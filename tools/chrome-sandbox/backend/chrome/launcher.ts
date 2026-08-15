@@ -1,19 +1,19 @@
-import { spawn } from 'child_process';
-import { detectChromePath } from './detector.js';
-import { registerProcess, findRunningPid } from './process-manager.js';
-import { getFreePort } from './developer-mode.js';
-import { logger } from '../utils/logger.js';
-import type { LaunchOptions } from '../../../../shared/types.js';
+import type { LaunchOptions } from '../../../../shared/types.js'
+import { spawn } from 'node:child_process'
+import { logger } from '../utils/logger.js'
+import { detectChromePath } from './detector.js'
+import { getFreePort } from './developer-mode.js'
+import { findRunningPid, registerProcess } from './process-manager.js'
 
 interface LaunchChromeOptions {
-  sandboxId: string;
-  userDataDir: string;
-  profileDirectory?: string;
-  extensionPath?: string | null;
-  windowPosition?: { x: number; y: number };
-  windowSize?: { width: number; height: number };
-  enableDeveloperMode?: boolean;
-  launchOptions?: LaunchOptions;
+  sandboxId: string
+  userDataDir: string
+  profileDirectory?: string
+  extensionPath?: string | null
+  windowPosition?: { x: number, y: number }
+  windowSize?: { width: number, height: number }
+  enableDeveloperMode?: boolean
+  launchOptions?: LaunchOptions
 }
 
 export async function launchChrome({
@@ -25,9 +25,9 @@ export async function launchChrome({
   windowSize = { width: 1280, height: 800 },
   enableDeveloperMode = false,
   launchOptions = {},
-}: LaunchChromeOptions): Promise<{ pid: number; debugPort: number | null }> {
-  const chromePath = await detectChromePath();
-  const debugPort = enableDeveloperMode ? await getFreePort() : null;
+}: LaunchChromeOptions): Promise<{ pid: number, debugPort: number | null }> {
+  const chromePath = await detectChromePath()
+  const debugPort = enableDeveloperMode ? await getFreePort() : null
 
   const args = [
     `--user-data-dir=${userDataDir}`,
@@ -37,30 +37,30 @@ export async function launchChrome({
     '--no-default-browser-check',
     '--disable-default-apps',
     `--window-size=${windowSize.width},${windowSize.height}`,
-  ];
+  ]
 
   if (debugPort) {
-    args.push(`--remote-debugging-port=${debugPort}`);
-    args.push('--start-minimized');
-    args.push('--window-position=-32000,-32000');
+    args.push(`--remote-debugging-port=${debugPort}`)
+    args.push('--start-minimized')
+    args.push('--window-position=-32000,-32000')
   } else {
-    args.push(`--window-position=${windowPosition.x},${windowPosition.y}`);
+    args.push(`--window-position=${windowPosition.x},${windowPosition.y}`)
   }
 
   if (extensionPath) {
-    args.push(`--load-extension=${extensionPath}`);
+    args.push(`--load-extension=${extensionPath}`)
   }
 
   // Safety checks disabled
   if (launchOptions.disableSafetyChecks) {
-    args.push('--disable-web-security');
-    args.push('--ignore-certificate-errors');
-    args.push('--disable-features=IsolateOrigins,site-per-process');
+    args.push('--disable-web-security')
+    args.push('--ignore-certificate-errors')
+    args.push('--disable-features=IsolateOrigins,site-per-process')
   }
 
   // CORS disabled
   if (launchOptions.disableCors) {
-    args.push('--disable-web-security');
+    args.push('--disable-web-security')
   }
 
   // Custom arguments
@@ -68,22 +68,22 @@ export async function launchChrome({
     const customArgsList = launchOptions.customArgs
       .split(' ')
       .map(arg => arg.trim())
-      .filter(arg => arg.length > 0);
-    args.push(...customArgsList);
+      .filter(arg => arg.length > 0)
+    args.push(...customArgsList)
   }
 
-  logger.info('Launching Chrome', { sandboxId, chromePath, userDataDir, profileDirectory, debugPort, launchOptions });
+  logger.info('Launching Chrome', { sandboxId, chromePath, userDataDir, profileDirectory, debugPort, launchOptions })
 
   const child = spawn(chromePath, args, {
     detached: false,
     stdio: 'ignore',
     windowsHide: false,
-  });
+  })
 
-  registerProcess(sandboxId, child, userDataDir);
-  const pid = findRunningPid(sandboxId, userDataDir) || child.pid;
+  registerProcess(sandboxId, child, userDataDir)
+  const pid = findRunningPid(sandboxId, userDataDir) || child.pid
   if (!pid) {
-    throw new Error('Chrome 进程启动失败，未获取到进程 ID');
+    throw new Error('Chrome 进程启动失败，未获取到进程 ID')
   }
-  return { pid, debugPort };
+  return { pid, debugPort }
 }

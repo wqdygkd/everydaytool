@@ -1,7 +1,7 @@
-import type { RouteRecordRaw } from 'vue-router';
-import HomePage from '../pages/HomePage.vue';
-import ToolLayout from '../layouts/ToolLayout.vue';
-import { getActiveTools } from '../config/tools.js';
+import type { RouteRecordRaw } from 'vue-router'
+import { getActiveTools } from '../config/tools'
+import ToolLayout from '../layouts/ToolLayout.vue'
+import HomePage from '../pages/HomePage.vue'
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -13,10 +13,10 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/tools',
     component: ToolLayout,
-    children: getActiveTools().map((tool) => tool.route as RouteRecordRaw),
+    children: getActiveTools().map(tool => tool.route as RouteRecordRaw),
   },
   {
     path: '/:pathMatch(.*)*',
     redirect: '/',
   },
-];
+]

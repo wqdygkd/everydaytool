@@ -1,3 +1,55 @@
+<script setup lang="ts">
+import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
+import {
+  buildLaunchOptionsPayload,
+  LAUNCH_OPTION_FORM_FIELDS,
+} from '../shared/launchOptions'
+import { useSandboxStore } from '../stores/sandboxStore'
+
+const props = defineProps({ modelValue: Boolean })
+const emit = defineEmits(['update:modelValue'])
+
+const store = useSandboxStore()
+const loading = ref(false)
+const form = reactive({
+  name: '',
+  inheritExtensions: false,
+  ...LAUNCH_OPTION_FORM_FIELDS,
+})
+const visible = useDialogVisible(props, emit)
+
+function reset() {
+  Object.assign(form, {
+    name: '',
+    inheritExtensions: false,
+    ...LAUNCH_OPTION_FORM_FIELDS,
+  })
+}
+
+async function submit() {
+  if (!form.name.trim()) {
+    ElMessage.warning('请输入沙箱名称')
+    return
+  }
+
+  loading.value = true
+  try {
+    await store.create({
+      name: form.name.trim(),
+      inheritExtensions: form.inheritExtensions,
+      launchOptions: buildLaunchOptionsPayload(form),
+    })
+    ElMessage.success('沙箱创建成功')
+    visible.value = false
+    reset()
+  } catch (error) {
+    ElMessage.error(error.message || '创建失败')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
 <template>
   <el-dialog v-model="visible" title="新建沙箱" width="420px" @close="reset">
     <el-form :model="form" label-width="120px">
@@ -13,70 +65,22 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="loading" @click="submit">创建</el-button>
+      <el-button @click="visible = false">
+        取消
+      </el-button>
+      <el-button type="primary" :loading="loading" @click="submit">
+        创建
+      </el-button>
     </template>
   </el-dialog>
 </template>
 
-<script setup lang="ts">
-import { useSandboxStore } from '../stores/sandboxStore.js';
-import {
-  LAUNCH_OPTION_FORM_FIELDS,
-  buildLaunchOptionsPayload,
-} from '../shared/launchOptions.js';
-import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible.js';
-
-const props = defineProps({ modelValue: Boolean });
-const emit = defineEmits(['update:modelValue']);
-
-const store = useSandboxStore();
-const loading = ref(false);
-const form = reactive({
-  name: '',
-  inheritExtensions: false,
-  ...LAUNCH_OPTION_FORM_FIELDS,
-});
-const visible = useDialogVisible(props, emit);
-
-function reset() {
-  Object.assign(form, {
-    name: '',
-    inheritExtensions: false,
-    ...LAUNCH_OPTION_FORM_FIELDS,
-  });
-}
-
-async function submit() {
-  if (!form.name.trim()) {
-    ElMessage.warning('请输入沙箱名称');
-    return;
-  }
-
-  loading.value = true;
-  try {
-    await store.create({
-      name: form.name.trim(),
-      inheritExtensions: form.inheritExtensions,
-      launchOptions: buildLaunchOptionsPayload(form),
-    });
-    ElMessage.success('沙箱创建成功');
-    visible.value = false;
-    reset();
-  } catch (error) {
-    ElMessage.error(error.message || '创建失败');
-  } finally {
-    loading.value = false;
-  }
-}
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .form-hint {
   display: block;
   margin-top: 6px;
-  font-size: 12px;
   color: var(--el-text-color-secondary);
+  font-size: 12px;
   line-height: 1.4;
 }
 </style>

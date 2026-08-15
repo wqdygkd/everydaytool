@@ -1,19 +1,19 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
     "resolveJsonModule": true,
+    "types": ["node"],
     "allowImportingTsExtensions": true,
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "noEmit": true,
+    "esModuleInterop": true,
     "verbatimModuleSyntax": true,
-    "types": ["node"],
-    "lib": ["ES2022"]
+    "skipLibCheck": true
   },
   "include": ["electron", "tools/**/backend", "scripts", "types/**/*.d.ts"]
 }

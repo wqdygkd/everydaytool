@@ -17,7 +17,7 @@
     "output": "release"
   },
   "files": [
-    "dist-backend/**/*",
+    "dist-electron/**/*",
     "electron/**/*",
     "tools/**/*",
     "dist/**/*",

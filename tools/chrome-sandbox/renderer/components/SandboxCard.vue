@@ -1,3 +1,19 @@
+<script setup lang="ts">
+import { formatSandboxStatus } from '../shared/sandbox'
+
+const props = defineProps({
+  sandbox: { type: Object, required: true },
+  active: { type: Boolean, default: false },
+})
+
+defineEmits(['click'])
+
+const hasLaunchOptions = computed(() => {
+  const opts = props.sandbox.metadata?.launchOptions
+  return opts && (opts.disableSafetyChecks || opts.disableCors || opts.customArgs)
+})
+</script>
+
 <template>
   <div class="sandbox-card" :class="{ active }" @click="$emit('click')">
     <div class="card-header">
@@ -22,23 +38,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { formatSandboxStatus } from '../shared/sandbox.js';
-
-const props = defineProps({
-  sandbox: { type: Object, required: true },
-  active: { type: Boolean, default: false },
-});
-
-defineEmits(['click']);
-
-const hasLaunchOptions = computed(() => {
-  const opts = props.sandbox.metadata?.launchOptions;
-  return opts && (opts.disableSafetyChecks || opts.disableCors || opts.customArgs);
-});
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .card-header {
   display: flex;
   align-items: center;
@@ -58,8 +58,8 @@ const hasLaunchOptions = computed(() => {
 
 .launch-options-tags {
   display: flex;
-  gap: 4px;
-  margin-top: 6px;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
 }
 </style>

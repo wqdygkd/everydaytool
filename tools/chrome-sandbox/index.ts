@@ -1,5 +1,5 @@
-import { defineTool } from '../../renderer/shared/tool/defineTool.js';
-import ChromeSandboxPage from './renderer/pages/ChromeSandbox.vue';
+import { defineTool } from '../../renderer/shared/tool/defineTool'
+import ChromeSandboxPage from './renderer/pages/ChromeSandbox.vue'
 
 const tool = defineTool({
   id: 'chrome-sandbox',
@@ -13,8 +13,10 @@ const tool = defineTool({
   createdAt: '2026-05-23',
   route: {
     path: 'chrome-sandbox',
+    name: 'tool-chrome-sandbox',
     component: ChromeSandboxPage,
+    meta: { toolId: 'chrome-sandbox', title: 'Chrome沙箱' },
   },
-});
+})
 
-export default tool;
+export default tool

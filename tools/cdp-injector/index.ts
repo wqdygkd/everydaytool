@@ -1,5 +1,5 @@
-import { defineTool } from '../../renderer/shared/tool/defineTool.js';
-import CdpInjectorPage from './renderer/pages/CdpInjector.vue';
+import { defineTool } from '../../renderer/shared/tool/defineTool'
+import CdpInjectorPage from './renderer/pages/CdpInjector.vue'
 
 const tool = defineTool({
   id: 'cdp-injector',
@@ -13,8 +13,10 @@ const tool = defineTool({
   createdAt: '2026-08-15',
   route: {
     path: 'cdp-injector',
+    name: 'tool-cdp-injector',
     component: CdpInjectorPage,
+    meta: { toolId: 'cdp-injector', title: 'CDP 脚本注入' },
   },
-});
+})
 
-export default tool;
+export default tool

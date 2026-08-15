@@ -1,22 +1,11 @@
 {
   "name": "everydaytool",
-  "version": "1.0.0",
-  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
-  "main": "dist-backend/electron/main.js",
   "type": "module",
+  "version": "1.0.0",
   "packageManager": "pnpm@10.6.3",
-  "scripts": {
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
-    "create:tool": "node scripts/create-tool.mjs",
-    "build:backend": "node scripts/build-backend.mjs",
-    "sync:preload": "node scripts/sync-preload.mjs",
-    "dev": "pnpm run build:backend && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron . --remote-debugging-port=0\"",
-    "build": "pnpm run build:backend && vite build",
-    "start": "electron . --remote-debugging-port=0",
-    "postinstall": "electron-builder install-app-deps",
-    "pack": "pnpm run build && electron-builder --dir",
-    "dist": "pnpm run build && electron-builder"
-  },
+  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
+  "author": "",
+  "license": "MIT",
   "keywords": [
     "electron",
     "edt",
@@ -26,45 +15,44 @@
     "fingerprint",
     "multi-tool"
   ],
-  "author": "",
-  "license": "MIT",
+  "main": "dist-electron/electron/main.js",
   "engines": {
     "node": ">=22.12.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "better-sqlite3",
-      "electron",
-      "electron-winstaller"
-    ]
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "create:tool": "node scripts/create-tool.mjs",
+    "build:electron": "node scripts/build-electron.mjs",
+    "dev": "concurrently -k \"vite\" \"node scripts/dev-electron.mjs\"",
+    "build": "pnpm run build:electron && vite build",
+    "start": "electron . --remote-debugging-port=0",
+    "postinstall": "electron-builder install-app-deps",
+    "pack": "pnpm run build && electron-builder --dir",
+    "dist": "pnpm run build && electron-builder"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.0",
     "element-plus": "^2.9.0",
-    "fs-extra": "^11.2.0",
     "pinia": "^3.0.4",
-    "uuid": "^14.0.0",
+    "sass": "^1.100.0",
     "vue": "^3.5.13",
-    "vue-router": "4",
-    "ws": "^8.21.0"
+    "vue-router": "4"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.3.0",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.2.0",
-    "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "concurrently": "^9.1.0",
-    "cross-env": "^10.1.0",
     "electron": "^41.7.0",
     "electron-builder": "^26.11.1",
     "esbuild": "^0.28.2",
-    "sass": "^1.100.0",
-    "typescript": "^7.0.2",
+    "eslint": "^10.8.1",
+    "typescript": "^6.0.3",
     "unplugin-auto-import": "^21.1.0",
     "unplugin-vue-components": "^32.1.0",
-    "vite": "^8.0.14",
-    "wait-on": "^9.0.10"
+    "vite": "^8.0.14"
   }
 }

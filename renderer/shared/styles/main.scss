@@ -31,7 +31,6 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 12px;
@@ -55,7 +54,7 @@
   --transition-slow: 0.34s cubic-bezier(0.2, 0, 0, 1);
 
   color-scheme: light;
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: "Geist", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-synthesis-weight: none;
   background: var(--color-app-bg);
   color: var(--color-text-primary);
@@ -78,6 +77,10 @@
   --el-box-shadow-light: var(--shadow-md);
 }
 
+html {
+  background: var(--color-app-bg);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -92,10 +95,17 @@ body {
   line-height: 1.5;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 #app {
-  height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
@@ -133,23 +143,23 @@ select:focus-visible,
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
-}
 
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(95, 109, 113, 0.44);
+  &:hover {
+    background-color: rgba(95, 109, 113, 0.44);
+  }
 }
 
 .el-button {
   font-weight: var(--font-weight-medium);
-}
 
-.el-button--primary {
-  --el-button-bg-color: var(--color-primary);
-  --el-button-border-color: var(--color-primary);
-  --el-button-hover-bg-color: var(--color-primary-hover);
-  --el-button-hover-border-color: var(--color-primary-hover);
-  --el-button-active-bg-color: var(--color-primary-hover);
-  --el-button-active-border-color: var(--color-primary-hover);
+  &--primary {
+    --el-button-bg-color: var(--color-primary);
+    --el-button-border-color: var(--color-primary);
+    --el-button-hover-bg-color: var(--color-primary-hover);
+    --el-button-hover-border-color: var(--color-primary-hover);
+    --el-button-active-bg-color: var(--color-primary-hover);
+    --el-button-active-border-color: var(--color-primary-hover);
+  }
 }
 
 .el-table {
@@ -168,12 +178,10 @@ select:focus-visible,
 .el-textarea__inner,
 .el-select__wrapper {
   box-shadow: 0 0 0 1px var(--color-border-light) inset;
-}
 
-.el-input__wrapper:hover,
-.el-textarea__inner:hover,
-.el-select__wrapper:hover {
-  box-shadow: 0 0 0 1px var(--color-border) inset;
+  &:hover {
+    box-shadow: 0 0 0 1px var(--color-border) inset;
+  }
 }
 
 .el-input__wrapper.is-focus,

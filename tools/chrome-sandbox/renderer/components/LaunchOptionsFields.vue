@@ -1,8 +1,20 @@
+<script setup lang="ts">
+defineProps({
+  form: { type: Object, required: true },
+})
+</script>
+
 <template>
   <div class="launch-options">
-    <el-checkbox v-model="form.disableSafetyChecks">禁用安全检查</el-checkbox>
-    <el-checkbox v-model="form.disableCors">禁用 CORS</el-checkbox>
-    <el-checkbox v-model="form.enableCustomArgs">自定义启动参数</el-checkbox>
+    <el-checkbox v-model="form.disableSafetyChecks">
+      禁用安全检查
+    </el-checkbox>
+    <el-checkbox v-model="form.disableCors">
+      禁用 CORS
+    </el-checkbox>
+    <el-checkbox v-model="form.enableCustomArgs">
+      自定义启动参数
+    </el-checkbox>
     <el-input
       v-if="form.enableCustomArgs"
       v-model="form.customArgs"
@@ -12,20 +24,14 @@
   </div>
 </template>
 
-<script setup lang="ts">
-defineProps({
-  form: { type: Object, required: true },
-});
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .launch-options {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
 
-.custom-args-input {
-  margin-top: 4px;
+  .custom-args-input {
+    margin-top: 4px;
+  }
 }
 </style>

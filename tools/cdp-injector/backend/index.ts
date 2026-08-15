@@ -1,12 +1,12 @@
-import { registerCdpInjectorHandlers } from './ipc/handlers.js';
-import { injectorService } from './services/injector-service.js';
+import { registerCdpInjectorHandlers } from './ipc/handlers.js'
+import { injectorService } from './services/injector-service.js'
 
 export const cdpInjectorBackend = {
   initialize(): void {
-    registerCdpInjectorHandlers();
+    registerCdpInjectorHandlers()
   },
 
   async dispose(): Promise<void> {
-    await injectorService.stopAll();
+    await injectorService.stopAll()
   },
-};
+}

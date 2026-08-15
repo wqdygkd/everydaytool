@@ -3,17 +3,17 @@
  * 用法：在「脚本库」中新建脚本 →「从文件导入」选本文件 → 应用配置关联该脚本后启动。
  */
 (function () {
-  const ROOT_ID = 'cdp-injector-floating-btn';
+  const ROOT_ID = 'cdp-injector-floating-btn'
 
   function mount() {
-    const existing = document.getElementById(ROOT_ID);
-    if (existing) existing.remove();
+    const existing = document.getElementById(ROOT_ID)
+    if (existing) existing.remove()
 
-    const btn = document.createElement('button');
-    btn.id = ROOT_ID;
-    btn.type = 'button';
-    btn.textContent = '工具';
-    btn.title = '点击在控制台输出当前页面地址；按住可拖动';
+    const btn = document.createElement('button')
+    btn.id = ROOT_ID
+    btn.type = 'button'
+    btn.textContent = '工具'
+    btn.title = '点击在控制台输出当前页面地址；按住可拖动'
 
     Object.assign(btn.style, {
       position: 'fixed',
@@ -32,89 +32,85 @@
       userSelect: 'none',
       touchAction: 'none',
       WebkitUserSelect: 'none',
-    });
+    })
 
-    let dragging = false;
-    let pointerId = null;
-    let offsetX = 0;
-    let offsetY = 0;
-    let dragMoved = false;
+    let dragging = false
+    let pointerId = null
+    let offsetX = 0
+    let offsetY = 0
+    let dragMoved = false
 
     function clamp(value, min, max) {
-      return Math.min(Math.max(value, min), max);
+      return Math.min(Math.max(value, min), max)
     }
 
     function placeAt(clientX, clientY) {
-      const rect = btn.getBoundingClientRect();
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const left = clamp(clientX - offsetX, 0, w - rect.width);
-      const top = clamp(clientY - offsetY, 0, h - rect.height);
-      btn.style.left = `${left}px`;
-      btn.style.top = `${top}px`;
-      btn.style.right = 'auto';
-      btn.style.bottom = 'auto';
+      const rect = btn.getBoundingClientRect()
+      const w = window.innerWidth
+      const h = window.innerHeight
+      const left = clamp(clientX - offsetX, 0, w - rect.width)
+      const top = clamp(clientY - offsetY, 0, h - rect.height)
+      btn.style.left = `${left}px`
+      btn.style.top = `${top}px`
+      btn.style.right = 'auto'
+      btn.style.bottom = 'auto'
     }
 
     btn.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      dragging = true;
-      dragMoved = false;
-      pointerId = e.pointerId;
-      const rect = btn.getBoundingClientRect();
-      offsetX = e.clientX - rect.left;
-      offsetY = e.clientY - rect.top;
-      btn.style.cursor = 'grabbing';
-      btn.setPointerCapture(pointerId);
-      e.preventDefault();
-    });
+      if (e.button !== 0) return
+      dragging = true
+      dragMoved = false
+      pointerId = e.pointerId
+      const rect = btn.getBoundingClientRect()
+      offsetX = e.clientX - rect.left
+      offsetY = e.clientY - rect.top
+      btn.style.cursor = 'grabbing'
+      btn.setPointerCapture(pointerId)
+      e.preventDefault()
+    })
 
     btn.addEventListener('pointermove', (e) => {
-      if (!dragging || e.pointerId !== pointerId) return;
-      dragMoved = true;
-      placeAt(e.clientX, e.clientY);
-    });
+      if (!dragging || e.pointerId !== pointerId) return
+      dragMoved = true
+      placeAt(e.clientX, e.clientY)
+    })
 
     function endDrag(e) {
-      if (!dragging || (e && e.pointerId !== pointerId)) return;
-      dragging = false;
-      pointerId = null;
-      btn.style.cursor = 'grab';
+      if (!dragging || (e && e.pointerId !== pointerId)) return
+      dragging = false
+      pointerId = null
+      btn.style.cursor = 'grab'
       try {
-        if (e) btn.releasePointerCapture(e.pointerId);
+        if (e) btn.releasePointerCapture(e.pointerId)
       } catch {
         /* ignore */
       }
     }
 
-    btn.addEventListener('pointerup', endDrag);
-    btn.addEventListener('pointercancel', endDrag);
+    btn.addEventListener('pointerup', endDrag)
+    btn.addEventListener('pointercancel', endDrag)
 
     function openCurrentUrlInConsole() {
-      const href = location.href;
-      console.groupCollapsed('[CDP] 当前页面');
-      console.log('地址（可点击打开）:', href);
-      console.log('标题:', document.title || '(无标题)');
-      console.groupEnd();
-      return href;
+      const href = location.href
+      return href
     }
 
     btn.addEventListener('click', (e) => {
       if (!dragMoved) {
-        openCurrentUrlInConsole();
-        return;
+        openCurrentUrlInConsole()
+        return
       }
-      dragMoved = false;
-      e.preventDefault();
-      e.stopPropagation();
+      dragMoved = false
+      e.preventDefault()
+      e.stopPropagation()
     });
 
-    (document.documentElement || document.body).appendChild(btn);
+    (document.documentElement || document.body).appendChild(btn)
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount, { once: true });
+    document.addEventListener('DOMContentLoaded', mount, { once: true })
   } else {
-    mount();
+    mount()
   }
-})();
+})()

@@ -16,6 +16,6 @@ export const CDP_IPC_CHANNELS = {
   GET_TARGETS: 'cdp:get-targets',
   OPEN_DEVTOOLS: 'cdp:open-devtools',
   EVENT_STATUS_CHANGED: 'cdp:status-changed',
-} as const;
+} as const
 
-export type CdpIpcChannel = (typeof CDP_IPC_CHANNELS)[keyof typeof CDP_IPC_CHANNELS];
+export type CdpIpcChannel = (typeof CDP_IPC_CHANNELS)[keyof typeof CDP_IPC_CHANNELS]

@@ -14,11 +14,11 @@ project/
 │   ├── layouts/              # 页面布局
 │   ├── pages/HomePage.vue    # 主页工具网格
 │   ├── shared/               # 前端共享资源
-│   └── config/tools.js       # 工具注册表
+│   └── config/tools.ts       # 工具注册表
 │
 ├── tools/                    # 工具目录
 │   └── chrome-sandbox/       # Chrome沙箱 工具（完全独立）
-│       ├── index.js          # 工具入口定义
+│       ├── index.ts          # 工具入口定义
 │       ├── renderer/         # 工具前端
 │       │   ├── components/   # Vue 组件
 │       │   ├── stores/       # Pinia 状态管理
@@ -34,9 +34,10 @@ project/
 │       └── assets/           # 工具资源
 │
 ├── electron/                 # Electron 入口
-│   ├── main.js               # 主进程入口
-│   └── preload.cjs           # 预加载脚本
+│   ├── main.ts               # 主进程入口源码
+│   └── preload.ts            # 预加载脚本源码，构建为 preload.cjs
 │
+├── dist-electron/            # Electron 主进程与 preload 构建产物
 ├── shared/                   # 跨工具共享代码（预留）
 ├── data/                     # 运行时数据
 └── docs/                     # 文档
@@ -49,8 +50,9 @@ project/
 | `renderer/` | 仅首页导航，不含任何工具代码 |
 | `tools/<tool>/renderer/` | 工具前端代码 |
 | `tools/<tool>/backend/` | 工具后端代码（Electron 主进程） |
-| `tools/<tool>/index.js` | 工具定义入口（导出 id, name, route 等） |
+| `tools/<tool>/index.ts` | 工具定义入口（导出 id, name, route 等） |
 | `electron/` | 仅入口，加载 `tools/*/backend/` |
+| `dist-electron/` | Electron 主进程、工具后端、preload 构建产物 |
 | `shared/` | 跨工具共享代码（预留） |
 | `data/` | 运行时数据（config.db, sandboxes/） |
 
@@ -73,20 +75,31 @@ pnpm install
 pnpm dev
 ```
 
+`pnpm dev` 会启动 Vite 前端 HMR，并监听 `electron/`、`shared/`、`tools/*/backend/` 变化，重建 `dist-electron/` 后自动重启 Electron。
+
 ## 构建
 
 ```bash
-pnpm build        # 前端构建
+pnpm build        # 构建 Electron 侧与前端
+pnpm build:electron
 pnpm start        # 启动 Electron
 pnpm dist         # 打包安装程序
 ```
+
+## TypeScript 与导入规范
+
+- 源码统一使用 TypeScript / Vue SFC；构建产物才是 JavaScript。
+- 前端范围（`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts`）导入 TS 模块使用无后缀，Vue SFC 保留 `.vue`。
+- Electron / 后端范围（`electron/**`、`tools/*/backend/**`）是 Node ESM，源码中的相对 TS 模块导入使用 `.js` 运行时后缀，不导入 `.ts`。
+- `preload` 源码为 `electron/preload.ts`，由 `scripts/build-electron.mjs` 打包为 `dist-electron/electron/preload.cjs`。
+- 前端不得直接导入 `backend/**`，统一通过 preload 暴露的 IPC API 调用。
 
 ## 添加新工具
 
 1. 创建工具目录：
    ```
    tools/<tool>/
-   ├── index.js        # 工具定义
+   ├── index.ts        # 工具定义
    ├── renderer/       # 前端
    │   ├── components/
    │   ├── stores/
@@ -94,25 +107,29 @@ pnpm dist         # 打包安装程序
    └── backend/        # 后端（可选）
    ```
 
-2. 实现 `index.js`：
-   ```javascript
-   export default {
+2. 实现 `index.ts`：
+   ```ts
+   import { defineTool } from '../../renderer/shared/tool/defineTool';
+   import ToolPage from './renderer/pages/ToolPage.vue';
+
+   export default defineTool({
      id: 'tool-name',
      name: '工具名称',
      description: '工具描述',
      version: '1.0.0',
      color: '#color',
+     category: { key: 'general', name: '通用工具' },
+     keywords: ['tool-name'],
+     supportedTargets: ['web', 'win', 'mac'],
      route: {
        path: 'tool-name',
-       name: 'tool-tool-name',
        component: ToolPage,
-       meta: { toolId: 'tool-name' },
      },
-   };
+   });
    ```
 
-3. 注册：`renderer/config/tools.js`
-4. 路由：`renderer/router/routes.js`
+3. 注册：`renderer/config/tools.ts`
+4. 路由由工具注册表自动汇总
 
 ## 工具端支持配置
 

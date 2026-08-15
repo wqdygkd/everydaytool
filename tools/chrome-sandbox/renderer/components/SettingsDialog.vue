@@ -1,3 +1,65 @@
+<script setup lang="ts">
+import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
+import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+
+const props = defineProps({ modelValue: Boolean })
+const emit = defineEmits(['update:modelValue', 'saved'])
+
+const loading = ref(false)
+const form = reactive({
+  chromePath: '',
+  dataDirectory: '',
+  autoRestoreOnStartup: false,
+  preserveDataOnClose: true,
+})
+const visible = useDialogVisible(props, emit)
+const channels = ipcChannels()
+
+async function runSettingAction(action, errorMessage) {
+  try {
+    return await action()
+  } catch (error) {
+    ElMessage.error(error.message || errorMessage)
+    return null
+  }
+}
+
+watch(visible, async (open) => {
+  if (open) {
+    Object.assign(form, await invokeIpc(channels.CONFIG_GET))
+  }
+})
+
+async function detectChrome() {
+  const chromePath = await runSettingAction(
+    () => invokeIpc(channels.CHROME_DETECT_PATH),
+    '检测失败',
+  )
+  if (!chromePath) return
+  form.chromePath = chromePath
+  ElMessage.success('已检测到 Chrome')
+}
+
+async function save() {
+  if (!form.dataDirectory.trim()) {
+    ElMessage.warning('请选择或填写数据目录')
+    return
+  }
+
+  loading.value = true
+  try {
+    const result = await invokeIpc(channels.CONFIG_UPDATE, { ...form })
+    ElMessage.success('设置已保存')
+    visible.value = false
+    emit('saved', result)
+  } catch (error) {
+    ElMessage.error(error.message || '保存失败')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
 <template>
   <el-dialog v-model="visible" title="全局设置" width="560px">
     <el-form :model="form" label-width="140px">
@@ -16,80 +78,22 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="detectChrome">检测 Chrome</el-button>
-      <el-button type="primary" :loading="loading" @click="save">保存</el-button>
+      <el-button @click="detectChrome">
+        检测 Chrome
+      </el-button>
+      <el-button type="primary" :loading="loading" @click="save">
+        保存
+      </el-button>
     </template>
   </el-dialog>
 </template>
 
-<script setup lang="ts">
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc.js';
-import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible.js';
-
-const props = defineProps({ modelValue: Boolean });
-const emit = defineEmits(['update:modelValue', 'saved']);
-
-const loading = ref(false);
-const form = reactive({
-  chromePath: '',
-  dataDirectory: '',
-  autoRestoreOnStartup: false,
-  preserveDataOnClose: true,
-});
-const visible = useDialogVisible(props, emit);
-const channels = ipcChannels();
-
-async function runSettingAction(action, errorMessage) {
-  try {
-    return await action();
-  } catch (error) {
-    ElMessage.error(error.message || errorMessage);
-    return null;
-  }
-}
-
-watch(visible, async (open) => {
-  if (open) {
-    Object.assign(form, await invokeIpc(channels.CONFIG_GET));
-  }
-});
-
-async function detectChrome() {
-  const chromePath = await runSettingAction(
-    () => invokeIpc(channels.CHROME_DETECT_PATH),
-    '检测失败',
-  );
-  if (!chromePath) return;
-  form.chromePath = chromePath;
-  ElMessage.success('已检测到 Chrome');
-}
-
-async function save() {
-  if (!form.dataDirectory.trim()) {
-    ElMessage.warning('请选择或填写数据目录');
-    return;
-  }
-
-  loading.value = true;
-  try {
-    const result = await invokeIpc(channels.CONFIG_UPDATE, { ...form });
-    ElMessage.success('设置已保存');
-    visible.value = false;
-    emit('saved', result);
-  } catch (error) {
-    ElMessage.error(error.message || '保存失败');
-  } finally {
-    loading.value = false;
-  }
-}
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .form-hint {
   display: block;
   margin-top: 6px;
-  font-size: 12px;
   color: var(--el-text-color-secondary);
+  font-size: 12px;
   line-height: 1.4;
 }
 </style>

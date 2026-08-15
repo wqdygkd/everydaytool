@@ -1,3 +1,20 @@
+<script setup lang="ts">
+import { hasLaunchOptions as hasLaunchOptionsEnabled } from '../shared/launchOptions'
+import { formatSandboxStatus } from '../shared/sandbox'
+
+const props = defineProps({
+  sandbox: { type: Object, default: null },
+  fingerprint: { type: Object, default: null },
+})
+
+defineEmits(['activate', 'close', 'delete', 'editFingerprint'])
+
+const editSettingsVisible = ref(false)
+
+const inheritExtensions = computed(() => Boolean(props.sandbox?.metadata?.inheritExtensions))
+const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.metadata))
+</script>
+
 <template>
   <section class="status-panel">
     <template v-if="sandbox">
@@ -6,7 +23,7 @@
         @activate="$emit('activate')"
         @close="$emit('close')"
         @delete="$emit('delete')"
-        @edit-fingerprint="$emit('edit-fingerprint')"
+        @edit-fingerprint="$emit('editFingerprint')"
         @edit-settings="editSettingsVisible = true"
       />
 
@@ -23,8 +40,12 @@
       </div>
 
       <div class="detail-grid">
-        <div class="detail-item"><span>PID</span><strong>{{ sandbox.chromePid || '-' }}</strong></div>
-        <div class="detail-item"><span>路径</span><strong class="path">{{ sandbox.userDataPath }}</strong></div>
+        <div class="detail-item">
+          <span>PID</span><strong>{{ sandbox.chromePid || '-' }}</strong>
+        </div>
+        <div class="detail-item">
+          <span>路径</span><strong class="path">{{ sandbox.userDataPath }}</strong>
+        </div>
       </div>
 
       <div class="section-block">
@@ -64,7 +85,9 @@
           <p>Platform: {{ fingerprint.navigator?.platform }} | 分辨率: {{ fingerprint.screen?.width }}x{{ fingerprint.screen?.height }}</p>
           <p>Canvas: {{ fingerprint.canvas?.noiseLevel }} | WebGL: {{ fingerprint.webgl?.vendor }}</p>
         </div>
-        <p v-else class="muted">暂无指纹信息</p>
+        <p v-else class="muted">
+          暂无指纹信息
+        </p>
       </div>
     </template>
 
@@ -74,76 +97,59 @@
   </section>
 </template>
 
-<script setup lang="ts">
-import { formatSandboxStatus } from '../shared/sandbox.js';
-import { hasLaunchOptions as hasLaunchOptionsEnabled } from '../shared/launchOptions.js';
-
-const props = defineProps({
-  sandbox: { type: Object, default: null },
-  fingerprint: { type: Object, default: null },
-});
-
-defineEmits(['activate', 'close', 'delete', 'edit-fingerprint']);
-
-const editSettingsVisible = ref(false);
-
-const inheritExtensions = computed(() => Boolean(props.sandbox?.metadata?.inheritExtensions));
-const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.metadata));
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .sandbox-config {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
 
-.config-row {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 8px 12px;
-  align-items: start;
-}
+  .config-row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 8px 12px;
+    align-items: start;
+  }
 
-.config-label {
-  font-size: 13px;
-  line-height: 22px;
-  color: var(--el-text-color-secondary);
-}
+  .config-label {
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+    line-height: 22px;
+  }
 
-.config-value {
-  min-width: 0;
-  line-height: 22px;
-}
+  .config-value {
+    min-width: 0;
+    line-height: 22px;
 
-.config-value :deep(.el-tag) {
-  width: fit-content;
-  max-width: 100%;
-}
+    :deep(.el-tag) {
+      width: fit-content;
+      max-width: 100%;
+    }
+  }
 
-.launch-options-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
+  .launch-options-display {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
 
-.custom-args {
-  display: flex;
-  flex-basis: 100%;
-  gap: 8px;
-  align-items: baseline;
-}
+  .custom-args {
+    display: flex;
+    flex-basis: 100%;
+    align-items: baseline;
+    gap: 8px;
 
-.custom-args .label {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-}
+    .label {
+      color: var(--el-text-color-secondary);
+      font-size: 13px;
+    }
 
-.custom-args code {
-  background: var(--el-fill-color-light);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+    code {
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+      background: var(--el-fill-color-light);
+      font-size: 12px;
+    }
+  }
 }
 </style>

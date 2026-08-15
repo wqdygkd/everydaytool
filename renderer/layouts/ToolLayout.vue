@@ -1,3 +1,22 @@
+<script setup lang="ts">
+import { toolRegistry } from '../config/tools'
+
+const route = useRoute()
+const router = useRouter()
+
+const currentTool = computed(() => {
+  const toolId = typeof route.meta?.toolId === 'string' ? route.meta.toolId : null
+  return toolRegistry.find(t => t.id === toolId)
+})
+const toolTitle = computed(() => {
+  return currentTool.value?.name || '工具'
+})
+
+function goBack() {
+  router.push({ name: 'home' })
+}
+</script>
+
 <template>
   <div class="tool-layout">
     <div class="tool-header">
@@ -7,8 +26,12 @@
       </button>
       <div class="tool-heading">
         <span class="tool-category">{{ currentTool?.category.name || '工具' }}</span>
-        <h2 class="tool-title">{{ toolTitle }}</h2>
-        <p v-if="currentTool" class="tool-description">{{ currentTool.description }}</p>
+        <h2 class="tool-title">
+          {{ toolTitle }}
+        </h2>
+        <p v-if="currentTool" class="tool-description">
+          {{ currentTool.description }}
+        </p>
       </div>
     </div>
     <div class="tool-content">
@@ -17,26 +40,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { toolRegistry } from '../config/tools.js';
-
-const route = useRoute();
-const router = useRouter();
-
-const currentTool = computed(() => {
-  const toolId = typeof route.meta?.toolId === 'string' ? route.meta.toolId : null;
-  return toolRegistry.find((t) => t.id === toolId);
-});
-const toolTitle = computed(() => {
-  return currentTool.value?.name || '工具';
-});
-
-function goBack() {
-  router.push({ name: 'home' });
-}
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .tool-layout {
   display: flex;
   flex-direction: column;
@@ -46,7 +50,8 @@ function goBack() {
 }
 
 .tool-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: flex-start;
   gap: 18px;
   padding: 18px 24px;
@@ -55,7 +60,7 @@ function goBack() {
 }
 
 .back-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 34px;
@@ -66,37 +71,42 @@ function goBack() {
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: var(--transition-fast);
-}
 
-.back-btn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  &:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
 }
 
 .tool-heading {
   min-width: 0;
-}
 
-.tool-category {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
+  .tool-category {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+  }
 
-.tool-title {
-  margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
+  .tool-title {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+  }
 
-.tool-description {
-  margin: 4px 0 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  .tool-description {
+    margin: 4px 0 0;
+    max-width: 70ch;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 }
 
 .tool-content {
@@ -105,10 +115,9 @@ function goBack() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.tool-content > :deep(*) {
-  flex: 1;
-  min-height: 0;
+  > :deep(*) {
+    flex: 1;
+    min-height: 0;
+  }
 }
 </style>

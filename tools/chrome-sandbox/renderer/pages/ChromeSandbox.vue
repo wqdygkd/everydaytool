@@ -1,3 +1,69 @@
+<script setup lang="ts">
+import { useNavigation } from '@renderer/shared/composables/useNavigation'
+import { invokeIpc, ipcChannels, onIpc } from '@renderer/shared/ipc/useIpc'
+import { useSandboxStore } from '../stores/sandboxStore'
+
+const { goToHome } = useNavigation()
+const store = useSandboxStore()
+const ready = ref(false)
+const showCreate = ref(false)
+const showSettings = ref(false)
+const showFingerprint = ref(false)
+const showSetup = ref(false)
+const channels = ipcChannels()
+
+function openFingerprintEditor() {
+  showFingerprint.value = true
+}
+
+async function deleteSandbox() {
+  if (!store.selectedId) return
+  try {
+    await store.remove(store.selectedId)
+  } catch (error) {
+    ElMessage.error(error.message || '删除失败')
+  }
+}
+
+watch(() => store.selectedId, (id) => {
+  if (id) store.loadFingerprint(id)
+})
+
+const unsubscribers = []
+
+async function initPage() {
+  await store.loadAll()
+  unsubscribers.push(
+    onIpc(channels.EVENT_STATUS_CHANGED, () => store.loadAll()),
+    onIpc(channels.EVENT_PROCESS_EXITED, () => store.loadAll()),
+  )
+  ready.value = true
+}
+
+async function onSetupCompleted() {
+  await initPage()
+}
+
+async function onSettingsSaved(result) {
+  if (result.dataDirectoryChanged) {
+    await store.loadAll()
+  }
+}
+
+onMounted(async () => {
+  const config = await invokeIpc(channels.CONFIG_GET)
+  if (!config.dataDirectoryConfigured) {
+    showSetup.value = true
+    return
+  }
+  await initPage()
+})
+
+onUnmounted(() => {
+  unsubscribers.forEach(off => off())
+})
+</script>
+
 <template>
   <div class="chrome-sandbox-page">
     <template v-if="ready">
@@ -36,266 +102,200 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { useNavigation } from '@renderer/shared/composables/useNavigation.js';
-import { useSandboxStore } from '../stores/sandboxStore.js';
-import { invokeIpc, ipcChannels, onIpc } from '@renderer/shared/ipc/useIpc.js';
-
-const { goToHome } = useNavigation();
-const store = useSandboxStore();
-const ready = ref(false);
-const showCreate = ref(false);
-const showSettings = ref(false);
-const showFingerprint = ref(false);
-const showSetup = ref(false);
-const channels = ipcChannels();
-
-function openFingerprintEditor() {
-  showFingerprint.value = true;
-}
-
-async function deleteSandbox() {
-  if (!store.selectedId) return;
-  try {
-    await store.remove(store.selectedId);
-  } catch (error) {
-    ElMessage.error(error.message || '删除失败');
-  }
-}
-
-watch(() => store.selectedId, (id) => {
-  if (id) store.loadFingerprint(id);
-});
-
-const unsubscribers = [];
-
-async function initPage() {
-  await store.loadAll();
-  unsubscribers.push(
-    onIpc(channels.EVENT_STATUS_CHANGED, () => store.loadAll()),
-    onIpc(channels.EVENT_PROCESS_EXITED, () => store.loadAll()),
-  );
-  ready.value = true;
-}
-
-async function onSetupCompleted() {
-  await initPage();
-}
-
-async function onSettingsSaved(result) {
-  if (result.dataDirectoryChanged) {
-    await store.loadAll();
-  }
-}
-
-onMounted(async () => {
-  const config = await invokeIpc(channels.CONFIG_GET);
-  if (!config.dataDirectoryConfigured) {
-    showSetup.value = true;
-    return;
-  }
-  await initPage();
-});
-
-onUnmounted(() => {
-  unsubscribers.forEach((off) => off());
-});
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .chrome-sandbox-page {
   display: grid;
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: 252px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   background: var(--color-app-bg);
-}
 
-.chrome-sandbox-page :deep(.sidebar) {
-  background: var(--color-surface-raised);
-  border-right: 1px solid var(--color-border-light);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 18px 14px;
-}
+  :deep(.sidebar) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 18px 14px;
+    border-right: 1px solid var(--color-border-light);
+    background: var(--color-surface-raised);
+  }
 
-.chrome-sandbox-page :deep(.sidebar-title) {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-secondary);
-  margin-bottom: 14px;
-}
+  :deep(.sidebar-title) {
+    margin-bottom: 14px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
 
-.chrome-sandbox-page :deep(.sandbox-list) {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
+  :deep(.sandbox-list) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow-y: auto;
+  }
 
-.chrome-sandbox-page :deep(.sandbox-list .empty-tip) {
-  text-align: center;
-  padding: var(--spacing-lg);
-}
+  :deep(.sandbox-list .empty-tip) {
+    padding: var(--spacing-lg);
+    text-align: center;
+  }
 
-.chrome-sandbox-page :deep(.sidebar-actions) {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-}
+  :deep(.sidebar-actions) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
 
-.chrome-sandbox-page :deep(.sidebar-actions .el-button),
-.chrome-sandbox-page :deep(.action-bar .el-button) {
-  margin-left: 0;
-}
+  :deep(.sidebar-actions .el-button),
+  :deep(.action-bar .el-button) {
+    margin-left: 0;
+  }
 
-.chrome-sandbox-page :deep(.full-width) {
-  width: 100%;
-}
+  :deep(.full-width) {
+    width: 100%;
+  }
 
-.chrome-sandbox-page :deep(.sandbox-card) {
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: 14px;
-  cursor: pointer;
-  background: var(--color-surface);
-  transition: var(--transition-base);
-}
+  :deep(.sandbox-card) {
+    padding: 14px;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    cursor: pointer;
+    transition: var(--transition-base);
+  }
 
-.chrome-sandbox-page :deep(.sandbox-card:hover),
-.chrome-sandbox-page :deep(.sandbox-card.active) {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  box-shadow: var(--shadow-sm);
-}
+  :deep(.sandbox-card:hover),
+  :deep(.sandbox-card.active) {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    box-shadow: var(--shadow-sm);
+  }
 
-.chrome-sandbox-page :deep(.card-header) {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: 6px;
-}
+  :deep(.card-header) {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: 6px;
+  }
 
-.chrome-sandbox-page :deep(.color-dot) {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
+  :deep(.color-dot) {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
 
-.chrome-sandbox-page :deep(.name) {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-base);
-}
+  :deep(.name) {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+  }
 
-.chrome-sandbox-page :deep(.card-meta) {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
+  :deep(.card-meta) {
+    display: flex;
+    justify-content: space-between;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 
-.chrome-sandbox-page :deep(.status.running) {
-  color: var(--color-success);
-}
+  :deep(.status.running) {
+    color: var(--color-success);
+  }
 
-.chrome-sandbox-page :deep(.status-panel) {
-  flex: 1;
-  min-height: 0;
-  padding: 24px;
-  overflow: auto;
-}
+  :deep(.status-panel) {
+    flex: 1;
+    min-height: 0;
+    padding: 24px;
+    overflow: auto;
+  }
 
-.chrome-sandbox-page :deep(.panel-header) {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
-}
+  :deep(.panel-header) {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+  }
 
-.chrome-sandbox-page :deep(.panel-header h2) {
-  margin: 0;
-}
+  :deep(.panel-header h2) {
+    margin: 0;
+  }
 
-.chrome-sandbox-page :deep(.detail-grid) {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
-}
+  :deep(.detail-grid) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
 
-.chrome-sandbox-page :deep(.detail-item) {
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--font-size-sm);
-}
+  :deep(.detail-item) {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--spacing-md);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+    font-size: var(--font-size-sm);
+  }
 
-.chrome-sandbox-page :deep(.detail-item span) {
-  color: var(--color-text-secondary);
-}
+  :deep(.detail-item span) {
+    color: var(--color-text-secondary);
+  }
 
-.chrome-sandbox-page :deep(.detail-item .path) {
-  font-size: var(--font-size-xs);
-  word-break: break-all;
-}
+  :deep(.detail-item .path) {
+    font-size: var(--font-size-xs);
+    word-break: break-all;
+  }
 
-.chrome-sandbox-page :deep(.section-block) {
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-}
+  :deep(.section-block) {
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-lg);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+  }
 
-.chrome-sandbox-page :deep(.section-block h3) {
-  margin: 0 0 10px;
-  font-size: var(--font-size-base);
-}
+  :deep(.section-block h3) {
+    margin: 0 0 10px;
+    font-size: var(--font-size-base);
+  }
 
-.chrome-sandbox-page :deep(.fingerprint-summary p) {
-  margin: 4px 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
+  :deep(.fingerprint-summary p) {
+    margin: 4px 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 
-.chrome-sandbox-page :deep(.action-bar) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  padding-bottom: var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border-light);
-}
+  :deep(.action-bar) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border-light);
+  }
 
-.chrome-sandbox-page :deep(.empty-tip),
-.chrome-sandbox-page :deep(.empty-panel),
-.chrome-sandbox-page :deep(.muted) {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  :deep(.empty-tip),
+  :deep(.empty-panel),
+  :deep(.muted) {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
 }
 
 @media (max-width: 760px) {
   .chrome-sandbox-page {
     grid-template-columns: 1fr;
-  }
 
-  .chrome-sandbox-page :deep(.sidebar) {
-    max-height: 280px;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border-light);
-  }
+    :deep(.sidebar) {
+      max-height: 280px;
+      border-right: 0;
+      border-bottom: 1px solid var(--color-border-light);
+    }
 
-  .chrome-sandbox-page :deep(.detail-grid) {
-    grid-template-columns: 1fr;
+    :deep(.detail-grid) {
+      grid-template-columns: 1fr;
+    }
   }
 }
 </style>

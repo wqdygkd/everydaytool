@@ -1,3 +1,61 @@
+<script setup lang="ts">
+import type { ToolDefinition } from '../shared/types/tool'
+import { groupToolsByCategory, toolsByCategory } from '../config/tools'
+
+const FAVORITE_STORAGE_KEY = 'edt:favorite-tools'
+const router = useRouter()
+const searchText = ref('')
+const allTools = toolsByCategory.flatMap(group => group.tools)
+const favoriteIds = ref(readFavoriteIds())
+
+const filteredTools = computed<ToolDefinition[]>(() => {
+  const keyword = searchText.value.toLowerCase()
+  if (!keyword) return allTools
+
+  return allTools.filter((tool) => {
+    const searchableText = [
+      tool.name,
+      tool.description,
+      tool.category.name,
+      tool.category.key,
+      ...tool.keywords,
+    ].join(' ').toLowerCase()
+
+    return searchableText.includes(keyword)
+  })
+})
+
+const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value))
+const visibleToolCount = computed(() => filteredTools.value.length)
+const favoriteTools = computed(() => favoriteIds.value
+  .map(id => allTools.find(tool => tool.id === id))
+  .filter((tool): tool is ToolDefinition => Boolean(tool)))
+
+function goToTool(toolId: string) {
+  router.push({ name: `tool-${toolId}` })
+}
+
+function isFavorite(toolId: string): boolean {
+  return favoriteIds.value.includes(toolId)
+}
+
+function toggleFavorite(toolId: string) {
+  favoriteIds.value = isFavorite(toolId)
+    ? favoriteIds.value.filter(id => id !== toolId)
+    : [...favoriteIds.value, toolId]
+  localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(favoriteIds.value))
+}
+
+function readFavoriteIds(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(FAVORITE_STORAGE_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+</script>
+
 <template>
   <div class="home-page">
     <section class="workspace-header">
@@ -76,139 +134,84 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { groupToolsByCategory, toolsByCategory } from '../config/tools.js';
-import type { ToolDefinition } from '../shared/types/tool.js';
-
-const FAVORITE_STORAGE_KEY = 'edt:favorite-tools';
-const router = useRouter();
-const searchText = ref('');
-const allTools = toolsByCategory.flatMap((group) => group.tools);
-const favoriteIds = ref(readFavoriteIds());
-
-const filteredTools = computed<ToolDefinition[]>(() => {
-  const keyword = searchText.value.toLowerCase();
-  if (!keyword) return allTools;
-
-  return allTools.filter((tool) => {
-    const searchableText = [
-      tool.name,
-      tool.description,
-      tool.category.name,
-      tool.category.key,
-      ...tool.keywords,
-    ].join(' ').toLowerCase();
-
-    return searchableText.includes(keyword);
-  });
-});
-
-const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value));
-const visibleToolCount = computed(() => filteredTools.value.length);
-const favoriteTools = computed(() => favoriteIds.value
-  .map((id) => allTools.find((tool) => tool.id === id))
-  .filter((tool): tool is ToolDefinition => Boolean(tool)));
-
-function goToTool(toolId: string) {
-  router.push({ name: `tool-${toolId}` });
-}
-
-function isFavorite(toolId: string): boolean {
-  return favoriteIds.value.includes(toolId);
-}
-
-function toggleFavorite(toolId: string) {
-  favoriteIds.value = isFavorite(toolId)
-    ? favoriteIds.value.filter((id) => id !== toolId)
-    : [...favoriteIds.value, toolId];
-  localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(favoriteIds.value));
-}
-
-function readFavoriteIds(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(FAVORITE_STORAGE_KEY) ?? '[]');
-    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .home-page {
-  padding: 34px 32px 48px;
   width: 100%;
-  max-width: 1320px;
+  max-width: 1360px;
   margin: 0 auto;
+  padding: 36px 32px 54px;
   box-sizing: border-box;
   overflow-y: auto;
 }
 
 .workspace-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 32px;
   align-items: end;
-  margin-bottom: 26px;
-}
+  margin-bottom: 28px;
 
-.workspace-kicker {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+  .workspace-kicker {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--color-primary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
 
-.workspace-copy h1 {
-  margin: 0;
-  max-width: 680px;
-  font-size: clamp(34px, 5vw, 64px);
-  line-height: 0.98;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--color-text-primary);
-}
+  .workspace-copy {
+    h1 {
+      max-width: 720px;
+      margin: 0;
+      color: var(--color-text-primary);
+      font-size: clamp(34px, 5vw, 60px);
+      font-weight: var(--font-weight-bold);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
 
-.workspace-copy p {
-  margin: 14px 0 0;
-  max-width: 560px;
-  font-size: var(--font-size-base);
-  color: var(--color-text-secondary);
+    p {
+      max-width: 58ch;
+      margin: 14px 0 0;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-base);
+    }
+  }
 }
 
 .workspace-stats {
   display: grid;
-  grid-template-columns: repeat(3, 92px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-border-light);
   overflow: hidden;
-}
 
-.workspace-stats div {
-  background: var(--color-surface-raised);
-  padding: 14px;
-}
+  div {
+    min-width: 0;
+    background: var(--color-surface-raised);
+    padding: 14px;
+  }
 
-.workspace-stats strong,
-.workspace-stats span {
-  display: block;
-}
+  strong,
+  span {
+    display: block;
+  }
 
-.workspace-stats strong {
-  font-size: var(--font-size-xl);
-  line-height: 1;
-  color: var(--color-text-primary);
-}
+  strong {
+    color: var(--color-text-primary);
+    font-size: var(--font-size-xl);
+    line-height: 1;
+  }
 
-.workspace-stats span {
-  margin-top: 6px;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
+  span {
+    margin-top: 6px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+  }
 }
 
 .toolbar {
@@ -216,30 +219,30 @@ function readFavoriteIds(): string[] {
   align-items: center;
   gap: var(--spacing-md);
   margin-bottom: 28px;
-}
 
-.search-input {
-  width: min(520px, 100%);
-  height: 42px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
-  color: var(--color-text-primary);
-  font: inherit;
-  padding: 0 14px;
-  outline: none;
-  transition: var(--transition-fast);
-}
+  .search-input {
+    width: min(520px, 100%);
+    height: 42px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+    color: var(--color-text-primary);
+    font: inherit;
+    padding: 0 14px;
+    outline: none;
+    transition: var(--transition-fast);
 
-.search-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-focus);
-}
+    &:focus {
+      border-color: var(--color-primary);
+      box-shadow: var(--shadow-focus);
+    }
+  }
 
-.tool-count {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
+  .tool-count {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
 }
 
 .category-list {
@@ -260,18 +263,18 @@ function readFavoriteIds(): string[] {
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--color-border-light);
-}
 
-.category-header h2 {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
+  h2 {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+  }
 
-.category-header span {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
+  span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
+  }
 }
 
 .tools-grid {
@@ -292,11 +295,10 @@ function readFavoriteIds(): string[] {
 @media (max-width: 900px) {
   .workspace-header {
     grid-template-columns: 1fr;
-  }
 
-  .workspace-stats {
-    width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    .workspace-stats {
+      width: 100%;
+    }
   }
 }
 

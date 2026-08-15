@@ -1,11 +1,293 @@
+<script setup lang="ts">
+import { cdpIpcChannels, invokeCdpIpc } from '@renderer/shared/ipc/useCdpIpc'
+import { useCdpInjectorStore } from '../stores/cdpInjectorStore'
+
+const store = useCdpInjectorStore()
+const channels = cdpIpcChannels()
+const activeTab = ref('profiles')
+const selectedIds = ref([])
+let unsubscribeStatus = null
+
+const profileDialogVisible = ref(false)
+const scriptDialogVisible = ref(false)
+const targetsCache = reactive({})
+const targetsLoading = reactive({})
+const selectedTargetId = reactive({})
+
+const profileForm = reactive({
+  id: '',
+  name: '',
+  executable: '',
+  args: '',
+  debugPort: 9333,
+  scriptId: '',
+  startupDelayMs: 2000,
+})
+
+const scriptForm = reactive({
+  id: '',
+  name: '',
+  description: '',
+  content: '',
+})
+
+const ACTIVE_STATUSES = ['launching', 'waiting', 'connecting', 'running']
+
+const STATUS_LABELS = {
+  launching: '启动中',
+  waiting: '等待 CDP',
+  connecting: '连接中',
+  running: '运行中',
+  error: '错误',
+  stopped: '已停止',
+}
+
+function scriptName(scriptId) {
+  return store.scripts.find(s => s.id === scriptId)?.name ?? '-'
+}
+
+function isRunning(profileId) {
+  const state = store.getRunningState(profileId)
+  return Boolean(state && ACTIVE_STATUSES.includes(state.status))
+}
+
+function statusLabel(profileId) {
+  const state = store.getRunningState(profileId)
+  if (!state) return '未运行'
+  return STATUS_LABELS[state.status] ?? state.status
+}
+
+function statusTagType(profileId) {
+  const state = store.getRunningState(profileId)
+  if (!state) return 'info'
+  if (state.status === 'running') return 'success'
+  if (state.status === 'error') return 'danger'
+  return 'warning'
+}
+
+function openProfileDialog(row) {
+  if (row) {
+    Object.assign(profileForm, {
+      id: row.id,
+      name: row.name,
+      executable: row.executable,
+      args: row.args ?? '',
+      debugPort: row.debugPort ?? 9333,
+      scriptId: row.scriptId ?? '',
+      startupDelayMs: row.startupDelayMs ?? 2000,
+    })
+  } else {
+    Object.assign(profileForm, {
+      id: '',
+      name: '',
+      executable: '',
+      args: '',
+      debugPort: 9333,
+      scriptId: store.scripts[0]?.id ?? '',
+      startupDelayMs: 2000,
+    })
+  }
+  profileDialogVisible.value = true
+}
+
+function openScriptDialog(row) {
+  if (row) {
+    Object.assign(scriptForm, {
+      id: row.id,
+      name: row.name,
+      description: row.description ?? '',
+      content: row.content ?? '',
+    })
+  } else {
+    Object.assign(scriptForm, {
+      id: '',
+      name: '',
+      description: '',
+      content: 'console.log(\'[CDP] injected\', location.href);\n',
+    })
+  }
+  scriptDialogVisible.value = true
+}
+
+async function pickExecutable() {
+  const path = await invokeCdpIpc(channels.SELECT_EXECUTABLE)
+  if (path) profileForm.executable = path
+}
+
+async function importScriptFile() {
+  const result = await invokeCdpIpc(channels.SELECT_SCRIPT_FILE)
+  if (result?.content) {
+    scriptForm.content = result.content
+    ElMessage.success('已导入脚本文件')
+  }
+}
+
+async function saveProfile() {
+  if (!profileForm.name?.trim() || !profileForm.executable?.trim() || !profileForm.scriptId) {
+    ElMessage.warning('请填写名称、可执行文件并选择脚本')
+    return
+  }
+  await store.saveProfile({ ...profileForm })
+  profileDialogVisible.value = false
+  ElMessage.success('已保存')
+}
+
+async function saveScript() {
+  if (!scriptForm.name?.trim() || !scriptForm.content?.trim()) {
+    ElMessage.warning('请填写名称和脚本内容')
+    return
+  }
+  await store.saveScript({ ...scriptForm })
+  scriptDialogVisible.value = false
+  ElMessage.success('已保存')
+}
+
+async function removeProfile(id) {
+  await ElMessageBox.confirm('确定删除该应用配置？', '确认')
+  await store.deleteProfile(id)
+  selectedIds.value = selectedIds.value.filter(item => item !== id)
+  ElMessage.success('已删除')
+}
+
+async function removeScript(id) {
+  await ElMessageBox.confirm('确定删除该脚本？', '确认')
+  await store.deleteScript(id)
+  ElMessage.success('已删除')
+}
+
+async function launchOne(profileId) {
+  const results = await store.launchBatch([profileId])
+  reportLaunchResults(results, '启动并注入成功')
+}
+
+async function launchSelected() {
+  const results = await store.launchBatch(selectedIds.value)
+  reportLaunchResults(results)
+}
+
+function reportLaunchResults(results, successMessage) {
+  const failed = results.filter(item => !item.ok)
+  if (failed.length === 0) {
+    ElMessage.success(successMessage ?? `已启动 ${results.length} 个应用`)
+    return
+  }
+  if (failed.length === results.length) {
+    ElMessage.error(failed[0]?.error || '启动失败')
+    return
+  }
+  ElMessage.warning(`${results.length - failed.length} 成功，${failed.length} 失败`)
+}
+
+function targetLabel(target) {
+  const type = target.type === 'iframe' ? '[iframe] ' : ''
+  const title = target.title || '(无标题)'
+  const url = target.url ? ` · ${target.url}` : ''
+  return `${type}${title}${url}`
+}
+
+async function loadTargets(profileId, port) {
+  targetsLoading[profileId] = true
+  try {
+    const targets = await store.fetchTargets(port)
+    targetsCache[profileId] = targets
+    if (targets.length > 0 && !selectedTargetId[profileId]) {
+      selectedTargetId[profileId] = targets[0].id
+    }
+    if (targets.length === 0) {
+      ElMessage.info('当前没有可用的 page 目标')
+    }
+  } catch (error) {
+    targetsCache[profileId] = []
+    ElMessage.error(error.message || '获取页面列表失败')
+  } finally {
+    targetsLoading[profileId] = false
+  }
+}
+
+async function ensureTargets(profileId, port) {
+  if (targetsCache[profileId]?.length) return
+  await loadTargets(profileId, port)
+}
+
+async function onRunningExpandChange(row, expandedRows) {
+  const expanded = expandedRows.some(item => item.profileId === row.profileId)
+  if (expanded) {
+    await loadTargets(row.profileId, row.port)
+  }
+}
+
+async function openDevToolsForTarget(target, options = {}) {
+  try {
+    await store.openDevTools({
+      devToolsUrl: target.devToolsUrl,
+      title: `DevTools · ${target.title || target.url || 'page'}`,
+      external: options.external === true,
+    })
+    const hint = options.external
+      ? '已在外部浏览器打开（30 秒内暂停注入）'
+      : '已打开 DevTools（调试期间已暂停脚本注入）'
+    ElMessage.success(hint)
+  } catch (error) {
+    ElMessage.error(error.message || '打开 DevTools 失败')
+  }
+}
+
+async function openDevToolsIndex(row) {
+  try {
+    await store.openDevTools({
+      port: row.port,
+      title: `CDP 调试入口 · ${row.name || row.port}`,
+    })
+    ElMessage.success('已打开调试入口页')
+  } catch (error) {
+    ElMessage.error(error.message || '打开调试入口失败')
+  }
+}
+
+async function openSelectedTarget(profileId) {
+  const targetId = selectedTargetId[profileId]
+  const target = targetsCache[profileId]?.find(item => item.id === targetId)
+  if (!target) {
+    ElMessage.warning('请先选择要打开的页面')
+    return
+  }
+  await openDevToolsForTarget(target)
+}
+
+watch(
+  () => store.running.map(item => item.profileId),
+  (profileIds) => {
+    const idSet = new Set(profileIds)
+    for (const profileId of Object.keys(targetsCache)) {
+      if (!idSet.has(profileId)) {
+        delete targetsCache[profileId]
+        delete targetsLoading[profileId]
+        delete selectedTargetId[profileId]
+      }
+    }
+  },
+)
+
+onMounted(async () => {
+  unsubscribeStatus = store.bindStatusEvents()
+  await store.load()
+})
+
+onUnmounted(() => {
+  unsubscribeStatus?.()
+})
+</script>
+
 <template>
   <div class="cdp-injector-page">
     <el-tabs v-model="activeTab" class="cdp-tabs">
       <el-tab-pane label="应用配置" name="profiles">
         <div class="tab-toolbar">
-          <el-button type="primary" @click="openProfileDialog()">新增应用</el-button>
+          <el-button type="primary" @click="openProfileDialog()">
+            新增应用
+          </el-button>
         </div>
-        <el-table :data="store.profiles" v-loading="store.loading" empty-text="暂无应用，点击「新增应用」添加">
+        <el-table v-loading="store.loading" :data="store.profiles" empty-text="暂无应用，点击「新增应用」添加">
           <el-table-column prop="name" label="名称" min-width="120" />
           <el-table-column prop="executable" label="可执行文件" min-width="200" show-overflow-tooltip />
           <el-table-column prop="debugPort" label="调试端口" width="100" />
@@ -16,12 +298,16 @@
           </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
-              <el-tag :type="statusTagType(row.id)" size="small">{{ statusLabel(row.id) }}</el-tag>
+              <el-tag :type="statusTagType(row.id)" size="small">
+                {{ statusLabel(row.id) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openProfileDialog(row)">编辑</el-button>
+              <el-button link type="primary" @click="openProfileDialog(row)">
+                编辑
+              </el-button>
               <el-button
                 link
                 type="success"
@@ -38,7 +324,9 @@
               >
                 停止
               </el-button>
-              <el-button link type="danger" @click="removeProfile(row.id)">删除</el-button>
+              <el-button link type="danger" @click="removeProfile(row.id)">
+                删除
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -46,15 +334,21 @@
 
       <el-tab-pane label="脚本库" name="scripts">
         <div class="tab-toolbar">
-          <el-button type="primary" @click="openScriptDialog()">新增脚本</el-button>
+          <el-button type="primary" @click="openScriptDialog()">
+            新增脚本
+          </el-button>
         </div>
-        <el-table :data="store.scripts" v-loading="store.loading" empty-text="暂无脚本">
+        <el-table v-loading="store.loading" :data="store.scripts" empty-text="暂无脚本">
           <el-table-column prop="name" label="名称" min-width="140" />
           <el-table-column prop="description" label="说明" min-width="160" show-overflow-tooltip />
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openScriptDialog(row)">编辑</el-button>
-              <el-button link type="danger" @click="removeScript(row.id)">删除</el-button>
+              <el-button link type="primary" @click="openScriptDialog(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="removeScript(row.id)">
+                删除
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -76,12 +370,16 @@
               {{ profile.name }}（端口 {{ profile.debugPort }}）
             </el-checkbox>
           </el-checkbox-group>
-          <div v-if="store.profiles.length === 0" class="empty-run">请先在「应用配置」中添加应用</div>
+          <div v-if="store.profiles.length === 0" class="empty-run">
+            请先在「应用配置」中添加应用
+          </div>
           <div class="run-actions">
             <el-button type="primary" :disabled="selectedIds.length === 0" @click="launchSelected">
               批量启动并注入
             </el-button>
-            <el-button :disabled="store.running.length === 0" @click="store.stopAll()">全部停止</el-button>
+            <el-button :disabled="store.running.length === 0" @click="store.stopAll()">
+              全部停止
+            </el-button>
           </div>
           <div v-if="store.running.length > 0" class="running-section">
             <h4>运行中</h4>
@@ -97,7 +395,9 @@
                     <div class="targets-expand-toolbar">
                       <span class="targets-expand-title">CDP 页面列表（端口 {{ row.port }}）</span>
                       <div class="targets-expand-actions">
-                        <el-button size="small" @click="openDevToolsIndex(row)">调试入口页</el-button>
+                        <el-button size="small" @click="openDevToolsIndex(row)">
+                          调试入口页
+                        </el-button>
                         <el-button
                           size="small"
                           :loading="targetsLoading[row.profileId]"
@@ -108,9 +408,9 @@
                       </div>
                     </div>
                     <el-table
+                      v-loading="targetsLoading[row.profileId]"
                       :data="targetsCache[row.profileId] ?? []"
                       size="small"
-                      v-loading="targetsLoading[row.profileId]"
                       empty-text="暂无页面，点击刷新获取"
                     >
                       <el-table-column prop="type" label="类型" width="80">
@@ -142,7 +442,9 @@
                 </template>
               </el-table-column>
               <el-table-column label="PID" width="90">
-                <template #default="{ row }">{{ row.pid ?? '-' }}</template>
+                <template #default="{ row }">
+                  {{ row.pid ?? '-' }}
+                </template>
               </el-table-column>
               <el-table-column prop="port" label="端口" width="80" />
               <el-table-column prop="message" label="状态" min-width="180" show-overflow-tooltip />
@@ -174,8 +476,12 @@
               </el-table-column>
               <el-table-column label="操作" width="180" fixed="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="store.reinject(row.profileId)">重新注入</el-button>
-                  <el-button link type="warning" @click="store.stop(row.profileId)">停止</el-button>
+                  <el-button link type="primary" @click="store.reinject(row.profileId)">
+                    重新注入
+                  </el-button>
+                  <el-button link type="warning" @click="store.stop(row.profileId)">
+                    停止
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -195,7 +501,9 @@
               v-model="profileForm.executable"
               placeholder="Windows: C:\path\app.exe；macOS: /Applications/App.app"
             />
-            <el-button @click="pickExecutable">浏览</el-button>
+            <el-button @click="pickExecutable">
+              浏览
+            </el-button>
           </div>
         </el-form-item>
         <el-form-item label="启动参数">
@@ -224,8 +532,12 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="profileDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveProfile">保存</el-button>
+        <el-button @click="profileDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="saveProfile">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -239,7 +551,9 @@
         </el-form-item>
         <el-form-item label="脚本" required>
           <div class="script-toolbar">
-            <el-button size="small" @click="importScriptFile">从文件导入</el-button>
+            <el-button size="small" @click="importScriptFile">
+              从文件导入
+            </el-button>
           </div>
           <el-input
             v-model="scriptForm.content"
@@ -251,334 +565,58 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="scriptDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveScript">保存</el-button>
+        <el-button @click="scriptDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" @click="saveScript">
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
-<script setup lang="ts">
-import { useCdpInjectorStore } from '../stores/cdpInjectorStore.js';
-import { invokeCdpIpc, cdpIpcChannels } from '@renderer/shared/ipc/useCdpIpc.js';
-
-const store = useCdpInjectorStore();
-const channels = cdpIpcChannels();
-const activeTab = ref('profiles');
-const selectedIds = ref([]);
-let unsubscribeStatus = null;
-
-const profileDialogVisible = ref(false);
-const scriptDialogVisible = ref(false);
-const targetsCache = reactive({});
-const targetsLoading = reactive({});
-const selectedTargetId = reactive({});
-
-const profileForm = reactive({
-  id: '',
-  name: '',
-  executable: '',
-  args: '',
-  debugPort: 9333,
-  scriptId: '',
-  startupDelayMs: 2000,
-});
-
-const scriptForm = reactive({
-  id: '',
-  name: '',
-  description: '',
-  content: '',
-});
-
-const ACTIVE_STATUSES = ['launching', 'waiting', 'connecting', 'running'];
-
-const STATUS_LABELS = {
-  launching: '启动中',
-  waiting: '等待 CDP',
-  connecting: '连接中',
-  running: '运行中',
-  error: '错误',
-  stopped: '已停止',
-};
-
-function scriptName(scriptId) {
-  return store.scripts.find((s) => s.id === scriptId)?.name ?? '-';
-}
-
-function isRunning(profileId) {
-  const state = store.getRunningState(profileId);
-  return Boolean(state && ACTIVE_STATUSES.includes(state.status));
-}
-
-function statusLabel(profileId) {
-  const state = store.getRunningState(profileId);
-  if (!state) return '未运行';
-  return STATUS_LABELS[state.status] ?? state.status;
-}
-
-function statusTagType(profileId) {
-  const state = store.getRunningState(profileId);
-  if (!state) return 'info';
-  if (state.status === 'running') return 'success';
-  if (state.status === 'error') return 'danger';
-  return 'warning';
-}
-
-function openProfileDialog(row) {
-  if (row) {
-    Object.assign(profileForm, {
-      id: row.id,
-      name: row.name,
-      executable: row.executable,
-      args: row.args ?? '',
-      debugPort: row.debugPort ?? 9333,
-      scriptId: row.scriptId ?? '',
-      startupDelayMs: row.startupDelayMs ?? 2000,
-    });
-  } else {
-    Object.assign(profileForm, {
-      id: '',
-      name: '',
-      executable: '',
-      args: '',
-      debugPort: 9333,
-      scriptId: store.scripts[0]?.id ?? '',
-      startupDelayMs: 2000,
-    });
-  }
-  profileDialogVisible.value = true;
-}
-
-function openScriptDialog(row) {
-  if (row) {
-    Object.assign(scriptForm, {
-      id: row.id,
-      name: row.name,
-      description: row.description ?? '',
-      content: row.content ?? '',
-    });
-  } else {
-    Object.assign(scriptForm, {
-      id: '',
-      name: '',
-      description: '',
-      content: "console.log('[CDP] injected', location.href);\n",
-    });
-  }
-  scriptDialogVisible.value = true;
-}
-
-async function pickExecutable() {
-  const path = await invokeCdpIpc(channels.SELECT_EXECUTABLE);
-  if (path) profileForm.executable = path;
-}
-
-async function importScriptFile() {
-  const result = await invokeCdpIpc(channels.SELECT_SCRIPT_FILE);
-  if (result?.content) {
-    scriptForm.content = result.content;
-    ElMessage.success('已导入脚本文件');
-  }
-}
-
-async function saveProfile() {
-  if (!profileForm.name?.trim() || !profileForm.executable?.trim() || !profileForm.scriptId) {
-    ElMessage.warning('请填写名称、可执行文件并选择脚本');
-    return;
-  }
-  await store.saveProfile({ ...profileForm });
-  profileDialogVisible.value = false;
-  ElMessage.success('已保存');
-}
-
-async function saveScript() {
-  if (!scriptForm.name?.trim() || !scriptForm.content?.trim()) {
-    ElMessage.warning('请填写名称和脚本内容');
-    return;
-  }
-  await store.saveScript({ ...scriptForm });
-  scriptDialogVisible.value = false;
-  ElMessage.success('已保存');
-}
-
-async function removeProfile(id) {
-  await ElMessageBox.confirm('确定删除该应用配置？', '确认');
-  await store.deleteProfile(id);
-  selectedIds.value = selectedIds.value.filter((item) => item !== id);
-  ElMessage.success('已删除');
-}
-
-async function removeScript(id) {
-  await ElMessageBox.confirm('确定删除该脚本？', '确认');
-  await store.deleteScript(id);
-  ElMessage.success('已删除');
-}
-
-async function launchOne(profileId) {
-  const results = await store.launchBatch([profileId]);
-  reportLaunchResults(results, '启动并注入成功');
-}
-
-async function launchSelected() {
-  const results = await store.launchBatch(selectedIds.value);
-  reportLaunchResults(results);
-}
-
-function reportLaunchResults(results, successMessage) {
-  const failed = results.filter((item) => !item.ok);
-  if (failed.length === 0) {
-    ElMessage.success(successMessage ?? `已启动 ${results.length} 个应用`);
-    return;
-  }
-  if (failed.length === results.length) {
-    ElMessage.error(failed[0]?.error || '启动失败');
-    return;
-  }
-  ElMessage.warning(`${results.length - failed.length} 成功，${failed.length} 失败`);
-}
-
-function targetLabel(target) {
-  const type = target.type === 'iframe' ? '[iframe] ' : '';
-  const title = target.title || '(无标题)';
-  const url = target.url ? ` · ${target.url}` : '';
-  return `${type}${title}${url}`;
-}
-
-async function loadTargets(profileId, port) {
-  targetsLoading[profileId] = true;
-  try {
-    const targets = await store.fetchTargets(port);
-    targetsCache[profileId] = targets;
-    if (targets.length > 0 && !selectedTargetId[profileId]) {
-      selectedTargetId[profileId] = targets[0].id;
-    }
-    if (targets.length === 0) {
-      ElMessage.info('当前没有可用的 page 目标');
-    }
-  } catch (error) {
-    targetsCache[profileId] = [];
-    ElMessage.error(error.message || '获取页面列表失败');
-  } finally {
-    targetsLoading[profileId] = false;
-  }
-}
-
-async function ensureTargets(profileId, port) {
-  if (targetsCache[profileId]?.length) return;
-  await loadTargets(profileId, port);
-}
-
-async function onRunningExpandChange(row, expandedRows) {
-  const expanded = expandedRows.some((item) => item.profileId === row.profileId);
-  if (expanded) {
-    await loadTargets(row.profileId, row.port);
-  }
-}
-
-async function openDevToolsForTarget(target, options = {}) {
-  try {
-    await store.openDevTools({
-      devToolsUrl: target.devToolsUrl,
-      title: `DevTools · ${target.title || target.url || 'page'}`,
-      external: options.external === true,
-    });
-    const hint = options.external
-      ? '已在外部浏览器打开（30 秒内暂停注入）'
-      : '已打开 DevTools（调试期间已暂停脚本注入）';
-    ElMessage.success(hint);
-  } catch (error) {
-    ElMessage.error(error.message || '打开 DevTools 失败');
-  }
-}
-
-async function openDevToolsIndex(row) {
-  try {
-    await store.openDevTools({
-      port: row.port,
-      title: `CDP 调试入口 · ${row.name || row.port}`,
-    });
-    ElMessage.success('已打开调试入口页');
-  } catch (error) {
-    ElMessage.error(error.message || '打开调试入口失败');
-  }
-}
-
-async function openSelectedTarget(profileId) {
-  const targetId = selectedTargetId[profileId];
-  const target = targetsCache[profileId]?.find((item) => item.id === targetId);
-  if (!target) {
-    ElMessage.warning('请先选择要打开的页面');
-    return;
-  }
-  await openDevToolsForTarget(target);
-}
-
-watch(
-  () => store.running.map((item) => item.profileId),
-  (profileIds) => {
-    const idSet = new Set(profileIds);
-    for (const profileId of Object.keys(targetsCache)) {
-      if (!idSet.has(profileId)) {
-        delete targetsCache[profileId];
-        delete targetsLoading[profileId];
-        delete selectedTargetId[profileId];
-      }
-    }
-  },
-);
-
-onMounted(async () => {
-  unsubscribeStatus = store.bindStatusEvents();
-  await store.load();
-});
-
-onUnmounted(() => {
-  unsubscribeStatus?.();
-});
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .cdp-injector-page {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
-  flex: 1;
   padding: 20px 24px 24px;
-  background: var(--color-app-bg);
   overflow: hidden;
+  background: var(--color-app-bg);
 }
 
 .cdp-tabs {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
-  flex: 1;
+  padding: 14px 16px 16px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-sm);
-  padding: 14px 16px 16px;
-}
 
-.cdp-tabs :deep(.el-tabs__header) {
-  margin-bottom: 14px;
-}
+  :deep(.el-tabs__header) {
+    margin-bottom: 14px;
+  }
 
-.cdp-tabs :deep(.el-tabs__nav-wrap::after) {
-  background: var(--color-border-light);
-}
+  :deep(.el-tabs__nav-wrap::after) {
+    background: var(--color-border-light);
+  }
 
-.cdp-tabs :deep(.el-tabs__content) {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  :deep(.el-tabs__content) {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
 }
 
 .tab-toolbar {
-  margin-bottom: 14px;
   display: flex;
   justify-content: flex-end;
+  margin-bottom: 14px;
 }
 
 .path-row {
@@ -594,11 +632,11 @@ onUnmounted(() => {
 
 .running-section {
   margin-top: var(--spacing-lg);
-}
 
-.running-section h4 {
-  margin: 0 0 var(--spacing-sm);
-  font-size: var(--font-size-base);
+  h4 {
+    margin: 0 0 var(--spacing-sm);
+    font-size: var(--font-size-base);
+  }
 }
 
 .running-table {
@@ -607,48 +645,47 @@ onUnmounted(() => {
 
 .targets-expand {
   padding: 12px 14px 14px;
-  background: var(--color-muted);
   border-radius: var(--radius-lg);
+  background: var(--color-muted);
 }
 
 .targets-expand-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--spacing-sm);
   gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
-.targets-expand-actions {
+.targets-expand-actions,
+.devtools-quick {
   display: flex;
   gap: var(--spacing-sm);
-}
-
-.targets-expand-title {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
 }
 
 .devtools-quick {
-  display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+}
+
+.targets-expand-title {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .run-hint {
+  max-width: 860px;
+  margin: 0 0 16px;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: 1.6;
-  margin: 0 0 16px;
-  max-width: 860px;
-}
 
-.run-hint code {
-  background: var(--color-muted);
-  border: 1px solid var(--color-border-light);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
+  code {
+    padding: 2px 6px;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-sm);
+    background: var(--color-muted);
+    font-size: var(--font-size-xs);
+  }
 }
 
 .run-checkboxes {
@@ -668,14 +705,16 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-xs);
 }
 
-.script-editor :deep(textarea) {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--font-size-sm);
+.script-editor {
+  :deep(textarea) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--font-size-sm);
+  }
 }
 
 .empty-run {
-  color: var(--color-text-secondary);
   margin-bottom: var(--spacing-md);
+  color: var(--color-text-secondary);
 }
 
 @media (max-width: 760px) {

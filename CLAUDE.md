@@ -12,8 +12,9 @@ Electron + Vue 3 + Pinia + Element Plus + Vite 多工具平台。Chrome沙箱 �
 renderer/              → 主应用 Shell（首页导航）
 tools/<tool>/renderer/ → 工具前端（Vue 组件）
 tools/<tool>/backend/  → 工具后端（Electron 主进程代码）
-tools/<tool>/index.js  → 工具定义入口
-electron/              → Electron 入口（仅加载 backend）
+tools/<tool>/index.ts  → 工具定义入口
+electron/              → Electron 主进程与 preload 源码
+dist-electron/         → Electron 主进程、后端、preload 构建产物
 shared/                → 跨工具共享代码（预留）
 data/                  → 运行时数据（项目根目录）
 ```
@@ -24,7 +25,7 @@ data/                  → 运行时数据（项目根目录）
 project/
 ├── renderer/
 │   ├── App.vue              # 应用 Shell（header + router-view + footer）
-│   ├── main.js              # Vue 入口
+│   ├── main.ts              # Vue 入口
 │   ├── router/              # 路由配置
 │   ├── layouts/             # ToolLayout（返回按钮 + 标题）
 │   ├── pages/HomePage.vue   # 主页工具网格
@@ -32,29 +33,31 @@ project/
 │   │   ├── components/      # ToolCard 等通用组件
 │   │   ├── composables/     # useIpc, useDialogVisible, useNavigation
 │   │   └── styles/main.css  # CSS 变量定义
-│   └── config/tools.js      # 工具注册表
+│   └── config/tools.ts      # 工具注册表
 │
 ├── tools/chrome-sandbox/
-│   ├── index.js             # 工具定义（id, name, route）
+│   ├── index.ts             # 工具定义（id, name, route）
 │   ├── renderer/
 │   │   ├── components/      # SandboxCard, StatusPanel, ActionBar 等
 │   │   ├── stores/          # sandboxStore（命名空间 chrome-sandbox/sandbox）
 │   │   ├── pages/           # ChromeSandbox.vue
-│   │   └── shared/          # sandbox.js 常量
+│   │   └── shared/          # 前端共享逻辑
 │   ├── backend/
-│   │   ├── ipc/             # channels.js + handlers.js
-│   │   ├── services/        # sandbox-service.js
-│   │   ├── store/           # database.js, config-store.js
+│   │   ├── ipc/             # channels.ts + handlers.ts
+│   │   ├── services/        # 服务层
+│   │   ├── store/           # database.ts, config-store.ts
 │   │   ├── chrome/          # Chrome 启动和管理
 │   │   ├── fingerprint/     # 指纹生成
-│   │   ├── constants/       # sandbox.js 常量（后端用）
+│   │   ├── constants/       # 后端常量
 │   │   └── utils/           # path-helper.js, logger.js
 │   ├── extension/           # 指纹伪造 Chrome 扩展
 │   └── assets/              # 工具资源
 │
 ├── electron/
-│   ├── main.js              # 引用 tools/chrome-sandbox/backend
-│   └── preload.cjs          # IPC 通道暴露
+│   ├── main.ts              # 引用 tools/*/backend
+│   └── preload.ts           # IPC 通道暴露源码
+│
+├── dist-electron/           # 构建产物：main.js + preload.cjs + tools backend
 │
 ├── shared/                  # 跨工具共享（预留）
 └── data/                    # 运行时数据（config.db, sandboxes/）
@@ -72,22 +75,35 @@ project/
 
 ## 编码规范
 
-### 工具定义（index.js）
+### TypeScript 与导入边界
 
-```javascript
-export default {
+- 源码统一使用 `.ts` / `.vue`；构建产物才是 `.js` / `.cjs`。
+- 前端范围：`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts` 导入 TS 模块使用无后缀，Vue SFC 保留 `.vue`。
+- Electron/后端范围：`electron/**`、`tools/*/backend/**` 使用 Node ESM，源码中的相对 TS 模块导入写 `.js` 运行时后缀，不写 `.ts`。
+- `electron/preload.ts` 由 `scripts/build-electron.mjs` 打包为 `dist-electron/electron/preload.cjs`。
+- 前端不得直接 import `tools/*/backend/**`，必须通过 preload 暴露的 IPC API 调用。
+- `shared/**` 只能放纯类型、常量、纯函数，不依赖 Electron、Node API 或数据库。
+
+### 工具定义（index.ts）
+
+```ts
+import { defineTool } from '../../renderer/shared/tool/defineTool';
+import ChromeSandboxPage from './renderer/pages/ChromeSandbox.vue';
+
+export default defineTool({
   id: 'chrome-sandbox',           // 唯一标识
   name: 'Chrome沙箱',             // 显示名称
   description: '多沙箱浏览器管理',
   version: '1.0.0',
   color: '#3b82f6',               // 卡片颜色
+  category: { key: 'browser', name: '浏览器工具' },
+  keywords: ['chrome', 'sandbox'],
+  supportedTargets: ['win', 'mac'],
   route: {
     path: 'chrome-sandbox',
-    name: 'tool-chrome-sandbox',
     component: ChromeSandboxPage,
-    meta: { toolId: 'chrome-sandbox' },
   },
-};
+});
 ```
 
 ### CSS 变量
@@ -125,13 +141,13 @@ export default {
 前端调用后端：
 
 ```javascript
-import { invokeIpc, ipcChannels } from '@renderer/shared/composables/useIpc.js';
+import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc';
 
 const channels = ipcChannels();
 await invokeIpc(channels.SANDBOX_CREATE, { name: '新沙箱' });
 ```
 
-IPC 通道定义：`tools/chrome-sandbox/backend/ipc/channels.js`
+IPC 通道定义：`tools/chrome-sandbox/backend/ipc/channels.ts`
 
 ### Pinia Store
 
@@ -143,7 +159,7 @@ defineStore('chrome-sandbox/sandbox', () => { ... });
 
 ### 常量文件
 
-工具常量（如 sandbox.js）同时存在于：
+工具常量同时存在于：
 - `tools/<tool>/renderer/shared/` — 前端使用
 - `tools/<tool>/backend/constants/` — 后端使用
 
@@ -154,7 +170,7 @@ defineStore('chrome-sandbox/sandbox', () => { ... });
 1. 创建目录结构：
    ```
    tools/<tool>/
-   ├── index.js
+   ├── index.ts
    ├── renderer/
    │   ├── components/
    │   ├── stores/
@@ -162,21 +178,15 @@ defineStore('chrome-sandbox/sandbox', () => { ... });
    └── backend/              # 可选，如需后端代码
    ```
 
-2. 实现 `index.js` 工具定义
+2. 实现 `index.ts` 工具定义
 
-3. 注册到 `renderer/config/tools.js`：
-   ```javascript
-   import newTool from '@tools/new-tool/index.js';
+3. 注册到 `renderer/config/tools.ts`：
+   ```ts
+   import newTool from '@tools/new-tool/index';
    export const toolRegistry = [chromeSandbox, newTool];
    ```
 
-4. 路由添加到 `renderer/router/routes.js`：
-   ```javascript
-   children: [
-     chromeSandbox.route,
-     newTool.route,
-   ]
-   ```
+4. 路由由工具注册表自动汇总。
 
 ## 常用命令
 

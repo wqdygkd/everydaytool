@@ -1,11 +1,12 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { logger } from '../utils/logger.js';
+import { exec } from 'node:child_process'
+import process from 'node:process'
+import { promisify } from 'node:util'
+import { logger } from '../utils/logger.js'
 
-const execAsync = promisify(exec);
+const execAsync = promisify(exec)
 
 export async function focusChromeWindow(pid: number): Promise<boolean> {
-  if (!pid) return false;
+  if (!pid) return false
 
   try {
     if (process.platform === 'win32') {
@@ -23,20 +24,20 @@ export async function focusChromeWindow(pid: number): Promise<boolean> {
           [Win32]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
           [Win32]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
         }
-      `;
-      await execAsync(`powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`);
-      return true;
+      `
+      await execAsync(`powershell -NoProfile -Command "${script.replace(/"/g, '\\"')}"`)
+      return true
     }
 
     if (process.platform === 'darwin') {
-      await execAsync(`osascript -e 'tell application "Google Chrome" to activate'`);
-      return true;
+      await execAsync(`osascript -e 'tell application "Google Chrome" to activate'`)
+      return true
     }
 
-    await execAsync(`wmctrl -ia $(wmctrl -lp | awk '$3 == ${pid} {print $1; exit}')`);
-    return true;
+    await execAsync(`wmctrl -ia $(wmctrl -lp | awk '$3 == ${pid} {print $1; exit}')`)
+    return true
   } catch (error) {
-    logger.warn('Failed to focus Chrome window', { pid, error: (error as Error).message });
-    return false;
+    logger.warn('Failed to focus Chrome window', { pid, error: (error as Error).message })
+    return false
   }
 }

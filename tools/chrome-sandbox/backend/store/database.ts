@@ -1,8 +1,8 @@
-import Database from 'better-sqlite3';
-import fs from 'fs-extra';
-import path from 'path';
-import { getDatabasePath } from '../utils/path-helper.js';
-import { logger } from '../utils/logger.js';
+import { mkdirSync } from 'node:fs'
+import path from 'node:path'
+import Database from 'better-sqlite3'
+import { logger } from '../utils/logger.js'
+import { getDatabasePath } from '../utils/path-helper.js'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sandboxes (
@@ -50,31 +50,31 @@ CREATE TABLE IF NOT EXISTS global_config (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sandboxes_status ON sandboxes(status);
-`;
+`
 
-let db: Database.Database | null = null;
+let db: Database.Database | null = null
 
 export function getDatabase(): Database.Database {
-  if (db) return db;
+  if (db) return db
 
-  const dbPath = getDatabasePath();
-  fs.ensureDirSync(path.dirname(dbPath));
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.exec(SCHEMA);
-  logger.info('Database initialized', { dbPath });
-  return db;
+  const dbPath = getDatabasePath()
+  mkdirSync(path.dirname(dbPath), { recursive: true })
+  db = new Database(dbPath)
+  db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
+  db.exec(SCHEMA)
+  logger.info('Database initialized', { dbPath })
+  return db
 }
 
 export function reloadDatabase(): Database.Database {
-  closeDatabase();
-  return getDatabase();
+  closeDatabase()
+  return getDatabase()
 }
 
 export function closeDatabase(): void {
   if (db) {
-    db.close();
-    db = null;
+    db.close()
+    db = null
   }
 }

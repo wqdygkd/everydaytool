@@ -1,25 +1,25 @@
 export function useNavigation() {
-  const router = useRouter();
-  const route = useRoute();
+  const router = useRouter()
+  const route = useRoute()
 
   function goToHome(): void {
-    router.push({ name: 'home' });
+    router.push({ name: 'home' })
   }
 
   function goToTool(toolId: string): void {
-    router.push({ name: `tool-${toolId}` });
+    router.push({ name: `tool-${toolId}` })
   }
 
   function goBack(): void {
     if (route.meta?.toolId) {
-      goToHome();
+      goToHome()
     } else {
-      router.back();
+      router.back()
     }
   }
 
-  const currentTool = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null));
-  const isHome = computed(() => route.name === 'home');
+  const currentTool = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null))
+  const isHome = computed(() => route.name === 'home')
 
-  return { goToHome, goToTool, goBack, currentTool, isHome };
+  return { goToHome, goToTool, goBack, currentTool, isHome }
 }

@@ -1,4 +1,4 @@
-import type { ComputedRef } from 'vue';
+import type { ComputedRef } from 'vue'
 
 export function useDialogVisible(
   props: { modelValue: boolean },
@@ -7,5 +7,5 @@ export function useDialogVisible(
   return computed({
     get: () => props.modelValue,
     set: (value: boolean) => emit('update:modelValue', value),
-  });
+  })
 }
