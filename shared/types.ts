@@ -138,6 +138,11 @@ export interface CdpProfile {
   debugPort: number;
   scriptId: string;
   startupDelayMs?: number;
+  /** 运行期可用的扩展字段 */
+  scriptContent?: string;
+  scriptPath?: string;
+  cdpTimeoutMs?: number;
+  pollIntervalMs?: number;
 }
 
 export interface CdpScript {
@@ -161,6 +166,7 @@ export interface CdpRunningState {
   status: CdpRunningStatus;
   message: string;
   targetCount?: number;
+  launchArgs?: string[];
   updatedAt: number;
 }
 
