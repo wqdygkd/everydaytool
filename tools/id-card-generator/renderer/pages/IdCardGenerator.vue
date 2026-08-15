@@ -80,18 +80,19 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-2xl);
+  padding: 32px;
+  background: var(--color-app-bg);
   overflow: auto;
 }
 
 .generator-card {
   width: 100%;
   max-width: 520px;
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-2xl);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-md);
 }
 
 .config-form {
@@ -105,8 +106,9 @@ onMounted(() => {
 }
 
 .result-section {
-  padding: var(--spacing-lg);
+  padding: 18px;
   background: var(--color-muted);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-lg);
 }
@@ -115,7 +117,7 @@ onMounted(() => {
   font-family: 'Consolas', 'Courier New', monospace;
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
-  letter-spacing: 2px;
+  letter-spacing: 0.08em;
   color: var(--color-text-primary);
   text-align: center;
   margin-bottom: var(--spacing-lg);
@@ -130,8 +132,11 @@ onMounted(() => {
 
 .detail-item {
   display: flex;
+  justify-content: space-between;
   gap: var(--spacing-md);
   font-size: var(--font-size-sm);
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 8px;
 }
 
 .detail-label {
@@ -150,5 +155,19 @@ onMounted(() => {
   color: var(--color-text-tertiary);
   line-height: 1.5;
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .id-card-page {
+    padding: 16px;
+  }
+
+  .generator-card {
+    padding: 20px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
 }
 </style>

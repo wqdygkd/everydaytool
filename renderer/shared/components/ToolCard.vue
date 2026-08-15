@@ -1,5 +1,5 @@
 <template>
-  <div class="tool-card" :style="{ borderColor: tool.color }" @click="$emit('click')">
+  <div class="tool-card" :style="{ '--tool-color': tool.color }" @click="$emit('click')">
     <button
       class="favorite-btn"
       type="button"
@@ -8,17 +8,13 @@
       :title="isFavorite ? '取消收藏' : '收藏工具'"
       @click.stop="$emit('toggleFavorite')"
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3.4l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17.3l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3.4z" />
-      </svg>
+      <span aria-hidden="true">★</span>
     </button>
-    <div class="tool-icon" :style="{ background: tool.color }">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-        <rect x="3" y="3" width="7" height="7" rx="2" />
-        <rect x="14" y="3" width="7" height="7" rx="2" />
-        <rect x="3" y="14" width="7" height="7" rx="2" />
-        <rect x="14" y="14" width="7" height="7" rx="2" />
-      </svg>
+    <div class="tool-icon" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
     </div>
     <div class="tool-info">
       <h3 class="tool-name">{{ tool.name }}</h3>
@@ -49,26 +45,37 @@ defineEmits<{
 <style scoped>
 .tool-card {
   position: relative;
-  background: var(--color-surface);
+  min-height: 184px;
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  padding: 18px;
   cursor: pointer;
   transition: var(--transition-base);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.tool-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-top: 3px solid var(--tool-color);
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .favorite-btn {
   position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
-  width: 28px;
-  height: 28px;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
   color: var(--color-text-tertiary);
   cursor: pointer;
   display: inline-flex;
@@ -82,17 +89,18 @@ defineEmits<{
 .favorite-btn.active {
   border-color: var(--color-warning);
   color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface-raised));
 }
 
-.favorite-btn svg {
-  width: 17px;
-  height: 17px;
-  fill: currentColor;
+.favorite-btn span {
+  line-height: 1;
+  font-size: 15px;
 }
 
 .tool-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--tool-color) 48%, var(--color-border-light));
 }
 
 .tool-card:active {
@@ -100,12 +108,21 @@ defineEmits<{
 }
 
 .tool-icon {
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--tool-color) 16%, var(--color-surface-raised));
+  border: 1px solid color-mix(in srgb, var(--tool-color) 28%, var(--color-border-light));
+}
+
+.tool-icon span {
+  border-radius: 3px;
+  background: var(--tool-color);
+  opacity: 0.9;
 }
 
 .tool-info {
@@ -116,7 +133,7 @@ defineEmits<{
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  margin-bottom: 4px;
+  margin: 0 38px 6px 0;
 }
 
 .tool-desc {
@@ -145,7 +162,7 @@ defineEmits<{
 
 .tool-new {
   border-radius: var(--radius-sm);
-  background: var(--color-primary-light);
+  background: var(--color-primary-soft);
   color: var(--color-primary);
   padding: 1px 6px;
   font-weight: var(--font-weight-semibold);

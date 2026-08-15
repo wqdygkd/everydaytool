@@ -546,7 +546,8 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
   flex: 1;
-  padding: var(--spacing-md);
+  padding: 20px 24px 24px;
+  background: var(--color-app-bg);
   overflow: hidden;
 }
 
@@ -555,6 +556,19 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
   flex: 1;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px 16px;
+}
+
+.cdp-tabs :deep(.el-tabs__header) {
+  margin-bottom: 14px;
+}
+
+.cdp-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--color-border-light);
 }
 
 .cdp-tabs :deep(.el-tabs__content) {
@@ -564,7 +578,9 @@ onUnmounted(() => {
 }
 
 .tab-toolbar {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .path-row {
@@ -575,6 +591,7 @@ onUnmounted(() => {
 
 .run-panel {
   max-width: 100%;
+  padding: 2px;
 }
 
 .running-section {
@@ -591,7 +608,9 @@ onUnmounted(() => {
 }
 
 .targets-expand {
-  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  padding: 12px 14px 14px;
+  background: var(--color-muted);
+  border-radius: var(--radius-lg);
 }
 
 .targets-expand-toolbar {
@@ -622,11 +641,13 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: 1.6;
-  margin-bottom: var(--spacing-md);
+  margin: 0 0 16px;
+  max-width: 860px;
 }
 
 .run-hint code {
-  background: var(--color-surface);
+  background: var(--color-muted);
+  border: 1px solid var(--color-border-light);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
@@ -657,5 +678,18 @@ onUnmounted(() => {
 .empty-run {
   color: var(--color-text-secondary);
   margin-bottom: var(--spacing-md);
+}
+
+@media (max-width: 760px) {
+  .cdp-injector-page {
+    padding: 14px;
+  }
+
+  .targets-expand-toolbar,
+  .devtools-quick,
+  .path-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

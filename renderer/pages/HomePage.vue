@@ -1,8 +1,25 @@
 <template>
   <div class="home-page">
-    <section class="hero-section">
-      <h1>everydaytool</h1>
-      <p class="hero-desc">edt · 选择一个工具开始工作</p>
+    <section class="workspace-header">
+      <div class="workspace-copy">
+        <span class="workspace-kicker">edt workspace</span>
+        <h1>选择工具，继续工作</h1>
+        <p>桌面端和网页端工具统一入口，收藏常用项，按能力快速过滤。</p>
+      </div>
+      <div class="workspace-stats">
+        <div>
+          <strong>{{ allTools.length }}</strong>
+          <span>可用工具</span>
+        </div>
+        <div>
+          <strong>{{ favoriteTools.length }}</strong>
+          <span>收藏</span>
+        </div>
+        <div>
+          <strong>{{ toolsByCategory.length }}</strong>
+          <span>分类</span>
+        </div>
+      </div>
     </section>
 
     <section class="toolbar">
@@ -12,7 +29,7 @@
         type="search"
         placeholder="搜索工具、能力或关键词"
       >
-      <span class="tool-count">共 {{ visibleToolCount }} 个工具</span>
+      <span class="tool-count">{{ visibleToolCount }} 个匹配</span>
     </section>
 
     <section v-if="favoriteTools.length > 0" class="favorite-section">
@@ -122,54 +139,104 @@ function readFavoriteIds(): string[] {
 
 <style scoped>
 .home-page {
-  padding: var(--spacing-2xl);
+  padding: 34px 32px 48px;
   width: 100%;
-  max-width: 1400px;
+  max-width: 1320px;
   margin: 0 auto;
   box-sizing: border-box;
   overflow-y: auto;
 }
 
-.hero-section {
-  text-align: center;
-  margin-bottom: var(--spacing-2xl);
+.workspace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: end;
+  margin-bottom: 26px;
 }
 
-.hero-section h1 {
-  font-size: var(--font-size-2xl);
+.workspace-kicker {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--spacing-sm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.hero-desc {
+.workspace-copy h1 {
+  margin: 0;
+  max-width: 680px;
+  font-size: clamp(34px, 5vw, 64px);
+  line-height: 0.98;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.workspace-copy p {
+  margin: 14px 0 0;
+  max-width: 560px;
   font-size: var(--font-size-base);
   color: var(--color-text-secondary);
+}
+
+.workspace-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 92px);
+  gap: 1px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-border-light);
+  overflow: hidden;
+}
+
+.workspace-stats div {
+  background: var(--color-surface-raised);
+  padding: 14px;
+}
+
+.workspace-stats strong,
+.workspace-stats span {
+  display: block;
+}
+
+.workspace-stats strong {
+  font-size: var(--font-size-xl);
+  line-height: 1;
+  color: var(--color-text-primary);
+}
+
+.workspace-stats span {
+  margin-top: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: 28px;
 }
 
 .search-input {
-  width: min(420px, 100%);
-  height: 38px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  width: min(520px, 100%);
+  height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
   color: var(--color-text-primary);
   font: inherit;
-  padding: 0 var(--spacing-md);
+  padding: 0 14px;
   outline: none;
   transition: var(--transition-fast);
 }
 
 .search-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-light);
+  box-shadow: var(--shadow-focus);
 }
 
 .tool-count {
@@ -181,18 +248,21 @@ function readFavoriteIds(): string[] {
 .category-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xl);
+  gap: 34px;
 }
 
 .favorite-section {
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: 36px;
 }
 
 .category-header {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .category-header h2 {
@@ -209,17 +279,35 @@ function readFavoriteIds(): string[] {
 
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
 }
 
 .empty-state {
-  padding: var(--spacing-2xl);
+  padding: 42px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   text-align: center;
   color: var(--color-text-secondary);
 }
 
+@media (max-width: 900px) {
+  .workspace-header {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-stats {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
+  .home-page {
+    padding: 24px 16px 36px;
+  }
+
   .toolbar {
     align-items: stretch;
     flex-direction: column;

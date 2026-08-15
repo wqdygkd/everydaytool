@@ -113,27 +113,28 @@ onUnmounted(() => {
 <style scoped>
 .chrome-sandbox-page {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 248px 1fr;
   flex: 1;
   min-height: 0;
+  background: var(--color-app-bg);
 }
 
 .chrome-sandbox-page :deep(.sidebar) {
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   border-right: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: var(--spacing-lg) var(--spacing-md);
+  padding: 18px 14px;
 }
 
 .chrome-sandbox-page :deep(.sidebar-title) {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 14px;
 }
 
 .chrome-sandbox-page :deep(.sandbox-list) {
@@ -142,7 +143,7 @@ onUnmounted(() => {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 10px;
 }
 
 .chrome-sandbox-page :deep(.sandbox-list .empty-tip) {
@@ -153,8 +154,8 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.sidebar-actions) {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .chrome-sandbox-page :deep(.sidebar-actions .el-button),
@@ -169,16 +170,17 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.sandbox-card) {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  padding: var(--spacing-md);
+  padding: 14px;
   cursor: pointer;
-  background: #fafafa;
+  background: var(--color-surface);
   transition: var(--transition-base);
 }
 
 .chrome-sandbox-page :deep(.sandbox-card:hover),
 .chrome-sandbox-page :deep(.sandbox-card.active) {
   border-color: var(--color-primary);
-  background: var(--color-primary-light);
+  background: var(--color-primary-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .chrome-sandbox-page :deep(.card-header) {
@@ -213,7 +215,7 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.status-panel) {
   flex: 1;
   min-height: 0;
-  padding: var(--spacing-xl);
+  padding: 24px;
   overflow: auto;
 }
 
@@ -231,12 +233,12 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.detail-grid) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
 .chrome-sandbox-page :deep(.detail-item) {
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
@@ -256,7 +258,7 @@ onUnmounted(() => {
 }
 
 .chrome-sandbox-page :deep(.section-block) {
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
@@ -271,7 +273,7 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.fingerprint-summary p) {
   margin: 4px 0;
   font-size: var(--font-size-sm);
-  color: #374151;
+  color: var(--color-text-secondary);
 }
 
 .chrome-sandbox-page :deep(.action-bar) {
@@ -287,5 +289,21 @@ onUnmounted(() => {
 .chrome-sandbox-page :deep(.muted) {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+@media (max-width: 760px) {
+  .chrome-sandbox-page {
+    grid-template-columns: 1fr;
+  }
+
+  .chrome-sandbox-page :deep(.sidebar) {
+    max-height: 280px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .chrome-sandbox-page :deep(.detail-grid) {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
