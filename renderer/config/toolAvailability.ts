@@ -1,12 +1,7 @@
 import type { ToolClientTarget, ToolDefinition } from '../shared/types/tool.js';
 
 export function getCurrentToolClientTarget(): ToolClientTarget {
-  if (!window.chromeSandbox && !window.cdpInjector) {
-    return 'web';
-  }
-
-  const platform = navigator.platform.toLowerCase();
-  return platform.includes('mac') ? 'mac' : 'win';
+  return window.edtRuntime?.target ?? 'web';
 }
 
 export function isToolSupportedOnTarget(

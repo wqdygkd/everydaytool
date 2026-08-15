@@ -1,4 +1,11 @@
+import type { ToolClientTarget } from '../types/tool.js';
+
 // IPC 边界类型：window.chromeSandbox / window.cdpInjector 全局声明
+
+export interface EdtRuntimeApi {
+  target: ToolClientTarget;
+  platform: string;
+}
 
 export interface IpcInvokeApi {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
@@ -8,6 +15,7 @@ export interface IpcInvokeApi {
 
 declare global {
   interface Window {
+    edtRuntime?: EdtRuntimeApi;
     chromeSandbox: IpcInvokeApi;
     cdpInjector: IpcInvokeApi;
   }

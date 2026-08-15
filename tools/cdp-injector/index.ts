@@ -1,19 +1,20 @@
-import type { ToolDefinition } from '../../renderer/shared/types/tool.js';
+import { defineTool } from '../../renderer/shared/tool/defineTool.js';
 import CdpInjectorPage from './renderer/pages/CdpInjector.vue';
 
-const tool: ToolDefinition = {
+const tool = defineTool({
   id: 'cdp-injector',
   name: 'CDP 脚本注入',
   description: '批量启动应用并通过调试端口注入自定义脚本',
   version: '1.0.0',
   color: '#10b981',
+  category: { key: 'automation', name: '自动化工具' },
+  keywords: ['cdp', 'devtools', 'inject', 'script', 'automation', '注入', '脚本'],
   supportedTargets: ['win', 'mac'],
+  createdAt: '2026-08-15',
   route: {
     path: 'cdp-injector',
-    name: 'tool-cdp-injector',
     component: CdpInjectorPage,
-    meta: { toolId: 'cdp-injector' },
   },
-};
+});
 
 export default tool;

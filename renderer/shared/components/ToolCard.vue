@@ -13,6 +13,8 @@
       <p class="tool-desc">{{ tool.description }}</p>
     </div>
     <div class="tool-meta">
+      <span class="tool-category">{{ tool.category.name }}</span>
+      <span v-if="tool.isNew" class="tool-new">新</span>
       <span class="tool-version">v{{ tool.version }}</span>
     </div>
   </div>
@@ -76,12 +78,32 @@ defineEmits<{ click: [] }>();
 
 .tool-meta {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  justify-content: flex-start;
   align-items: center;
 }
 
+.tool-category,
+.tool-new,
 .tool-version {
   font-size: var(--font-size-xs);
+}
+
+.tool-category {
+  color: var(--color-text-secondary);
+}
+
+.tool-new {
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  padding: 1px 6px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.tool-version {
   color: var(--color-text-tertiary);
+  margin-left: auto;
 }
 </style>

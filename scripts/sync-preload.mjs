@@ -29,6 +29,11 @@ const { body: cdpChannels } = await extractChannels(path.join(cdpChannelsDir, 'c
 const preloadTemplate = `const { contextBridge, ipcRenderer } = require('electron');
 
 // Auto-generated from dist-backend by scripts/sync-preload.mjs — do not edit by hand.
+const EDT_RUNTIME = {
+  target: process.platform === 'darwin' ? 'mac' : 'win',
+  platform: process.platform,
+};
+
 const IPC_CHANNELS = {
   ${sandboxChannels}
 };
@@ -51,6 +56,7 @@ function exposeIpcApi(channels) {
   };
 }
 
+contextBridge.exposeInMainWorld('edtRuntime', EDT_RUNTIME);
 contextBridge.exposeInMainWorld('chromeSandbox', exposeIpcApi(IPC_CHANNELS));
 contextBridge.exposeInMainWorld('cdpInjector', exposeIpcApi(CDP_IPC_CHANNELS));
 `;
