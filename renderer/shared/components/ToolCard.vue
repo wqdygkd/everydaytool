@@ -1,5 +1,17 @@
 <template>
   <div class="tool-card" :style="{ borderColor: tool.color }" @click="$emit('click')">
+    <button
+      class="favorite-btn"
+      type="button"
+      :class="{ active: isFavorite }"
+      :aria-label="isFavorite ? '取消收藏' : '收藏工具'"
+      :title="isFavorite ? '取消收藏' : '收藏工具'"
+      @click.stop="$emit('toggleFavorite')"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3.4l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17.3l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3.4z" />
+      </svg>
+    </button>
     <div class="tool-icon" :style="{ background: tool.color }">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
         <rect x="3" y="3" width="7" height="7" rx="2" />
@@ -23,13 +35,20 @@
 <script setup lang="ts">
 import type { ToolDefinition } from '../types/tool.js';
 
-defineProps<{ tool: ToolDefinition }>();
+defineProps<{
+  tool: ToolDefinition;
+  isFavorite?: boolean;
+}>();
 
-defineEmits<{ click: [] }>();
+defineEmits<{
+  click: [];
+  toggleFavorite: [];
+}>();
 </script>
 
 <style scoped>
 .tool-card {
+  position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
@@ -39,6 +58,36 @@ defineEmits<{ click: [] }>();
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+}
+
+.favorite-btn {
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: var(--transition-fast);
+}
+
+.favorite-btn:hover,
+.favorite-btn.active {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.favorite-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
 }
 
 .tool-card:hover {

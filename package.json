@@ -7,6 +7,7 @@
   "packageManager": "pnpm@10.6.3",
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "create:tool": "node scripts/create-tool.mjs",
     "build:backend": "node scripts/build-backend.mjs",
     "sync:preload": "node scripts/sync-preload.mjs",
     "dev": "pnpm run build:backend && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron . --remote-debugging-port=0\"",

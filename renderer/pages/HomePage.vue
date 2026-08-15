@@ -15,6 +15,24 @@
       <span class="tool-count">共 {{ visibleToolCount }} 个工具</span>
     </section>
 
+    <section v-if="favoriteTools.length > 0" class="favorite-section">
+      <div class="category-header">
+        <h2>我的收藏</h2>
+        <span>{{ favoriteTools.length }}</span>
+      </div>
+
+      <div class="tools-grid">
+        <ToolCard
+          v-for="tool in favoriteTools"
+          :key="tool.id"
+          :tool="tool"
+          :is-favorite="true"
+          @click="goToTool(tool.id)"
+          @toggle-favorite="toggleFavorite(tool.id)"
+        />
+      </div>
+    </section>
+
     <section v-if="filteredGroups.length > 0" class="category-list">
       <div v-for="group in filteredGroups" :key="group.category.key" class="category-section">
         <div class="category-header">
@@ -27,7 +45,9 @@
             v-for="tool in group.tools"
             :key="tool.id"
             :tool="tool"
+            :is-favorite="isFavorite(tool.id)"
             @click="goToTool(tool.id)"
+            @toggle-favorite="toggleFavorite(tool.id)"
           />
         </div>
       </div>
@@ -46,15 +66,17 @@ import ToolCard from '../shared/components/ToolCard.vue';
 import { groupToolsByCategory, toolsByCategory } from '../config/tools.js';
 import type { ToolDefinition } from '../shared/types/tool.js';
 
+const FAVORITE_STORAGE_KEY = 'edt:favorite-tools';
 const router = useRouter();
 const searchText = ref('');
+const allTools = toolsByCategory.flatMap((group) => group.tools);
+const favoriteIds = ref(readFavoriteIds());
 
 const filteredTools = computed<ToolDefinition[]>(() => {
   const keyword = searchText.value.toLowerCase();
-  const tools = toolsByCategory.flatMap((group) => group.tools);
-  if (!keyword) return tools;
+  if (!keyword) return allTools;
 
-  return tools.filter((tool) => {
+  return allTools.filter((tool) => {
     const searchableText = [
       tool.name,
       tool.description,
@@ -69,9 +91,32 @@ const filteredTools = computed<ToolDefinition[]>(() => {
 
 const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value));
 const visibleToolCount = computed(() => filteredTools.value.length);
+const favoriteTools = computed(() => favoriteIds.value
+  .map((id) => allTools.find((tool) => tool.id === id))
+  .filter((tool): tool is ToolDefinition => Boolean(tool)));
 
 function goToTool(toolId: string) {
   router.push({ name: `tool-${toolId}` });
+}
+
+function isFavorite(toolId: string): boolean {
+  return favoriteIds.value.includes(toolId);
+}
+
+function toggleFavorite(toolId: string) {
+  favoriteIds.value = isFavorite(toolId)
+    ? favoriteIds.value.filter((id) => id !== toolId)
+    : [...favoriteIds.value, toolId];
+  localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(favoriteIds.value));
+}
+
+function readFavoriteIds(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(FAVORITE_STORAGE_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 </script>
 
@@ -137,6 +182,10 @@ function goToTool(toolId: string) {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xl);
+}
+
+.favorite-section {
+  margin-bottom: var(--spacing-2xl);
 }
 
 .category-header {

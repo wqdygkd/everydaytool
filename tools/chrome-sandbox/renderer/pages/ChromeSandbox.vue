@@ -117,4 +117,175 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
 }
+
+.chrome-sandbox-page :deep(.sidebar) {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--spacing-lg) var(--spacing-md);
+}
+
+.chrome-sandbox-page :deep(.sidebar-title) {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+}
+
+.chrome-sandbox-page :deep(.sandbox-list) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.chrome-sandbox-page :deep(.sandbox-list .empty-tip) {
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.chrome-sandbox-page :deep(.sidebar-actions) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.chrome-sandbox-page :deep(.sidebar-actions .el-button),
+.chrome-sandbox-page :deep(.action-bar .el-button) {
+  margin-left: 0;
+}
+
+.chrome-sandbox-page :deep(.full-width) {
+  width: 100%;
+}
+
+.chrome-sandbox-page :deep(.sandbox-card) {
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  cursor: pointer;
+  background: #fafafa;
+  transition: var(--transition-base);
+}
+
+.chrome-sandbox-page :deep(.sandbox-card:hover),
+.chrome-sandbox-page :deep(.sandbox-card.active) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.chrome-sandbox-page :deep(.card-header) {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: 6px;
+}
+
+.chrome-sandbox-page :deep(.color-dot) {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.chrome-sandbox-page :deep(.name) {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+}
+
+.chrome-sandbox-page :deep(.card-meta) {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.chrome-sandbox-page :deep(.status.running) {
+  color: var(--color-success);
+}
+
+.chrome-sandbox-page :deep(.status-panel) {
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-xl);
+  overflow: auto;
+}
+
+.chrome-sandbox-page :deep(.panel-header) {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.chrome-sandbox-page :deep(.panel-header h2) {
+  margin: 0;
+}
+
+.chrome-sandbox-page :deep(.detail-grid) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.chrome-sandbox-page :deep(.detail-item) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+}
+
+.chrome-sandbox-page :deep(.detail-item span) {
+  color: var(--color-text-secondary);
+}
+
+.chrome-sandbox-page :deep(.detail-item .path) {
+  font-size: var(--font-size-xs);
+  word-break: break-all;
+}
+
+.chrome-sandbox-page :deep(.section-block) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.chrome-sandbox-page :deep(.section-block h3) {
+  margin: 0 0 10px;
+  font-size: var(--font-size-base);
+}
+
+.chrome-sandbox-page :deep(.fingerprint-summary p) {
+  margin: 4px 0;
+  font-size: var(--font-size-sm);
+  color: #374151;
+}
+
+.chrome-sandbox-page :deep(.action-bar) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.chrome-sandbox-page :deep(.empty-tip),
+.chrome-sandbox-page :deep(.empty-panel),
+.chrome-sandbox-page :deep(.muted) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
 </style>

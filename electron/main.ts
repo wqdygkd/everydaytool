@@ -1,12 +1,7 @@
 import { createRequire } from 'module';
 import path from 'path';
-import fs from 'fs-extra';
-import { registerIpcHandlers } from '../tools/chrome-sandbox/backend/ipc/handlers.js';
-import { registerCdpInjectorHandlers } from '../tools/cdp-injector/backend/ipc/handlers.js';
-import { injectorService } from '../tools/cdp-injector/backend/services/injector-service.js';
-import { getDatabase, closeDatabase } from '../tools/chrome-sandbox/backend/store/database.js';
-import { loadDataDirectoryOverride, getDataDirectory } from '../tools/chrome-sandbox/backend/utils/path-helper.js';
-import { logger } from '../tools/chrome-sandbox/backend/utils/logger.js';
+import { chromeSandboxBackend } from '../tools/chrome-sandbox/backend/index.js';
+import { cdpInjectorBackend } from '../tools/cdp-injector/backend/index.js';
 
 const require = createRequire(import.meta.url);
 const { app, BrowserWindow } = require('electron') as typeof import('electron');
@@ -23,15 +18,26 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A
 let mainWindow: Electron.BrowserWindow | null = null;
 let backendInitialized = false;
 
+type ToolBackend = {
+  initialize: () => Promise<void> | void;
+  dispose?: () => Promise<void> | void;
+};
+
+const toolBackends: ToolBackend[] = [chromeSandboxBackend, cdpInjectorBackend];
+
 async function initializeBackend(): Promise<void> {
   if (backendInitialized) return;
   backendInitialized = true;
 
-  await loadDataDirectoryOverride();
-  await fs.ensureDir(getDataDirectory());
-  getDatabase();
-  registerIpcHandlers();
-  registerCdpInjectorHandlers();
+  for (const backend of toolBackends) {
+    await backend.initialize();
+  }
+}
+
+async function disposeBackend(): Promise<void> {
+  for (const backend of [...toolBackends].reverse()) {
+    await backend.dispose?.();
+  }
 }
 
 async function createWindow(): Promise<void> {
@@ -62,7 +68,6 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  closeDatabase();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -75,7 +80,5 @@ app.on('activate', async () => {
 });
 
 app.on('before-quit', async () => {
-  await injectorService.stopAll();
-  closeDatabase();
-  logger.info('Application quitting');
+  await disposeBackend();
 });
