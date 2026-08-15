@@ -1,4 +1,3 @@
-import { ElMessage } from 'element-plus';
 import { selectDataDirectory } from '@renderer/shared/ipc/useIpc.js';
 
 export function useDataDirectoryPicker() {

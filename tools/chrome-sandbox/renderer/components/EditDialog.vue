@@ -16,9 +16,6 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus';
-import LaunchOptionsFields from './LaunchOptionsFields.vue';
 import { useSandboxStore } from '../stores/sandboxStore.js';
 import {
   LAUNCH_OPTION_FORM_FIELDS,

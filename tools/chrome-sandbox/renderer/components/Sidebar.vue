@@ -19,7 +19,6 @@
 </template>
 
 <script setup lang="ts">
-import SandboxCard from './SandboxCard.vue';
 
 defineProps({
   sandboxes: { type: Array, default: () => [] },

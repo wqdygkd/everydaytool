@@ -37,15 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue';
-import { ElMessage } from 'element-plus';
 import { useNavigation } from '@renderer/shared/composables/useNavigation.js';
-import Sidebar from '../components/Sidebar.vue';
-import StatusPanel from '../components/StatusPanel.vue';
-import CreateDialog from '../components/CreateDialog.vue';
-import SettingsDialog from '../components/SettingsDialog.vue';
-import FingerprintEditor from '../components/FingerprintEditor.vue';
-import DataDirectorySetupDialog from '../components/DataDirectorySetupDialog.vue';
 import { useSandboxStore } from '../stores/sandboxStore.js';
 import { invokeIpc, ipcChannels, onIpc } from '@renderer/shared/ipc/useIpc.js';
 

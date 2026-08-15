@@ -44,8 +44,6 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { ElMessage } from 'element-plus';
 import { generateIdCard, GENDER } from '../shared/generator.js';
 
 const gender = ref(GENDER.RANDOM);

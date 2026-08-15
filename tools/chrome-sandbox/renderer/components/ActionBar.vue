@@ -11,9 +11,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { ElMessageBox } from 'element-plus';
-
 const props = defineProps({
   running: { type: Boolean, default: false },
 });

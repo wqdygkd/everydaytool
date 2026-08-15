@@ -77,9 +77,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import ToolCard from '../shared/components/ToolCard.vue';
 import { groupToolsByCategory, toolsByCategory } from '../config/tools.js';
 import type { ToolDefinition } from '../shared/types/tool.js';
 

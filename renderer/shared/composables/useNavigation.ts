@@ -1,6 +1,3 @@
-import { useRouter, useRoute } from 'vue-router';
-import { computed } from 'vue';
-
 export function useNavigation() {
   const router = useRouter();
   const route = useRoute();

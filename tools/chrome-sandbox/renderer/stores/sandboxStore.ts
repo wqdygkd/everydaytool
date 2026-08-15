@@ -1,5 +1,3 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
 import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc.js';
 import type {
   Fingerprint,

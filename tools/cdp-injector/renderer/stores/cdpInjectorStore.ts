@@ -1,5 +1,3 @@
-import { defineStore } from 'pinia';
-import { ref } from 'vue';
 import { invokeCdpIpc, cdpIpcChannels, onCdpIpc } from '@renderer/shared/ipc/useCdpIpc.js';
 import type {
   CdpBatchResult,

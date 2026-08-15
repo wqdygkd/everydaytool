@@ -75,9 +75,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import ActionBar from './ActionBar.vue';
-import EditDialog from './EditDialog.vue';
 import { formatSandboxStatus } from '../shared/sandbox.js';
 import { hasLaunchOptions as hasLaunchOptionsEnabled } from '../shared/launchOptions.js';
 
