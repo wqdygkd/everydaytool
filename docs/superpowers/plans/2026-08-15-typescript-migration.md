@@ -77,7 +77,6 @@ pnpm add -D typescript esbuild @types/node @types/better-sqlite3 @types/ws
     "verbatimModuleSyntax": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noUncheckedIndexedAccess": true,
     "types": [],
     "baseUrl": ".",
     "paths": {
@@ -107,7 +106,6 @@ pnpm add -D typescript esbuild @types/node @types/better-sqlite3 @types/ws
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
     "types": ["node"],
     "lib": ["ES2022"]
@@ -116,23 +114,25 @@ pnpm add -D typescript esbuild @types/node @types/better-sqlite3 @types/ws
 }
 ```
 
-- [ ] **Step 5: 改 vite.config.ts**
+- [ ] **Step 6: 改 vite.config.ts + index.html**
 
-`vite.config.js` 重命名为 `vite.config.ts`，内容不变（esbuild 自动转译）。验证 index.html 仍引用 `/main.js`（保持不变）。
+`vite.config.js` 重命名为 `vite.config.ts`，内容不变（esbuild 自动转译）。
 
-- [ ] **Step 6: .gitignore 追加 dist-backend/**
+`renderer/index.html` 的 `<script type="module" src="/main.js">` 改为 `src="/main.ts"`（Vite 会解析 TS 入口）。
+
+- [ ] **Step 7: .gitignore 追加 dist-backend/**
 
 在 `dist/` 后追加一行 `dist-backend/`。
 
-- [ ] **Step 7: 验证**
+- [ ] **Step 8: 验证**
 
 Run: `pnpm typecheck`
 预期：通过（当前还是纯 JS，tsc 只检查可推断的；allowJs 未开，TS 文件尚不存在则无输出）。若 `scripts/sync-ipc-channels.js` 报错（`tsconfig.node.json` 已 include scripts），记录后忽略——Task 3 会重建该脚本。
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add package.json pnpm-lock.yaml tsconfig.json tsconfig.node.json vite.config.ts .gitignore
+git add package.json pnpm-lock.yaml tsconfig.json tsconfig.node.json vite.config.ts .gitignore renderer/index.html
 git commit -m "build: add TypeScript toolchain and tsconfig base"
 ```
 
@@ -417,7 +417,7 @@ export function onCdpIpc<T = unknown>(channel: string, callback: (payload: T) =>
 
 /** 类型化调用：PROFILE_GET_ALL 返回 { profiles, scripts, defaults } */
 export async function cdpProfileGetAll(): Promise<{ profiles: CdpProfile[]; scripts: CdpScript[]; defaults: CdpDefaults }> {
-  return invokeCdpIpc(ipcChannels().PROFILE_GET_ALL);
+  return invokeCdpIpc(cdpIpcChannels().PROFILE_GET_ALL);
 }
 export async function cdpSaveProfile(profile: CdpProfile): Promise<CdpProfile | undefined> {
   return invokeCdpIpc(ipcChannels().PROFILE_SAVE, profile);
@@ -490,7 +490,7 @@ git commit -m "feat: add shared types and typed IPC wrappers"
 
 - [ ] **Step 1: 写 scripts/build-backend.mjs**
 
-esbuild 逐文件编译，保持相对目录结构：
+esbuild 逐文件编译，保持相对目录结构。**不打包（`bundle: false`）**——保留模块间 ESM→CJS 转换与相对路径，用 glob 枚举后端全部 `.ts` 入口，避免遗漏新建文件：
 
 ```js
 import { build } from 'esbuild';
@@ -502,14 +502,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const outDir = path.join(rootDir, 'dist-backend');
 
-// 相对 rootDir 的后端源码入口
+// 相对 rootDir 的后端源码入口（glob，逐文件编译、保目录结构）
 const entryPoints = [
   'electron/main.ts',
-  'tools/chrome-sandbox/backend/ipc/handlers.ts',
-  'tools/chrome-sandbox/backend/ipc/channels.ts',
-  'tools/chrome-sandbox/backend/constants/sandbox.ts',
-  'tools/cdp-injector/backend/ipc/handlers.ts',
-  'tools/cdp-injector/backend/ipc/channels.ts',
+  'tools/chrome-sandbox/backend/**/*.ts',
+  'tools/cdp-injector/backend/**/*.ts',
 ];
 
 // 需复制的非 TS 资源（相对 rootDir）
@@ -520,12 +517,12 @@ const assets = [
 await fs.emptyDir(outDir);
 
 await build({
-  entryPoints: entryPoints.map((p) => path.join(rootDir, p)),
+  entryPoints,
   outdir: outDir,
   format: 'cjs',
   platform: 'node',
   target: 'node22',
-  bundle: true,
+  bundle: false,
   sourcemap: false,
   outbase: rootDir,
   logLevel: 'info',
@@ -545,7 +542,7 @@ for (const asset of assets) {
 console.log('✓ backend 编译到 dist-backend/');
 ```
 
-说明：entryPoints 显式列出 IPC handlers（它们是被 main 引用的叶子，但作为独立入口可校验每个文件都能编译；main.ts 通过 bundle 连带编译内部依赖）。若将来通道常量被 preload 同步脚本读取，也以 channels.ts 为入口。
+说明：`bundle: false` 时 esbuild 不会打包第三方依赖，但**会**将源码 ESM import 改写为 CJS require，并输出到与源码相对位置一致的 `dist-backend/` 目录。外部依赖（better-sqlite3、ws、fs-extra、electron 等）保持 `require(...)` 指向 node_modules——打包时 electron-builder 会将其打入 app。`**/*.ts` glob 由 esbuild 原生支持。
 
 - [ ] **Step 2: 写 scripts/sync-preload.mjs**
 
@@ -612,12 +609,13 @@ console.log('✓ electron/preload.cjs 已同步');
 
 - [ ] **Step 3: 写 electron/main.ts**
 
-把 `electron/main.js` 原地改名并在头部适配：
+把 `electron/main.js` 原地改名（`git mv electron/main.js electron/main.ts`），头部适配：
 
 ```ts
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs-extra';
+import { fileURLToPath } from 'url';
 import { registerIpcHandlers } from '../tools/chrome-sandbox/backend/ipc/handlers.js';
 import { registerCdpInjectorHandlers } from '../tools/cdp-injector/backend/ipc/handlers.js';
 import { injectorService } from '../tools/cdp-injector/backend/services/injector-service.js';
@@ -625,11 +623,9 @@ import { getDatabase, closeDatabase } from '../tools/chrome-sandbox/backend/stor
 import { loadDataDirectoryOverride, getDataDirectory } from '../tools/chrome-sandbox/backend/utils/path-helper.js';
 import { logger } from '../tools/chrome-sandbox/backend/utils/logger.js';
 
-// 入口文件路径（编译后为 dist-backend/electron/main.js；源码类型检查也通过）
-const entryDir = path.dirname(new URL('../electron/main.ts', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
-
 app.commandLine.appendSwitch('remote-debugging-port', '0');
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
@@ -653,7 +649,7 @@ async function createWindow() {
     minHeight: 500,
     title: 'Tool Hub',
     webPreferences: {
-      preload: path.join(entryDir, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -663,19 +659,12 @@ async function createWindow() {
     await mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    await mainWindow.loadFile(path.join(entryDir, '../dist/index.html'));
+    await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
 ```
 
-保留原文件其余逻辑（`app.whenReady`、`window-all-closed`、`activate`、`before-quit`），仅将变量声明补类型、删除 `fileURLToPath` 导入。`pathname` 的 Windows 盘符处理可简化为 `path.join(new URL('../electron/main.ts', import.meta.url).pathname)`——若在 Windows 上 `pathname` 以 `/` 开头带盘符，改用 `path.win32.join` 或 `fileURLToPath(new URL(...))` 更稳妥；两者任选其一并保持一致。优先使用：
-
-```ts
-import { fileURLToPath } from 'url';
-const entryDir = path.dirname(fileURLToPath(import.meta.url));
-```
-
-（本文件除外——入口处 `fileURLToPath(import.meta.url)` 在编译产物中相对路径仍正确，等价于原实现；其余后端文件一律用 `new URL`。）
+保留原文件其余逻辑（`app.whenReady`、`window-all-closed`、`activate`、`before-quit`），仅补类型、删除重复的 `fileURLToPath` 导入。**唯一例外**：本入口文件允许用 `__dirname` 变量（原 JS 即有），因编译产物 `dist-backend/electron/main.js` 中 `import.meta.url` 仍指向该文件所在目录，`preload.cjs` 位于 `dist-backend/electron/` 同目录——相对关系不变。其他后端文件按约束统一用 `fileURLToPath(new URL(...))`。
 
 - [ ] **Step 4: 删除旧脚本**
 
@@ -778,7 +767,7 @@ for f in \
 
 - [ ] **Step 4: 类型化 path-helper / logger / file-ops**
 
-- `path-helper.ts`：`__dirname` 替换为 `path.dirname(new URL(import.meta.url).pathname)`；所有函数返回类型补齐；`getChromePaths()` 返回 `{ userDataRoot: string; defaultProfile: string; executables: string[] }`。注意 Windows 盘符：`new URL(import.meta.url).pathname` 在 Windows 形如 `/C:/...`，需 `decodeURIComponent` + 去前缀，或直接用 `fileURLToPath`——本文件为计算路径的关键模块，采用 `fileURLToPath(new URL(import.meta.url))` 是安全的（esbuild 产物保持相对路径），全项目保持一致用 `fileURLToPath`。
+- `path-helper.ts`：路径计算用 `fileURLToPath(new URL(import.meta.url))` 得到本文件真实目录（编译产物 `dist-backend/...` 中仍解析到产物所在目录，dev 下 `APP_ROOT_DEV` 上溯 4 级到项目根逻辑不变）。`getChromePaths()` 返回 `{ userDataRoot: string; defaultProfile: string; executables: string[] }`；所有函数补返回类型。
 - `logger.ts`：`logger` 方法 `(message: string, meta?: Record<string, unknown>) => void`。
 - `file-ops.ts`：`readJsonFile<T = unknown>(filePath: string, fallback: T | null = null): Promise<T | null>`；其余函数补参数/返回类型。
 
@@ -791,7 +780,7 @@ for f in \
 - `launcher.ts`：`launchChrome(options: LaunchChromeOptions): Promise<{ pid: number; debugPort: number | null }>`，定义 `LaunchChromeOptions`。
 - `window-controller.ts`：`focusChromeWindow(pid: number): Promise<boolean>`。
 - `developer-mode.ts`：`setupSandboxDeveloperMode(debugPort: number, windowBounds: { x: number; y: number; width: number; height: number }): Promise<boolean>`；`shouldSkipDeveloperModeSetup(sandbox: Sandbox): Promise<boolean>`；`getFreePort(): Promise<number>`。
-- `process-manager.ts`：`WINDOWS_QUERY_SCRIPT` 改为 `fileURLToPath(new URL('./chrome-process-query.ps1', import.meta.url))`；`registerProcess(sandboxId: string, childProcess: import('child_process').ChildProcess, userDataDir: string)`；`onProcessExit(handler: (sandboxId: string) => void)`；`queryChromeSandboxProcesses(userDataDir: string): Promise<{ pids: number[] }>`；`killProcess(sandboxId: string, userDataDir?: string | null): Promise<boolean>`；`isRunning(sandboxId: string, userDataDir?: string | null, opts?: { allowProcessQuery?: boolean }): boolean`；`findRunningPid(sandboxId: string, userDataDir?: string | null): number | null`；`invalidateChromeProcessCache(userDataDir?: string): void`。
+- `process-manager.ts`：`WINDOWS_QUERY_SCRIPT` 改为 `fileURLToPath(new URL('./chrome-process-query.ps1', import.meta.url))`；`registerProcess(sandboxId: string, childProcess: import('child_process').ChildProcess, userDataDir: string)`；`onProcessExit(handler: (sandboxId: string) => void)`；`queryChromeSandboxProcesses(userDataDir: string): Promise<{ pids: number[] }>`；`killProcess(sandboxId: string, userDataDir?: string | null): Promise<boolean>`；`isRunning(sandboxId: string, userDataDir?: string | null, opts?: { allowProcessQuery?: boolean }): boolean`；`findRunningPid(sandboxId: string, userDataDir?: string | null): number | null`；`invalidateChromeProcessCache(userDataDir?: string): void`。顶部 `fileURLToPath(new URL(import.meta.url))` 计算 `__dirname`（或直接用变量名 `scriptDir`），保持与现文件一致的 `WINDOWS_QUERY_SCRIPT` 位置。
 
 - [ ] **Step 6: 类型化 channels.ts**
 
@@ -811,15 +800,15 @@ import { IPC_CHANNELS } from '../ipc/channels.js';
 let statusEmitter: ((channel: string, payload: unknown) => void) | null = null;
 export function setStatusEmitter(emitter: (channel: string, payload: unknown) => void): void { ... }
 ```
-`create(data: SandboxCreatePayload): Promise<Sandbox>`；`activate(sandboxId: string): Promise<Sandbox | null>`；`update(sandboxId: string, data: SandboxUpdatePayload): Sandbox | null`；`getAll/getById/close/delete/refreshStatus` 同理。`updateSandboxFingerprint(sandboxId: string, fingerprintData: FingerprintUpdatePayload): Promise<Fingerprint | null>`。
+`create(data: SandboxCreatePayload): Promise<Sandbox>`；`activate(sandboxId: string): Promise<Sandbox | null>`；`update(sandboxId: string, data: SandboxUpdatePayload): Sandbox | null`；`getAll/getById/close/delete/refreshStatus` 同理。`updateSandboxFingerprint(sandboxId: string, fingerprintData: FingerprintUpdatePayload): Promise<Fingerprint | null>`。`setStatusEmitter` 由 `handlers.ts` 注入，其类型应与 Task 4 定义一致（`(channel: string, payload: unknown) => void`）。
 
 - [ ] **Step 8: 验证**
 
 Run: `pnpm run build:backend`
-预期：esbuild 编译通过（channels 入口连带所有依赖）。
+预期：esbuild 编译全部 backend 文件到 `dist-backend/`（含 main.ts），`.ps1` 复制成功。
 
 Run: `pnpm typecheck`
-预期：`tsconfig.node.json` 覆盖的 backend 文件零错误。若 `handlers.ts`（尚未转）被引用导致类型错误，属预期——Task 5 处理。
+预期：`tsconfig.node.json` 覆盖的 backend 文件零错误。
 
 - [ ] **Step 9: Commit**
 
@@ -994,11 +983,15 @@ git commit -m "refactor(cdp-injector): convert backend to TypeScript"
 - Rename: `renderer/config/tools.js` → `.ts`
 - Rename: `renderer/router/routes.js` → `.ts`
 - Rename: `renderer/router/index.js` → `.ts`
-- Create: `renderer/shared/components/ToolCard.vue` 脚本类型化（见步骤 3）
+- Rename: `renderer/main.js` → `.ts`
+- Create: `renderer/shims-vue.d.ts`
+- Create: `renderer/shared/types/tool.ts`
+- Modify: `renderer/shared/components/ToolCard.vue`（脚本类型化）
+- Modify: `renderer/App.vue`、`renderer/pages/HomePage.vue`、`renderer/layouts/ToolLayout.vue`（脚本类型化，随 Task 8）
 
 **Interfaces:**
 - Consumes: `shared/types.ts`；`renderer/shared/ipc/*`
-- Produces: `ToolDefinition` 类型（`renderer/shared/types/tool.ts`）；`toolRegistry`、`getToolById`、`getActiveTools`
+- Produces: `ToolDefinition` 类型（`renderer/shared/types/tool.ts`）；`toolRegistry`、`getToolById`、`getActiveTools`；`main.ts` 入口
 
 - [ ] **Step 1: 建 ToolDefinition 类型**
 
@@ -1017,17 +1010,27 @@ export interface ToolDefinition {
   route: {
     path: string;
     name: string;
-    component: RouteRecordRaw['components'] extends never ? never : any;
+    component: unknown;
     meta?: { toolId?: string };
   };
 }
 ```
 
-（`component` 用 `any` 保留 Vue 组件导入灵活性，避免 vue-tsc 依赖。）
+（`component` 用 `unknown`，避免 vue 组件类型解析依赖；`renderer/config/tools.ts` 中使用 `route.component as never` 或 `RouteRecordRaw` 断言在路由构建处收窄。）
 
-- [ ] **Step 2: 改三个工具 index.ts**
+- [ ] **Step 2: 建 renderer/shims-vue.d.ts**
 
-`git mv` 每个 `index.js` → `.ts`，导入改为 `import type { ToolDefinition } from '../../renderer/shared/types/tool.js'`（按相对路径：`tools/chrome-sandbox/index.ts` 到 `renderer/shared/types/tool.ts` 是 `../../renderer/shared/types/tool.js`）。导出对象标注 `ToolDefinition`：
+```ts
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;
+  export default component;
+}
+```
+
+- [ ] **Step 3: 改三个工具 index.ts**
+
+`git mv` 每个 `index.js` → `.ts`，导入改为 `import type { ToolDefinition } from '../../renderer/shared/types/tool.js'`（`tools/chrome-sandbox/index.ts` 到 `renderer/shared/types/tool.ts` 的相对路径是 `../../renderer/shared/types/tool.js`；cdp-injector 与 id-card-generator 同理）。导出对象标注 `ToolDefinition`：
 
 ```ts
 import type { ToolDefinition } from '../../renderer/shared/types/tool.js';
@@ -1037,33 +1040,49 @@ const tool: ToolDefinition = { ... };
 export default tool;
 ```
 
-- [ ] **Step 3: 改 renderer/config/tools.ts + router + ToolCard**
+- [ ] **Step 4: 改 renderer/main.js → main.ts**
+
+`git mv renderer/main.js renderer/main.ts`，内容仅改导入后缀 `.ts`：
+
+```ts
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import ElementPlus from 'element-plus';
+import 'element-plus/dist/index.css';
+import App from './App.vue';
+import { router } from './router/index.js';
+import './shared/styles/main.css';
+```
+
+（`index.js` → `index.ts` 后，说明符写 `./router/index.js` 由 Vite 解析到 `index.ts`；或直接写 `./router/index.js` 均可。）
+
+- [ ] **Step 5: 改 renderer/config/tools.ts + router + ToolCard**
 
 - `config/tools.ts`：`import chromeSandbox from '@tools/chrome-sandbox/index.js'`（说明符 `.js` 保留，Vite 解析到 `.ts` 源码）；`export const toolRegistry: ToolDefinition[] = [...]`；`getToolById(id: string): ToolDefinition | undefined`；`getActiveTools(): ToolDefinition[]`。
-- `router/routes.ts`：`routes: RouteRecordRaw[]`；组件导入 `.vue` 不变。
+- `router/routes.ts`：`import type { RouteRecordRaw } from 'vue-router'`；`export const routes: RouteRecordRaw[] = [...]`；组件导入 `.vue` 不变；工具 route 对象用 `route.component as RouteRecordRaw['component']` 收窄或直接展开。
 - `router/index.ts`：`router` 导出类型推断。
 - `ToolCard.vue`：`<script setup lang="ts">`，`defineProps<{ tool: ToolDefinition }>()`、`defineEmits<{ click: [] }>()`，导入类型。
 
-- [ ] **Step 4: 共享前端模块 TS 化**
+- [ ] **Step 6: 共享前端模块 TS 化**
 
-- `generator.ts`：`GENDER` 常量对象 `as const`；`generateIdCard(options?: { gender?: Gender; minAge?: number; maxAge?: number }): IdCardResult`；定义 `IdCardResult` 与 `Gender` 类型。
-- `area-codes.ts`：`export const AREA_CODES: Array<{ code: string; name: string }>`（`as const` 可选）。
-- `sandbox.ts`：`formatSandboxStatus(status: SandboxStatus): string`。
-- `launchOptions.ts`：`LAUNCH_OPTION_FORM_FIELDS: LaunchOptionsForm`；`LaunchOptionsForm` 接口（`disableSafetyChecks: boolean; disableCors: boolean; enableCustomArgs: boolean; customArgs: string`）；`syncLaunchOptionsForm(form: LaunchOptionsForm, launchOptions?: LaunchOptions | null): void`；`buildLaunchOptionsPayload(form: LaunchOptionsForm): LaunchOptions`；`hasLaunchOptions(metadata: SandboxMetadata | null | undefined): boolean`。
-- `useDataDirectoryPicker.ts`：改用 `selectDataDirectory` 类型化函数（从 `@renderer/shared/ipc/useIpc`），返回 `Promise<string | null>`。
+- `generator.ts`：`export const GENDER = { MALE: 'male', FEMALE: 'female', RANDOM: 'random' } as const; export type Gender = (typeof GENDER)[keyof typeof GENDER];`；`export interface IdCardResult { id: string; areaCode: string; areaName: string; birthDate: string; birthDateDisplay: string; gender: Gender; genderLabel: string; }`；`export function generateIdCard(options?: { gender?: Gender; minAge?: number; maxAge?: number }): IdCardResult`。
+- `area-codes.ts`：`export const AREA_CODES: Array<{ code: string; name: string }> = [...]`。
+- `sandbox.ts`：`import type { SandboxStatus } from '../../../../shared/types.js'`（相对上溯 4 级）；`export function formatSandboxStatus(status: SandboxStatus): string`。
+- `launchOptions.ts`：`export interface LaunchOptionsForm { disableSafetyChecks: boolean; disableCors: boolean; enableCustomArgs: boolean; customArgs: string; }`；`LAUNCH_OPTION_FORM_FIELDS: LaunchOptionsForm`；`syncLaunchOptionsForm(form: LaunchOptionsForm, launchOptions?: LaunchOptions | null): void`；`buildLaunchOptionsPayload(form: LaunchOptionsForm): LaunchOptions`；`hasLaunchOptions(metadata: SandboxMetadata | null | undefined): boolean`。类型 `LaunchOptions`、`SandboxMetadata` 从 `shared/types.js` 导入。
+- `useDataDirectoryPicker.ts`：改用 `selectDataDirectory` 类型化函数（从 `@renderer/shared/ipc/useIpc.js`），返回 `Promise<string | null>`。
 
-- [ ] **Step 5: 验证**
+- [ ] **Step 7: 验证**
 
 Run: `pnpm vite build`（前端 TS 编译）
-预期：构建通过。若 `.vue` 组件的 TS 报错（`vue-tsc` 未装，vite 只做转译不查类型），`tsc` 会忽略 `.vue`——本步以 vite build 通过为准。
+预期：构建通过。`.vue` 组件脚本 TS 报错在 vite 转译下通常不拦截（无类型检查），但若模板编译报错会失败——本步以 vite build 通过为准。
 
 Run: `pnpm typecheck`
-预期：`renderer/` 与 `tools/**/renderer` 中非 `.vue` 的 `.ts` 文件零错误（`.vue` 内容暂不纳入 tsc，因 `allowImportingTsExtensions` + 无 vue 类型解析器）。
+预期：`renderer/` 与 `tools/**/renderer` 中非 `.vue` 的 `.ts` 文件零错误（`.vue` 通过 shims 只提供默认导出类型）。若 `App.vue`/`HomePage.vue` 等导入的工具类型报错，属 Task 8 范围，本步以 `.ts` 文件为准。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add tools/*/index.ts tools/*/renderer/shared renderer/config renderer/router renderer/shared/types renderer/shared/components
+git add tools/*/index.ts tools/*/renderer/shared renderer/config renderer/router renderer/shared/types renderer/shared/components renderer/main.ts renderer/shims-vue.d.ts
 git commit -m "refactor: convert tool definitions and shared frontend modules to TS"
 ```
 
@@ -1072,9 +1091,7 @@ git commit -m "refactor: convert tool definitions and shared frontend modules to
 ### Task 8: renderer 主应用与共享 composables TS 化
 
 **Files:**
-- Rename: `renderer/App.vue`（`<script setup lang="ts">`）
-- Rename: `renderer/pages/HomePage.vue`（`<script setup lang="ts">`）
-- Rename: `renderer/layouts/ToolLayout.vue`（`<script setup lang="ts">`）
+- Modify: `renderer/App.vue`、`renderer/pages/HomePage.vue`、`renderer/layouts/ToolLayout.vue`（`<script setup lang="ts">`，Template 保持）
 - Rename: `renderer/shared/composables/useDialogVisible.js` → `.ts`
 - Rename: `renderer/shared/composables/useNavigation.js` → `.ts`
 
@@ -1146,8 +1163,8 @@ git commit -m "refactor: convert renderer app shell and shared composables to TS
 
 **Files:**
 - Rename: `tools/chrome-sandbox/renderer/stores/sandboxStore.js` → `.ts`
-- Rename: `tools/chrome-sandbox/renderer/pages/ChromeSandbox.vue`（`<script setup lang="ts">`）
-- Rename: 以下组件的 `<script setup lang="ts">`：`Sidebar.vue`、`StatusPanel.vue`、`CreateDialog.vue`、`SettingsDialog.vue`、`EditDialog.vue`、`FingerprintEditor.vue`、`DataDirectorySetupDialog.vue`、`DataDirectoryField.vue`、`ActionBar.vue`、`SandboxCard.vue`、`LaunchOptionsFields.vue`
+- Modify: `tools/chrome-sandbox/renderer/pages/ChromeSandbox.vue`（`<script setup lang="ts">`，Template 保持）
+- Modify: 以下组件（`<script setup lang="ts">`，Template 保持）：`Sidebar.vue`、`StatusPanel.vue`、`CreateDialog.vue`、`SettingsDialog.vue`、`EditDialog.vue`、`FingerprintEditor.vue`、`DataDirectorySetupDialog.vue`、`DataDirectoryField.vue`、`ActionBar.vue`、`SandboxCard.vue`、`LaunchOptionsFields.vue`
 
 **Interfaces:**
 - Consumes: Task 2 的 ipc 类型化函数、Task 7 的 launchOptions/sandbox 工具、`shared/types.ts`
@@ -1221,8 +1238,8 @@ git commit -m "refactor(chrome-sandbox): convert renderer to TypeScript"
 
 **Files:**
 - Rename: `tools/cdp-injector/renderer/stores/cdpInjectorStore.js` → `.ts`
-- Rename: `tools/cdp-injector/renderer/pages/CdpInjector.vue`（`<script setup lang="ts">`）
-- Rename: `tools/id-card-generator/renderer/pages/IdCardGenerator.vue`（`<script setup lang="ts">`）
+- Modify: `tools/cdp-injector/renderer/pages/CdpInjector.vue`（`<script setup lang="ts">`，Template 保持）
+- Modify: `tools/id-card-generator/renderer/pages/IdCardGenerator.vue`（`<script setup lang="ts">`，Template 保持）
 
 **Interfaces:**
 - Consumes: Task 2 的 cdp ipc 类型化函数、Task 7 的 generator 类型
@@ -1245,7 +1262,7 @@ import { cdpProfileGetAll, cdpGetRunning, cdpLaunchBatch, cdpStop, cdpStopAll, c
 
 - [ ] **Step 3: 改 IdCardGenerator.vue**
 
-`<script setup lang="ts">`；`gender = ref<Gender>(GENDER.RANDOM)`；`ageRange = ref<[number, number]>([18, 60])`；`result = ref<IdCardResult | null>(null)`；`handleGenerate()` 类型化。
+`<script setup lang="ts">`；`import { generateIdCard, GENDER, type Gender, type IdCardResult } from '../shared/generator.js'`；`gender = ref<Gender>(GENDER.RANDOM)`；`ageRange = ref<[number, number]>([18, 60])`；`result = ref<IdCardResult | null>(null)`；`handleGenerate()` 类型化。
 
 - [ ] **Step 4: 验证**
 
@@ -1291,22 +1308,16 @@ git commit -m "refactor: convert cdp-injector and id-card-generator renderer to 
 ]
 ```
 
-- [ ] **Step 2: 全量验证**
+- [ ] **Step 2: 一次性全量验证**
 
 Run:
 ```bash
 pnpm typecheck
 pnpm build
+node scripts/sync-preload.mjs
 pnpm dev
 ```
-预期：typecheck 零错误；build 产出 `dist/` + `dist-backend/`；dev 正常启动 Electron。冒烟：应用窗口打开、主页工具网格显示 3 个工具、进入 Chrome沙箱可创建沙箱（如环境可运行 Chrome）。
-
-- [ ] **Step 3: 运行 sync-preload 并确认 preload 无手改差异**
-
-Run: `node scripts/sync-preload.mjs && git diff electron/preload.cjs`
-预期：preload 已由脚本生成（若 Task 3 已同步则无差异）。
-
-- [ ] **Step 4: 更新 README.md**
+预期：typecheck 零错误；build 产出 `dist/` + `dist-backend/`；sync-preload 重新生成 `electron/preload.cjs`；dev 正常启动 Electron 窗口。冒烟：主页工具网格显示 3 个工具；进入 Chrome沙箱可创建沙箱（如环境可运行 Chrome）；CDP 注入页能加载配置；身份证生成器可用。**若验证发现错误，修复后重跑整套命令直至全绿**（这是唯一一次验证，之后不再逐步验证）。
 
 在"开发"或"技术栈"部分增加 TypeScript：说明前端 Vite 消费 TS 源码、后端 esbuild 编译到 `dist-backend/`、`pnpm typecheck`、`pnpm build:backend`、`pnpm sync:preload` 命令。
 
@@ -1334,4 +1345,5 @@ git commit -m "chore: finalize TS migration config and docs"
 - **Spec 覆盖**：设计文档各节 → 对应任务：§2 策略 → Task 1/3；§4 共享类型 → Task 2；§5 IPC 封装 → Task 2；§6 各模块 → Task 4-10；§7 配置 → Task 1/3/11；§8 顺序 → 任务序；§9 风险（ps1、build 链）→ Task 3/11；§10 验证 → Task 11。
 - **占位符扫描**：无 TBD/TODO；每个步骤含具体代码或命令。
 - **类型一致性**：`Sandbox`/`Fingerprint`/`CdpProfile` 等在共享类型中定义并在 store/handler/组件间一致使用；`SandboxCreatePayload`、`SandboxUpdatePayload`、`AppConfigUpdate`、`FingerprintUpdatePayload` 与后端 handler 入参对齐；`CdpRunningState`、`CdpLaunchResult` 与 injector-service/devtools 返回对齐；`useDialogVisible` 的 emit 签名与各 dialog 组件一致。
-- **已知取舍**：`.vue` 组件脚本不纳入 `tsc`（无 vue-tsc），以 vite build 转译为准；`ToolDefinition.component` 用 `any` 规避 vue 组件类型解析；`tsconfig.json` 的 `include` 不含 `.vue`，`allowImportingTsExtensions` 允许源码写 `.ts` 说明符。
+- **已知取舍**：`.vue` 组件脚本不纳入 `tsc`（无 vue-tsc），以 vite build 转译为准；`ToolDefinition.component` 用 `unknown` 并在路由处收窄；`tsconfig.json` 的 `include` 不含 `.vue`，`allowImportingTsExtensions` 允许源码写 `.ts` 说明符。
+
