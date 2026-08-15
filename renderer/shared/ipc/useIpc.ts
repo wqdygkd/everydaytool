@@ -12,7 +12,7 @@ import type { IpcInvokeApi } from './types.js';
 export function getChromeSandboxApi(): IpcInvokeApi {
   const api = window.chromeSandbox;
   if (!api) {
-    throw new Error('未检测到 Electron IPC，请通过 pnpm dev 或 pnpm start 启动 Tool Hub');
+    throw new Error('未检测到 Electron IPC，请通过 pnpm dev 或 pnpm start 启动 everydaytool');
   }
   return api;
 }

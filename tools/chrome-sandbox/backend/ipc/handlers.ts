@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { createRequire } from 'module';
 import { IPC_CHANNELS } from './channels.js';
 import { sandboxService, updateSandboxFingerprint } from '../services/sandbox-service.js';
 import { fingerprintStore } from '../store/fingerprint-store.js';
@@ -16,6 +16,9 @@ import type {
   SandboxCreatePayload,
   SandboxUpdatePayload,
 } from '../../../../shared/types.js';
+
+const require = createRequire(import.meta.url);
+const { ipcMain, BrowserWindow, dialog } = require('electron') as typeof import('electron');
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {

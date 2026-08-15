@@ -1,6 +1,6 @@
 import type {
   CdpDefaults,
-  CdpLaunchResult,
+  CdpBatchResult,
   CdpOpenDevToolsPayload,
   CdpProfile,
   CdpRunningState,
@@ -12,7 +12,7 @@ import type { IpcInvokeApi } from './types.js';
 export function getCdpInjectorApi(): IpcInvokeApi {
   const api = window.cdpInjector;
   if (!api) {
-    throw new Error('未检测到 CDP 注入 IPC，请通过 pnpm dev 或 pnpm start 启动 Tool Hub');
+    throw new Error('未检测到 CDP 注入 IPC，请通过 pnpm dev 或 pnpm start 启动 everydaytool');
   }
   return api;
 }
@@ -71,7 +71,7 @@ export async function cdpGetRunning(): Promise<CdpRunningState[]> {
   return invokeCdpIpc(cdpIpcChannels().GET_RUNNING);
 }
 
-export async function cdpLaunchBatch(ids: string[]): Promise<CdpLaunchResult[]> {
+export async function cdpLaunchBatch(ids: string[]): Promise<CdpBatchResult[]> {
   return invokeCdpIpc(cdpIpcChannels().LAUNCH_BATCH, ids);
 }
 

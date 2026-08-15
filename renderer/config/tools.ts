@@ -2,8 +2,10 @@ import type { ToolDefinition } from '../shared/types/tool.js';
 import chromeSandbox from '@tools/chrome-sandbox/index.js';
 import idCardGenerator from '@tools/id-card-generator/index.js';
 import cdpInjector from '@tools/cdp-injector/index.js';
+import { filterToolsForCurrentTarget } from './toolAvailability.js';
 
-export const toolRegistry: ToolDefinition[] = [chromeSandbox, cdpInjector, idCardGenerator];
+export const allToolRegistry: ToolDefinition[] = [chromeSandbox, cdpInjector, idCardGenerator];
+export const toolRegistry: ToolDefinition[] = filterToolsForCurrentTarget(allToolRegistry);
 
 export function getToolById(id: string): ToolDefinition | undefined {
   return toolRegistry.find((tool) => tool.id === id);

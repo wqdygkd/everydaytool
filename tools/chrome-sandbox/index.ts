@@ -7,6 +7,7 @@ const tool: ToolDefinition = {
   description: '多沙箱浏览器管理',
   version: '1.0.0',
   color: '#3b82f6',
+  supportedTargets: ['win', 'mac'],
   route: {
     path: 'chrome-sandbox',
     name: 'tool-chrome-sandbox',

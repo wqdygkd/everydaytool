@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { createRequire } from 'module';
 import { CDP_IPC_CHANNELS } from './channels.js';
 import { cdpConfigStore } from '../store/config-store.js';
 import { injectorService, setCdpStatusEmitter } from '../services/injector-service.js';
@@ -7,6 +7,9 @@ import { openDevToolsFromPayload } from '../services/devtools-service.js';
 import fs from 'fs-extra';
 import { resolveExecutablePath } from '../utils/resolve-executable.js';
 import type { CdpOpenDevToolsPayload, CdpProfile, CdpScript } from '../../../../shared/types.js';
+
+const require = createRequire(import.meta.url);
+const { ipcMain, BrowserWindow, dialog } = require('electron') as typeof import('electron');
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {

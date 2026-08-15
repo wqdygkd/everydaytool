@@ -38,7 +38,7 @@ export async function shouldSkipDeveloperModeSetup(sandbox: Sandbox): Promise<bo
   if (!await fs.pathExists(sessionsDir)) return false;
 
   const files = await fs.readdir(sessionsDir);
-  if (!files.some((file) => file.startsWith('Session_'))) return false;
+  if (!files.some((file: string) => file.startsWith('Session_'))) return false;
 
   const prefs = await readJsonFile<DevToolsPrefs>(path.join(profilePath, 'Secure Preferences'), {});
   return prefs?.extensions?.ui?.developer_mode === true;

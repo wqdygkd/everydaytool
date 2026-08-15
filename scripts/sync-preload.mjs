@@ -6,7 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const channelsDir = path.join(rootDir, 'dist-backend/tools/chrome-sandbox/backend/ipc');
 const cdpChannelsDir = path.join(rootDir, 'dist-backend/tools/cdp-injector/backend/ipc');
-const preloadPath = path.join(rootDir, 'electron/preload.cjs');
+const preloadPaths = [
+  path.join(rootDir, 'electron/preload.cjs'),
+  path.join(rootDir, 'dist-backend/electron/preload.cjs'),
+];
 
 async function extractChannels(filePath) {
   const content = await fs.readFile(filePath, 'utf-8');
@@ -52,5 +55,9 @@ contextBridge.exposeInMainWorld('chromeSandbox', exposeIpcApi(IPC_CHANNELS));
 contextBridge.exposeInMainWorld('cdpInjector', exposeIpcApi(CDP_IPC_CHANNELS));
 `;
 
-await fs.writeFile(preloadPath, preloadTemplate);
-console.log('✓ electron/preload.cjs 已同步');
+for (const preloadPath of preloadPaths) {
+  await fs.ensureDir(path.dirname(preloadPath));
+  await fs.writeFile(preloadPath, preloadTemplate);
+}
+
+console.log('✓ preload 已同步');

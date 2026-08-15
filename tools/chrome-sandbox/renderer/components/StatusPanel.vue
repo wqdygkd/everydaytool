@@ -74,7 +74,7 @@
   </section>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue';
 import ActionBar from './ActionBar.vue';
 import EditDialog from './EditDialog.vue';

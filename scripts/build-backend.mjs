@@ -24,14 +24,13 @@ await fs.emptyDir(outDir);
 await build({
   entryPoints,
   outdir: outDir,
-  format: 'cjs',
+  format: 'esm',
   platform: 'node',
   target: 'node22',
   bundle: false,
   sourcemap: false,
   outbase: rootDir,
   logLevel: 'info',
-  external: ['electron'],
 });
 
 for (const asset of assets) {
@@ -43,5 +42,7 @@ for (const asset of assets) {
     throw new Error(`资源复制失败: ${asset}`);
   }
 }
+
+await import('./sync-preload.mjs');
 
 console.log('✓ backend 编译到 dist-backend/');

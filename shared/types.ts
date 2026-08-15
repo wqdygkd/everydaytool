@@ -186,6 +186,8 @@ export interface CdpLaunchResult {
   error?: string;
 }
 
+export type CdpBatchResult = CdpLaunchResult;
+
 export interface CdpOpenDevToolsPayload {
   devToolsUrl?: string;
   title?: string;

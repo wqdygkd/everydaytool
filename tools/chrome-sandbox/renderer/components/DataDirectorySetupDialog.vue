@@ -19,11 +19,11 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import DataDirectoryField from './DataDirectoryField.vue';
-import { invokeIpc, ipcChannels } from '@renderer/shared/composables/useIpc.js';
+import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc.js';
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible.js';
 
 const props = defineProps({ modelValue: Boolean });

@@ -1,11 +1,14 @@
-import { BrowserWindow, shell } from 'electron';
+import { createRequire } from 'module';
 import { injectorService } from './injector-service.js';
 import { isAllowedDevToolsUrl } from './cdp-client.js';
 import { sleep } from '../utils/sleep.js';
 import { logger } from '../../../chrome-sandbox/backend/utils/logger.js';
 import type { CdpOpenDevToolsPayload } from '../../../../shared/types.js';
 
-const devtoolsWindows = new Map<string, BrowserWindow>();
+const require = createRequire(import.meta.url);
+const { BrowserWindow, shell } = require('electron') as typeof import('electron');
+
+const devtoolsWindows = new Map<string, Electron.BrowserWindow>();
 const pauseCountByPort = new Map<number, number>();
 
 const DEVTOOLS_WINDOW_OPTIONS: Electron.BrowserWindowConstructorOptions = {

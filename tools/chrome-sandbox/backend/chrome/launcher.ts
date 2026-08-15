@@ -82,5 +82,8 @@ export async function launchChrome({
 
   registerProcess(sandboxId, child, userDataDir);
   const pid = findRunningPid(sandboxId, userDataDir) || child.pid;
+  if (!pid) {
+    throw new Error('Chrome 进程启动失败，未获取到进程 ID');
+  }
   return { pid, debugPort };
 }

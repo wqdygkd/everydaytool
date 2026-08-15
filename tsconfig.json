@@ -13,11 +13,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "types": [],
-    "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["renderer/*"],
-      "@tools/*": ["tools/*"],
-      "@shared/*": ["shared/*"]
+      "@renderer/*": ["./renderer/*"],
+      "@tools/*": ["./tools/*"],
+      "@shared/*": ["./shared/*"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },

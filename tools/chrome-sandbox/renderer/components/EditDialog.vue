@@ -15,7 +15,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import LaunchOptionsFields from './LaunchOptionsFields.vue';

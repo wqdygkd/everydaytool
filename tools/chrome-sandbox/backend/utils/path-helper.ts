@@ -1,18 +1,23 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import os from 'os';
 import fs from 'fs-extra';
-import { app } from 'electron';
 import { logger } from './logger.js';
+
+const require = createRequire(import.meta.url);
+const { app } = require('electron') as typeof import('electron');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Use app.isPackaged for reliable detection (NODE_ENV may not be set in packaged apps)
 const isDev = !app.isPackaged;
 
-// In development: resolve from source directory
-// In production: use electron app paths
-const APP_ROOT_DEV = path.resolve(__dirname, '..', '..', '..', '..');
+// In development: source files live under tools/, compiled files under dist-backend/tools/.
+const sourceRootCandidate = path.resolve(__dirname, '..', '..', '..', '..');
+const APP_ROOT_DEV = path.basename(sourceRootCandidate) === 'dist-backend'
+  ? path.dirname(sourceRootCandidate)
+  : sourceRootCandidate;
 
 interface ChromePaths {
   userDataRoot: string;

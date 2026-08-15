@@ -1,8 +1,8 @@
 <template>
   <div class="home-page">
     <section class="hero-section">
-      <h1>Tool Hub</h1>
-      <p class="hero-desc">选择一个工具开始工作</p>
+      <h1>everydaytool</h1>
+      <p class="hero-desc">edt · 选择一个工具开始工作</p>
     </section>
 
     <section class="tools-grid">
@@ -16,14 +16,14 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useRouter } from 'vue-router';
 import ToolCard from '../shared/components/ToolCard.vue';
 import { toolRegistry } from '../config/tools.js';
 
 const router = useRouter();
 
-function goToTool(toolId) {
+function goToTool(toolId: string) {
   router.push({ name: `tool-${toolId}` });
 }
 </script>

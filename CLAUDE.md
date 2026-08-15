@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Tool Hub（`tool-hub`）多功能工具平台的 Claude Code 项目指南。
+everydaytool（简称 `edt`，包名 `everydaytool`）多功能工具平台的 Claude Code 项目指南。
 
 ## 项目概述
 
@@ -192,6 +192,8 @@ pnpm dist         # 打包安装程序
 | 查找内容 | 位置 |
 |----------|------|
 | 工具注册 | `renderer/config/tools.js` |
+| 工具端支持声明 | `tools/<tool>/index.ts` 的 `supportedTargets` |
+| 当前端过滤逻辑 | `renderer/config/toolAvailability.ts` |
 | 路由配置 | `renderer/router/routes.js` |
 | IPC 通道 | `tools/chrome-sandbox/backend/ipc/channels.js` |
 | IPC 处理 | `tools/chrome-sandbox/backend/ipc/handlers.js` |

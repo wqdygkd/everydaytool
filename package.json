@@ -1,7 +1,7 @@
 {
-  "name": "tool-hub",
+  "name": "everydaytool",
   "version": "1.0.0",
-  "description": "Tool Hub 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
+  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
   "main": "dist-backend/electron/main.js",
   "type": "module",
   "packageManager": "pnpm@10.6.3",
@@ -18,6 +18,8 @@
   },
   "keywords": [
     "electron",
+    "edt",
+    "everydaytool",
     "chrome",
     "sandbox",
     "fingerprint",

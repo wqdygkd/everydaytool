@@ -7,6 +7,7 @@ const tool: ToolDefinition = {
   description: '随机生成中国大陆18位身份证号',
   version: '1.0.0',
   color: '#8b5cf6',
+  supportedTargets: ['web', 'win', 'mac'],
   route: {
     path: 'id-card-generator',
     name: 'tool-id-card-generator',

@@ -3,9 +3,9 @@
     <header class="app-header">
       <div class="brand">
         <span class="brand-dot" />
-        <span>Tool Hub</span>
+        <span>everydaytool</span>
       </div>
-      <span class="subtitle">多功能工具平台</span>
+      <span class="subtitle">edt · 多功能工具平台</span>
     </header>
 
     <main class="app-main">
@@ -24,14 +24,14 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { toolRegistry } from './config/tools.js';
 
 const route = useRoute();
 
-const currentTool = computed(() => route.meta?.toolId);
+const currentTool = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null));
 const currentToolName = computed(() => {
   const tool = toolRegistry.find((t) => t.id === currentTool.value);
   return tool?.name || '';

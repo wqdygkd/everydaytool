@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { createRequire } from 'module';
 import path from 'path';
 import fs from 'fs-extra';
 import { registerIpcHandlers } from '../tools/chrome-sandbox/backend/ipc/handlers.js';
@@ -8,17 +8,19 @@ import { getDatabase, closeDatabase } from '../tools/chrome-sandbox/backend/stor
 import { loadDataDirectoryOverride, getDataDirectory } from '../tools/chrome-sandbox/backend/utils/path-helper.js';
 import { logger } from '../tools/chrome-sandbox/backend/utils/logger.js';
 
-// Tool Hub 本体不对外暴露 Chromium 远程调试端口（CDP 仅用于注入外部应用）
+const require = createRequire(import.meta.url);
+const { app, BrowserWindow } = require('electron') as typeof import('electron');
+
+// everydaytool 本体不对外暴露 Chromium 远程调试端口（CDP 仅用于注入外部应用）
 app.commandLine.appendSwitch('remote-debugging-port', '0');
 
-// Use app.isPackaged for reliable detection (NODE_ENV may not be set in packaged apps)
-const isDev = !app.isPackaged;
+const isDev = process.env.NODE_ENV === 'development';
 
 // 编译产物 dist-backend/electron/main.js 中 import.meta.url 仍指向本文件所在目录，
 // preload.cjs 与 ../dist/index.html 的相对关系与源码一致。
 const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
 
-let mainWindow: BrowserWindow | null = null;
+let mainWindow: Electron.BrowserWindow | null = null;
 let backendInitialized = false;
 
 async function initializeBackend(): Promise<void> {
@@ -38,7 +40,7 @@ async function createWindow(): Promise<void> {
     height: 900,
     minWidth: 800,
     minHeight: 500,
-    title: 'Tool Hub',
+    title: 'everydaytool',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -50,7 +52,7 @@ async function createWindow(): Promise<void> {
     await mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    await mainWindow.loadFile(path.join(app.getAppPath(), 'dist/index.html'));
   }
 }
 

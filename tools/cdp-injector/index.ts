@@ -7,6 +7,7 @@ const tool: ToolDefinition = {
   description: '批量启动应用并通过调试端口注入自定义脚本',
   version: '1.0.0',
   color: '#10b981',
+  supportedTargets: ['win', 'mac'],
   route: {
     path: 'cdp-injector',
     name: 'tool-cdp-injector',

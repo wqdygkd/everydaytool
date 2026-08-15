@@ -227,7 +227,7 @@ export async function readExtensionsFromProfile(profilePath: string): Promise<Pr
     if (!stat.isDirectory()) continue;
 
     const versions = await fs.readdir(extRoot);
-    const latestVersion = versions.filter((v) => !v.startsWith('.')).sort().pop();
+    const latestVersion = versions.filter((v: string) => !v.startsWith('.')).sort().pop();
     if (!latestVersion) continue;
 
     const manifestPath = path.join(extRoot, latestVersion, 'manifest.json');

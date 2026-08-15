@@ -15,7 +15,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { toolRegistry } from '../config/tools.js';
@@ -24,7 +24,7 @@ const route = useRoute();
 const router = useRouter();
 
 const toolTitle = computed(() => {
-  const toolId = route.meta?.toolId;
+  const toolId = typeof route.meta?.toolId === 'string' ? route.meta.toolId : null;
   const tool = toolRegistry.find((t) => t.id === toolId);
   return tool?.name || '工具';
 });

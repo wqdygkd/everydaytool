@@ -9,7 +9,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useDataDirectoryPicker } from '../composables/useDataDirectoryPicker.js';
 
 defineProps({

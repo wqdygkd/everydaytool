@@ -258,11 +258,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useCdpInjectorStore } from '../stores/cdpInjectorStore.js';
-import { invokeCdpIpc, cdpIpcChannels } from '@renderer/shared/composables/useCdpIpc.js';
+import { invokeCdpIpc, cdpIpcChannels } from '@renderer/shared/ipc/useCdpIpc.js';
 
 const store = useCdpInjectorStore();
 const channels = cdpIpcChannels();

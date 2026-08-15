@@ -24,7 +24,7 @@ async function ensureSharedFingerprintExtension(): Promise<string> {
   const templatePath = getExtensionTemplatePath();
   await fs.copy(templatePath, sharedPath, {
     overwrite: true,
-    filter: (src) => path.basename(src) !== CONFIG_FILE,
+    filter: (src: string) => path.basename(src) !== CONFIG_FILE,
   });
   logger.info('Shared fingerprint extension initialized', { sharedPath });
   return sharedPath;

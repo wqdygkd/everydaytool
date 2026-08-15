@@ -1,6 +1,6 @@
 {
-  "appId": "com.toolhub.app",
-  "productName": "Tool Hub",
+  "appId": "com.edt.everydaytool",
+  "productName": "everydaytool",
   "asar": true,
   "asarUnpack": [
     "**/*.node",
@@ -17,6 +17,7 @@
     "output": "release"
   },
   "files": [
+    "dist-backend/**/*",
     "electron/**/*",
     "tools/**/*",
     "dist/**/*",

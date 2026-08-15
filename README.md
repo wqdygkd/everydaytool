@@ -1,6 +1,6 @@
-# Tool Hub
+# everydaytool (edt)
 
-多功能工具平台（`tool-hub`），基于 Electron + Vue 3。首个工具模块 Chrome 沙箱提供多实例浏览器管理。
+多功能工具平台（`everydaytool`，简称 `edt`），基于 Electron + Vue 3。首个工具模块 Chrome 沙箱提供多实例浏览器管理。
 
 ## 架构概览
 
@@ -113,6 +113,20 @@ pnpm dist         # 打包安装程序
 
 3. 注册：`renderer/config/tools.js`
 4. 路由：`renderer/router/routes.js`
+
+## 工具端支持配置
+
+工具在不同客户端的可用性配置在每个工具的 `index.ts` 中：
+
+```ts
+supportedTargets: ['web', 'win', 'mac'],
+```
+
+- `web`：网页端
+- `win`：Windows 桌面端
+- `mac`：macOS 桌面端
+
+`renderer/config/toolAvailability.ts` 负责识别当前客户端并过滤首页工具列表与路由。
 
 ## 文档
 

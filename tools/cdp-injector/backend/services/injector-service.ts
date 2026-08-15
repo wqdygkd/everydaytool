@@ -6,7 +6,6 @@ import { sleep } from '../utils/sleep.js';
 import { logger } from '../../../chrome-sandbox/backend/utils/logger.js';
 import type {
   CdpBatchResult,
-  CdpLaunchResult,
   CdpProfile,
   CdpRunningState,
 } from '../../../../shared/types.js';

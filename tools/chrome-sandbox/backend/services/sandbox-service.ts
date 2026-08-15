@@ -218,9 +218,10 @@ export const sandboxService = {
 export async function updateSandboxFingerprint(
   sandboxId: string,
   fingerprintData: FingerprintUpdatePayload,
-): Promise<Sandbox | null> {
+): Promise<Fingerprint | null> {
   const sandbox = sandboxStore.getById(sandboxId);
   if (!sandbox) throw new Error('沙箱不存在');
+  if (!sandbox.fingerprintId) throw new Error('沙箱未关联指纹');
 
   fingerprintStore.update(sandbox.fingerprintId, fingerprintData);
   await updateFingerprintConfig(getSandboxFingerprintExtPath(sandboxId), fingerprintData as Fingerprint);
