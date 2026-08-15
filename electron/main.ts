@@ -1,6 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs-extra';
 import { registerIpcHandlers } from '../tools/chrome-sandbox/backend/ipc/handlers.js';
 import { registerCdpInjectorHandlers } from '../tools/cdp-injector/backend/ipc/handlers.js';
@@ -12,14 +11,17 @@ import { logger } from '../tools/chrome-sandbox/backend/utils/logger.js';
 // Tool Hub 本体不对外暴露 Chromium 远程调试端口（CDP 仅用于注入外部应用）
 app.commandLine.appendSwitch('remote-debugging-port', '0');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Use app.isPackaged for reliable detection (NODE_ENV may not be set in packaged apps)
 const isDev = !app.isPackaged;
 
-let mainWindow = null;
+// 编译产物 dist-backend/electron/main.js 中 import.meta.url 仍指向本文件所在目录，
+// preload.cjs 与 ../dist/index.html 的相对关系与源码一致。
+const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+
+let mainWindow: BrowserWindow | null = null;
 let backendInitialized = false;
 
-async function initializeBackend() {
+async function initializeBackend(): Promise<void> {
   if (backendInitialized) return;
   backendInitialized = true;
 
@@ -30,7 +32,7 @@ async function initializeBackend() {
   registerCdpInjectorHandlers();
 }
 
-async function createWindow() {
+async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 900,
