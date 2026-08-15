@@ -1,7 +1,28 @@
 import { getDatabase } from './database.js';
 import { SANDBOX_COLORS } from '../constants/sandbox.js';
+import type {
+  Sandbox,
+  SandboxMetadata,
+  SandboxStatus,
+  SandboxUpdatePayload,
+} from '../../../../shared/types.js';
 
-const FIELD_MAP = {
+interface SandboxRow {
+  id: string;
+  name: string;
+  category: string | null;
+  color: string | null;
+  user_data_path: string;
+  chrome_pid: number | null;
+  status: SandboxStatus;
+  fingerprint_id: string | null;
+  created_at: string | null;
+  last_used_at: string | null;
+  last_active_at: string | null;
+  metadata: string | null;
+}
+
+const FIELD_MAP: Record<string, keyof SandboxRow> = {
   name: 'name',
   category: 'category',
   color: 'color',
@@ -13,7 +34,7 @@ const FIELD_MAP = {
   lastActiveAt: 'last_active_at',
 };
 
-function mapRow(row) {
+function mapRow(row: SandboxRow | undefined): Sandbox | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -27,22 +48,34 @@ function mapRow(row) {
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
     lastActiveAt: row.last_active_at,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata: row.metadata ? JSON.parse(row.metadata) as SandboxMetadata : null,
   };
 }
 
+interface SandboxCreateData {
+  id: string;
+  name: string;
+  category?: string;
+  color?: string;
+  userDataPath: string;
+  fingerprintId: string | null;
+  metadata?: SandboxMetadata | null;
+}
+
 export const sandboxStore = {
-  getAll() {
-    const rows = getDatabase().prepare('SELECT * FROM sandboxes').all();
-    return rows.map(mapRow);
+  getAll(): Sandbox[] {
+    const rows = getDatabase().prepare('SELECT * FROM sandboxes').all() as SandboxRow[];
+    return rows.map(mapRow).filter((row): row is Sandbox => row !== null);
   },
 
-  getById(id) {
-    const row = getDatabase().prepare('SELECT * FROM sandboxes WHERE id = ?').get(id);
+  getById(id: string): Sandbox | null {
+    const row = getDatabase().prepare('SELECT * FROM sandboxes WHERE id = ?').get(id) as
+      | SandboxRow
+      | undefined;
     return mapRow(row);
   },
 
-  create(data) {
+  create(data: SandboxCreateData): Sandbox | null {
     getDatabase().prepare(`
       INSERT INTO sandboxes (id, name, category, color, user_data_path, fingerprint_id, metadata)
       VALUES (@id, @name, @category, @color, @userDataPath, @fingerprintId, @metadata)
@@ -58,14 +91,14 @@ export const sandboxStore = {
     return this.getById(data.id);
   },
 
-  update(id, data) {
-    const fields = [];
-    const params = { id };
+  update(id: string, data: SandboxUpdatePayload): Sandbox | null {
+    const fields: string[] = [];
+    const params: Record<string, unknown> = { id };
 
     for (const [key, col] of Object.entries(FIELD_MAP)) {
-      if (data[key] !== undefined) {
+      if (data[key as keyof SandboxUpdatePayload] !== undefined) {
         fields.push(`${col} = @${key}`);
-        params[key] = data[key];
+        params[key] = data[key as keyof SandboxUpdatePayload];
       }
     }
 
@@ -79,7 +112,7 @@ export const sandboxStore = {
     return this.getById(id);
   },
 
-  delete(id) {
+  delete(id: string): void {
     getDatabase().prepare('DELETE FROM sandboxes WHERE id = ?').run(id);
   },
 };

@@ -14,7 +14,13 @@ const isDev = !app.isPackaged;
 // In production: use electron app paths
 const APP_ROOT_DEV = path.resolve(__dirname, '..', '..', '..', '..');
 
-function getChromePaths() {
+interface ChromePaths {
+  userDataRoot: string;
+  defaultProfile: string;
+  executables: string[];
+}
+
+function getChromePaths(): ChromePaths {
   const home = os.homedir();
   if (process.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
@@ -45,35 +51,35 @@ function getChromePaths() {
   };
 }
 
-export function getAppRoot() {
+export function getAppRoot(): string {
   return isDev ? APP_ROOT_DEV : app.getAppPath();
 }
 
-export function getDefaultDataDirectory() {
+export function getDefaultDataDirectory(): string {
   return isDev
     ? path.join(APP_ROOT_DEV, 'data')
     : path.join(app.getPath('userData'), 'data');
 }
 
-let dataDirectoryOverride = null;
+let dataDirectoryOverride: string | null = null;
 
-function getUserDataFile(filename) {
+function getUserDataFile(filename: string): string {
   return path.join(app.getPath('userData'), filename);
 }
 
-export function getBootstrapConfigPath() {
+export function getBootstrapConfigPath(): string {
   return getUserDataFile('data-root.json');
 }
 
-export function getSetupStatePath() {
+export function getSetupStatePath(): string {
   return getUserDataFile('setup-state.json');
 }
 
-export function getCustomDataPathFile() {
+export function getCustomDataPathFile(): string {
   return getUserDataFile('data-root.path');
 }
 
-async function updateCustomDataPathFile(customDirectory) {
+async function updateCustomDataPathFile(customDirectory: string | null): Promise<void> {
   const pathFile = getCustomDataPathFile();
   if (!customDirectory) {
     if (await fs.pathExists(pathFile)) {
@@ -90,35 +96,37 @@ async function updateCustomDataPathFile(customDirectory) {
   await fs.writeFile(pathFile, customDirectory, 'utf8');
 }
 
-export async function isDataDirectoryConfigured() {
+export async function isDataDirectoryConfigured(): Promise<boolean> {
   const setupPath = getSetupStatePath();
   if (await fs.pathExists(setupPath)) {
     try {
       const state = await fs.readJson(setupPath);
       return state.dataDirectoryConfigured === true;
     } catch (error) {
-      logger.warn('Failed to read setup state', { error: error.message });
+      logger.warn('Failed to read setup state', { error: (error as Error).message });
     }
   }
 
   return fs.pathExists(getBootstrapConfigPath());
 }
 
-export async function markDataDirectoryConfigured() {
+export async function markDataDirectoryConfigured(): Promise<void> {
   const setupPath = getSetupStatePath();
   await fs.ensureDir(path.dirname(setupPath));
   await fs.writeJson(setupPath, { dataDirectoryConfigured: true }, { spaces: 2 });
 }
 
-export function setDataDirectoryOverride(dir) {
+export function setDataDirectoryOverride(dir: string | null): void {
   dataDirectoryOverride = normalizeDataDirectory(dir);
 }
 
-export function isSameDataDirectory(a, b) {
+export function isSameDataDirectory(a: string, b: string): boolean {
   return path.resolve(a) === path.resolve(b);
 }
 
-export async function applyDataDirectoryChange(nextDirectory) {
+export async function applyDataDirectoryChange(
+  nextDirectory: string,
+): Promise<{ dataDirectory: string; changed: boolean }> {
   const normalized = normalizeDataDirectory(nextDirectory) || getDefaultDataDirectory();
   await fs.ensureDir(normalized);
 
@@ -134,33 +142,33 @@ export async function applyDataDirectoryChange(nextDirectory) {
   return { dataDirectory: normalized, changed: true };
 }
 
-export function normalizeDataDirectory(dir) {
+export function normalizeDataDirectory(dir: string | null | undefined): string | null {
   if (!dir || !String(dir).trim()) return null;
   return path.resolve(String(dir).trim());
 }
 
-export function getDataDirectory() {
+export function getDataDirectory(): string {
   return dataDirectoryOverride || getDefaultDataDirectory();
 }
 
-export async function syncCustomDataPathFile() {
+export async function syncCustomDataPathFile(): Promise<void> {
   await updateCustomDataPathFile(dataDirectoryOverride);
 }
 
-export async function loadDataDirectoryOverride() {
+export async function loadDataDirectoryOverride(): Promise<void> {
   const bootstrapPath = getBootstrapConfigPath();
   try {
     if (!await fs.pathExists(bootstrapPath)) return;
     const { dataDirectory } = await fs.readJson(bootstrapPath);
     setDataDirectoryOverride(normalizeDataDirectory(dataDirectory));
   } catch (error) {
-    logger.warn('Failed to load data directory override', { error: error.message });
+    logger.warn('Failed to load data directory override', { error: (error as Error).message });
   } finally {
     await syncCustomDataPathFile();
   }
 }
 
-export async function saveDataDirectoryOverride(dataDirectory) {
+export async function saveDataDirectoryOverride(dataDirectory: string | null): Promise<void> {
   const bootstrapPath = getBootstrapConfigPath();
   await fs.ensureDir(path.dirname(bootstrapPath));
 
@@ -174,15 +182,15 @@ export async function saveDataDirectoryOverride(dataDirectory) {
   await updateCustomDataPathFile(dataDirectory);
 }
 
-export function getSandboxesDirectory() {
+export function getSandboxesDirectory(): string {
   return path.join(getDataDirectory(), 'sandboxes');
 }
 
-export function getDatabasePath() {
+export function getDatabasePath(): string {
   return path.join(getDataDirectory(), 'config.db');
 }
 
-export function getExtensionTemplatePath() {
+export function getExtensionTemplatePath(): string {
   // In dev: source directory
   // In prod: extraResources copied to resources/extension/
   return isDev
@@ -191,35 +199,35 @@ export function getExtensionTemplatePath() {
 }
 
 /** 系统 Chrome 默认 Profile 目录，仅作新建/修复沙箱时的克隆源 */
-export function getDefaultChromeProfilePath() {
+export function getDefaultChromeProfilePath(): string {
   return getChromePaths().defaultProfile;
 }
 
 /** 系统 Chrome User Data 根目录，仅作克隆 Local State 等，不作为沙箱 user-data-dir */
-export function getChromeUserDataRoot() {
+export function getChromeUserDataRoot(): string {
   return getChromePaths().userDataRoot;
 }
 
-export function getDefaultChromePaths() {
+export function getDefaultChromePaths(): string[] {
   return getChromePaths().executables;
 }
 
-export function getSandboxPath(sandboxId) {
+export function getSandboxPath(sandboxId: string): string {
   return path.join(getSandboxesDirectory(), sandboxId);
 }
 
-export function getSandboxProfileDirectoryName(sandboxId) {
+export function getSandboxProfileDirectoryName(sandboxId: string): string {
   return sandboxId.replace(/^sandbox_/, 'sb_');
 }
 
-export function getSandboxProfilePath(sandboxId) {
+export function getSandboxProfilePath(sandboxId: string): string {
   return path.join(getSandboxPath(sandboxId), getSandboxProfileDirectoryName(sandboxId));
 }
 
-export function getSandboxFingerprintExtPath(sandboxId) {
+export function getSandboxFingerprintExtPath(sandboxId: string): string {
   return path.join(getSandboxPath(sandboxId), 'fingerprint_ext');
 }
 
-export function getSharedFingerprintExtPath() {
+export function getSharedFingerprintExtPath(): string {
   return path.join(getDataDirectory(), 'shared', 'fingerprint_ext');
 }

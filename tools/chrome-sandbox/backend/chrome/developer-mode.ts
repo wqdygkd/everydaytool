@@ -4,23 +4,33 @@ import net from 'net';
 import { readJsonFile } from '../utils/file-ops.js';
 import { getSandboxProfilePath } from '../utils/path-helper.js';
 import { logger } from '../utils/logger.js';
+import type { Sandbox } from '../../../../shared/types.js';
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function getFreePort() {
+export function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
       server.close(() => resolve(port));
     });
     server.on('error', reject);
   });
 }
 
-export async function shouldSkipDeveloperModeSetup(sandbox) {
+interface DevToolsPrefs {
+  extensions?: {
+    ui?: {
+      developer_mode?: boolean;
+    };
+  };
+}
+
+export async function shouldSkipDeveloperModeSetup(sandbox: Sandbox): Promise<boolean> {
   if (sandbox.metadata?.developerModeEnabled) return true;
 
   const profilePath = getSandboxProfilePath(sandbox.id);
@@ -30,11 +40,11 @@ export async function shouldSkipDeveloperModeSetup(sandbox) {
   const files = await fs.readdir(sessionsDir);
   if (!files.some((file) => file.startsWith('Session_'))) return false;
 
-  const prefs = await readJsonFile(path.join(profilePath, 'Secure Preferences'), {});
+  const prefs = await readJsonFile<DevToolsPrefs>(path.join(profilePath, 'Secure Preferences'), {});
   return prefs?.extensions?.ui?.developer_mode === true;
 }
 
-async function waitForCdp(port, timeoutMs = 20000) {
+async function waitForCdp(port: number, timeoutMs = 20000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -48,7 +58,13 @@ async function waitForCdp(port, timeoutMs = 20000) {
   return false;
 }
 
-async function cdpCall(wsUrl, method, params = {}) {
+interface CdpMessage {
+  id?: number;
+  error?: { message?: string };
+  result?: Record<string, unknown>;
+}
+
+async function cdpCall(wsUrl: string, method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const ws = new WebSocket(wsUrl);
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true });
@@ -58,36 +74,48 @@ async function cdpCall(wsUrl, method, params = {}) {
   const id = 1;
   return new Promise((resolve, reject) => {
     ws.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data);
+      const message = JSON.parse((event as MessageEvent).data) as CdpMessage;
       if (message.id !== id) return;
       ws.close();
       if (message.error) reject(new Error(message.error.message || JSON.stringify(message.error)));
-      else resolve(message.result);
+      else resolve(message.result ?? {});
     });
     ws.send(JSON.stringify({ id, method, params }));
   });
 }
 
-async function cdpEval(wsUrl, expression) {
+async function cdpEval(wsUrl: string, expression: string): Promise<unknown> {
   const result = await cdpCall(wsUrl, 'Runtime.evaluate', {
     expression,
     returnByValue: true,
     awaitPromise: true,
   });
-  return result?.result?.value;
+  const value = (result.result as { value?: unknown } | undefined)?.value;
+  return value;
 }
 
-async function getBrowserWsUrl(port) {
-  const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+interface PageTarget {
+  id?: string;
+  url?: string;
+  webSocketDebuggerUrl?: string;
+  type?: string;
+}
+
+async function getBrowserWsUrl(port: number): Promise<string> {
+  const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json() as { webSocketDebuggerUrl: string };
   return version.webSocketDebuggerUrl;
 }
 
-async function listPageTargets(port) {
-  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+async function listPageTargets(port: number): Promise<PageTarget[]> {
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as PageTarget[];
   return list.filter((item) => item.type === 'page');
 }
 
-async function waitForExtensionsTarget(port, targetId, timeoutMs = 8000) {
+async function waitForExtensionsTarget(
+  port: number,
+  targetId: string,
+  timeoutMs = 8000,
+): Promise<PageTarget | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const pages = await listPageTargets(port);
@@ -99,12 +127,19 @@ async function waitForExtensionsTarget(port, targetId, timeoutMs = 8000) {
   return null;
 }
 
-async function createBackgroundExtensionsTab(port) {
+interface ExtensionsTab {
+  targetId: string;
+  wsUrl: string;
+  browserWsUrl: string;
+}
+
+async function createBackgroundExtensionsTab(port: number): Promise<ExtensionsTab> {
   const browserWsUrl = await getBrowserWsUrl(port);
-  const { targetId } = await cdpCall(browserWsUrl, 'Target.createTarget', {
+  const result = await cdpCall(browserWsUrl, 'Target.createTarget', {
     url: 'chrome://extensions/',
     background: true,
   });
+  const targetId = result.targetId as string;
 
   const target = await waitForExtensionsTarget(port, targetId);
   if (!target?.webSocketDebuggerUrl) {
@@ -118,7 +153,7 @@ async function createBackgroundExtensionsTab(port) {
   };
 }
 
-async function waitForExtensionsTabsClosed(port, timeoutMs = 3000) {
+async function waitForExtensionsTabsClosed(port: number, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const pages = await listPageTargets(port);
@@ -127,7 +162,7 @@ async function waitForExtensionsTabsClosed(port, timeoutMs = 3000) {
   }
 }
 
-async function closeExtensionsTab(port, browserWsUrl, targetId) {
+async function closeExtensionsTab(port: number, browserWsUrl: string, targetId: string): Promise<void> {
   try {
     await cdpCall(browserWsUrl, 'Target.closeTarget', { targetId });
   } catch {
@@ -138,29 +173,37 @@ async function closeExtensionsTab(port, browserWsUrl, targetId) {
 
   for (const item of await listPageTargets(port)) {
     if (item.url?.startsWith('chrome://extensions')) {
-      await fetch(`http://127.0.0.1:${port}/json/close/${encodeURIComponent(item.id)}`);
+      await fetch(`http://127.0.0.1:${port}/json/close/${encodeURIComponent(item.id as string)}`);
     }
   }
   await waitForExtensionsTabsClosed(port);
 }
 
-async function restoreChromeWindow(port, { x, y, width, height }) {
+interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+async function restoreChromeWindow(port: number, { x, y, width, height }: WindowBounds): Promise<void> {
   try {
     const browserWsUrl = await getBrowserWsUrl(port);
     const pages = await listPageTargets(port);
     const page = pages.find((item) => !item.url?.startsWith('chrome://extensions')) || pages[0];
-    if (!page) return;
+    if (!page?.id) return;
 
-    const { windowId } = await cdpCall(browserWsUrl, 'Browser.getWindowForTarget', {
+    const windowResult = await cdpCall(browserWsUrl, 'Browser.getWindowForTarget', {
       targetId: page.id,
     });
+    const windowId = windowResult.windowId as number;
 
     await cdpCall(browserWsUrl, 'Browser.setWindowBounds', {
       windowId,
       bounds: { left: x, top: y, width, height, windowState: 'normal' },
     });
   } catch (error) {
-    logger.warn('Failed to restore Chrome window bounds', { error: error.message });
+    logger.warn('Failed to restore Chrome window bounds', { error: (error as Error).message });
   }
 }
 
@@ -172,12 +215,17 @@ const TOGGLE_SCRIPT = `(enable) => {
   return { found: true, checked: !!toggle.checked };
 }`;
 
-async function enableDeveloperModeOnTab(wsUrl) {
+interface ToggleState {
+  found: boolean;
+  checked: boolean;
+}
+
+async function enableDeveloperModeOnTab(wsUrl: string): Promise<boolean> {
   const deadline = Date.now() + 10000;
-  let state = { found: false, checked: false };
+  let state: ToggleState = { found: false, checked: false };
 
   while (Date.now() < deadline) {
-    state = await cdpEval(wsUrl, `(${TOGGLE_SCRIPT})(false)`) || state;
+    state = (await cdpEval(wsUrl, `(${TOGGLE_SCRIPT})(false)`) as ToggleState) || state;
     if (state.found) break;
     await sleep(300);
   }
@@ -194,7 +242,7 @@ async function enableDeveloperModeOnTab(wsUrl) {
   await cdpEval(wsUrl, `(${TOGGLE_SCRIPT})(true)`);
   await sleep(500);
 
-  const verified = await cdpEval(wsUrl, `(${TOGGLE_SCRIPT})(false)`);
+  const verified = await cdpEval(wsUrl, `(${TOGGLE_SCRIPT})(false)`) as ToggleState;
   if (verified?.found && verified.checked) {
     logger.info('Extensions developer mode enabled via CDP');
     return true;
@@ -204,18 +252,21 @@ async function enableDeveloperModeOnTab(wsUrl) {
   return false;
 }
 
-export async function setupSandboxDeveloperMode(debugPort, windowBounds) {
+export async function setupSandboxDeveloperMode(
+  debugPort: number,
+  windowBounds?: WindowBounds | null,
+): Promise<boolean> {
   if (!debugPort || !await waitForCdp(debugPort)) {
     if (debugPort) logger.warn('CDP not ready, skip developer mode enable', { debugPort });
     return false;
   }
 
-  let tab = null;
+  let tab: ExtensionsTab | null = null;
   try {
     tab = await createBackgroundExtensionsTab(debugPort);
     return await enableDeveloperModeOnTab(tab.wsUrl);
   } catch (error) {
-    logger.warn('Developer mode CDP flow failed', { error: error.message });
+    logger.warn('Developer mode CDP flow failed', { error: (error as Error).message });
     return false;
   } finally {
     if (tab) await closeExtensionsTab(debugPort, tab.browserWsUrl, tab.targetId);

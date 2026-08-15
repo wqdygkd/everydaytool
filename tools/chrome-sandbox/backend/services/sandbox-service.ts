@@ -19,10 +19,17 @@ import { removeIfExists } from '../utils/file-ops.js';
 import { logger } from '../utils/logger.js';
 import { SANDBOX_COLORS } from '../constants/sandbox.js';
 import { IPC_CHANNELS } from '../ipc/channels.js';
+import type {
+  Sandbox,
+  SandboxCreatePayload,
+  SandboxUpdatePayload,
+  FingerprintUpdatePayload,
+  Fingerprint,
+} from '../../../../shared/types.js';
 
-let statusEmitter = null;
+let statusEmitter: ((channel: string, payload: unknown) => void) | null = null;
 
-export function setStatusEmitter(emitter) {
+export function setStatusEmitter(emitter: (channel: string, payload: unknown) => void): void {
   statusEmitter = emitter;
   onProcessExit((sandboxId) => {
     emit(IPC_CHANNELS.EVENT_PROCESS_EXITED, { sandboxId });
@@ -30,11 +37,11 @@ export function setStatusEmitter(emitter) {
   });
 }
 
-function emit(channel, payload) {
+function emit(channel: string, payload: unknown): void {
   if (statusEmitter) statusEmitter(channel, payload);
 }
 
-function syncRunningState(sandbox) {
+function syncRunningState(sandbox: Sandbox): Sandbox | null {
   const running = isRunning(sandbox.id, sandbox.userDataPath, {
     allowProcessQuery: sandbox.status === 'running',
   });
@@ -49,7 +56,7 @@ function syncRunningState(sandbox) {
   });
 }
 
-async function refreshSandboxPid(sandboxId) {
+async function refreshSandboxPid(sandboxId: string): Promise<Sandbox | null> {
   const sandbox = sandboxStore.getById(sandboxId);
   if (!sandbox) return null;
 
@@ -60,7 +67,7 @@ async function refreshSandboxPid(sandboxId) {
   return sandboxStore.update(sandboxId, { chromePid: pid });
 }
 
-async function focusRunningSandbox(sandbox) {
+async function focusRunningSandbox(sandbox: Sandbox): Promise<Sandbox | null> {
   const pid = findRunningPid(sandbox.id, sandbox.userDataPath) || sandbox.chromePid;
   if (!pid) return null;
   await focusChromeWindow(pid);
@@ -72,16 +79,17 @@ async function focusRunningSandbox(sandbox) {
 }
 
 export const sandboxService = {
-  async getAll() {
-    return sandboxStore.getAll().map(syncRunningState);
+  async getAll(): Promise<Sandbox[]> {
+    return sandboxStore.getAll().map(syncRunningState).filter((s): s is Sandbox => s !== null);
   },
 
-  async getById(id) {
+  async getById(id: string): Promise<Sandbox | null> {
     const sandbox = sandboxStore.getById(id);
     return sandbox ? syncRunningState(sandbox) : null;
   },
 
-  async create({ name, fingerprintData = null, inheritExtensions = false, launchOptions = {} }) {
+  async create(data: SandboxCreatePayload): Promise<Sandbox | null> {
+    const { name, fingerprintData = null, inheritExtensions = false, launchOptions = {} } = data;
     const sandboxId = `sandbox_${uuidv4().replace(/-/g, '').slice(0, 8)}`;
     const sandboxPath = getSandboxPath(sandboxId);
     const fingerprintExtPath = getSandboxFingerprintExtPath(sandboxId);
@@ -114,7 +122,7 @@ export const sandboxService = {
     return sandbox;
   },
 
-  async activate(sandboxId) {
+  async activate(sandboxId: string): Promise<Sandbox | null> {
     let sandbox = await this.getById(sandboxId);
     if (!sandbox) throw new Error('沙箱不存在');
 
@@ -168,7 +176,7 @@ export const sandboxService = {
     return (await refreshSandboxPid(sandboxId)) || sandbox;
   },
 
-  async close(sandboxId) {
+  async close(sandboxId: string): Promise<Sandbox | null> {
     const sandbox = await this.getById(sandboxId);
     if (!sandbox) throw new Error('沙箱不存在');
 
@@ -182,7 +190,7 @@ export const sandboxService = {
     return updated;
   },
 
-  async delete(sandboxId) {
+  async delete(sandboxId: string): Promise<boolean> {
     const sandbox = await this.getById(sandboxId);
     if (!sandbox) throw new Error('沙箱不存在');
 
@@ -197,21 +205,24 @@ export const sandboxService = {
     return true;
   },
 
-  update(sandboxId, data) {
+  update(sandboxId: string, data: SandboxUpdatePayload): Sandbox | null {
     return sandboxStore.update(sandboxId, data);
   },
 
-  async refreshStatus(sandboxId) {
+  async refreshStatus(sandboxId: string): Promise<Sandbox | null> {
     if (!sandboxStore.getById(sandboxId)) throw new Error('沙箱不存在');
     return refreshSandboxPid(sandboxId);
   },
 };
 
-export async function updateSandboxFingerprint(sandboxId, fingerprintData) {
+export async function updateSandboxFingerprint(
+  sandboxId: string,
+  fingerprintData: FingerprintUpdatePayload,
+): Promise<Sandbox | null> {
   const sandbox = sandboxStore.getById(sandboxId);
   if (!sandbox) throw new Error('沙箱不存在');
 
   fingerprintStore.update(sandbox.fingerprintId, fingerprintData);
-  await updateFingerprintConfig(getSandboxFingerprintExtPath(sandboxId), fingerprintData);
+  await updateFingerprintConfig(getSandboxFingerprintExtPath(sandboxId), fingerprintData as Fingerprint);
   return fingerprintStore.getById(sandbox.fingerprintId);
 }

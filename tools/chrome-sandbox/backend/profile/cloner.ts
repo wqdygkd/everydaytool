@@ -4,6 +4,10 @@ import { getDefaultChromeProfilePath, getChromeUserDataRoot, getSandboxProfileDi
 import { copyIfExists, ensureDir, readJsonFile, removeIfExists, writeJsonFile } from '../utils/file-ops.js';
 import { logger } from '../utils/logger.js';
 
+// 迁移本地 JSON 结构（Local State / Preferences），允许任意嵌套
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type JsonObject = Record<string, any>;
+
 const PROFILE_ITEMS_CORE = ['Bookmarks', 'Preferences'];
 /** Chrome 已保存密码（及账号同步密码）对应的 SQLite 库名 */
 const PROFILE_PASSWORD_DATABASES = ['Login Data', 'Login Data For Account'];
@@ -13,13 +17,17 @@ const EXTENSION_STATE_ITEMS = ['Extension State', 'Local Extension Settings', 'E
 const EXTENSION_ASSET_ITEMS = ['Extensions', ...EXTENSION_STATE_ITEMS];
 const EXTENSION_PROFILE_ITEMS = [...EXTENSION_ASSET_ITEMS, PROFILE_ITEM_SECURE_PREFS];
 
-function getCloneItems(inheritExtensions) {
+interface CloneOptions {
+  inheritExtensions?: boolean;
+}
+
+function getCloneItems(inheritExtensions: boolean): string[] {
   return inheritExtensions
     ? [...PROFILE_ITEMS_CORE, PROFILE_ITEM_SECURE_PREFS, ...EXTENSION_ASSET_ITEMS]
     : PROFILE_ITEMS_CORE;
 }
 
-async function copyProfilePasswordStores(sourceProfilePath, targetProfilePath) {
+async function copyProfilePasswordStores(sourceProfilePath: string, targetProfilePath: string): Promise<void> {
   for (const dbName of PROFILE_PASSWORD_DATABASES) {
     for (const suffix of SQLITE_SIDECAR_SUFFIXES) {
       const item = `${dbName}${suffix}`;
@@ -33,17 +41,18 @@ async function copyProfilePasswordStores(sourceProfilePath, targetProfilePath) {
   }
 }
 
-async function removeExtensionProfileData(profilePath) {
+async function removeExtensionProfileData(profilePath: string): Promise<void> {
   for (const item of EXTENSION_PROFILE_ITEMS) {
     await removeIfExists(path.join(profilePath, item));
   }
 }
 
 export async function cloneProfile(
-  targetProfilePath,
-  sourceProfilePath = getDefaultChromeProfilePath(),
-  { inheritExtensions = false } = {},
-) {
+  targetProfilePath: string,
+  sourceProfilePath: string = getDefaultChromeProfilePath(),
+  options: CloneOptions = {},
+): Promise<string> {
+  const { inheritExtensions = false } = options;
   await ensureDir(targetProfilePath);
   const items = getCloneItems(inheritExtensions);
 
@@ -64,10 +73,11 @@ export async function cloneProfile(
 }
 
 export async function initSandboxUserData(
-  sandboxPath,
-  sourceProfilePath = getDefaultChromeProfilePath(),
-  { inheritExtensions = false } = {},
-) {
+  sandboxPath: string,
+  sourceProfilePath: string = getDefaultChromeProfilePath(),
+  options: CloneOptions = {},
+): Promise<string> {
+  const { inheritExtensions = false } = options;
   const sandboxId = path.basename(sandboxPath);
   const profileDirName = getSandboxProfileDirectoryName(sandboxId);
   const profilePath = path.join(sandboxPath, profileDirName);
@@ -77,10 +87,11 @@ export async function initSandboxUserData(
 }
 
 export async function repairSandboxProfile(
-  sandboxPath,
-  sourceProfilePath = getDefaultChromeProfilePath(),
-  { inheritExtensions = false } = {},
-) {
+  sandboxPath: string,
+  sourceProfilePath: string = getDefaultChromeProfilePath(),
+  options: CloneOptions = {},
+): Promise<void> {
+  const { inheritExtensions = false } = options;
   const sandboxId = path.basename(sandboxPath);
   const profileDirName = getSandboxProfileDirectoryName(sandboxId);
   const profilePath = await ensureSandboxProfilePath(sandboxPath, profileDirName);
@@ -115,7 +126,7 @@ export async function repairSandboxProfile(
   await patchPreferences(profilePath, { inheritExtensions });
 }
 
-async function ensureSandboxProfilePath(sandboxPath, profileDirName) {
+async function ensureSandboxProfilePath(sandboxPath: string, profileDirName: string): Promise<string> {
   const profilePath = path.join(sandboxPath, profileDirName);
   const legacyProfilePath = path.join(sandboxPath, 'Default');
 
@@ -127,7 +138,7 @@ async function ensureSandboxProfilePath(sandboxPath, profileDirName) {
   return profilePath;
 }
 
-function applySandboxProfileMeta(localState, profileDirName) {
+function applySandboxProfileMeta(localState: JsonObject, profileDirName: string): void {
   localState.profile = localState.profile || {};
   localState.profile.info_cache = {
     [profileDirName]: {
@@ -140,16 +151,17 @@ function applySandboxProfileMeta(localState, profileDirName) {
   localState.profile.profiles_order = [profileDirName];
 }
 
-function stripLocalStateExtensions(localState) {
+function stripLocalStateExtensions(localState: JsonObject): void {
   delete localState.extensions;
   delete localState.updateclientdata;
 }
 
 async function writeLocalStateProfile(
-  sandboxPath,
-  profileDirName,
-  { copyFromSource = false, inheritExtensions = false } = {},
-) {
+  sandboxPath: string,
+  profileDirName: string,
+  options: { copyFromSource?: boolean; inheritExtensions?: boolean } = {},
+): Promise<void> {
+  const { copyFromSource = false, inheritExtensions = false } = options;
   const destLocalState = path.join(sandboxPath, 'Local State');
 
   if (copyFromSource) {
@@ -159,7 +171,7 @@ async function writeLocalStateProfile(
     }
   }
 
-  const localState = await readJsonFile(destLocalState, {});
+  const localState = await readJsonFile<JsonObject>(destLocalState, {});
   applySandboxProfileMeta(localState, profileDirName);
   if (!inheritExtensions) {
     stripLocalStateExtensions(localState);
@@ -168,9 +180,13 @@ async function writeLocalStateProfile(
   logger.info('Local State updated for sandbox profile', { profileDirName, destLocalState, inheritExtensions });
 }
 
-async function patchPreferences(profilePath, { inheritExtensions = false } = {}) {
+async function patchPreferences(
+  profilePath: string,
+  options: { inheritExtensions?: boolean } = {},
+): Promise<void> {
+  const { inheritExtensions = false } = options;
   const prefsPath = path.join(profilePath, 'Preferences');
-  const prefs = await readJsonFile(prefsPath, {});
+  const prefs = await readJsonFile<JsonObject>(prefsPath, {});
 
   prefs.session = prefs.session || {};
   prefs.session.restore_on_startup = 1;
@@ -191,11 +207,17 @@ async function patchPreferences(profilePath, { inheritExtensions = false } = {})
   logger.info('Preferences patched for session restore and extensions', { prefsPath, inheritExtensions });
 }
 
-export async function readExtensionsFromProfile(profilePath) {
+interface ProfileExtensionInfo {
+  extensionId: string;
+  extensionName: string;
+  extensionPath: string;
+}
+
+export async function readExtensionsFromProfile(profilePath: string): Promise<ProfileExtensionInfo[]> {
   const extensionsDir = path.join(profilePath, 'Extensions');
   if (!await fs.pathExists(extensionsDir)) return [];
 
-  const extensions = [];
+  const extensions: ProfileExtensionInfo[] = [];
   const extensionIds = await fs.readdir(extensionsDir);
 
   for (const extensionId of extensionIds) {

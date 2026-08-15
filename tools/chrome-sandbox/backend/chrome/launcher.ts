@@ -3,6 +3,18 @@ import { detectChromePath } from './detector.js';
 import { registerProcess, findRunningPid } from './process-manager.js';
 import { getFreePort } from './developer-mode.js';
 import { logger } from '../utils/logger.js';
+import type { LaunchOptions } from '../../../../shared/types.js';
+
+interface LaunchChromeOptions {
+  sandboxId: string;
+  userDataDir: string;
+  profileDirectory?: string;
+  extensionPath?: string | null;
+  windowPosition?: { x: number; y: number };
+  windowSize?: { width: number; height: number };
+  enableDeveloperMode?: boolean;
+  launchOptions?: LaunchOptions;
+}
 
 export async function launchChrome({
   sandboxId,
@@ -13,7 +25,7 @@ export async function launchChrome({
   windowSize = { width: 1280, height: 800 },
   enableDeveloperMode = false,
   launchOptions = {},
-}) {
+}: LaunchChromeOptions): Promise<{ pid: number; debugPort: number | null }> {
   const chromePath = await detectChromePath();
   const debugPort = enableDeveloperMode ? await getFreePort() : null;
 

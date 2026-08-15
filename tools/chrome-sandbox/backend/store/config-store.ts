@@ -1,7 +1,8 @@
 import { getDatabase } from './database.js';
 import { getDefaultDataDirectory, getDataDirectory, normalizeDataDirectory } from '../utils/path-helper.js';
+import type { AppConfig, AppConfigUpdate } from '../../../../shared/types.js';
 
-const DEFAULTS = {
+const DEFAULTS: AppConfig = {
   chromePath: '',
   defaultProfile: '',
   dataDirectory: getDefaultDataDirectory(),
@@ -9,10 +10,15 @@ const DEFAULTS = {
   preserveDataOnClose: true,
 };
 
+interface ConfigRow {
+  key: string;
+  value: string;
+}
+
 export const configStore = {
-  getAll() {
-    const rows = getDatabase().prepare('SELECT key, value FROM global_config').all();
-    const config = { ...DEFAULTS };
+  getAll(): AppConfig {
+    const rows = getDatabase().prepare('SELECT key, value FROM global_config').all() as ConfigRow[];
+    const config: Record<string, unknown> = { ...DEFAULTS };
     for (const row of rows) {
       try {
         config[row.key] = JSON.parse(row.value);
@@ -21,23 +27,25 @@ export const configStore = {
       }
     }
     config.dataDirectory = getDataDirectory();
-    return config;
+    return config as unknown as AppConfig;
   },
 
-  get(key) {
-    const row = getDatabase().prepare('SELECT value FROM global_config WHERE key = ?').get(key);
-    if (!row) return DEFAULTS[key];
+  get<T = unknown>(key: string): T {
+    const row = getDatabase().prepare('SELECT value FROM global_config WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
+    if (!row) return DEFAULTS[key as keyof AppConfig] as unknown as T;
     try {
-      return JSON.parse(row.value);
+      return JSON.parse(row.value) as T;
     } catch {
-      return row.value;
+      return row.value as unknown as T;
     }
   },
 
-  update(data) {
-    const payload = { ...data };
+  update(data: AppConfigUpdate): AppConfig {
+    const payload: Record<string, unknown> = { ...data };
     if ('dataDirectory' in payload) {
-      payload.dataDirectory = normalizeDataDirectory(payload.dataDirectory) || getDefaultDataDirectory();
+      payload.dataDirectory = normalizeDataDirectory(payload.dataDirectory as string) || getDefaultDataDirectory();
     }
 
     const stmt = getDatabase().prepare(`

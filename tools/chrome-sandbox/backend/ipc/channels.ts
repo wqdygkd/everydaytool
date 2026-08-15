@@ -1,4 +1,4 @@
-// Auto-synced to electron/preload.cjs via scripts/sync-ipc-channels.js
+// Auto-synced to electron/preload.cjs via scripts/sync-preload.mjs
 export const IPC_CHANNELS = {
   SANDBOX_CREATE: 'sandbox:create',
   SANDBOX_DELETE: 'sandbox:delete',
@@ -16,4 +16,6 @@ export const IPC_CHANNELS = {
   CONFIG_SELECT_DATA_DIRECTORY: 'config:select-data-directory',
   EVENT_STATUS_CHANGED: 'sandbox:status-changed',
   EVENT_PROCESS_EXITED: 'sandbox:process-exited',
-};
+} as const;
+
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

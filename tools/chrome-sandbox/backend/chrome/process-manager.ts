@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../utils/logger.js';
+import type { ChildProcess } from 'child_process';
 
 const execFileAsync = promisify(execFile);
 
@@ -11,14 +12,18 @@ const WINDOWS_QUERY_SCRIPT = path.join(__dirname, 'chrome-process-query.ps1');
 const EMPTY_SNAPSHOT = Object.freeze({ pids: [] });
 const QUERY_CACHE_MS = 8000;
 
-const processes = new Map();
-const userDataDirs = new Map();
-const queryCache = new Map();
-const inFlightQueries = new Map();
-let exitHandler = null;
+interface ProcessSnapshot {
+  pids: number[];
+}
+
+const processes = new Map<string, ChildProcess>();
+const userDataDirs = new Map<string, string>();
+const queryCache = new Map<string, { result: ProcessSnapshot; at: number }>();
+const inFlightQueries = new Map<string, Promise<ProcessSnapshot>>();
+let exitHandler: ((sandboxId: string) => void) | null = null;
 
 const GRACEFUL_TIMEOUT_MS = 10000;
-const POWERSHELL_QUERY_ARGS = (userDataDir) => [
+const POWERSHELL_QUERY_ARGS = (userDataDir: string): string[] => [
   '-NoProfile',
   '-ExecutionPolicy',
   'Bypass',
@@ -28,15 +33,15 @@ const POWERSHELL_QUERY_ARGS = (userDataDir) => [
   userDataDir,
 ];
 
-function logWindowsQueryFailure(userDataDir, error) {
-  logger.warn('Failed to query Chrome process tree on Windows', { userDataDir, error: error.message });
+function logWindowsQueryFailure(userDataDir: string, error: unknown): void {
+  logger.warn('Failed to query Chrome process tree on Windows', { userDataDir, error: (error as Error).message });
 }
 
-function buildUnixSnapshot(userDataDir) {
+function buildUnixSnapshot(userDataDir: string): ProcessSnapshot {
   return { pids: findUnixPidsByUserDataDir(userDataDir) };
 }
 
-function queryWindowsChromeSync(userDataDir) {
+function queryWindowsChromeSync(userDataDir: string): ProcessSnapshot {
   const output = execFileSync(
     'powershell.exe',
     POWERSHELL_QUERY_ARGS(userDataDir),
@@ -47,27 +52,27 @@ function queryWindowsChromeSync(userDataDir) {
   return result;
 }
 
-export function onProcessExit(handler) {
+export function onProcessExit(handler: (sandboxId: string) => void): void {
   exitHandler = handler;
 }
 
-export function invalidateChromeProcessCache(userDataDir) {
+export function invalidateChromeProcessCache(userDataDir?: string): void {
   if (userDataDir) {
     queryCache.delete(userDataDir);
   }
 }
 
-function parseQueryOutput(output) {
+function parseQueryOutput(output: string): ProcessSnapshot {
   if (!output) return { ...EMPTY_SNAPSHOT };
 
-  const parsed = JSON.parse(output);
+  const parsed = JSON.parse(output) as { pids?: unknown };
   const pids = Array.isArray(parsed.pids) ? parsed.pids : [parsed.pids].filter(Boolean);
   return {
     pids: pids.map((pid) => Number(pid)).filter(Number.isFinite),
   };
 }
 
-function getCachedSnapshot(userDataDir) {
+function getCachedSnapshot(userDataDir: string): ProcessSnapshot | null {
   const entry = queryCache.get(userDataDir);
   if (entry && Date.now() - entry.at < QUERY_CACHE_MS) {
     return entry.result;
@@ -75,11 +80,11 @@ function getCachedSnapshot(userDataDir) {
   return null;
 }
 
-function setCachedSnapshot(userDataDir, result) {
+function setCachedSnapshot(userDataDir: string, result: ProcessSnapshot): void {
   queryCache.set(userDataDir, { result, at: Date.now() });
 }
 
-function findUnixPidsByUserDataDir(userDataDir) {
+function findUnixPidsByUserDataDir(userDataDir: string): number[] {
   try {
     const output = execSync(`pgrep -f "${userDataDir}"`, { encoding: 'utf8' }).trim();
     if (!output) return [];
@@ -89,7 +94,7 @@ function findUnixPidsByUserDataDir(userDataDir) {
   }
 }
 
-async function runWindowsChromeQuery(userDataDir) {
+async function runWindowsChromeQuery(userDataDir: string): Promise<ProcessSnapshot> {
   try {
     const { stdout } = await execFileAsync(
       'powershell.exe',
@@ -105,7 +110,7 @@ async function runWindowsChromeQuery(userDataDir) {
   }
 }
 
-export async function queryChromeSandboxProcesses(userDataDir) {
+export async function queryChromeSandboxProcesses(userDataDir: string): Promise<ProcessSnapshot> {
   if (!userDataDir) return { ...EMPTY_SNAPSHOT };
 
   if (process.platform !== 'win32') {
@@ -126,7 +131,7 @@ export async function queryChromeSandboxProcesses(userDataDir) {
   return query;
 }
 
-function getChromeSandboxSnapshotSync(userDataDir) {
+function getChromeSandboxSnapshotSync(userDataDir: string): ProcessSnapshot {
   if (!userDataDir) return { ...EMPTY_SNAPSHOT };
 
   if (process.platform !== 'win32') {
@@ -144,7 +149,7 @@ function getChromeSandboxSnapshotSync(userDataDir) {
   }
 }
 
-export function registerProcess(sandboxId, childProcess, userDataDir) {
+export function registerProcess(sandboxId: string, childProcess: ChildProcess, userDataDir: string): void {
   processes.set(sandboxId, childProcess);
   if (userDataDir) userDataDirs.set(sandboxId, userDataDir);
 
@@ -163,11 +168,15 @@ export function registerProcess(sandboxId, childProcess, userDataDir) {
   });
 }
 
-function findPidsByUserDataDir(userDataDir) {
+function findPidsByUserDataDir(userDataDir: string): number[] {
   return getChromeSandboxSnapshotSync(userDataDir).pids;
 }
 
-export function isRunning(sandboxId, userDataDir, { allowProcessQuery = true } = {}) {
+export function isRunning(
+  sandboxId: string,
+  userDataDir?: string | null,
+  { allowProcessQuery = true }: { allowProcessQuery?: boolean } = {},
+): boolean {
   const proc = processes.get(sandboxId);
   if (proc != null && proc.exitCode == null && !proc.killed) {
     return true;
@@ -185,16 +194,16 @@ export function isRunning(sandboxId, userDataDir, { allowProcessQuery = true } =
   return false;
 }
 
-export function findRunningPid(sandboxId, userDataDir) {
+export function findRunningPid(sandboxId: string, userDataDir?: string | null): number | null {
   const proc = processes.get(sandboxId);
   if (proc?.pid && isPidAlive(proc.pid)) {
     return proc.pid;
   }
-  const pids = findPidsByUserDataDir(userDataDir);
+  const pids = findPidsByUserDataDir(userDataDir || '');
   return pids[0] || null;
 }
 
-function isPidAlive(pid) {
+function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -203,7 +212,7 @@ function isPidAlive(pid) {
   }
 }
 
-function waitForProcessExit(childProcess, timeoutMs) {
+function waitForProcessExit(childProcess: ChildProcess | null, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     if (!childProcess || childProcess.exitCode != null || childProcess.killed) {
       resolve(true);
@@ -211,7 +220,7 @@ function waitForProcessExit(childProcess, timeoutMs) {
     }
 
     let settled = false;
-    const finish = (result) => {
+    const finish = (result: boolean) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -223,7 +232,7 @@ function waitForProcessExit(childProcess, timeoutMs) {
   });
 }
 
-async function killPidTree(pid, force = false) {
+async function killPidTree(pid: number, force = false): Promise<void> {
   const args = force
     ? ['/pid', String(pid), '/T', '/F']
     : ['/pid', String(pid), '/T'];
@@ -240,12 +249,12 @@ async function killPidTree(pid, force = false) {
   }
 }
 
-export async function killProcess(sandboxId, userDataDir) {
+export async function killProcess(sandboxId: string, userDataDir?: string | null): Promise<boolean> {
   const proc = processes.get(sandboxId);
   const trackedDir = userDataDir || userDataDirs.get(sandboxId);
-  const pids = new Set([
+  const pids = new Set<number>([
     ...(proc?.pid ? [proc.pid] : []),
-    ...findPidsByUserDataDir(trackedDir),
+    ...findPidsByUserDataDir(trackedDir || ''),
   ]);
 
   if (pids.size === 0) {
@@ -282,7 +291,7 @@ export async function killProcess(sandboxId, userDataDir) {
     invalidateChromeProcessCache(trackedDir);
     return true;
   } catch (error) {
-    logger.error('Failed to kill Chrome process', { sandboxId, error: error.message });
+    logger.error('Failed to kill Chrome process', { sandboxId, error: (error as Error).message });
     return false;
   }
 }

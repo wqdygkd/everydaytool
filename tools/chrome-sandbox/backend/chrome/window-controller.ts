@@ -4,7 +4,7 @@ import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
-export async function focusChromeWindow(pid) {
+export async function focusChromeWindow(pid: number): Promise<boolean> {
   if (!pid) return false;
 
   try {
@@ -36,7 +36,7 @@ export async function focusChromeWindow(pid) {
     await execAsync(`wmctrl -ia $(wmctrl -lp | awk '$3 == ${pid} {print $1; exit}')`);
     return true;
   } catch (error) {
-    logger.warn('Failed to focus Chrome window', { pid, error: error.message });
+    logger.warn('Failed to focus Chrome window', { pid, error: (error as Error).message });
     return false;
   }
 }

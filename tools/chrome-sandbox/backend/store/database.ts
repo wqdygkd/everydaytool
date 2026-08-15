@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS global_config (
 CREATE INDEX IF NOT EXISTS idx_sandboxes_status ON sandboxes(status);
 `;
 
-let db = null;
+let db: Database.Database | null = null;
 
-export function getDatabase() {
+export function getDatabase(): Database.Database {
   if (db) return db;
 
   const dbPath = getDatabasePath();
@@ -67,12 +67,12 @@ export function getDatabase() {
   return db;
 }
 
-export function reloadDatabase() {
+export function reloadDatabase(): Database.Database {
   closeDatabase();
   return getDatabase();
 }
 
-export function closeDatabase() {
+export function closeDatabase(): void {
   if (db) {
     db.close();
     db = null;

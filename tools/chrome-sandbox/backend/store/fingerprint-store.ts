@@ -1,6 +1,42 @@
 import { getDatabase } from './database.js';
+import type {
+  Fingerprint,
+  FingerprintCreatePayload,
+  FingerprintUpdatePayload,
+} from '../../../../shared/types.js';
 
-const FIELDS = [
+interface FingerprintRow {
+  id: string;
+  user_agent: string;
+  platform: string;
+  language: string;
+  hardware_concurrency: number;
+  device_memory: number;
+  canvas_noise_level: string;
+  canvas_noise_seed: number;
+  webgl_vendor: string;
+  webgl_renderer: string;
+  screen_width: number;
+  screen_height: number;
+  screen_color_depth: number;
+  device_pixel_ratio: number;
+  audio_noise_enabled: number;
+  audio_noise_level: number;
+  timezone_offset: number;
+  timezone_name: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+type FingerprintData = FingerprintCreatePayload;
+
+interface FieldDef {
+  key: string;
+  col: keyof FingerprintRow;
+  transform?: (v: unknown) => unknown;
+}
+
+const FIELDS: FieldDef[] = [
   { key: 'id', col: 'id' },
   { key: 'navigator.userAgent', col: 'user_agent' },
   { key: 'navigator.platform', col: 'platform' },
@@ -21,14 +57,14 @@ const FIELDS = [
   { key: 'timezone.name', col: 'timezone_name' },
 ];
 
-function getNestedValue(obj, path) {
+function getNestedValue(obj: unknown, path: string): unknown {
   const keys = path.split('.');
-  let value = obj;
-  for (const k of keys) value = value?.[k];
+  let value: unknown = obj;
+  for (const k of keys) value = (value as Record<string, unknown>)?.[k];
   return value;
 }
 
-function mapRow(row) {
+function mapRow(row: FingerprintRow | undefined): Fingerprint | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -40,7 +76,7 @@ function mapRow(row) {
       deviceMemory: row.device_memory,
     },
     canvas: {
-      noiseLevel: row.canvas_noise_level,
+      noiseLevel: row.canvas_noise_level as Fingerprint['canvas']['noiseLevel'],
       noiseSeed: row.canvas_noise_seed,
     },
     webgl: {
@@ -66,8 +102,8 @@ function mapRow(row) {
   };
 }
 
-function buildParams(data) {
-  const params = {};
+function buildParams(data: FingerprintData): Record<string, unknown> {
+  const params: Record<string, unknown> = {};
   for (const f of FIELDS) {
     if (f.key === 'id') continue;
     const value = getNestedValue(data, f.key);
@@ -76,33 +112,35 @@ function buildParams(data) {
   return params;
 }
 
-const INSERT_FIELDS = FIELDS.filter(f => f.key !== 'id');
-const INSERT_COLS = INSERT_FIELDS.map(f => f.col).join(', ');
-const INSERT_PARAMS = INSERT_FIELDS.map(f => `@${f.col}`).join(', ');
+const INSERT_FIELDS = FIELDS.filter((f) => f.key !== 'id');
+const INSERT_COLS = INSERT_FIELDS.map((f) => f.col).join(', ');
+const INSERT_PARAMS = INSERT_FIELDS.map((f) => `@${f.col}`).join(', ');
 
-const UPDATE_CLAUSES = INSERT_FIELDS.map(f => `${f.col} = @${f.col}`).join(', ');
+const UPDATE_CLAUSES = INSERT_FIELDS.map((f) => `${f.col} = @${f.col}`).join(', ');
 
 export const fingerprintStore = {
-  getById(id) {
-    const row = getDatabase().prepare('SELECT * FROM fingerprints WHERE id = ?').get(id);
+  getById(id: string): Fingerprint | null {
+    const row = getDatabase().prepare('SELECT * FROM fingerprints WHERE id = ?').get(id) as
+      | FingerprintRow
+      | undefined;
     return mapRow(row);
   },
 
-  create(data) {
+  create(data: FingerprintData): Fingerprint | null {
     getDatabase().prepare(`
       INSERT INTO fingerprints (id, ${INSERT_COLS}) VALUES (@id, ${INSERT_PARAMS})
     `).run({ id: data.id, ...buildParams(data) });
     return this.getById(data.id);
   },
 
-  update(id, data) {
+  update(id: string, data: FingerprintUpdatePayload): Fingerprint | null {
     getDatabase().prepare(`
       UPDATE fingerprints SET ${UPDATE_CLAUSES}, updated_at = CURRENT_TIMESTAMP WHERE id = @id
-    `).run({ id, ...buildParams(data) });
+    `).run({ id, ...buildParams(data as FingerprintData) });
     return this.getById(id);
   },
 
-  delete(id) {
+  delete(id: string | null | undefined): void {
     if (!id) return;
     getDatabase().prepare('DELETE FROM fingerprints WHERE id = ?').run(id);
   },
