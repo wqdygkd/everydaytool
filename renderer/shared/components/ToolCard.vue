@@ -18,12 +18,12 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  tool: { type: Object, required: true },
-});
+<script setup lang="ts">
+import type { ToolDefinition } from '../types/tool.js';
 
-defineEmits(['click']);
+defineProps<{ tool: ToolDefinition }>();
+
+defineEmits<{ click: [] }>();
 </script>
 
 <style scoped>

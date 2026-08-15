@@ -1,5 +1,5 @@
 /** GB/T 2260 行政区划代码（省/直辖市/地级市及区级，抽样覆盖大陆常见区划） */
-export const AREA_CODES = [
+export const AREA_CODES: Array<{ code: string; name: string }> = [
   { code: '110101', name: '北京市东城区' },
   { code: '110102', name: '北京市西城区' },
   { code: '110105', name: '北京市朝阳区' },

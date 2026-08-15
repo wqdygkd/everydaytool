@@ -1,6 +1,7 @@
+import type { ToolDefinition } from '../../renderer/shared/types/tool.js';
 import ChromeSandboxPage from './renderer/pages/ChromeSandbox.vue';
 
-export default {
+const tool: ToolDefinition = {
   id: 'chrome-sandbox',
   name: 'Chrome沙箱',
   description: '多沙箱浏览器管理',
@@ -13,3 +14,5 @@ export default {
     meta: { toolId: 'chrome-sandbox' },
   },
 };
+
+export default tool;
