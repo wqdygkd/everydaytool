@@ -2,12 +2,15 @@
   "name": "tool-hub",
   "version": "1.0.0",
   "description": "Tool Hub 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
-  "main": "electron/main.js",
+  "main": "dist-backend/electron/main.js",
   "type": "module",
   "packageManager": "pnpm@10.6.3",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron . --remote-debugging-port=0\"",
-    "build": "vite build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "build:backend": "node scripts/build-backend.mjs",
+    "sync:preload": "node scripts/sync-preload.mjs",
+    "dev": "pnpm run build:backend && concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron . --remote-debugging-port=0\"",
+    "build": "pnpm run build:backend && vite build",
     "start": "electron . --remote-debugging-port=0",
     "postinstall": "electron-builder install-app-deps",
     "pack": "pnpm run build && electron-builder --dir",
@@ -44,12 +47,17 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.2.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "concurrently": "^9.1.0",
     "cross-env": "^10.1.0",
     "electron": "^41.7.0",
     "electron-builder": "^26.11.1",
+    "esbuild": "^0.28.2",
     "sass": "^1.100.0",
+    "typescript": "^7.0.2",
     "vite": "^8.0.14",
     "wait-on": "^9.0.10"
   }
