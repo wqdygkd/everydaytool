@@ -10,8 +10,12 @@ const outDir = path.join(rootDir, 'dist-electron')
 
 const backendEntryPoints = [
   'electron/main.ts',
-  'shared/sleep.ts',
+  'electron/tool-registry.ts',
+  // shared/** 里含后端运行时值导入（如 sleep、webview 分区常量），必须随编译产出到 dist-electron/shared/
+  'shared/**/*.ts',
   'tools/chrome-sandbox/backend/**/*.ts',
+  'tools/env-browser/backend/**/*.ts',
+  'tools/treease-editor/backend/**/*.ts',
   'tools/cdp-injector/backend/**/*.ts',
 ]
 

@@ -52,7 +52,7 @@ async function save() {
         <el-input v-model="local.navigator.platform" />
       </el-form-item>
       <el-form-item label="分辨率">
-        <div class="inline-fields">
+        <div class="inline-group">
           <el-input-number v-model="local.screen.width" :min="800" />
           <span>x</span>
           <el-input-number v-model="local.screen.height" :min="600" />
@@ -82,11 +82,3 @@ async function save() {
     </template>
   </el-dialog>
 </template>
-
-<style scoped lang="scss">
-.inline-fields {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-</style>

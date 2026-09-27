@@ -111,8 +111,8 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
   }
 
   .config-label {
-    color: var(--el-text-color-secondary);
-    font-size: 13px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
     line-height: 22px;
   }
 
@@ -140,8 +140,8 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
     gap: 8px;
 
     .label {
-      color: var(--el-text-color-secondary);
-      font-size: 13px;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
     }
 
     code {

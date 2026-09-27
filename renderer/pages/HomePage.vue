@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import type { ToolDefinition } from '../shared/types/tool'
-import { groupToolsByCategory, toolsByCategory } from '../config/tools'
+import { getToolsByCategory, groupToolsByCategory } from '../config/tools'
 
 const FAVORITE_STORAGE_KEY = 'edt:favorite-tools'
 const router = useRouter()
 const searchText = ref('')
-const allTools = toolsByCategory.flatMap(group => group.tools)
+const allTools = computed(() => getToolsByCategory().flatMap(group => group.tools))
 const favoriteIds = ref(readFavoriteIds())
 
 const filteredTools = computed<ToolDefinition[]>(() => {
   const keyword = searchText.value.toLowerCase()
-  if (!keyword) return allTools
+  if (!keyword) return allTools.value
 
-  return allTools.filter((tool) => {
+  return allTools.value.filter((tool) => {
     const searchableText = [
       tool.name,
       tool.description,
@@ -28,7 +28,7 @@ const filteredTools = computed<ToolDefinition[]>(() => {
 const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value))
 const visibleToolCount = computed(() => filteredTools.value.length)
 const favoriteTools = computed(() => favoriteIds.value
-  .map(id => allTools.find(tool => tool.id === id))
+  .map(id => allTools.value.find(tool => tool.id === id))
   .filter((tool): tool is ToolDefinition => Boolean(tool)))
 
 function goToTool(toolId: string) {
@@ -58,28 +58,6 @@ function readFavoriteIds(): string[] {
 
 <template>
   <div class="home-page">
-    <section class="workspace-header">
-      <div class="workspace-copy">
-        <span class="workspace-kicker">edt workspace</span>
-        <h1>选择工具，继续工作</h1>
-        <p>桌面端和网页端工具统一入口，收藏常用项，按能力快速过滤。</p>
-      </div>
-      <div class="workspace-stats">
-        <div>
-          <strong>{{ allTools.length }}</strong>
-          <span>可用工具</span>
-        </div>
-        <div>
-          <strong>{{ favoriteTools.length }}</strong>
-          <span>收藏</span>
-        </div>
-        <div>
-          <strong>{{ toolsByCategory.length }}</strong>
-          <span>分类</span>
-        </div>
-      </div>
-    </section>
-
     <section class="toolbar">
       <input
         v-model.trim="searchText"
@@ -135,83 +113,13 @@ function readFavoriteIds(): string[] {
 </template>
 
 <style scoped lang="scss">
+/* 自然流式高度：滚动发生在 .app-main（滚动条贴窗口右缘），本页不自带滚动。
+   width:100% 必须保留：flex 列子项 + 横向 auto margin 会禁用 stretch，缺了它宽度塌缩、网格掉回单列 */
 .home-page {
   width: 100%;
   max-width: 1360px;
   margin: 0 auto;
-  padding: 36px 32px 54px;
-  box-sizing: border-box;
-  overflow-y: auto;
-}
-
-.workspace-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: 32px;
-  align-items: end;
-  margin-bottom: 28px;
-
-  .workspace-kicker {
-    display: block;
-    margin-bottom: 10px;
-    color: var(--color-primary);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .workspace-copy {
-    h1 {
-      max-width: 720px;
-      margin: 0;
-      color: var(--color-text-primary);
-      font-size: clamp(34px, 5vw, 60px);
-      font-weight: var(--font-weight-bold);
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-
-    p {
-      max-width: 58ch;
-      margin: 14px 0 0;
-      color: var(--color-text-secondary);
-      font-size: var(--font-size-base);
-    }
-  }
-}
-
-.workspace-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  background: var(--color-border-light);
-  overflow: hidden;
-
-  div {
-    min-width: 0;
-    background: var(--color-surface-raised);
-    padding: 14px;
-  }
-
-  strong,
-  span {
-    display: block;
-  }
-
-  strong {
-    color: var(--color-text-primary);
-    font-size: var(--font-size-xl);
-    line-height: 1;
-  }
-
-  span {
-    margin-top: 6px;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-  }
+  padding: 24px 32px 32px;
 }
 
 .toolbar {
@@ -279,8 +187,8 @@ function readFavoriteIds(): string[] {
 
 .tools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
 }
 
 .empty-state {
@@ -290,16 +198,6 @@ function readFavoriteIds(): string[] {
   background: var(--color-surface);
   text-align: center;
   color: var(--color-text-secondary);
-}
-
-@media (max-width: 900px) {
-  .workspace-header {
-    grid-template-columns: 1fr;
-
-    .workspace-stats {
-      width: 100%;
-    }
-  }
 }
 
 @media (max-width: 640px) {

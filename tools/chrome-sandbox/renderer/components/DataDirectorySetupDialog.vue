@@ -77,7 +77,7 @@ async function save() {
 <style scoped lang="scss">
 .setup-intro {
   margin: 0 0 16px;
-  color: var(--el-text-color-regular);
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 </style>

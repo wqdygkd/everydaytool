@@ -1,7 +1,5 @@
 shellEmulator: true
-
 trustPolicy: no-downgrade
-
 packages:
   - .
   - '!data/**'
@@ -10,3 +8,6 @@ packages:
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - better-sqlite3
+  - electron
+  - electron-winstaller
+  - esbuild

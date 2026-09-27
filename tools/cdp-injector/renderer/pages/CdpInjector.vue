@@ -279,8 +279,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="cdp-injector-page">
-    <el-tabs v-model="activeTab" class="cdp-tabs">
+  <div class="cdp-injector-page tool-page">
+    <el-tabs v-model="activeTab" class="cdp-tabs surface-card">
       <el-tab-pane label="应用配置" name="profiles">
         <div class="tab-toolbar">
           <el-button type="primary" @click="openProfileDialog()">
@@ -394,7 +394,7 @@ onUnmounted(() => {
                   <div class="targets-expand">
                     <div class="targets-expand-toolbar">
                       <span class="targets-expand-title">CDP 页面列表（端口 {{ row.port }}）</span>
-                      <div class="targets-expand-actions">
+                      <div class="inline-group">
                         <el-button size="small" @click="openDevToolsIndex(row)">
                           调试入口页
                         </el-button>
@@ -450,7 +450,7 @@ onUnmounted(() => {
               <el-table-column prop="message" label="状态" min-width="180" show-overflow-tooltip />
               <el-table-column label="DevTools" min-width="320" fixed="right">
                 <template #default="{ row }">
-                  <div class="devtools-quick">
+                  <div class="inline-group devtools-quick">
                     <el-select
                       v-model="selectedTargetId[row.profileId]"
                       placeholder="选择页面"
@@ -496,7 +496,7 @@ onUnmounted(() => {
           <el-input v-model="profileForm.name" placeholder="例如：某 Electron 客户端" />
         </el-form-item>
         <el-form-item label="可执行文件" required>
-          <div class="path-row">
+          <div class="path-row inline-group">
             <el-input
               v-model="profileForm.executable"
               placeholder="Windows: C:\path\app.exe；macOS: /Applications/App.app"
@@ -560,7 +560,7 @@ onUnmounted(() => {
             type="textarea"
             :rows="14"
             placeholder="在此编写将在每次页面加载前执行的 JavaScript"
-            class="script-editor"
+            class="script-editor mono"
           />
         </el-form-item>
       </el-form>
@@ -579,23 +579,16 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .cdp-injector-page {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  min-height: 0;
   padding: 20px 24px 24px;
-  overflow: hidden;
-  background: var(--color-app-bg);
 }
 
 .cdp-tabs {
   display: flex;
-  flex: 1;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
   padding: 14px 16px 16px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
   box-shadow: var(--shadow-sm);
 
   :deep(.el-tabs__header) {
@@ -620,8 +613,6 @@ onUnmounted(() => {
 }
 
 .path-row {
-  display: flex;
-  gap: var(--spacing-sm);
   width: 100%;
 }
 
@@ -655,16 +646,6 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
-}
-
-.targets-expand-actions,
-.devtools-quick {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.devtools-quick {
-  align-items: center;
 }
 
 .targets-expand-title {
@@ -703,13 +684,6 @@ onUnmounted(() => {
 
 .script-toolbar {
   margin-bottom: var(--spacing-xs);
-}
-
-.script-editor {
-  :deep(textarea) {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: var(--font-size-sm);
-  }
 }
 
 .empty-run {

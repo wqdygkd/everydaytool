@@ -1,27 +1,42 @@
 import type { ToolCategoryGroup, ToolClientTarget, ToolDefinition } from '../shared/types/tool'
 import cdpInjector from '@tools/cdp-injector/index'
 import chromeSandbox from '@tools/chrome-sandbox/index'
+import envBrowser from '@tools/env-browser/index'
 import idCardGenerator from '@tools/id-card-generator/index'
+import treeaseEditor from '@tools/treease-editor/index'
 
-export const allToolRegistry: ToolDefinition[] = [chromeSandbox, cdpInjector, idCardGenerator]
-export const toolRegistry: ToolDefinition[] = filterToolsForCurrentTarget(allToolRegistry)
-export const toolsByCategory: ToolCategoryGroup[] = groupToolsByCategory(toolRegistry)
-
-export function getToolById(id: string): ToolDefinition | undefined {
-  return toolRegistry.find(tool => tool.id === id)
-}
-
-export function getActiveTools(): ToolDefinition[] {
-  return toolRegistry.filter(tool => !tool.disabled)
-}
+export const allToolRegistry: ToolDefinition[] = [chromeSandbox, envBrowser, treeaseEditor, cdpInjector, idCardGenerator]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
-  return window.edtRuntime?.target ?? 'web'
+  // 兼容预加载时序：优先读 window.edtRuntime，兜底 UA 判断
+  const w = window as unknown as { edtRuntime?: { target?: ToolClientTarget } }
+  if (w.edtRuntime?.target) return w.edtRuntime.target
+  if (navigator.userAgent.includes('Electron')) {
+    // Electron 环境但 edtRuntime 尚未注入时，按平台推断
+    return navigator.userAgent.includes('Mac') ? 'mac' : 'win'
+  }
+  return 'web'
 }
 
 function filterToolsForCurrentTarget(tools: ToolDefinition[]): ToolDefinition[] {
   const target = getCurrentToolClientTarget()
   return tools.filter(tool => !tool.disabled && tool.supportedTargets.includes(target))
+}
+
+// 动态 getter：避免在模块加载时固化 target，导致 Electron 中误判为 web
+export function getToolRegistry(): ToolDefinition[] {
+  return filterToolsForCurrentTarget(allToolRegistry)
+}
+export function getToolsByCategory(): ToolCategoryGroup[] {
+  return groupToolsByCategory(getToolRegistry())
+}
+
+export function getToolById(id: string): ToolDefinition | undefined {
+  return getToolRegistry().find(tool => tool.id === id)
+}
+
+export function getActiveTools(): ToolDefinition[] {
+  return getToolRegistry().filter(tool => !tool.disabled)
 }
 
 export function groupToolsByCategory(tools: ToolDefinition[]): ToolCategoryGroup[] {

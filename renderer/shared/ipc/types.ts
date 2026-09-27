@@ -1,3 +1,4 @@
+import type { ShellMenuAction } from '../../../shared/types'
 import type { ToolClientTarget } from '../types/tool'
 
 // IPC 边界类型：window.chromeSandbox / window.cdpInjector 全局声明
@@ -5,6 +6,7 @@ import type { ToolClientTarget } from '../types/tool'
 export interface EdtRuntimeApi {
   target: ToolClientTarget
   platform: string
+  menuAction: (action: ShellMenuAction) => void
 }
 
 export interface IpcInvokeApi {

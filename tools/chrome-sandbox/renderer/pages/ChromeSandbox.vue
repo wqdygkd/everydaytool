@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { MotionScope } from '@renderer/shared/composables/useGsap'
+import { createMotionScope, gsap } from '@renderer/shared/composables/useGsap'
 import { useNavigation } from '@renderer/shared/composables/useNavigation'
 import { invokeIpc, ipcChannels, onIpc } from '@renderer/shared/ipc/useIpc'
 import { useSandboxStore } from '../stores/sandboxStore'
@@ -11,6 +13,8 @@ const showSettings = ref(false)
 const showFingerprint = ref(false)
 const showSetup = ref(false)
 const channels = ipcChannels()
+const rootEl = ref<HTMLElement | null>(null)
+let motion: MotionScope | undefined
 
 function openFingerprintEditor() {
   showFingerprint.value = true
@@ -27,6 +31,21 @@ async function deleteSandbox() {
 
 watch(() => store.selectedId, (id) => {
   if (id) store.loadFingerprint(id)
+})
+
+// 页面就绪后：侧栏左滑入 + 状态面板右淡入（尊重 prefers-reduced-motion）
+watch(ready, async (r) => {
+  if (!r)
+    return
+  await nextTick()
+  motion?.revert()
+  const el = rootEl.value
+  if (!el)
+    return
+  motion = createMotionScope(() => {
+    gsap.from('.sidebar', { x: -24, autoAlpha: 0, duration: 0.45, ease: 'power3.out', clearProps: 'transform,opacity,visibility' })
+    gsap.from('.status-panel', { x: 24, autoAlpha: 0, duration: 0.45, ease: 'power3.out', delay: 0.08, clearProps: 'transform,opacity,visibility' })
+  }, el)
 })
 
 const unsubscribers = []
@@ -61,11 +80,12 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unsubscribers.forEach(off => off())
+  motion?.revert()
 })
 </script>
 
 <template>
-  <div class="chrome-sandbox-page">
+  <div ref="rootEl" class="chrome-sandbox-page">
     <template v-if="ready">
       <Sidebar
         :sandboxes="store.sandboxes"
@@ -222,30 +242,7 @@ onUnmounted(() => {
   }
 
   :deep(.detail-grid) {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
     margin-bottom: 24px;
-  }
-
-  :deep(.detail-item) {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: var(--spacing-md);
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface-raised);
-    font-size: var(--font-size-sm);
-  }
-
-  :deep(.detail-item span) {
-    color: var(--color-text-secondary);
-  }
-
-  :deep(.detail-item .path) {
-    font-size: var(--font-size-xs);
-    word-break: break-all;
   }
 
   :deep(.section-block) {

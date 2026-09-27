@@ -188,3 +188,79 @@ export interface CdpOpenDevToolsPayload {
   external?: boolean
   port?: number | null
 }
+
+// ---- Treease 编辑器接口拦截（多接口，每接口独立规则） ----
+
+export interface TreeaseInterceptPatch {
+  path: string
+  value: unknown
+}
+
+export interface TreeaseInterceptRule {
+  id: string
+  name: string
+  enabled: boolean
+  urlPattern: string
+  action: 'modify' | 'block'
+  patches: TreeaseInterceptPatch[]
+}
+
+export interface TreeaseInterceptStatus {
+  webContentsId: number
+  attached: boolean
+  ruleCount: number
+  hits: number
+}
+
+export interface EnvConfig {
+  id: string
+  name: string
+  url: string
+  username: string
+  password: string
+  remark?: string | null
+  autoLogin: number
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface EnvCreatePayload {
+  name: string
+  url: string
+  username: string
+  password: string
+  remark?: string
+  autoLogin?: boolean
+}
+
+export interface EnvUpdatePayload {
+  name?: string
+  url?: string
+  username?: string
+  password?: string
+  remark?: string
+  autoLogin?: boolean
+}
+
+export interface TreeaseInterceptLog {
+  webContentsId: number
+  hits: number
+}
+
+// 自定义标题栏页内菜单的动作（AppMenuBar → preload → 主进程执行）
+export type ShellMenuAction
+  = | 'quit'
+    | 'undo'
+    | 'redo'
+    | 'cut'
+    | 'copy'
+    | 'paste'
+    | 'selectAll'
+    | 'reload'
+    | 'reloadIgnoringCache'
+    | 'toggleDevTools'
+    | 'zoomIn'
+    | 'zoomOut'
+    | 'zoomReset'
+    | 'minimize'
+    | 'close'

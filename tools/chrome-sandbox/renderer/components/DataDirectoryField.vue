@@ -20,7 +20,7 @@ async function pickDirectory() {
 </script>
 
 <template>
-  <div class="data-directory-row">
+  <div class="data-directory-row inline-group">
     <el-input
       :model-value="modelValue"
       placeholder="沙箱与配置文件存储位置"
@@ -34,8 +34,6 @@ async function pickDirectory() {
 
 <style scoped lang="scss">
 .data-directory-row {
-  display: flex;
-  gap: 8px;
   width: 100%;
 
   .el-input {

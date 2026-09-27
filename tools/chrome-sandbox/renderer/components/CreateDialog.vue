@@ -74,13 +74,3 @@ async function submit() {
     </template>
   </el-dialog>
 </template>
-
-<style scoped lang="scss">
-.form-hint {
-  display: block;
-  margin-top: 6px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.4;
-}
-</style>

@@ -1,11 +1,17 @@
-import process from 'node:process'
+import type { ShellMenuAction } from '../shared/types.js'
 import { contextBridge, ipcRenderer } from 'electron'
-import { CDP_IPC_CHANNELS } from '../tools/cdp-injector/backend/ipc/channels.js'
-import { IPC_CHANNELS } from '../tools/chrome-sandbox/backend/ipc/channels.js'
+import { ipcNamespaces } from './ipc-namespaces.js'
 
+// eslint-disable-next-line node/prefer-global/process -- preload 内不能打包成运行时 require
+const _platform = (globalThis as unknown as { process?: { platform?: string } }).process?.platform
+  ?? 'win32'
 const EDT_RUNTIME = {
-  target: process.platform === 'darwin' ? 'mac' : 'win',
-  platform: process.platform,
+  target: _platform === 'darwin' ? 'mac' : 'win',
+  platform: _platform,
+  // 自定义标题栏：页内菜单动作（AppMenuBar 触发，主进程执行）
+  menuAction: (action: ShellMenuAction) => {
+    ipcRenderer.send('edt:menu-action', action)
+  },
 } as const
 
 type IpcChannels = Record<string, string>
@@ -26,5 +32,6 @@ function exposeIpcApi(channels: IpcChannels) {
 }
 
 contextBridge.exposeInMainWorld('edtRuntime', EDT_RUNTIME)
-contextBridge.exposeInMainWorld('chromeSandbox', exposeIpcApi(IPC_CHANNELS))
-contextBridge.exposeInMainWorld('cdpInjector', exposeIpcApi(CDP_IPC_CHANNELS))
+for (const namespace of ipcNamespaces) {
+  contextBridge.exposeInMainWorld(namespace.preloadNamespace, exposeIpcApi(namespace.channels))
+}

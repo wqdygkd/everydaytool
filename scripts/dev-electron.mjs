@@ -12,6 +12,8 @@ const watchRoots = [
   'electron',
   'shared',
   'tools/chrome-sandbox/backend',
+  'tools/env-browser/backend',
+  'tools/treease-editor/backend',
   'tools/cdp-injector/backend',
 ].map(dir => path.join(rootDir, dir))
 
@@ -22,19 +24,35 @@ let pendingRebuild = false
 
 function waitForRenderer() {
   return new Promise((resolve) => {
-    const check = () => {
-      const request = http.get('http://127.0.0.1:5173', () => {
+    const urls = ['http://localhost:5173', 'http://127.0.0.1:5173']
+
+    const probe = (url, retry) => {
+      const request = http.get(url, () => {
         request.destroy()
         resolve()
       })
-      request.on('error', () => {
-        setTimeout(check, 300)
-      })
+      request.on('error', retry)
       request.setTimeout(1000, () => {
         request.destroy()
-        setTimeout(check, 300)
+        retry()
       })
     }
+
+    const check = () => {
+      let index = 0
+
+      const retry = () => {
+        if (index < urls.length) {
+          probe(urls[index++], retry)
+          return
+        }
+
+        setTimeout(check, 300)
+      }
+
+      retry()
+    }
+
     check()
   })
 }

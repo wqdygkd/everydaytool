@@ -4,6 +4,7 @@ defineProps({
 })
 </script>
 
+<!-- eslint-disable vue/no-mutating-props -->
 <template>
   <div class="launch-options">
     <el-checkbox v-model="form.disableSafetyChecks">
