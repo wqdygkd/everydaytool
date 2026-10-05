@@ -120,51 +120,57 @@ export interface SetupState extends AppConfig {
   dataDirectoryChanged?: boolean
 }
 
-// ---- CDP 注入工具 ----
+// ---- WXP 增强（CDP 启动 + 登录缓存 + CSS/JS 界面注入） ----
 
-export type CdpRunningStatus = | 'launching' | 'waiting' | 'connecting' | 'running' | 'error' | 'stopped'
+export type WxpEnhancementType = 'css' | 'js'
 
-export interface CdpProfile {
-  id?: string
-  name: string
-  executable: string
-  args?: string
+export type WxpRunningStatus = 'launching' | 'waiting' | 'connecting' | 'running' | 'error' | 'stopped'
+
+export interface WxpSettings {
+  executablePath: string
   debugPort: number
-  scriptId: string
-  startupDelayMs?: number
-  /** 运行期可用的扩展字段 */
-  scriptContent?: string
-  scriptPath?: string
-  cdpTimeoutMs?: number
-  pollIntervalMs?: number
+  /** 缓存登录状态：镜像应用存于 sessionStorage 的用户信息并在启动时还原，自动进入主页（登出后失效） */
+  cacheLogin?: boolean
+  /** 在 WXP 窗口左下角显示「增强中」呼吸灯角标 */
+  showStatusBadge?: boolean
+  extraArgs?: string
 }
 
-export interface CdpScript {
-  id?: string
+/** 唯一的 WXP 默认设置来源（后端 config-store 与渲染层 store/表单共用） */
+export const DEFAULT_WXP_SETTINGS: WxpSettings = {
+  executablePath: '',
+  debugPort: 9553,
+  cacheLogin: true,
+  showStatusBadge: true,
+  extraArgs: '',
+}
+
+export interface WxpEnhancement {
+  id: string
   name: string
-  description?: string
-  content: string
+  type: WxpEnhancementType
+  code: string
+  enabled: boolean
+  /** 非空时仅在 URL 包含该子串的页面生效 */
+  urlPattern?: string
 }
 
-export interface CdpDefaults {
-  startupDelayMs: number
-  pollIntervalMs: number
-  cdpTimeoutMs: number
+export interface WxpConfig {
+  settings: WxpSettings
+  enhancements: WxpEnhancement[]
 }
 
-export interface CdpRunningState {
-  profileId: string
-  name: string
-  port: number
+export interface WxpRunningState {
   pid?: number
-  status: CdpRunningStatus
+  port: number
+  status: WxpRunningStatus
   message: string
   targetCount?: number
   launchArgs?: string[]
   updatedAt: number
 }
 
-export interface CdpTarget {
+export interface WxpTarget {
   id: string
   title: string
   url: string
@@ -173,16 +179,7 @@ export interface CdpTarget {
   devToolsUrl: string
 }
 
-export interface CdpLaunchResult {
-  profileId: string
-  ok: boolean
-  state?: CdpRunningState
-  error?: string
-}
-
-export type CdpBatchResult = CdpLaunchResult
-
-export interface CdpOpenDevToolsPayload {
+export interface WxpOpenDevToolsPayload {
   devToolsUrl?: string
   title?: string
   external?: boolean

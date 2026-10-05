@@ -16,7 +16,7 @@ const backendEntryPoints = [
   'tools/chrome-sandbox/backend/**/*.ts',
   'tools/env-browser/backend/**/*.ts',
   'tools/treease-editor/backend/**/*.ts',
-  'tools/cdp-injector/backend/**/*.ts',
+  'tools/wxp-enhancer/backend/**/*.ts',
 ]
 
 const backendAssets = [

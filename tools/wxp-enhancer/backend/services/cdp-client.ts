@@ -1,4 +1,4 @@
-import type { CdpTarget } from '../../../../shared/types.js'
+import type { WxpTarget } from '../../../../shared/types.js'
 import { sleep } from '../../../../shared/sleep.js'
 
 export function buildDevToolsUrl(webSocketDebuggerUrl: string, port: number): string {
@@ -36,7 +36,7 @@ export function isAllowedDevToolsUrl(url: string): boolean {
 
 const DEBUGGABLE_TARGET_TYPES = new Set(['page', 'iframe'])
 
-function mapTarget(target: CdpTargetRaw, port: number): CdpTarget {
+function mapTarget(target: CdpTargetRaw, port: number): WxpTarget {
   return {
     id: target.id,
     title: target.title || '(无标题)',
@@ -135,7 +135,7 @@ async function injectTarget(
   }
 }
 
-export async function listPageTargets(port: number): Promise<CdpTarget[]> {
+export async function listPageTargets(port: number): Promise<WxpTarget[]> {
   const targets = await fetchTargets(port)
   return targets.map(target => mapTarget(target, port))
 }
@@ -245,8 +245,8 @@ export class CdpInjectionSession {
     this.scriptSource = scriptSource
   }
 
-  async scanAndInject(): Promise<number> {
-    if (this.stopped || this.injecting || this.paused) return 0
+  private async scanTargets(force = false): Promise<number> {
+    if (this.stopped || this.injecting || (this.paused && !force)) return 0
 
     this.injecting = true
     try {
@@ -256,7 +256,7 @@ export class CdpInjectionSession {
 
       for (const target of targets) {
         activeIds.add(target.id)
-        if (await this.injectIntoTarget(target)) {
+        if (await this.injectIntoTarget(target, { force })) {
           injectedCount += 1
         }
       }
@@ -273,32 +273,12 @@ export class CdpInjectionSession {
     }
   }
 
+  async scanAndInject(): Promise<number> {
+    return this.scanTargets(false)
+  }
+
   async reinjectAll(): Promise<number> {
-    if (this.stopped) return 0
-
-    this.injecting = true
-    try {
-      const targets = await fetchTargets(this.port)
-      const activeIds = new Set<string>()
-      let injectedCount = 0
-
-      for (const target of targets) {
-        activeIds.add(target.id)
-        if (await this.injectIntoTarget(target, { force: true })) {
-          injectedCount += 1
-        }
-      }
-
-      this.pruneInactiveTargets(activeIds)
-
-      if (injectedCount > 0 && this.onTargetsInjected) {
-        this.onTargetsInjected({ count: injectedCount, total: targets.length })
-      }
-
-      return injectedCount
-    } finally {
-      this.injecting = false
-    }
+    return this.scanTargets(true)
   }
 }
 

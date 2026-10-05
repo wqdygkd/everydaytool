@@ -1,25 +1,75 @@
-import type { CdpOpenDevToolsPayload } from '../../../../shared/types.js'
+import type { WxpOpenDevToolsPayload } from '../../../../shared/types.js'
 import { createRequire } from 'node:module'
 import { sleep } from '../../../../shared/sleep.js'
 import { logger } from '../../../chrome-sandbox/backend/utils/logger.js'
 import { isAllowedDevToolsUrl } from './cdp-client.js'
-import { injectorService } from './injector-service.js'
 
 const require = createRequire(import.meta.url)
-const { BrowserWindow, shell } = require('electron') as typeof import('electron')
+const { BrowserWindow, session, shell } = require('electron') as typeof import('electron')
 
 const devtoolsWindows = new Map<string, Electron.BrowserWindow>()
 const pauseCountByPort = new Map<number, number>()
 
-const DEVTOOLS_WINDOW_OPTIONS: Electron.BrowserWindowConstructorOptions = {
-  width: 1280,
-  height: 900,
-  minWidth: 800,
-  minHeight: 500,
-  webPreferences: {
-    nodeIntegration: false,
-    contextIsolation: true,
-  },
+let devtoolsSession: Electron.Session | null = null
+
+/**
+ * DevTools 前端页发起的 WebSocket 会携带 Origin（http://127.0.0.1:port），
+ * 而 Chromium 111+ 的调试服务对带 Origin 的连接直接 403（前端表现为
+ * "debugging connection was closed"）。这里在专用 session 中剥掉 ws 升级
+ * 请求的 Origin 头，兼容未带 --remote-allow-origins 启动的实例。
+ */
+function getDevtoolsSession(): Electron.Session {
+  if (devtoolsSession) return devtoolsSession
+  const ses = session.fromPartition('wxp-devtools', { cache: false })
+  try {
+    ses.webRequest.onBeforeSendHeaders(
+      { urls: ['ws://127.0.0.1:*/*', 'ws://localhost:*/*'] },
+      (details, callback) => {
+        const requestHeaders = { ...details.requestHeaders }
+        delete requestHeaders.Origin
+        callback({ requestHeaders })
+      },
+    )
+  } catch (error) {
+    logger.warn('wxp:devtools origin-strip unavailable', { error: (error as Error).message })
+  }
+  devtoolsSession = ses
+  return ses
+}
+
+function buildDevToolsWindowOptions(): Electron.BrowserWindowConstructorOptions {
+  return {
+    width: 1280,
+    height: 900,
+    minWidth: 800,
+    minHeight: 500,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      session: getDevtoolsSession(),
+    },
+  }
+}
+
+// 注入会话可注册监听，在 DevTools 调试期间同步暂停/恢复注入
+type DevtoolsPauseListener = (port: number, action: 'pause' | 'resume') => void
+
+const pauseListeners = new Set<DevtoolsPauseListener>()
+
+export function registerDevtoolsPauseListener(listener: DevtoolsPauseListener): () => void {
+  pauseListeners.add(listener)
+  return () => pauseListeners.delete(listener)
+}
+
+function notifyPauseListeners(port: number | null, action: 'pause' | 'resume'): void {
+  if (!port) return
+  for (const listener of pauseListeners) {
+    try {
+      listener(port, action)
+    } catch {
+      // 监听器异常不影响 DevTools 窗口本身
+    }
+  }
 }
 
 export function extractPortFromDevToolsUrl(devToolsUrl: string): number | null {
@@ -29,6 +79,7 @@ export function extractPortFromDevToolsUrl(devToolsUrl: string): number | null {
 
 function retainPause(port: number): void {
   pauseCountByPort.set(port, (pauseCountByPort.get(port) ?? 0) + 1)
+  notifyPauseListeners(port, 'pause')
 }
 
 function releasePause(port: number | null): void {
@@ -36,19 +87,18 @@ function releasePause(port: number | null): void {
   const current = pauseCountByPort.get(port) ?? 0
   if (current <= 0) return
 
+  // 计数归零（所有 DevTools 窗口都已关闭）才通知恢复
   if (current === 1) {
     pauseCountByPort.delete(port)
-    injectorService.resumeByPort(port)
-    return
+    notifyPauseListeners(port, 'resume')
+  } else {
+    pauseCountByPort.set(port, current - 1)
   }
-
-  pauseCountByPort.set(port, current - 1)
 }
 
 async function pauseInjection(port: number | null): Promise<void> {
   if (!port) return
   retainPause(port)
-  await injectorService.pauseByPort(port)
   await sleep(200)
 }
 
@@ -73,7 +123,7 @@ export async function openDevToolsWindow(
   const port = extractPortFromDevToolsUrl(devToolsUrl)
   await pauseInjection(port)
 
-  const win = new BrowserWindow({ ...DEVTOOLS_WINDOW_OPTIONS, title })
+  const win = new BrowserWindow({ ...buildDevToolsWindowOptions(), title })
   devtoolsWindows.set(devToolsUrl, win)
 
   win.on('closed', () => {
@@ -83,7 +133,7 @@ export async function openDevToolsWindow(
 
   try {
     await win.loadURL(devToolsUrl)
-    logger.info('cdp:devtools opened', { devToolsUrl, port })
+    logger.info('wxp:devtools opened', { devToolsUrl, port })
     return { reused: false }
   } catch (error) {
     if (!win.isDestroyed()) {
@@ -111,7 +161,7 @@ export async function openDevToolsExternal(devToolsUrl: string): Promise<void> {
   }
 }
 
-export function parseOpenDevToolsPayload(payload: string | CdpOpenDevToolsPayload | null | undefined): {
+export function parseOpenDevToolsPayload(payload: string | WxpOpenDevToolsPayload | null | undefined): {
   devToolsUrl?: string
   title?: string
   external: boolean
@@ -129,7 +179,7 @@ export function parseOpenDevToolsPayload(payload: string | CdpOpenDevToolsPayloa
   }
 }
 
-export async function openDevToolsFromPayload(payload: string | CdpOpenDevToolsPayload): Promise<boolean> {
+export async function openDevToolsFromPayload(payload: string | WxpOpenDevToolsPayload): Promise<boolean> {
   const { devToolsUrl, title, external, port } = parseOpenDevToolsPayload(payload)
 
   if (port && !devToolsUrl) {

@@ -1,7 +1,7 @@
 import type { ShellMenuAction } from '../../../shared/types'
 import type { ToolClientTarget } from '../types/tool'
 
-// IPC 边界类型：window.chromeSandbox / window.cdpInjector 全局声明
+// IPC 边界类型：window.chromeSandbox / window.wxpEnhancer 全局声明
 
 export interface EdtRuntimeApi {
   target: ToolClientTarget
@@ -19,7 +19,7 @@ declare global {
   interface Window {
     edtRuntime?: EdtRuntimeApi
     chromeSandbox: IpcInvokeApi
-    cdpInjector: IpcInvokeApi
+    wxpEnhancer: IpcInvokeApi
   }
 }
 

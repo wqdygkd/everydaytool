@@ -14,7 +14,7 @@ const watchRoots = [
   'tools/chrome-sandbox/backend',
   'tools/env-browser/backend',
   'tools/treease-editor/backend',
-  'tools/cdp-injector/backend',
+  'tools/wxp-enhancer/backend',
 ].map(dir => path.join(rootDir, dir))
 
 let electronProcess = null
