@@ -27,16 +27,9 @@ function filterToolsForCurrentTarget(tools: ToolDefinition[]): ToolDefinition[] 
 export function getToolRegistry(): ToolDefinition[] {
   return filterToolsForCurrentTarget(allToolRegistry)
 }
-export function getToolsByCategory(): ToolCategoryGroup[] {
-  return groupToolsByCategory(getToolRegistry())
-}
 
 export function getToolById(id: string): ToolDefinition | undefined {
   return getToolRegistry().find(tool => tool.id === id)
-}
-
-export function getActiveTools(): ToolDefinition[] {
-  return getToolRegistry().filter(tool => !tool.disabled)
 }
 
 export function groupToolsByCategory(tools: ToolDefinition[]): ToolCategoryGroup[] {

@@ -51,14 +51,16 @@ const statusTagType = computed(() => {
 })
 
 const enhancementDialogVisible = ref(false)
-const enhancementForm = reactive({
+const EMPTY_ENHANCEMENT_FORM = {
   id: '',
   name: '',
   type: 'css' as WxpEnhancementType,
   urlPattern: '',
   code: '',
   enabled: true,
-})
+}
+
+const enhancementForm = reactive({ ...EMPTY_ENHANCEMENT_FORM })
 
 const targets = ref<WxpTarget[]>([])
 const targetsLoading = ref(false)
@@ -138,14 +140,7 @@ function openEnhancementDialog(row?: WxpEnhancement): void {
       enabled: row.enabled,
     })
   } else {
-    Object.assign(enhancementForm, {
-      id: '',
-      name: '',
-      type: 'css',
-      urlPattern: '',
-      code: '',
-      enabled: true,
-    })
+    Object.assign(enhancementForm, EMPTY_ENHANCEMENT_FORM)
   }
   enhancementDialogVisible.value = true
 }
@@ -293,7 +288,7 @@ onUnmounted(() => {
           <div class="inline-group path-row">
             <el-input
               v-model="settingsForm.executablePath"
-              placeholder="例如 C:\Program Files\Tencent\Weixin\Weixin.exe"
+              placeholder="例如 C:\Users\你\AppData\Local\Programs\Wxp Client\WxP Client.exe"
               class="mono"
             />
             <el-button :disabled="isRunning" @click="pickExecutable">

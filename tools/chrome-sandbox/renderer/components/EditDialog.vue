@@ -15,10 +15,11 @@ const emit = defineEmits(['update:modelValue'])
 
 const store = useSandboxStore()
 const loading = ref(false)
-const form = reactive({
+const INITIAL_FORM = {
   name: '',
   ...LAUNCH_OPTION_FORM_FIELDS,
-})
+}
+const form = reactive({ ...INITIAL_FORM })
 const visible = useDialogVisible(props, emit)
 
 watch(visible, (open) => {
@@ -28,7 +29,7 @@ watch(visible, (open) => {
 })
 
 function reset() {
-  Object.assign(form, { name: '', ...LAUNCH_OPTION_FORM_FIELDS })
+  Object.assign(form, INITIAL_FORM)
 }
 
 function loadForm(sandbox) {

@@ -16,10 +16,6 @@ const channels = ipcChannels()
 const rootEl = ref<HTMLElement | null>(null)
 let motion: MotionScope | undefined
 
-function openFingerprintEditor() {
-  showFingerprint.value = true
-}
-
 async function deleteSandbox() {
   if (!store.selectedId) return
   try {
@@ -57,10 +53,6 @@ async function initPage() {
     onIpc(channels.EVENT_PROCESS_EXITED, () => store.loadAll()),
   )
   ready.value = true
-}
-
-async function onSetupCompleted() {
-  await initPage()
 }
 
 async function onSettingsSaved(result) {
@@ -101,7 +93,7 @@ onUnmounted(() => {
         @activate="store.activate(store.selectedId)"
         @close="store.close(store.selectedId)"
         @delete="deleteSandbox"
-        @edit-fingerprint="openFingerprintEditor"
+        @edit-fingerprint="showFingerprint = true"
       />
 
       <CreateDialog v-model="showCreate" />
@@ -116,7 +108,7 @@ onUnmounted(() => {
 
     <DataDirectorySetupDialog
       v-model="showSetup"
-      @completed="onSetupCompleted"
+      @completed="initPage"
       @cancel="goToHome"
     />
   </div>

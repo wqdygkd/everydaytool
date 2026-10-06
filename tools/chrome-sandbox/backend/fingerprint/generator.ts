@@ -30,7 +30,7 @@ const TIMEZONES: Array<{ offset: number, name: string }> = [
 ]
 
 function pick<T>(list: T[]): T {
-  return list[randomInt(list.length)] as T
+  return list[randomInt(list.length)]
 }
 
 function getPlatform(): string {
@@ -69,7 +69,7 @@ export function generateRandomFingerprint(): Fingerprint {
     },
     audio: {
       noiseEnabled: true,
-      noiseLevel: Math.round((randomInt(1, 100) / 1000) * 1000) / 1000,
+      noiseLevel: randomInt(1, 100) / 1000,
     },
     timezone: {
       offset: timezone.offset,

@@ -12,19 +12,13 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
   const settings = ref<WxpSettings>({ ...DEFAULT_WXP_SETTINGS })
   const enhancements = ref<WxpEnhancement[]>([])
   const running = ref<WxpRunningState | null>(null)
-  const loading = ref(false)
   const channels = wxpIpcChannels()
 
   async function load(): Promise<void> {
-    loading.value = true
-    try {
-      const data = await invokeWxpIpc<WxpGetAllResult>(channels.GET_ALL)
-      if (data.settings) settings.value = data.settings
-      enhancements.value = data.enhancements ?? []
-      running.value = data.running ?? null
-    } finally {
-      loading.value = false
-    }
+    const data = await invokeWxpIpc<WxpGetAllResult>(channels.GET_ALL)
+    if (data.settings) settings.value = data.settings
+    enhancements.value = data.enhancements ?? []
+    running.value = data.running ?? null
   }
 
   function bindStatusEvents(): () => void {
@@ -87,8 +81,6 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     settings,
     enhancements,
     running,
-    loading,
-    channels,
     load,
     bindStatusEvents,
     saveSettings,

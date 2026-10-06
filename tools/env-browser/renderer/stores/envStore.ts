@@ -62,13 +62,11 @@ export const useEnvBrowserStore = defineStore('env-browser/env', () => {
       envs.value.unshift(env)
       return env
     }
-    // web fallback: localStorage
     if (!payload?.name?.trim()) throw new Error('环境名称不能为空')
     if (!payload?.url?.trim()) throw new Error('环境地址不能为空')
     if (!payload?.username?.trim()) throw new Error('账号不能为空')
     try {
-      const u = new URL(payload.url)
-      if (!['http:', 'https:'].includes(u.protocol)) throw new Error('仅支持 http/https')
+      if (!['http:', 'https:'].includes(new URL(payload.url).protocol)) throw new Error('仅支持 http/https')
     } catch { throw new Error('环境地址格式不正确，需包含 http(s)://') }
     const now = new Date().toISOString()
     const env: EnvConfig = {

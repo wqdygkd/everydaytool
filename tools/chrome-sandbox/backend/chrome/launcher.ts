@@ -1,6 +1,6 @@
 import type { LaunchOptions } from '../../../../shared/types.js'
 import { spawn } from 'node:child_process'
-import { logger } from '../utils/logger.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { detectChromePath } from './detector.js'
 import { getFreePort } from './developer-mode.js'
 import { findRunningPid, registerProcess } from './process-manager.js'
@@ -51,19 +51,16 @@ export async function launchChrome({
     args.push(`--load-extension=${extensionPath}`)
   }
 
-  // Safety checks disabled
   if (launchOptions.disableSafetyChecks) {
     args.push('--disable-web-security')
     args.push('--ignore-certificate-errors')
     args.push('--disable-features=IsolateOrigins,site-per-process')
   }
 
-  // CORS disabled
   if (launchOptions.disableCors) {
     args.push('--disable-web-security')
   }
 
-  // Custom arguments
   if (launchOptions.customArgs) {
     const customArgsList = launchOptions.customArgs
       .split(' ')

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { ToolDefinition } from '../shared/types/tool'
-import { getToolsByCategory, groupToolsByCategory } from '../config/tools'
+import { getToolRegistry, groupToolsByCategory } from '../config/tools'
 
 const FAVORITE_STORAGE_KEY = 'edt:favorite-tools'
 const router = useRouter()
 const searchText = ref('')
-const allTools = computed(() => getToolsByCategory().flatMap(group => group.tools))
+const allTools = computed(() => getToolRegistry())
 const favoriteIds = ref(readFavoriteIds())
 
 const filteredTools = computed<ToolDefinition[]>(() => {
@@ -59,12 +59,18 @@ function readFavoriteIds(): string[] {
 <template>
   <div class="home-page">
     <section class="toolbar">
-      <input
-        v-model.trim="searchText"
-        class="search-input"
-        type="search"
-        placeholder="搜索工具、能力或关键词"
-      >
+      <div class="search-field">
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <input
+          v-model.trim="searchText"
+          class="search-input"
+          type="search"
+          placeholder="搜索工具、能力或关键词"
+        >
+      </div>
       <span class="tool-count">{{ visibleToolCount }} 个匹配</span>
     </section>
 
@@ -128,22 +134,65 @@ function readFavoriteIds(): string[] {
   gap: var(--spacing-md);
   margin-bottom: 28px;
 
-  .search-input {
+  /* 搜索框：白底浮岛胶囊（画布是灰 #f4f4f5，Telegram 的灰底胶囊在灰画布上不可见），聚焦蓝框 */
+  .search-field {
+    position: relative;
     width: min(520px, 100%);
+  }
+
+  .search-icon {
+    position: absolute;
+    top: 50%;
+    left: 15px;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    fill: none;
+    stroke: var(--color-text-secondary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    pointer-events: none;
+    transition: stroke var(--transition-fast);
+  }
+
+  .search-input {
+    width: 100%;
     height: 42px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface-raised);
+    border: 2px solid var(--color-border-light);
+    border-radius: 999px;
+    background: var(--color-surface);
     color: var(--color-text-primary);
     font: inherit;
-    padding: 0 14px;
+    padding: 0 16px 0 42px;
     outline: none;
+    appearance: none;
     transition: var(--transition-fast);
+
+    /* type=search 原生装饰（内衬/清除按钮）在胶囊内错位，去掉，Esc 仍可清空 */
+    &::-webkit-search-cancel-button,
+    &::-webkit-search-decoration,
+    &::-webkit-search-results-button,
+    &::-webkit-search-results-decoration {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    &::placeholder {
+      color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
+    }
+
+    &:hover {
+      border-color: var(--color-border);
+    }
 
     &:focus {
       border-color: var(--color-primary);
-      box-shadow: var(--shadow-focus);
+      caret-color: var(--color-primary);
     }
+  }
+
+  .search-field:focus-within .search-icon {
+    stroke: var(--color-primary);
   }
 
   .tool-count {
@@ -176,7 +225,7 @@ function readFavoriteIds(): string[] {
     margin: 0;
     color: var(--color-text-primary);
     font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 
   span {

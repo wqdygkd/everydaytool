@@ -1,5 +1,5 @@
 import type { AppConfig, AppConfigUpdate } from '../../../../shared/types.js'
-import { getDataDirectory, getDefaultDataDirectory, normalizeDataDirectory } from '../utils/path-helper.js'
+import { getDataDirectory, getDefaultDataDirectory, normalizeDataDirectory } from '../../../../backend/utils/data-root.js'
 import { getDatabase } from './database.js'
 
 const DEFAULTS: AppConfig = {

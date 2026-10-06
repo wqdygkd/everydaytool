@@ -6,6 +6,8 @@ import type {
   SandboxUpdatePayload,
 } from '../../../../shared/types.js'
 import { randomUUID } from 'node:crypto'
+import { ensureDir, removeIfExists } from '../../../../backend/utils/file-ops.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { setupSandboxDeveloperMode, shouldSkipDeveloperModeSetup } from '../chrome/developer-mode.js'
 import { launchChrome } from '../chrome/launcher.js'
 import { findRunningPid, isRunning, killProcess, onProcessExit, queryChromeSandboxProcesses } from '../chrome/process-manager.js'
@@ -17,8 +19,6 @@ import { IPC_CHANNELS } from '../ipc/channels.js'
 import { initSandboxUserData, repairSandboxProfile } from '../profile/cloner.js'
 import { fingerprintStore } from '../store/fingerprint-store.js'
 import { sandboxStore } from '../store/sandbox-store.js'
-import { ensureDir, removeIfExists } from '../utils/file-ops.js'
-import { logger } from '../utils/logger.js'
 import {
   getDefaultChromeProfilePath,
   getSandboxFingerprintExtPath,

@@ -28,7 +28,7 @@ export async function movePath(src: string, dest: string): Promise<void> {
   await rename(src, dest)
 }
 
-export async function linkOrCopyFile(src: string, dest: string): Promise<void> {
+async function linkOrCopyFile(src: string, dest: string): Promise<void> {
   await ensureDir(path.dirname(dest))
   await removeIfExists(dest)
   try {
@@ -83,8 +83,4 @@ export async function readJson<T = unknown>(filePath: string): Promise<T> {
 export async function writeJson(filePath: string, data: unknown): Promise<void> {
   await ensureDir(path.dirname(filePath))
   await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-}
-
-export async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
-  await writeJson(filePath, data)
 }

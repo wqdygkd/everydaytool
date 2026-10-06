@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasLaunchOptions } from '../shared/launchOptions'
 import { formatSandboxStatus } from '../shared/sandbox'
 
 const props = defineProps({
@@ -8,10 +9,7 @@ const props = defineProps({
 
 defineEmits(['click'])
 
-const hasLaunchOptions = computed(() => {
-  const opts = props.sandbox.metadata?.launchOptions
-  return opts && (opts.disableSafetyChecks || opts.disableCors || opts.customArgs)
-})
+const showLaunchOptions = computed(() => hasLaunchOptions(props.sandbox?.metadata))
 </script>
 
 <template>
@@ -24,7 +22,7 @@ const hasLaunchOptions = computed(() => {
       <span class="status" :class="sandbox.status">{{ formatSandboxStatus(sandbox.status) }}</span>
       <span v-if="sandbox.status === 'running'" class="pid">PID: {{ sandbox.chromePid || '-' }}</span>
     </div>
-    <div v-if="hasLaunchOptions" class="launch-options-tags">
+    <div v-if="showLaunchOptions" class="launch-options-tags">
       <el-tag v-if="sandbox.metadata?.launchOptions?.disableSafetyChecks" size="small" type="danger" effect="plain">
         禁用安全检查
       </el-tag>

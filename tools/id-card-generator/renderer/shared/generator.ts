@@ -41,7 +41,7 @@ function randomInt(min: number, max: number): number {
 }
 
 function randomPick<T>(list: T[]): T {
-  return list[randomInt(0, list.length - 1)] as T
+  return list[randomInt(0, list.length - 1)]
 }
 
 function pad2(n: number): string {
@@ -104,18 +104,18 @@ function pickArea(areaCode: string | null | undefined): { code: string, name: st
   return randomPick(matched)
 }
 
-export function calcCheckDigit(body17: string): string {
+function calcCheckDigit(body17: string): string {
   const sum = body17.split('').reduce((acc, digit, index) => acc + Number(digit) * WEIGHTS[index], 0)
-  return CHECK_CHARS[sum % 11] as string
+  return CHECK_CHARS[sum % 11]
 }
 
-export function generateIdCard(options: GenerateOptions = {}): IdCardResult {
+function generateIdCard(options: GenerateOptions = {}): IdCardResult {
   const { gender = GENDER.RANDOM, ageRange = [18, 60], birthRange, areaCode } = options
 
   const area = pickArea(areaCode)
 
   let birthDate: string
-  if (birthRange && birthRange[0] != null && birthRange[1] != null) {
+  if (birthRange) {
     birthDate = randomBirthDateInRange(birthRange[0], birthRange[1])
   } else {
     const [minAge, maxAge] = ageRange
@@ -142,9 +142,5 @@ export function generateIdCard(options: GenerateOptions = {}): IdCardResult {
 
 export function generateIdCards(options: GenerateOptions = {}, count = 1): IdCardResult[] {
   const safeCount = Math.max(1, Math.floor(count) || 1)
-  const results: IdCardResult[] = []
-  for (let i = 0; i < safeCount; i += 1) {
-    results.push(generateIdCard(options))
-  }
-  return results
+  return Array.from({ length: safeCount }, () => generateIdCard(options))
 }

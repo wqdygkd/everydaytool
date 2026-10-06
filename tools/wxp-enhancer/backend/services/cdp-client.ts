@@ -1,7 +1,7 @@
 import type { WxpTarget } from '../../../../shared/types.js'
 import { sleep } from '../../../../shared/sleep.js'
 
-export function buildDevToolsUrl(webSocketDebuggerUrl: string, port: number): string {
+function buildDevToolsUrl(webSocketDebuggerUrl: string, port: number): string {
   const wsPath = webSocketDebuggerUrl.replace(/^wss?:\/\//, '')
   return `http://127.0.0.1:${port}/devtools/inspector.html?ws=${wsPath}`
 }
@@ -18,20 +18,17 @@ interface CdpTargetRaw {
 
 function resolveDevToolsUrl(target: CdpTargetRaw, port: number): string {
   const frontend = target.devtoolsFrontendUrl
-  if (!frontend) {
-    return buildDevToolsUrl(target.webSocketDebuggerUrl as string, port)
-  }
-  if (frontend.startsWith('http://') || frontend.startsWith('https://')) {
+  if (frontend?.startsWith('http://') || frontend?.startsWith('https://')) {
     return frontend
   }
-  if (frontend.startsWith('/')) {
+  if (frontend?.startsWith('/')) {
     return `http://127.0.0.1:${port}${frontend}`
   }
   return buildDevToolsUrl(target.webSocketDebuggerUrl as string, port)
 }
 
 export function isAllowedDevToolsUrl(url: string): boolean {
-  return typeof url === 'string' && /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\//.test(url)
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\//.test(url)
 }
 
 const DEBUGGABLE_TARGET_TYPES = new Set(['page', 'iframe'])
@@ -76,19 +73,20 @@ function createCdpCaller(ws: WebSocket): CdpCaller {
     } catch {
       return
     }
-    if (!message.id || !pending.has(message.id)) return
+    if (!message.id) return
 
-    const call = pending.get(message.id) as PendingCall
+    const pendingCall = pending.get(message.id)
+    if (!pendingCall) return
     pending.delete(message.id)
     if (message.error) {
-      call.reject(new Error(message.error.message || 'CDP 调用失败'))
+      pendingCall.reject(new Error(message.error.message || 'CDP 调用失败'))
       return
     }
-    call.resolve(message.result ?? {})
+    pendingCall.resolve(message.result ?? {})
   })
 
-  return function call(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
+  const call: CdpCaller = (method, params = {}) =>
+    new Promise((resolve, reject) => {
       const id = ++messageId
       pending.set(id, { resolve, reject })
       ws.send(JSON.stringify({ id, method, params }))
@@ -98,7 +96,8 @@ function createCdpCaller(ws: WebSocket): CdpCaller {
         reject(new Error(`CDP 超时: ${method}`))
       }, 15000)
     })
-  }
+
+  return call
 }
 
 async function connectWebSocket(wsUrl: string): Promise<WebSocket> {
@@ -217,15 +216,7 @@ export class CdpInjectionSession {
     this.targetState.clear()
   }
 
-  pruneInactiveTargets(activeIds: Set<string>): void {
-    for (const id of this.targetState.keys()) {
-      if (!activeIds.has(id)) {
-        this.targetState.delete(id)
-      }
-    }
-  }
-
-  private async injectIntoTarget(target: CdpTargetRaw, { force = false } = {}): Promise<boolean> {
+  private async injectIntoTarget(target: CdpTargetRaw, force = false): Promise<boolean> {
     const prev = this.targetState.get(target.id)
     const url = target.url || ''
     if (!force && prev && prev.url === url) {
@@ -245,7 +236,8 @@ export class CdpInjectionSession {
     this.scriptSource = scriptSource
   }
 
-  private async scanTargets(force = false): Promise<number> {
+  /** 扫描全部可调试页面并注入；force 为 true 时忽略 URL 去重强制重注入 */
+  async scanAndInject(force = false): Promise<number> {
     if (this.stopped || this.injecting || (this.paused && !force)) return 0
 
     this.injecting = true
@@ -256,15 +248,19 @@ export class CdpInjectionSession {
 
       for (const target of targets) {
         activeIds.add(target.id)
-        if (await this.injectIntoTarget(target, { force })) {
+        if (await this.injectIntoTarget(target, force)) {
           injectedCount += 1
         }
       }
 
-      this.pruneInactiveTargets(activeIds)
+      for (const id of this.targetState.keys()) {
+        if (!activeIds.has(id)) {
+          this.targetState.delete(id)
+        }
+      }
 
-      if (injectedCount > 0 && this.onTargetsInjected) {
-        this.onTargetsInjected({ count: injectedCount, total: targets.length })
+      if (injectedCount > 0) {
+        this.onTargetsInjected?.({ count: injectedCount, total: targets.length })
       }
 
       return injectedCount
@@ -272,23 +268,4 @@ export class CdpInjectionSession {
       this.injecting = false
     }
   }
-
-  async scanAndInject(): Promise<number> {
-    return this.scanTargets(false)
-  }
-
-  async reinjectAll(): Promise<number> {
-    return this.scanTargets(true)
-  }
-}
-
-export async function injectOnce(port: number, scriptSource: string): Promise<number> {
-  const targets = await fetchTargets(port)
-  if (targets.length === 0) {
-    throw new Error('未找到可注入的 page 目标')
-  }
-  for (const target of targets) {
-    await injectTarget(target.webSocketDebuggerUrl as string, scriptSource)
-  }
-  return targets.length
 }

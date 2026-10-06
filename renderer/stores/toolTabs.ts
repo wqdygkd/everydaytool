@@ -32,14 +32,11 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     openIds.value
       .map((id) => {
         const tool = getToolRegistry().find(t => t.id === id)
-        if (!tool) return null
-        return {
-          id: tool.id,
-          name: tool.name,
-          routeName: `tool-${tool.id}`,
-        } as ToolTab
+        return tool
+          ? { id: tool.id, name: tool.name, routeName: `tool-${tool.id}` }
+          : null
       })
-      .filter((t): t is ToolTab => Boolean(t)),
+      .filter((tab): tab is ToolTab => tab !== null),
   )
 
   function persist() {
@@ -51,14 +48,18 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     if (idx === -1) return
     openIds.value.splice(idx, 1)
     persist()
+    // 不自动切到相邻页签：关闭正在查看的工具后由调用方决定去向（当前约定：回主页）
     if (activeId.value === toolId) {
-      const next = openIds.value[idx] || openIds.value[idx - 1] || null
-      activeId.value = next
+      activeId.value = null
     }
   }
 
   function syncFromRoute(toolId: string | null) {
-    if (!toolId) return
+    // activeId 镜像当前路由：回到主页（toolId 为空）即清空，保证页签高亮永不残留
+    if (!toolId) {
+      activeId.value = null
+      return
+    }
     if (!openIds.value.includes(toolId)) {
       openIds.value.push(toolId)
       persist()
@@ -66,7 +67,6 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     activeId.value = toolId
   }
 
-  // 清理已不存在的工具
   const validIds = openIds.value.filter(id => getToolRegistry().some(t => t.id === id))
   if (validIds.length !== openIds.value.length) {
     openIds.value = validIds

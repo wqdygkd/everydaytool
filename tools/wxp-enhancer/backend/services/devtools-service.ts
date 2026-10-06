@@ -1,7 +1,7 @@
 import type { WxpOpenDevToolsPayload } from '../../../../shared/types.js'
 import { createRequire } from 'node:module'
+import { logger } from '../../../../backend/utils/logger.js'
 import { sleep } from '../../../../shared/sleep.js'
-import { logger } from '../../../chrome-sandbox/backend/utils/logger.js'
 import { isAllowedDevToolsUrl } from './cdp-client.js'
 
 const require = createRequire(import.meta.url)
@@ -37,20 +37,6 @@ function getDevtoolsSession(): Electron.Session {
   return ses
 }
 
-function buildDevToolsWindowOptions(): Electron.BrowserWindowConstructorOptions {
-  return {
-    width: 1280,
-    height: 900,
-    minWidth: 800,
-    minHeight: 500,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      session: getDevtoolsSession(),
-    },
-  }
-}
-
 // 注入会话可注册监听，在 DevTools 调试期间同步暂停/恢复注入
 type DevtoolsPauseListener = (port: number, action: 'pause' | 'resume') => void
 
@@ -61,8 +47,7 @@ export function registerDevtoolsPauseListener(listener: DevtoolsPauseListener): 
   return () => pauseListeners.delete(listener)
 }
 
-function notifyPauseListeners(port: number | null, action: 'pause' | 'resume'): void {
-  if (!port) return
+function notifyPauseListeners(port: number, action: 'pause' | 'resume'): void {
   for (const listener of pauseListeners) {
     try {
       listener(port, action)
@@ -72,7 +57,7 @@ function notifyPauseListeners(port: number | null, action: 'pause' | 'resume'): 
   }
 }
 
-export function extractPortFromDevToolsUrl(devToolsUrl: string): number | null {
+function extractPortFromDevToolsUrl(devToolsUrl: string): number | null {
   const match = devToolsUrl.match(/^https?:\/\/(?:127\.0\.0\.1|localhost):(\d+)\//)
   return match ? Number(match[1]) : null
 }
@@ -108,22 +93,30 @@ function assertDevToolsUrl(devToolsUrl: string): void {
   }
 }
 
-export async function openDevToolsWindow(
-  devToolsUrl: string,
-  title = 'CDP DevTools',
-): Promise<{ reused: boolean }> {
+async function openDevToolsWindow(devToolsUrl: string, title = 'CDP 调试入口'): Promise<void> {
   assertDevToolsUrl(devToolsUrl)
 
   const existing = devtoolsWindows.get(devToolsUrl)
   if (existing && !existing.isDestroyed()) {
     existing.focus()
-    return { reused: true }
+    return
   }
 
   const port = extractPortFromDevToolsUrl(devToolsUrl)
   await pauseInjection(port)
 
-  const win = new BrowserWindow({ ...buildDevToolsWindowOptions(), title })
+  const win = new BrowserWindow({
+    title,
+    width: 1280,
+    height: 900,
+    minWidth: 800,
+    minHeight: 500,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      session: getDevtoolsSession(),
+    },
+  })
   devtoolsWindows.set(devToolsUrl, win)
 
   win.on('closed', () => {
@@ -134,7 +127,6 @@ export async function openDevToolsWindow(
   try {
     await win.loadURL(devToolsUrl)
     logger.info('wxp:devtools opened', { devToolsUrl, port })
-    return { reused: false }
   } catch (error) {
     if (!win.isDestroyed()) {
       win.close()
@@ -145,11 +137,7 @@ export async function openDevToolsWindow(
   }
 }
 
-export function openDevToolsIndex(port: number, title = 'CDP 调试入口'): Promise<{ reused: boolean }> {
-  return openDevToolsWindow(`http://127.0.0.1:${port}/`, title)
-}
-
-export async function openDevToolsExternal(devToolsUrl: string): Promise<void> {
+async function openDevToolsExternal(devToolsUrl: string): Promise<void> {
   assertDevToolsUrl(devToolsUrl)
 
   const port = extractPortFromDevToolsUrl(devToolsUrl)
@@ -161,12 +149,7 @@ export async function openDevToolsExternal(devToolsUrl: string): Promise<void> {
   }
 }
 
-export function parseOpenDevToolsPayload(payload: string | WxpOpenDevToolsPayload | null | undefined): {
-  devToolsUrl?: string
-  title?: string
-  external: boolean
-  port: number | null
-} {
+function parseOpenDevToolsPayload(payload: string | WxpOpenDevToolsPayload | null | undefined) {
   if (typeof payload === 'string') {
     return { devToolsUrl: payload, title: undefined, external: false, port: null }
   }
@@ -183,14 +166,18 @@ export async function openDevToolsFromPayload(payload: string | WxpOpenDevToolsP
   const { devToolsUrl, title, external, port } = parseOpenDevToolsPayload(payload)
 
   if (port && !devToolsUrl) {
-    await openDevToolsIndex(port, title ?? `CDP 调试入口 · ${port}`)
+    await openDevToolsWindow(`http://127.0.0.1:${port}/`, title ?? `CDP 调试入口 · ${port}`)
     return true
   }
 
+  if (!devToolsUrl) {
+    throw new Error('无效的 DevTools 地址')
+  }
+
   if (external) {
-    await openDevToolsExternal(devToolsUrl as string)
+    await openDevToolsExternal(devToolsUrl)
   } else {
-    await openDevToolsWindow(devToolsUrl as string, title)
+    await openDevToolsWindow(devToolsUrl, title)
   }
 
   return true

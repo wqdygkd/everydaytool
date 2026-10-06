@@ -1,47 +1,57 @@
+/* Telegram 字母头像 / 品牌标字体（Nunito ExtraBold，同 telegram-tt 的头像字形） */
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("./fonts/Nunito-ExtraBold.woff2") format("woff2");
+}
+
 :root {
-  /* ── 品牌色:浅色暖调主题 = 小红书红(主红 #ff2442,暖调表面) ── */
-  --color-primary: #ff2442;
-  --color-primary-hover: #ff3d57;
-  --color-primary-soft: rgba(255, 36, 66, 0.1);
-  --color-primary-light: var(--color-primary-soft);
-  --color-accent: #ff2e51;
-  --color-info: #0ea5e9;
+  /* ── 品牌色:Telegram Web(A) 浅色主题（telegram-tt themes.json 移植）= Telegram 蓝 ── */
+  --color-primary: #3390ec;
+  --color-primary-hover: #4a95d6; /* telegram --color-primary-shade */
+  --color-primary-soft: rgba(51, 144, 236, 0.1); /* telegram --color-primary-tint */
+  --color-primary-light: rgba(51, 144, 236, 0.2); /* telegram --color-primary-opacity */
+  --color-accent: #6c93ff;
+  --color-info: #3390ec;
 
   /* ── 语义色 ── */
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-error: #e11d48;
+  --color-success: #00c73e; /* telegram 草绿(unread badge / --color-green) */
+  --color-warning: #fb8c00;
+  --color-error: #e53935;
 
   /* ── surfaces ── */
-  --color-app-bg: #fbf3f1;
-  --color-surface: #ffffff;
+  --color-app-bg: #f4f4f5; /* 画布 = telegram --color-background-secondary */
+  --color-surface: #ffffff; /* telegram --color-background */
   --color-surface-raised: #ffffff;
-  --color-muted: #fdf4f2;
+  --color-muted: #f4f4f5; /* telegram item hover 填充 */
 
   /* ── lines ── */
-  --color-border-light: #f8e9e4;
-  --color-border: #f2ddd7;
+  --color-border-light: #e4e4e5; /* telegram --color-background-secondary-accent */
+  --color-border: #dadce0; /* telegram --color-borders / 输入边框 */
 
   /* ── text ── */
-  --color-text-primary: #181113;
-  --color-text-secondary: #6e5e62;
-  --color-text-tertiary: #806f73;
+  --color-text-primary: #000000;
+  --color-text-secondary: #707579;
+  --color-text-tertiary: #686c72; /* telegram meta(时间戳) */
 
-  /* ── shape ── */
-  --radius-xs: 8px;
+  /* ── shape(telegram 阶梯:小件 6 / 控件 10 / 行·菜单 16 / 浮岛 24 / 模态 32) ── */
+  --radius-xs: 6px;
   --radius-sm: 10px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
 
-  --shadow-sm: 0 1px 2px rgba(190, 90, 100, 0.08);
-  --shadow-md: 0 1px 2px rgba(190, 90, 100, 0.07), 0 14px 30px -18px rgba(210, 90, 110, 0.3);
-  --shadow-lg: 0 8px 24px -12px rgba(210, 90, 110, 0.34);
-  --shadow-focus: 0 0 0 3px rgba(255, 36, 66, 0.3);
+  /* ── shadows(telegram 浮岛 / 面板 / 菜单) ── */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 5px -1px rgba(0, 0, 0, 0.21);
+  --shadow-lg: 0 4px 8px 2px rgba(114, 114, 114, 0.25);
+  --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18);
 
-  --transition-fast: 0.14s cubic-bezier(0.2, 0.75, 0.25, 1);
-  --transition-base: 0.22s cubic-bezier(0.2, 0.75, 0.25, 1);
-  --transition-slow: 0.34s cubic-bezier(0.2, 0.75, 0.25, 1);
+  --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+  --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1);
+  --transition-slow: 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 
   /* ── 字阶 / 字重 / 间距 ── */
   --font-size-xs: 11px;
@@ -64,23 +74,21 @@
   --spacing-2xl: 32px;
 
   color-scheme: light;
-  font-family: "Fira Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "Fira Code", ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+  /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace;
   font-synthesis-weight: none;
-  background:
-    radial-gradient(1100px 520px at 88% -12%, rgba(255, 36, 66, 0.1), transparent 60%),
-    radial-gradient(820px 460px at -5% 0%, rgba(255, 140, 90, 0.07), transparent 55%),
-    var(--color-app-bg);
+  background: var(--color-app-bg);
   color: var(--color-text-primary);
 
   /* ── Element Plus 绑定 ── */
   --el-color-primary: var(--color-primary);
-  --el-color-primary-light-3: #ff5c70;
-  --el-color-primary-light-5: #ff8b99;
-  --el-color-primary-light-7: #ffc3cb;
-  --el-color-primary-light-9: var(--color-primary-soft);
-  --el-color-primary-dark-2: var(--color-primary-hover);
-  --el-border-radius-base: var(--radius-md);
+  --el-color-primary-light-3: #70b1f2;
+  --el-color-primary-light-5: #99c7f5;
+  --el-color-primary-light-7: #c8defa;
+  --el-color-primary-light-9: #ebf4fd;
+  --el-color-primary-dark-2: #2f84d9;
+  --el-border-radius-base: var(--radius-sm);
   --el-border-color: var(--color-border);
   --el-border-color-light: var(--color-border-light);
   --el-border-color-lighter: var(--color-border-light);
@@ -95,6 +103,8 @@
   --el-text-color-secondary: var(--color-text-tertiary);
   --el-box-shadow-light: var(--shadow-md);
   --el-box-shadow: var(--shadow-lg);
+  --el-mask-color: rgba(0, 0, 0, 0.25);
+  --el-mask-color-light: rgba(0, 0, 0, 0.35);
 }
 
 html {
@@ -110,7 +120,7 @@ body {
   min-width: 320px;
   background: var(--color-app-bg);
   color: var(--color-text-primary);
-  line-height: 1.55;
+  line-height: 1.5;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
@@ -143,27 +153,27 @@ select:focus-visible,
 }
 
 ::selection {
-  background: var(--color-primary-soft);
+  background: var(--color-primary-light);
 }
 
+/* telegram 细滚动条：透明轨道 + 细圆角拇指(rgba(90,90,90,.3)) */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--color-border-light) 85%, transparent);
-  // border-radius: 999px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border: 2px solid transparent;
+  background: rgba(90, 90, 90, 0.3);
+  border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 
   &:hover {
-    background-color: color-mix(in srgb, var(--color-border) 60%, var(--color-muted));
+    background-color: rgba(90, 90, 90, 0.45);
   }
 }
 
@@ -177,11 +187,11 @@ select:focus-visible,
   background: var(--color-app-bg);
 }
 
-/* 表面卡片 */
+/* 表面卡片:telegram 浮岛(白底 + 浮岛阴影,无边框) */
 .surface-card {
   background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 详情卡片网格 (label + value) */
@@ -271,55 +281,53 @@ select:focus-visible,
 /* ── Element Plus 定制 ── */
 .el-button {
   font-weight: var(--font-weight-medium);
-  border-radius: var(--radius-sm);
+  /* telegram 按钮 = 胶囊 */
+  border-radius: 999px;
 
   &--primary {
     --el-button-bg-color: var(--color-primary);
     --el-button-border-color: var(--color-primary);
     --el-button-hover-bg-color: var(--color-primary-hover);
     --el-button-hover-border-color: var(--color-primary-hover);
-    --el-button-active-bg-color: var(--color-primary-hover);
-    --el-button-active-border-color: var(--color-primary-hover);
+    --el-button-active-bg-color: color-mix(in srgb, var(--color-primary) 88%, #000);
+    --el-button-active-border-color: color-mix(in srgb, var(--color-primary) 88%, #000);
   }
 }
 
 .el-table {
   --el-table-border-color: var(--color-border-light);
   --el-table-header-bg-color: var(--color-muted);
-  --el-table-row-hover-bg-color: var(--color-primary-soft);
+  --el-table-row-hover-bg-color: var(--color-muted);
   --el-table-tr-bg-color: var(--color-surface);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .el-dialog {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
 }
 
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
-  box-shadow: 0 0 0 1px var(--color-border-light) inset;
+  box-shadow: 0 0 0 1px var(--color-border) inset;
   background: var(--color-surface);
 
   &:hover {
-    box-shadow: 0 0 0 1px var(--color-border) inset;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, #000) inset;
   }
 }
 
+/* telegram 输入聚焦 = 蓝色边框 + 内圈蓝环(无外发光) */
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused {
-  box-shadow: var(--shadow-focus), 0 0 0 1px var(--color-primary) inset;
+  box-shadow: 0 0 0 1px var(--color-primary) inset;
 }
 
 /* ── Element Plus 全局品质 ── */
-:root {
-  --el-mask-color: rgba(103, 40, 55, 0.34);
-  --el-mask-color-light: rgba(103, 40, 55, 0.4);
-}
 
 .el-dialog {
-  --el-dialog-border-radius: var(--radius-lg);
+  --el-dialog-border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 
   .el-dialog__header {
@@ -331,7 +339,7 @@ select:focus-visible,
 
   .el-dialog__title {
     color: var(--color-text-primary);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 
   .el-dialog__body {
@@ -376,9 +384,10 @@ select:focus-visible,
   color: var(--color-text-primary);
 }
 
+/* telegram 占位符灰 #A2ACB4 ≈ 次级文本 55% */
 .el-input__inner::placeholder,
 .el-textarea__inner::placeholder {
-  color: var(--color-text-tertiary);
+  color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
 }
 
 /* 弹层载入 / 骨架屏动画更柔和 */

@@ -2,9 +2,9 @@ import type { Sandbox } from '../../../../shared/types.js'
 import { readdir } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
+import { pathExists, readJsonFile } from '../../../../backend/utils/file-ops.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { sleep } from '../../../../shared/sleep.js'
-import { pathExists, readJsonFile } from '../utils/file-ops.js'
-import { logger } from '../utils/logger.js'
 import { getSandboxProfilePath } from '../utils/path-helper.js'
 
 export function getFreePort(): Promise<number> {
@@ -35,7 +35,7 @@ export async function shouldSkipDeveloperModeSetup(sandbox: Sandbox): Promise<bo
   if (!await pathExists(sessionsDir)) return false
 
   const files = await readdir(sessionsDir)
-  if (!files.some((file: string) => file.startsWith('Session_'))) return false
+  if (!files.some(file => file.startsWith('Session_'))) return false
 
   const prefs = await readJsonFile<DevToolsPrefs>(path.join(profilePath, 'Secure Preferences'), {})
   return prefs?.extensions?.ui?.developer_mode === true
@@ -87,8 +87,7 @@ async function cdpEval(wsUrl: string, expression: string): Promise<unknown> {
     returnByValue: true,
     awaitPromise: true,
   })
-  const value = (result.result as { value?: unknown } | undefined)?.value
-  return value
+  return (result.result as { value?: unknown } | undefined)?.value
 }
 
 interface PageTarget {

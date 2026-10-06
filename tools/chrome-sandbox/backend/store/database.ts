@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
-import { logger } from '../utils/logger.js'
-import { getDatabasePath } from '../utils/path-helper.js'
+import { getDatabasePath } from '../../../../backend/utils/data-root.js'
+import { logger } from '../../../../backend/utils/logger.js'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sandboxes (

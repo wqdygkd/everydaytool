@@ -1,3 +1,5 @@
+// 平台级后端基建：所有工具的后端共用。只放与具体工具域无关的能力（日志 / 文件操作 / 数据目录），
+// 工具专属逻辑留在各自 tools/<id>/backend/ 内。Node ESM：相对 TS 导入写 .js 运行时后缀。
 import process from 'node:process'
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'

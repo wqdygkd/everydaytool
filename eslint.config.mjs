@@ -25,9 +25,6 @@ export default antfu(
     rules: {
       'antfu/if-newline': 'off',
       'style/brace-style': 'off',
-      // 'vue/no-mutating-props': ['error', {
-      //   shallowOnly: true,
-      // }],
     },
   },
   {

@@ -31,5 +31,3 @@ export interface ToolCategoryGroup {
   category: ToolCategory
   tools: ToolDefinition[]
 }
-
-export type ToolRoute = RouteRecordRaw

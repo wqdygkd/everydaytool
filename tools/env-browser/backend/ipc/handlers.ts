@@ -15,10 +15,9 @@ export function registerEnvBrowserHandlers(): void {
     if (!payload?.name?.trim()) throw new Error('环境名称不能为空')
     if (!payload?.url?.trim()) throw new Error('环境地址不能为空')
     if (!payload?.username?.trim()) throw new Error('账号不能为空')
-    // password may be empty for SSO? allow empty but warn
+    // 密码允许为空（如 SSO 场景）
     try {
-      const u = new URL(payload.url)
-      if (!['http:', 'https:'].includes(u.protocol)) throw new Error('仅支持 http/https')
+      if (!['http:', 'https:'].includes(new URL(payload.url).protocol)) throw new Error('仅支持 http/https')
     } catch {
       throw new Error('环境地址格式不正确，需包含 http(s)://')
     }

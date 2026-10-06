@@ -5,6 +5,8 @@ import type {
   SandboxUpdatePayload,
 } from '../../../../shared/types.js'
 import { createRequire } from 'node:module'
+import { applyDataDirectoryChange, markDataDirectoryConfigured } from '../../../../backend/utils/data-root.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { detectChromePath } from '../chrome/detector.js'
 import { generateRandomFingerprint } from '../fingerprint/generator.js'
 import { sandboxService, setStatusEmitter, updateSandboxFingerprint } from '../services/sandbox-service.js'
@@ -12,8 +14,6 @@ import { withSetupState } from '../store/config-setup.js'
 import { configStore } from '../store/config-store.js'
 import { reloadDatabase } from '../store/database.js'
 import { fingerprintStore } from '../store/fingerprint-store.js'
-import { logger } from '../utils/logger.js'
-import { applyDataDirectoryChange, markDataDirectoryConfigured } from '../utils/path-helper.js'
 import { IPC_CHANNELS } from './channels.js'
 
 const require = createRequire(import.meta.url)

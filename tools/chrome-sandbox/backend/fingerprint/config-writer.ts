@@ -1,7 +1,7 @@
 import type { Fingerprint } from '../../../../shared/types.js'
 import path from 'node:path'
-import { copyPath, ensureDir, linkOrCopyTree, pathExists, writeJson } from '../utils/file-ops.js'
-import { logger } from '../utils/logger.js'
+import { copyPath, ensureDir, linkOrCopyTree, pathExists, writeJson } from '../../../../backend/utils/file-ops.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { getExtensionTemplatePath, getSharedFingerprintExtPath } from '../utils/path-helper.js'
 
 const CONFIG_FILE = 'fingerprint-config.json'
@@ -26,14 +26,10 @@ async function ensureSharedFingerprintExtension(): Promise<string> {
   return sharedPath
 }
 
-async function materializeFingerprintExtension(targetPath: string, sharedPath: string): Promise<void> {
-  await ensureDir(targetPath)
-  await linkOrCopyTree(sharedPath, targetPath)
-}
-
 export async function prepareFingerprintExtension(targetPath: string, fingerprint: Fingerprint): Promise<string> {
   const sharedPath = await ensureSharedFingerprintExtension()
-  await materializeFingerprintExtension(targetPath, sharedPath)
+  await ensureDir(targetPath)
+  await linkOrCopyTree(sharedPath, targetPath)
   await updateFingerprintConfig(targetPath, fingerprint)
   return targetPath
 }

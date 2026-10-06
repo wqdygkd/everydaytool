@@ -27,8 +27,11 @@ interface ActiveIntercept {
 // 离线重开 tab 时首次导航即可命中缓存。
 let active: ActiveIntercept | null = null
 const handlerSessions = new Set<GuestSession>()
-function emitLog(): void {
+
+// 命中计数并广播日志；拦截未启动（active 为空）时静默忽略
+function recordHit(): void {
   if (!active) return
+  active.hits += 1
   const log: TreeaseInterceptLog = {
     webContentsId: active.webContentsId,
     hits: active.hits,
@@ -65,7 +68,7 @@ function setPath(root: unknown, path: string, value: unknown): boolean {
     if (typeof next !== 'object' || next === null) {
       rec[keys[i]] = /^\d+$/.test(keys[i + 1]) ? [] : {}
     }
-    cur = (cur as Record<string, unknown>)[keys[i]]
+    cur = rec[keys[i]]
   }
   if (typeof cur !== 'object' || cur === null) return false
   const target = cur as Record<string, unknown>
@@ -74,7 +77,7 @@ function setPath(root: unknown, path: string, value: unknown): boolean {
 }
 
 function applyPatches(raw: Buffer, patches: TreeaseInterceptPatch[]): { buf: Buffer, applied: number } | null {
-  const valid = (patches || []).filter(p => p && p.path && p.path.trim())
+  const valid = patches.filter(p => p && p.path && p.path.trim())
   if (!valid.length) return null
   let data: unknown
   try {
@@ -115,59 +118,46 @@ function responseHeaders(headers: Headers, mode: 'cache' | 'bypass'): Headers {
 function isCacheableRequest(request: Request): boolean {
   if (request.method !== 'GET' || request.headers.has('range')) return false
   const dest = (request.headers.get('sec-fetch-dest') || '').toLowerCase()
-  return !dest || dest !== 'empty'
+  return dest !== 'empty'
 }
 
 async function handleProtocolRequest(session: GuestSession, request: Request): Promise<Response> {
   const url = request.url
   // 屏蔽类规则：直接让请求失败（等价于旧方案的 BlockedByClient）
   if (findRule(url, 'block')) {
-    if (active) {
-      active.hits += 1
-      emitLog()
-    }
+    recordHit()
     throw new Error(`BlockedByClient: ${url}`)
   }
   const modifyRule = findRule(url, 'modify')
-  const cacheMode = !modifyRule && isCacheableRequest(request) ? 'cache' : 'bypass'
+  // 同 session 透传（cookie/代理不变），跳过自定义协议避免递归
+  const upstream = await session.fetch(request, { bypassCustomProtocolHandlers: true })
   if (!modifyRule) {
-    // 未命中：同 session 透传（cookie/代理不变），跳过自定义协议避免递归
-    const upstream = await session.fetch(request, { bypassCustomProtocolHandlers: true })
+    const cacheMode = isCacheableRequest(request) ? 'cache' : 'bypass'
     return new Response(upstream.body, {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: responseHeaders(upstream.headers, cacheMode),
     })
   }
-  const upstream = await session.fetch(request, { bypassCustomProtocolHandlers: true })
   const contentType = upstream.headers.get('content-type') ?? ''
   if (!contentType.includes('json') || NULL_BODY_STATUS.has(upstream.status) || request.method === 'HEAD') {
     return upstream
   }
+  const { status, statusText } = upstream
+  const headers = responseHeaders(upstream.headers, 'bypass')
   let text: string
   try {
     text = await upstream.text()
   } catch {
     // body 读失败：已消费的流无法回退，重建空等价响应透传
-    return new Response(null, { status: upstream.status, headers: responseHeaders(upstream.headers, 'bypass') })
+    return new Response(null, { status, headers })
   }
   const modified = applyPatches(Buffer.from(text, 'utf8'), modifyRule.patches)
   if (!modified) {
-    return new Response(text, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: responseHeaders(upstream.headers, 'bypass'),
-    })
+    return new Response(text, { status, statusText, headers })
   }
-  if (active) {
-    active.hits += 1
-    emitLog()
-  }
-  return new Response(modified.buf, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders(upstream.headers, 'bypass'),
-  })
+  recordHit()
+  return new Response(modified.buf, { status, statusText, headers })
 }
 
 function ensureProtocolHandlers(session: GuestSession): void {

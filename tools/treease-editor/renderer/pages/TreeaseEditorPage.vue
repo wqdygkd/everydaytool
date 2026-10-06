@@ -72,10 +72,14 @@ function readStoredRules(): TreeaseInterceptRule[] {
 const ruleForms = ref<RuleForm[]>(readStoredRules().map(toForm))
 const expanded = ref<string[]>(ruleForms.value.map(f => f.id))
 // navigator.onLine 反映主机网络状态：离线时禁止清缓存刷新，避免删掉唯一可用的本地副本
-const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+function readOnline(): boolean {
+  return typeof navigator === 'undefined' ? true : navigator.onLine
+}
+
+const isOnline = ref(readOnline())
 
 function updateOnlineStatus() {
-  isOnline.value = typeof navigator === 'undefined' ? true : navigator.onLine
+  isOnline.value = readOnline()
 }
 // 默认启用：除非用户之前手动关闭过
 const interceptEnabled = ref(localStorage.getItem(ENABLED_STORAGE_KEY) !== '0')
@@ -208,21 +212,17 @@ async function startIntercept() {
 async function stopIntercept() {
   const api = getIpc()
   const rules = buildRules()
-  if (!api || currentWebContentsId === null) {
-    attached.value = false
-    interceptEnabled.value = false
-    persistRules(rules)
-    return
-  }
-  try {
-    await api.invoke(api.channels.INTERCEPT_STOP, currentWebContentsId)
-  } catch {
-    // 忽略，后端可能已清理
+  if (api && currentWebContentsId !== null) {
+    try {
+      await api.invoke(api.channels.INTERCEPT_STOP, currentWebContentsId)
+    } catch {
+      // 忽略，后端可能已清理
+    }
+    ElMessage.info('已停止拦截')
   }
   attached.value = false
   interceptEnabled.value = false
   persistRules(rules)
-  ElMessage.info('已停止拦截')
 }
 
 async function applyRules() {
@@ -290,8 +290,8 @@ function handleWebviewReady() {
   if (guestId === currentWebContentsId && attached.value) return
   currentWebContentsId = guestId
   void refreshStatus().then(() => {
-    if (interceptEnabled.value && !attached.value && isElectron.value) {
-      if (hasActiveRule(buildRules())) void startIntercept()
+    if (interceptEnabled.value && !attached.value && isElectron.value && hasActiveRule(buildRules())) {
+      void startIntercept()
     }
   })
 }
@@ -318,34 +318,6 @@ async function handleReload() {
   }
   const iframe = document.querySelector<HTMLIFrameElement>('#treease-frame')
   if (iframe) iframe.src = SRC
-}
-
-function handleOpenExternal() {
-  window.open(SRC, '_blank')
-  ElMessage.info('已在外部浏览器打开')
-}
-
-function handleToggleDevTools() {
-  if (!isElectron.value) {
-    ElMessage.warning('调试控制台仅在 Electron 桌面端可用')
-    return
-  }
-  const el = webviewRef.value as unknown as {
-    openDevTools?: () => void
-    closeDevTools?: () => void
-    isDevToolsOpened?: () => boolean
-  } | null
-  if (!el || typeof el.openDevTools !== 'function') {
-    ElMessage.warning('页面内核未就绪，请等待页面加载完成')
-    return
-  }
-  try {
-    // 协议层拦截不占用调试通道，可与拦截同时使用
-    if (el.isDevToolsOpened?.()) el.closeDevTools?.()
-    else el.openDevTools()
-  } catch {
-    ElMessage.error('打开调试控制台失败')
-  }
 }
 
 onMounted(() => {
@@ -386,12 +358,6 @@ onUnmounted(() => {
         <el-button size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
           刷新
         </el-button>
-        <el-button size="small" :disabled="!isElectron" @click="handleToggleDevTools">
-          调试控制台
-        </el-button>
-        <el-button size="small" plain @click="handleOpenExternal">
-          外部打开
-        </el-button>
       </div>
     </div>
     <div class="treease-body">
@@ -401,14 +367,14 @@ onUnmounted(() => {
         :src="SRC"
         :partition="TREEASE_WEBVIEW_PARTITION"
         allowpopups
-        style="flex:1 1 auto; min-width:0; min-height:0; width:100%; border:0"
+        class="tool-frame"
         @dom-ready="handleWebviewReady"
       />
       <iframe
         v-else
         id="treease-frame"
         :src="SRC"
-        style="flex:1 1 auto; min-width:0; min-height:0; width:100%; border:0"
+        class="tool-frame"
         allow="fullscreen; clipboard-read; clipboard-write"
       />
     </div>
@@ -419,7 +385,7 @@ onUnmounted(() => {
         :closable="false"
         show-icon
         title="每个接口独立规则"
-        description="修改模式：命中后改写 JSON 响应体并返回，其余透传；屏蔽模式：请求直接失败不发出（如 sentry.io 上报）。协议层实现，可与调试控制台同时使用；规则保存后立即动态生效。"
+        description="修改模式：命中后改写 JSON 响应体并返回，其余透传；屏蔽模式：请求直接失败不发出（如 sentry.io 上报）。协议层实现，规则保存后立即动态生效。"
         style="margin-bottom:12px"
       />
       <el-collapse v-model="expanded">
@@ -544,6 +510,14 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   display: flex;
+}
+
+.tool-frame {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  border: 0;
 }
 
 .rule-title-name {

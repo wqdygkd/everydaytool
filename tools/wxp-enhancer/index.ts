@@ -6,7 +6,7 @@ const tool = defineTool({
   name: 'WXP 增强',
   description: '通过 CDP 启动 WXP，缓存登录状态并注入 CSS/JS 自定义界面',
   version: '1.0.0',
-  color: '#07c160',
+  color: '#46ba43',
   category: { key: 'automation', name: '自动化工具' },
   keywords: ['wxp', 'cdp', 'inject', 'css', 'js', '界面', '注入', '增强', '登录'],
   supportedTargets: ['win', 'mac'],

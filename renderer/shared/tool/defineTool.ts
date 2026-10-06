@@ -1,6 +1,6 @@
 import type { ToolDefinition } from '../types/tool'
 
-export const DEFAULT_NEW_TOOL_WINDOW_DAYS = 14
+const DEFAULT_NEW_TOOL_WINDOW_DAYS = 14
 
 type ToolDefinitionInput = Omit<ToolDefinition, 'isNew'> & {
   newToolWindowDays?: number

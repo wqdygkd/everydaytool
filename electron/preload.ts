@@ -8,7 +8,7 @@ const _platform = (globalThis as unknown as { process?: { platform?: string } })
 const EDT_RUNTIME = {
   target: _platform === 'darwin' ? 'mac' : 'win',
   platform: _platform,
-  // 自定义标题栏：页内菜单动作（AppMenuBar 触发，主进程执行）
+  // 应用菜单动作桥接（主进程执行；页内菜单已移除，保留备用）
   menuAction: (action: ShellMenuAction) => {
     ipcRenderer.send('edt:menu-action', action)
   },

@@ -9,7 +9,7 @@ export interface WebviewStatus {
   canGoForward: boolean
 }
 
-type WebviewTag = Omit<HTMLElement, 'addEventListener'> & {
+export type WebviewTag = Omit<HTMLElement, 'addEventListener'> & {
   src: string
   partition: string
   getURL: () => string
@@ -37,6 +37,27 @@ export function useWebview(
 
   function getPartition(env: EnvConfig) {
     return `persist:env-${env.id}`
+  }
+
+  function patchStatus(id: string, patch: Partial<WebviewStatus>) {
+    const status = webviewStatus[id]
+    if (status) Object.assign(status, patch)
+  }
+
+  function safeGetUrl(wv: WebviewTag): string {
+    try {
+      return wv.getURL()
+    } catch {
+      return ''
+    }
+  }
+
+  async function hasPasswordInput(wv: WebviewTag): Promise<boolean> {
+    try {
+      return Boolean(await wv.executeJavaScript('!!document.querySelector(\'input[type="password"]\')', false))
+    } catch {
+      return false
+    }
   }
 
   async function triggerAutoLogin(id: string) {
@@ -79,80 +100,58 @@ export function useWebview(
     anyWv.__envBound = true
 
     wv.addEventListener('did-start-loading', () => {
-      if (webviewStatus[id]) webviewStatus[id].loading = true
+      patchStatus(id, { loading: true })
     })
 
     wv.addEventListener('did-stop-loading', () => {
-      if (webviewStatus[id]) {
-        webviewStatus[id].loading = false
-        try {
-          webviewStatus[id].canGoBack = wv.canGoBack()
-          webviewStatus[id].canGoForward = wv.canGoForward()
-        } catch {}
-      }
+      patchStatus(id, { loading: false })
+      try {
+        patchStatus(id, { canGoBack: wv.canGoBack(), canGoForward: wv.canGoForward() })
+      } catch {}
     })
 
     wv.addEventListener('did-fail-load', (e: unknown) => {
       const ev = e as { errorCode?: number, errorDescription?: string, validatedURL?: string }
-      if (ev && ev.errorCode && ev.errorCode !== -3) {
-        if (webviewStatus[id]) webviewStatus[id].loading = false
+      if (ev?.errorCode && ev.errorCode !== -3) {
+        patchStatus(id, { loading: false })
         ElMessage.error(`加载失败: ${ev.errorDescription || ev.errorCode} (${ev.validatedURL || ''})`)
       }
     })
 
     wv.addEventListener('did-navigate-in-page', (e: unknown) => {
       const ev = e as { url: string }
-      if (webviewStatus[id]) webviewStatus[id].url = ev.url
+      patchStatus(id, { url: ev.url })
     })
 
     wv.addEventListener('page-title-updated', (e: unknown) => {
       const ev = e as { title: string }
-      if (webviewStatus[id]) webviewStatus[id].title = ev.title
+      patchStatus(id, { title: ev.title })
     })
 
     wv.addEventListener('dom-ready', async () => {
-      if (webviewStatus[id]) {
-        try {
-          webviewStatus[id].url = wv.getURL()
-          webviewStatus[id].title = wv.getTitle()
-          webviewStatus[id].canGoBack = wv.canGoBack()
-          webviewStatus[id].canGoForward = wv.canGoForward()
-        } catch {}
-      }
-      if (env && env.autoLogin && !autoLoginTried.has(id)) {
-        const curUrl = (() => {
-          try {
-            return wv.getURL()
-          } catch {
-            return ''
-          }
-        })()
-        const isLoginLike = /login|signin|auth/i.test(curUrl)
-        if (isLoginLike) {
-          autoLoginTried.add(id)
-          await triggerAutoLogin(id)
-        } else {
-          try {
-            const hasPwd = await wv.executeJavaScript(
-              '!!document.querySelector(\'input[type="password"]\')',
-              false,
-            ) as boolean
-            if (hasPwd) {
-              autoLoginTried.add(id)
-              await triggerAutoLogin(id)
-            }
-          } catch {}
-        }
+      try {
+        patchStatus(id, {
+          url: wv.getURL(),
+          title: wv.getTitle(),
+          canGoBack: wv.canGoBack(),
+          canGoForward: wv.canGoForward(),
+        })
+      } catch {}
+      if (!env || !env.autoLogin || autoLoginTried.has(id)) return
+      const isLoginLike = /login|signin|auth/i.test(safeGetUrl(wv))
+      if (isLoginLike || (await hasPasswordInput(wv))) {
+        autoLoginTried.add(id)
+        await triggerAutoLogin(id)
       }
     })
 
     wv.addEventListener('did-navigate', (e: unknown) => {
       const ev = e as { url: string }
-      if (webviewStatus[id]) webviewStatus[id].url = ev.url
+      patchStatus(id, { url: ev.url })
       if (/login|signin|auth/i.test(ev.url)) autoLoginTried.delete(id)
     })
 
-    wv.addEventListener('new-window' as unknown as string, (e: unknown) => {
+    wv.addEventListener('new-window', (e: unknown) => {
       const ev = e as { url: string }
       if (ev.url) wv.src = ev.url
     })
@@ -161,19 +160,19 @@ export function useWebview(
   function setWebviewRef(id: string, el: unknown) {
     if (!el) return
     const wv = el as WebviewTag
-    if (webviewRefs.value.has(id) && webviewRefs.value.get(id) === wv) return
+    if (webviewRefs.value.get(id) === wv) return
     webviewRefs.value.set(id, wv)
     attachWebviewEvents(id, wv)
     const env = getEnvById(id)
-    if (env) {
-      nextTick(() => {
-        if (!wv.getURL() || wv.getURL() === 'about:blank') {
-          void wv.loadURL(env.url).catch(() => {
-            wv.src = env.url
-          })
-        }
-      })
-    }
+    if (!env) return
+    nextTick(() => {
+      const current = wv.getURL()
+      if (!current || current === 'about:blank') {
+        void wv.loadURL(env.url).catch(() => {
+          wv.src = env.url
+        })
+      }
+    })
   }
 
   function cleanup(id: string) {

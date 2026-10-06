@@ -1,4 +1,3 @@
-import type { ChildProcess } from 'node:child_process'
 import { exec, spawn } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -93,18 +92,14 @@ async function killProcessTree(pid: number, options: KillOptions = {}): Promise<
   }
 }
 
-interface LaunchedProcess {
-  pid: number
-  child: ChildProcess
-}
-
 interface LaunchOptions {
   /** 被拉起的进程退出时回调（含用户自行关闭应用的情况） */
   onExit?: (code: number | null) => void
 }
 
 export class ProcessLauncher {
-  private processes = new Map<string, LaunchedProcess>()
+  /** profileId -> 已拉起进程的 PID */
+  private processes = new Map<string, number>()
 
   async launch(
     profileId: string,
@@ -120,7 +115,6 @@ export class ProcessLauncher {
     const resolvedExecutable = await resolveExecutablePath(executable)
     const args = ensureAllowOrigins(ensureDebugPort(parseArgs(argsString), debugPort), debugPort)
     const child = spawn(resolvedExecutable, args, {
-      detached: false,
       stdio: 'ignore',
       windowsHide: true,
     })
@@ -129,7 +123,7 @@ export class ProcessLauncher {
       throw new Error('进程启动失败')
     }
 
-    this.processes.set(profileId, { pid: child.pid, child })
+    this.processes.set(profileId, child.pid)
 
     child.on('exit', (code) => {
       this.processes.delete(profileId)
@@ -140,24 +134,15 @@ export class ProcessLauncher {
   }
 
   async stop(profileId: string, options: KillOptions = {}): Promise<boolean> {
-    const entry = this.processes.get(profileId)
-    if (!entry) return false
-    await killProcessTree(entry.pid, options)
+    const pid = this.processes.get(profileId)
+    if (pid === undefined) return false
+    await killProcessTree(pid, options)
     this.processes.delete(profileId)
     return true
   }
 
-  async stopAll(): Promise<void> {
-    const ids = [...this.processes.keys()]
-    await Promise.all(ids.map(id => this.stop(id)))
-  }
-
   isRunning(profileId: string): boolean {
     return this.processes.has(profileId)
-  }
-
-  getPid(profileId: string): number | null {
-    return this.processes.get(profileId)?.pid ?? null
   }
 }
 

@@ -56,35 +56,27 @@ const saving = ref(false)
 async function onSubmit() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
-  // 校验 URL
   try {
-    const u = new URL(form.url)
-    if (!['http:', 'https:'].includes(u.protocol)) throw new Error()
+    if (!['http:', 'https:'].includes(new URL(form.url).protocol)) throw new Error()
   } catch {
     ElMessage.error('地址需以 http:// 或 https:// 开头')
     return
   }
+  const payload = {
+    name: form.name.trim(),
+    url: form.url.trim(),
+    username: form.username.trim(),
+    password: form.password,
+    remark: form.remark.trim(),
+    autoLogin: form.autoLogin,
+  }
   saving.value = true
   try {
     if (props.editing) {
-      await store.update(props.editing.id, {
-        name: form.name.trim(),
-        url: form.url.trim(),
-        username: form.username.trim(),
-        password: form.password,
-        remark: form.remark.trim(),
-        autoLogin: form.autoLogin,
-      })
+      await store.update(props.editing.id, payload)
       ElMessage.success('已更新')
     } else {
-      await store.create({
-        name: form.name.trim(),
-        url: form.url.trim(),
-        username: form.username.trim(),
-        password: form.password,
-        remark: form.remark.trim(),
-        autoLogin: form.autoLogin,
-      })
+      await store.create(payload)
       ElMessage.success('已创建')
     }
     visible.value = false

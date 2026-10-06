@@ -1,7 +1,7 @@
+import { getDataDirectory, loadDataDirectoryOverride } from '../../../backend/utils/data-root.js'
+import { ensureDir } from '../../../backend/utils/file-ops.js'
 import { registerIpcHandlers } from './ipc/handlers.js'
 import { closeDatabase, getDatabase } from './store/database.js'
-import { ensureDir } from './utils/file-ops.js'
-import { getDataDirectory, loadDataDirectoryOverride } from './utils/path-helper.js'
 
 export const chromeSandboxBackend = {
   async initialize(): Promise<void> {

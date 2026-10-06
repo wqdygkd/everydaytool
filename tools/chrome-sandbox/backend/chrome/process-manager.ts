@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { logger } from '../utils/logger.js'
+import { logger } from '../../../../backend/utils/logger.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -40,10 +40,6 @@ function logWindowsQueryFailure(userDataDir: string, error: unknown): void {
   logger.warn('Failed to query Chrome process tree on Windows', { userDataDir, error: (error as Error).message })
 }
 
-function buildUnixSnapshot(userDataDir: string): ProcessSnapshot {
-  return { pids: findUnixPidsByUserDataDir(userDataDir) }
-}
-
 function queryWindowsChromeSync(userDataDir: string): ProcessSnapshot {
   const output = execFileSync(
     'powershell.exe',
@@ -59,7 +55,7 @@ export function onProcessExit(handler: (sandboxId: string) => void): void {
   exitHandler = handler
 }
 
-export function invalidateChromeProcessCache(userDataDir?: string): void {
+function invalidateChromeProcessCache(userDataDir?: string): void {
   if (userDataDir) {
     queryCache.delete(userDataDir)
   }
@@ -117,7 +113,7 @@ export async function queryChromeSandboxProcesses(userDataDir: string): Promise<
   if (!userDataDir) return { ...EMPTY_SNAPSHOT }
 
   if (process.platform !== 'win32') {
-    return buildUnixSnapshot(userDataDir)
+    return { pids: findUnixPidsByUserDataDir(userDataDir) }
   }
 
   const cached = getCachedSnapshot(userDataDir)
@@ -138,7 +134,7 @@ function getChromeSandboxSnapshotSync(userDataDir: string): ProcessSnapshot {
   if (!userDataDir) return { ...EMPTY_SNAPSHOT }
 
   if (process.platform !== 'win32') {
-    return buildUnixSnapshot(userDataDir)
+    return { pids: findUnixPidsByUserDataDir(userDataDir) }
   }
 
   const cached = getCachedSnapshot(userDataDir)
@@ -238,11 +234,10 @@ function waitForProcessExit(childProcess: ChildProcess | null, timeoutMs: number
 }
 
 async function killPidTree(pid: number, force = false): Promise<void> {
-  const args = force
-    ? ['/pid', String(pid), '/T', '/F']
-    : ['/pid', String(pid), '/T']
-
   if (process.platform === 'win32') {
+    const args = force
+      ? ['/pid', String(pid), '/T', '/F']
+      : ['/pid', String(pid), '/T']
     spawn('taskkill', args, { stdio: 'ignore' })
     return
   }

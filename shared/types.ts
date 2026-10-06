@@ -155,11 +155,6 @@ export interface WxpEnhancement {
   urlPattern?: string
 }
 
-export interface WxpConfig {
-  settings: WxpSettings
-  enhancements: WxpEnhancement[]
-}
-
 export interface WxpRunningState {
   pid?: number
   port: number
@@ -244,7 +239,7 @@ export interface TreeaseInterceptLog {
   hits: number
 }
 
-// 自定义标题栏页内菜单的动作（AppMenuBar → preload → 主进程执行）
+// 应用菜单动作（preload `menuAction` → 主进程执行；页内菜单已移除，桥接保留）
 export type ShellMenuAction
   = | 'quit'
     | 'undo'

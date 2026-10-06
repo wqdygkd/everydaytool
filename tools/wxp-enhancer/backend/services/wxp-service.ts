@@ -1,6 +1,6 @@
 import type { WxpRunningState, WxpSettings } from '../../../../shared/types.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { sleep } from '../../../../shared/sleep.js'
-import { logger } from '../../../chrome-sandbox/backend/utils/logger.js'
 import { wxpConfigStore } from '../store/config-store.js'
 import { isExecutableRunning } from '../utils/process-detect.js'
 import { CdpInjectionSession, waitForCdpPort } from './cdp-client.js'
@@ -270,7 +270,7 @@ export const wxpService = {
     if (session.paused) {
       throw new Error('DevTools 调试中，注入已暂停，请先关闭 DevTools 窗口')
     }
-    const count = await session.reinjectAll()
+    const count = await session.scanAndInject(true)
     setState({
       status: 'running',
       message: `已重新应用界面增强（${count} 个页面）`,

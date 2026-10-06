@@ -53,7 +53,7 @@ function cityNameOf(name: string): string {
  * 由扁平区划表构建 省 → 市 → 区县 级联数据。
  * 节点 value 依层级为 省(2位) / 市(4位) / 区县(6位) 代码，label 为可读名称。
  */
-export function buildAreaHierarchy(): AreaNode[] {
+function buildAreaHierarchy(): AreaNode[] {
   const provinceMap = new Map<string, Map<string, Array<{ code: string, name: string }>>>()
 
   for (const { code, name } of AREA_CODES) {
@@ -79,7 +79,7 @@ export function buildAreaHierarchy(): AreaNode[] {
         })
         .sort((a, b) => a.label.localeCompare(b.label))
 
-      const firstDistrictName = districts[0]!.name
+      const firstDistrictName = districts[0].name
       const cityLabel = isMuni ? provName : cityNameOf(firstDistrictName)
 
       cityNodes.push({
@@ -109,10 +109,4 @@ export function areaPrefixFromPath(path: Array<string | number> | undefined | nu
   const innermost = String(path[path.length - 1])
   if (!/^\d+$/.test(innermost)) return null
   return innermost
-}
-
-/** 由级联选中路径生成可读地址名称 */
-export function areaNameFromPath(path: Array<string | number> | undefined | null): string {
-  if (!path || path.length === 0) return ''
-  return path.map(String).join(' ')
 }

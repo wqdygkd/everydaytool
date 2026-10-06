@@ -15,15 +15,6 @@ const form = reactive({
 const visible = useDialogVisible(props, emit)
 const channels = ipcChannels()
 
-async function runSettingAction(action, errorMessage) {
-  try {
-    return await action()
-  } catch (error) {
-    ElMessage.error(error.message || errorMessage)
-    return null
-  }
-}
-
 watch(visible, async (open) => {
   if (open) {
     Object.assign(form, await invokeIpc(channels.CONFIG_GET))
@@ -31,13 +22,14 @@ watch(visible, async (open) => {
 })
 
 async function detectChrome() {
-  const chromePath = await runSettingAction(
-    () => invokeIpc(channels.CHROME_DETECT_PATH),
-    '检测失败',
-  )
-  if (!chromePath) return
-  form.chromePath = chromePath
-  ElMessage.success('已检测到 Chrome')
+  try {
+    const chromePath = await invokeIpc(channels.CHROME_DETECT_PATH)
+    if (!chromePath) return
+    form.chromePath = chromePath
+    ElMessage.success('已检测到 Chrome')
+  } catch (error) {
+    ElMessage.error(error.message || '检测失败')
+  }
 }
 
 async function save() {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { IdCardResult } from '../shared/generator'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
 import { GENDER, generateIdCards } from '../shared/generator'
 
@@ -9,10 +10,10 @@ const dateRange = ref<[Date, Date] | null>(null)
 const areaPath = ref<Array<string | number> | null>(null)
 const count = ref(1)
 
-const results = ref<Array<{ id: string, areaName: string, birthDateDisplay: string, genderLabel: string }>>([])
+const results = ref<IdCardResult[]>([])
 
 function buildOptions() {
-  const areaCode = areaPrefixFromPath(areaPath.value!)
+  const areaCode = areaPrefixFromPath(areaPath.value)
   const birthRange = birthMode.value === 'date' && dateRange.value
     ? [dateRange.value[0].getTime(), dateRange.value[1].getTime()] as [number, number]
     : undefined
@@ -28,28 +29,26 @@ function handleGenerate() {
   results.value = generateIdCards(buildOptions(), count.value)
 }
 
-async function handleCopyAll() {
-  if (results.value.length === 0) return
+async function copyText(text: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(results.value.map(r => r.id).join('\n'))
-    ElMessage.success(`已复制 ${results.value.length} 条到剪贴板`)
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(successMessage)
   } catch {
     ElMessage.error('复制失败，请手动复制')
   }
 }
 
-async function handleCopyId(id: string) {
-  try {
-    await navigator.clipboard.writeText(id)
-    ElMessage.success('已复制该条身份证号')
-  } catch {
-    ElMessage.error('复制失败，请手动复制')
+function handleCopyAll() {
+  if (results.value.length > 0) {
+    copyText(results.value.map(r => r.id).join('\n'), `已复制 ${results.value.length} 条到剪贴板`)
   }
 }
 
-onMounted(() => {
-  handleGenerate()
-})
+function handleCopyId(id: string) {
+  copyText(id, '已复制该条身份证号')
+}
+
+onMounted(handleGenerate)
 </script>
 
 <template>

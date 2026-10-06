@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { copyIfExists, copyPath, ensureDir, movePath, pathExists, readJson, readJsonFile, removeIfExists, writeJsonFile } from '../utils/file-ops.js'
-import { logger } from '../utils/logger.js'
+import { copyIfExists, copyPath, ensureDir, movePath, pathExists, readJson, readJsonFile, removeIfExists, writeJson } from '../../../../backend/utils/file-ops.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { getChromeUserDataRoot, getDefaultChromeProfilePath, getSandboxProfileDirectoryName } from '../utils/path-helper.js'
 
 type JsonObject = Record<string, any>
@@ -174,7 +174,7 @@ async function writeLocalStateProfile(
   if (!inheritExtensions) {
     stripLocalStateExtensions(localState)
   }
-  await writeJsonFile(destLocalState, localState)
+  await writeJson(destLocalState, localState)
   logger.info('Local State updated for sandbox profile', { profileDirName, destLocalState, inheritExtensions })
 }
 
@@ -201,7 +201,7 @@ async function patchPreferences(
     prefs.extensions.settings.enable_extensions = true
   }
 
-  await writeJsonFile(prefsPath, prefs)
+  await writeJson(prefsPath, prefs)
   logger.info('Preferences patched for session restore and extensions', { prefsPath, inheritExtensions })
 }
 
@@ -225,7 +225,7 @@ export async function readExtensionsFromProfile(profilePath: string): Promise<Pr
     if (!extStat.isDirectory()) continue
 
     const versions = await readdir(extRoot)
-    const latestVersion = versions.filter((v: string) => !v.startsWith('.')).sort().pop()
+    const latestVersion = versions.filter(v => !v.startsWith('.')).sort().pop()
     if (!latestVersion) continue
 
     const manifestPath = path.join(extRoot, latestVersion, 'manifest.json')

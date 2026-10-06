@@ -1,9 +1,9 @@
 import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.js'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { getDataDirectory } from '../../../../backend/utils/data-root.js'
+import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.js'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.js'
-import { ensureDir, pathExists, readJson, writeJson } from '../../../chrome-sandbox/backend/utils/file-ops.js'
-import { getDataDirectory } from '../../../chrome-sandbox/backend/utils/path-helper.js'
 
 interface WxpConfigFile {
   settings: WxpSettings
@@ -33,9 +33,8 @@ async function readConfig(): Promise<WxpConfigFile> {
   }
 }
 
-async function writeConfig(config: WxpConfigFile): Promise<WxpConfigFile> {
+async function writeConfig(config: WxpConfigFile): Promise<void> {
   await writeJson(getConfigPath(), config)
-  return config
 }
 
 export const wxpConfigStore = {

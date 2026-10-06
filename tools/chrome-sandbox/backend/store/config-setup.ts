@@ -1,9 +1,9 @@
 import type { AppConfig, SetupState } from '../../../../shared/types.js'
-import { logger } from '../utils/logger.js'
-import { isDataDirectoryConfigured, markDataDirectoryConfigured } from '../utils/path-helper.js'
+import { isDataDirectoryConfigured, markDataDirectoryConfigured } from '../../../../backend/utils/data-root.js'
+import { logger } from '../../../../backend/utils/logger.js'
 import { getDatabase } from './database.js'
 
-export async function resolveDataDirectoryConfigured(): Promise<boolean> {
+async function resolveDataDirectoryConfigured(): Promise<boolean> {
   if (await isDataDirectoryConfigured()) {
     return true
   }

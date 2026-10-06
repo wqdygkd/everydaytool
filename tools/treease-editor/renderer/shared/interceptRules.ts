@@ -40,12 +40,9 @@ export function mergeStoredRules(stored: TreeaseInterceptRule[]): TreeaseInterce
     seen.add(r.id)
   }
   for (const b of BUILT_IN_RULES) {
-    if (!seen.has(b.id)) {
-      merged.push(structuredClone(b))
-      seen.add(b.id)
-    }
+    if (!seen.has(b.id)) merged.push(structuredClone(b))
   }
-  return merged.length ? merged : structuredClone(BUILT_IN_RULES)
+  return merged
 }
 
 export function freshBuiltInRules(): TreeaseInterceptRule[] {

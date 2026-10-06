@@ -11,6 +11,7 @@ const rootDir = path.resolve(__dirname, '..')
 const watchRoots = [
   'electron',
   'shared',
+  'backend',
   'tools/chrome-sandbox/backend',
   'tools/env-browser/backend',
   'tools/treease-editor/backend',

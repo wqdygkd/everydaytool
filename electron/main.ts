@@ -2,6 +2,7 @@ import type { ShellMenuAction } from '../shared/types.js'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { SHELL_MENUS } from '../shared/menu.js'
 import { toolBackends } from './tool-registry.js'
 
 const require = createRequire(import.meta.url)
@@ -10,49 +11,43 @@ const { app, BrowserWindow, Menu, ipcMain } = require('electron') as typeof impo
 // everydaytool 本体不对外暴露 Chromium 远程调试端口（CDP 仅用于注入外部应用）
 app.commandLine.appendSwitch('remote-debugging-port', '0')
 
+// 页内菜单动作 → Electron role（role 自带标准行为与快捷键）。zoom 系列的 role 语义
+// 与下方 ipc 处理器一致（±0.5 / 重置为 0）。Record 键穷举 ShellMenuAction：新增动作
+// 漏映射时在编译期报错。
+const ACTION_ROLES: Record<ShellMenuAction, NonNullable<Electron.MenuItemConstructorOptions['role']>> = {
+  quit: 'quit',
+  undo: 'undo',
+  redo: 'redo',
+  cut: 'cut',
+  copy: 'copy',
+  paste: 'paste',
+  selectAll: 'selectAll',
+  reload: 'reload',
+  reloadIgnoringCache: 'forceReload',
+  toggleDevTools: 'toggleDevTools',
+  zoomIn: 'zoomIn',
+  zoomOut: 'zoomOut',
+  zoomReset: 'resetZoom',
+  minimize: 'minimize',
+  close: 'close',
+}
+
 // 应用菜单：Windows/Linux 渲染在系统菜单栏位置（标题栏下方），macOS 在屏幕顶部菜单栏。
-// role 自带标准行为与快捷键（Ctrl+C/V/R、F12 等），仅用中文标签覆盖显示文本。
+// 菜单项清单见 shared/menu.ts（原页内菜单已移除，系统菜单是唯一渲染方）；仅系统菜单的
+// 「视图」末尾额外追加全屏切换（webContents 无对应 IPC 动作）。
 const menuTemplate: Electron.MenuItemConstructorOptions[] = [
   ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
-  {
-    label: '文件',
+  ...SHELL_MENUS.map<Electron.MenuItemConstructorOptions>(({ label, items }) => ({
+    label,
     submenu: [
-      { role: 'quit', label: '退出' },
+      ...items.map<Electron.MenuItemConstructorOptions>(({ label: itemLabel, action, divided }) => ({
+        label: itemLabel,
+        role: ACTION_ROLES[action],
+        ...(divided ? { type: 'separator' as const } : {}),
+      })),
+      ...(label === '视图' ? [{ type: 'separator' as const }, { role: 'togglefullscreen' as const, label: '全屏' }] : []),
     ],
-  },
-  {
-    label: '编辑',
-    submenu: [
-      { role: 'undo', label: '撤销' },
-      { role: 'redo', label: '重做' },
-      { type: 'separator' },
-      { role: 'cut', label: '剪切' },
-      { role: 'copy', label: '复制' },
-      { role: 'paste', label: '粘贴' },
-      { role: 'selectAll', label: '全选' },
-    ],
-  },
-  {
-    label: '视图',
-    submenu: [
-      { role: 'reload', label: '重新加载' },
-      { role: 'forceReload', label: '强制重新加载' },
-      { role: 'toggleDevTools', label: '开发者工具' },
-      { type: 'separator' },
-      { role: 'resetZoom', label: '重置缩放' },
-      { role: 'zoomIn', label: '放大' },
-      { role: 'zoomOut', label: '缩小' },
-      { type: 'separator' },
-      { role: 'togglefullscreen', label: '全屏' },
-    ],
-  },
-  {
-    label: '窗口',
-    submenu: [
-      { role: 'minimize', label: '最小化' },
-      { role: 'close', label: '关闭窗口' },
-    ],
-  },
+  })),
 ]
 
 Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
@@ -66,16 +61,16 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A
 let mainWindow: Electron.BrowserWindow | null = null
 let backendInitialized = false
 
-// 自定义标题栏（VS Code 风格）：header 即标题栏，右上角用原生 titleBarOverlay 窗口按钮。
-// overlay 是不透明矩形，配色取 .app-header 表面在浅色主题下的混合色（应用固定浅色）。
-const TITLEBAR_COLORS = { color: '#fefdfd', symbolColor: '#181113' } as const
+// 自定义标题栏：header 即标题栏，右上角用原生 titleBarOverlay 窗口按钮。
+// overlay 是不透明矩形，配色取 .app-header 表面色（Telegram 浅色主题，纯白）。
+const TITLEBAR_COLORS = { color: '#ffffff', symbolColor: '#000000' } as const
 
 function adjustZoom(delta: number) {
   const wc = (BrowserWindow.getFocusedWindow() ?? mainWindow)?.webContents
   if (wc) wc.setZoomLevel(wc.getZoomLevel() + delta)
 }
 
-// 页内菜单（AppMenuBar）的动作入口（动作定义见 shared/types.ts 的 ShellMenuAction）。
+// 页内菜单动作的 IPC 入口（页内菜单已移除，桥接保留备用；动作定义见 shared/types.ts）。
 // Record 键穷举 ShellMenuAction：新增动作漏实现时在编译期报错；IPC 载荷运行时不经类型校验，未知值忽略。
 ipcMain.on('edt:menu-action', (_event, action: ShellMenuAction) => {
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow
@@ -123,7 +118,7 @@ async function createWindow(): Promise<void> {
     minWidth: 800,
     minHeight: 500,
     title: 'everydaytool',
-    // 隐藏系统标题栏，网页头部即标题栏（菜单在标题后，VS Code 风格）；
+    // 隐藏系统标题栏，网页头部即标题栏；
     // Windows/Linux 右上角保留原生最小化/最大化/关闭按钮，高度与 .app-header(44px) 对齐
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac
@@ -145,7 +140,11 @@ async function createWindow(): Promise<void> {
 
   if (isDev) {
     await mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    // 本地开发默认不自动打开 DevTools（菜单「开发者工具」/F12 随时可开）；
+    // 需要调试启动问题时用 EDT_DEVTOOLS=1 显式开启
+    if (process.env.EDT_DEVTOOLS === '1') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
   } else {
     await mainWindow.loadFile(path.join(app.getAppPath(), 'dist/index.html'))
   }

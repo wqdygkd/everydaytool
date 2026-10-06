@@ -1,8 +1,8 @@
 import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types.js'
 import { randomUUID } from 'node:crypto'
 import { createRequire } from 'node:module'
-import { logger } from '../../../chrome-sandbox/backend/utils/logger.js'
-import { getDatabasePath } from '../../../chrome-sandbox/backend/utils/path-helper.js'
+import { getDatabasePath } from '../../../../backend/utils/data-root.js'
+import { logger } from '../../../../backend/utils/logger.js'
 
 const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3') as typeof import('better-sqlite3')
@@ -47,17 +47,16 @@ function rowToEnv(row: Record<string, unknown>): EnvConfig {
   }
 }
 
+function getById(id: string): EnvConfig | null {
+  const row = getDb().prepare('SELECT * FROM env_browser_configs WHERE id = ?').get(id) as Record<string, unknown> | undefined
+  return row ? rowToEnv(row) : null
+}
+
 export const envStore = {
   getAll(): EnvConfig[] {
     const database = getDb()
     const rows = database.prepare('SELECT * FROM env_browser_configs ORDER BY created_at DESC').all() as Record<string, unknown>[]
     return rows.map(rowToEnv)
-  },
-
-  getById(id: string): EnvConfig | null {
-    const database = getDb()
-    const row = database.prepare('SELECT * FROM env_browser_configs WHERE id = ?').get(id) as Record<string, unknown> | undefined
-    return row ? rowToEnv(row) : null
   },
 
   create(payload: EnvCreatePayload): EnvConfig {
@@ -79,11 +78,11 @@ export const envStore = {
       now,
     )
     logger.info('Env created', { id, name: payload.name })
-    return this.getById(id)!
+    return getById(id)!
   },
 
   update(id: string, payload: EnvUpdatePayload): EnvConfig | null {
-    const existing = this.getById(id)
+    const existing = getById(id)
     if (!existing) return null
     const database = getDb()
     const now = new Date().toISOString()
@@ -97,7 +96,7 @@ export const envStore = {
     database.prepare(`
       UPDATE env_browser_configs SET name=?, url=?, username=?, password=?, remark=?, auto_login=?, updated_at=? WHERE id=?
     `).run(name, url, username, password, remark, autoLogin, now, id)
-    return this.getById(id)
+    return getById(id)
   },
 
   delete(id: string): boolean {

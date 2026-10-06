@@ -22,9 +22,7 @@ let handlersRegistered = false
 export function registerWxpHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
-  setWxpStatusEmitter((state) => {
-    broadcast(WXP_IPC_CHANNELS.EVENT_STATUS_CHANGED, state)
-  })
+  setWxpStatusEmitter(state => broadcast(WXP_IPC_CHANNELS.EVENT_STATUS_CHANGED, state))
   // DevTools 调试期间暂停注入，关闭后恢复（计数归零才通知 resume）
   registerDevtoolsPauseListener((port, action) => {
     if (action === 'pause') {

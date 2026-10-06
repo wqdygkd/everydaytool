@@ -25,11 +25,8 @@ defineEmits<{
       <span aria-hidden="true">★</span>
     </button>
     <div class="tool-head">
-      <div class="tool-icon" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <span />
+      <div class="tool-avatar" aria-hidden="true">
+        {{ tool.name.charAt(0) }}
       </div>
       <h3 class="tool-name">
         {{ tool.name }}
@@ -47,6 +44,7 @@ defineEmits<{
 </template>
 
 <style scoped lang="scss">
+/* Telegram 聊天条目式卡片：白底浮岛 + 头像行，hover 灰底轻提示 */
 .tool-card {
   position: relative;
   display: flex;
@@ -59,42 +57,15 @@ defineEmits<{
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
   cursor: pointer;
-  transition: transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
-
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--tool-color) 14%, transparent), transparent 38%);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--transition-base);
-  }
-
-  &::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, color-mix(in srgb, var(--tool-color) 55%, transparent), color-mix(in srgb, var(--tool-color) 90%, transparent));
-    opacity: 0.9;
-    pointer-events: none;
-  }
+  transition: background-color var(--transition-base), border-color var(--transition-base), transform var(--transition-base);
 
   &:hover {
-    border-color: color-mix(in srgb, var(--tool-color) 42%, var(--color-border-light));
-    box-shadow: var(--shadow-md);
-    transform: translateY(-3px);
-
-    &::before {
-      opacity: 1;
-    }
+    border-color: var(--color-border);
+    background: var(--color-muted);
   }
 
   &:active {
-    transform: translateY(-1px) scale(0.99);
+    transform: scale(0.99);
   }
 
   .favorite-btn {
@@ -108,7 +79,7 @@ defineEmits<{
     height: 26px;
     padding: 0;
     border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-md);
+    border-radius: 999px;
     background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
     color: var(--color-text-tertiary);
     cursor: pointer;
@@ -136,29 +107,28 @@ defineEmits<{
     }
   }
 
-  .tool-icon {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 3px;
-    width: 30px;
-    height: 30px;
-    padding: 6px;
-    border: 1px solid color-mix(in srgb, var(--tool-color) 28%, var(--color-border-light));
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--tool-color) 16%, var(--color-surface-raised));
-
-    span {
-      border-radius: 3px;
-      background: var(--tool-color);
-      opacity: 0.9;
-    }
-  }
-
   .tool-head {
     display: flex;
     align-items: center;
     gap: 10px;
     min-width: 0;
+  }
+
+  /* Telegram 字母头像：近白 → 工具色的纵向渐变 */
+  .tool-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tool-color) 75%, #fff) 0%, var(--tool-color) 100%);
+    color: var(--color-surface);
+    font-family: "Nunito", "Roboto", sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    user-select: none;
   }
 
   .tool-name {
@@ -167,7 +137,7 @@ defineEmits<{
     margin: 0 28px 0 0;
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -202,12 +172,13 @@ defineEmits<{
     color: var(--color-text-secondary);
   }
 
+  /* Telegram 未读徽章式草绿胶囊 */
   .tool-new {
-    padding: 1px 6px;
-    border-radius: var(--radius-sm);
-    background: var(--color-primary-soft);
-    color: var(--color-primary);
-    font-weight: var(--font-weight-semibold);
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--color-success);
+    color: var(--color-surface);
+    font-weight: var(--font-weight-medium);
   }
 
   .tool-version {

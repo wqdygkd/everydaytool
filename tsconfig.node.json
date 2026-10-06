@@ -15,5 +15,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["electron", "tools/**/backend", "scripts", "types/**/*.d.ts"]
+  "include": ["electron", "backend", "tools/**/backend", "scripts", "types/**/*.d.ts"]
 }

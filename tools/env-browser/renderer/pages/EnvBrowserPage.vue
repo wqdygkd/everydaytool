@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { WebviewTag } from '../composables/useWebview'
 import type { EnvConfig } from '../stores/envStore'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import EnvDialog from '../components/EnvDialog.vue'
@@ -10,7 +11,14 @@ const showDialog = ref(false)
 const editing = ref<EnvConfig | null>(null)
 const search = ref('')
 
-const isElectron = ref(isElectronEnvironment())
+const isElectron = isElectronEnvironment()
+
+// 调试信息在 script 里取值：模板直接写 window / navigator 会被编译成 _ctx.window 而渲染崩溃
+const webDebugInfo = computed(() => ({
+  envBrowser: Boolean((window as unknown as Record<string, unknown>).envBrowser),
+  edtRuntime: String((window as unknown as Record<string, unknown>).edtRuntime),
+  ua: navigator.userAgent.slice(0, 80),
+}))
 
 const {
   webviewRefs,
@@ -21,6 +29,8 @@ const {
   cleanup,
   triggerAutoLogin,
 } = useWebview((id: string) => store.envs.find(e => e.id === id))
+
+const activeEnv = computed(() => store.envs.find(e => e.id === store.activeId))
 
 const filteredEnvs = computed(() => {
   const kw = search.value.trim().toLowerCase()
@@ -81,13 +91,10 @@ async function inspectStorage(id: string) {
       'JSON.stringify(Object.fromEntries(Object.entries(sessionStorage)))',
       false,
     )) as string
-    const url = (() => {
-      try {
-        return wv.getURL()
-      } catch {
-        return ''
-      }
-    })()
+    let url = ''
+    try {
+      url = wv.getURL()
+    } catch {}
     ElMessageBox.alert(
       `<div style="text-align:left;word-break:break-all"><b>URL:</b> ${url}<br/><b>document.cookie:</b> ${cookie || '(空)'}<br/><b>localStorage:</b> ${ls}<br/><b>sessionStorage:</b> ${ss}</div>`,
       '存储检查',
@@ -108,33 +115,22 @@ function handleNav(
     return
   }
   if (action === 'openExternal') {
-    const url = webviewStatus[id]?.url || store.envs.find(e => e.id === id)?.url
+    const url = webviewStatus[id]?.url || activeEnv.value?.url
     if (url) {
       window.open(url, '_blank')
       ElMessage.info('已尝试在外部打开')
     }
     return
   }
-  if (action === 'devTools' && !isElectron.value) {
+  if (action === 'devTools' && !isElectron) {
     ElMessage.warning('当前为网页预览，Guest DevTools 仅在 Electron 中可用。请在 Electron 窗口中打开。')
     return
   }
-  let wv = webviewRefs.value.get(id) as unknown as
-    | (HTMLElement & {
-      openDevTools?: () => void
-      closeDevTools?: () => void
-      isDevToolsOpened?: () => boolean
-      canGoBack: () => boolean
-      canGoForward: () => boolean
-      goBack: () => void
-      goForward: () => void
-      reload: () => void
-    })
-    | undefined
+  let wv = webviewRefs.value.get(id)
   if (!wv) {
     const fallback = document.querySelector(
       `webview[partition="persist:env-${id}"]`,
-    ) as unknown as typeof wv | null
+    ) as WebviewTag | null
     if (fallback) {
       webviewRefs.value.set(id, fallback)
       wv = fallback
@@ -181,6 +177,11 @@ function handleAddressGo() {
   })
 }
 
+function onAddressInput(v: string) {
+  const id = store.activeId
+  if (id && webviewStatus[id]) webviewStatus[id].url = v
+}
+
 function onAddressKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter') handleAddressGo()
 }
@@ -192,7 +193,6 @@ onMounted(async () => {
 
 <template>
   <div class="env-browser-page">
-    <!-- Sidebar -->
     <div class="sidebar">
       <div class="sidebar-header">
         <span class="sidebar-title">环境列表</span>
@@ -249,9 +249,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Main -->
     <div class="main">
-      <!-- Tabs -->
       <div v-if="store.openIds.length" class="tab-bar">
         <el-tabs
           :model-value="store.activeId"
@@ -270,7 +268,6 @@ onMounted(async () => {
         </el-tabs>
       </div>
 
-      <!-- Toolbar -->
       <div v-if="store.activeId" class="toolbar">
         <el-button-group>
           <el-button
@@ -300,7 +297,7 @@ onMounted(async () => {
           placeholder="地址"
           size="small"
           style="flex:1"
-          @update:model-value="(v: string) => { if (webviewStatus[store.activeId!]) webviewStatus[store.activeId!].url = v }"
+          @update:model-value="(v: string) => onAddressInput(v)"
           @keydown="onAddressKeydown"
         />
         <el-button size="small" @click="handleAddressGo">
@@ -326,7 +323,6 @@ onMounted(async () => {
         </el-button>
       </div>
 
-      <!-- Browser area -->
       <div class="browser-area">
         <div v-if="!isElectron" class="web-tip">
           <el-alert
@@ -336,10 +332,10 @@ onMounted(async () => {
             title="当前为网页预览模式"
             description="检测到 window.envBrowser 为空（不在 Electron 内）。请在标题为 “everydaytool” 的原生窗口中操作，而非浏览器标签 http://localhost:5173。已执行 pnpm dev 重启仍提示时，请在当前窗口 DevTools Console 执行 window.envBrowser / window.edtRuntime / navigator.userAgent 查看，并确认 Electron 窗口已弹出。"
           />
-          <div style="margin-top:8px;font-size:12px;color:var(--color-text-secondary)">
-            调试：envBrowser={{ Boolean((window as unknown as Record<string, unknown>).envBrowser) }}
-            edtRuntime={{ String((window as unknown as Record<string, unknown>).edtRuntime) }}
-            UA={{ navigator.userAgent.slice(0, 80) }}
+          <div style="margin-top:8px;font-size:var(--font-size-sm);color:var(--color-text-secondary)">
+            调试：envBrowser={{ webDebugInfo.envBrowser }}
+            edtRuntime={{ webDebugInfo.edtRuntime }}
+            UA={{ webDebugInfo.ua }}
           </div>
         </div>
         <div v-if="!store.openIds.length" class="empty-browser">
@@ -382,10 +378,10 @@ onMounted(async () => {
             浏览器内核初始化中… 若长时间空白，请检查：1) 已重启 pnpm dev 使 webviewTag 生效 2) 打开 DevTools 查看 Console 是否有 webview did-fail-load 3) 尝试“外部打开”对比
           </p>
           <p class="muted">
-            当前环境: {{ store.envs.find(e => e.id === store.activeId)?.url }}
+            当前环境: {{ activeEnv?.url }}
           </p>
           <p class="muted">
-            partition: {{ store.activeId ? getPartition(store.envs.find(e => e.id === store.activeId)!) : '' }}
+            partition: {{ activeEnv ? getPartition(activeEnv) : '' }}
           </p>
         </div>
         <div v-if="store.activeId && !store.openEnvs.find(e => e.id === store.activeId)" class="empty-browser">
