@@ -18,6 +18,7 @@ export interface IpcInvokeApi {
 declare global {
   interface Window {
     edtRuntime?: EdtRuntimeApi
+    edtApp: IpcInvokeApi
     chromeSandbox: IpcInvokeApi
     wxpEnhancer: IpcInvokeApi
   }

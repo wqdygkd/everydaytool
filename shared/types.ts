@@ -129,7 +129,7 @@ export type WxpRunningStatus = 'launching' | 'waiting' | 'connecting' | 'running
 export interface WxpSettings {
   executablePath: string
   debugPort: number
-  /** 缓存登录状态：镜像应用存于 sessionStorage 的用户信息并在启动时还原，自动进入主页（登出后失效） */
+  /** 缓存登录状态：整体快照应用存于 sessionStorage 的登录会话并在启动时还原（token 过期不还原），宽限后自动进入主页，并补跑登录后初始化（租户列表 / 代理 NameNode / iframe SSO；登出后失效） */
   cacheLogin?: boolean
   /** 在 WXP 窗口左下角显示「增强中」呼吸灯角标 */
   showStatusBadge?: boolean
@@ -165,20 +165,36 @@ export interface WxpRunningState {
   updatedAt: number
 }
 
-export interface WxpTarget {
-  id: string
-  title: string
-  url: string
-  type: string
-  parentId: string | null
-  devToolsUrl: string
+export interface WxpClearLoginCacheResult {
+  /** 已清除登录缓存的页面数（WXP 未运行、登记待清除时为 0） */
+  pages: number
+  /** WXP 未运行：仅登记待清除标记，下次启动注入时自动执行 */
+  pending?: boolean
 }
 
-export interface WxpOpenDevToolsPayload {
-  devToolsUrl?: string
-  title?: string
-  external?: boolean
-  port?: number | null
+/** 从 WXP 页面采集并在工具侧缓存的数据（data-cache.json） */
+export interface WxpDataCache {
+  /** 采集时间戳（ms） */
+  collectedAt: number
+  login: {
+    accessToken: string
+    refreshToken: string
+    accessExpiresAt: number
+    refreshExpiresAt: number
+    /** 登录账号（来自应用凭据缓存 login-info-cache） */
+    username: string
+    password: string
+    /** 路由守卫恢复出的用户对象（Vuex getters.user） */
+    user: Record<string, unknown> | null
+    /** NameNode 地址（登录响应参数镜像） */
+    nameNodeAddrs: string
+    /** 租户状态查询服务器（登录响应参数镜像） */
+    statusQueryServers: string
+    /** 会话快照是否存在 */
+    snapshotExists: boolean
+  }
+  /** 链接收藏键列表（环境|名称|接入点|原地址） */
+  favorites: string[]
 }
 
 // ---- Treease 编辑器接口拦截（多接口，每接口独立规则） ----
@@ -237,6 +253,37 @@ export interface EnvUpdatePayload {
 export interface TreeaseInterceptLog {
   webContentsId: number
   hits: number
+}
+
+// ---- 应用壳设置（数据目录 / 磁盘用量 / 缓存清理，经 preload 命名空间 edtApp） ----
+
+export interface AppDataDirectoryInfo {
+  dataDirectory: string
+  defaultDataDirectory: string
+  isCustom: boolean
+}
+
+export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
+  changed: boolean
+}
+
+export interface DataRootEntryUsage {
+  name: string
+  bytes: number
+  isDirectory: boolean
+}
+
+export interface DataRootUsage {
+  totalBytes: number
+  cacheBytes: number
+  entries: DataRootEntryUsage[]
+}
+
+export interface CacheCleanResult {
+  freedBytes: number
+  cleanedDirs: number
+  /** 因路径被跳过（如运行中沙箱）或被占用而未清理的目录数 */
+  skippedDirs: number
 }
 
 // 应用菜单动作（preload `menuAction` → 主进程执行；页内菜单已移除，桥接保留）

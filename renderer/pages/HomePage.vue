@@ -27,6 +27,7 @@ const filteredTools = computed<ToolDefinition[]>(() => {
 
 const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value))
 const visibleToolCount = computed(() => filteredTools.value.length)
+const settingsVisible = ref(false)
 const favoriteTools = computed(() => favoriteIds.value
   .map(id => allTools.value.find(tool => tool.id === id))
   .filter((tool): tool is ToolDefinition => Boolean(tool)))
@@ -115,6 +116,21 @@ function readFavoriteIds(): string[] {
     <section v-else class="empty-state">
       没有匹配的工具
     </section>
+
+    <button
+      class="settings-fab"
+      type="button"
+      title="应用设置"
+      aria-label="应用设置"
+      @click="settingsVisible = true"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    </button>
+
+    <AppSettingsDialog v-model="settingsVisible" />
   </div>
 </template>
 
@@ -247,6 +263,45 @@ function readFavoriteIds(): string[] {
   background: var(--color-surface);
   text-align: center;
   color: var(--color-text-secondary);
+}
+
+/* 右下角悬浮设置按钮（fixed：随窗口底缘，不随内容滚动） */
+.settings-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition-fast);
+
+  svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &:hover {
+    background: var(--color-primary-hover);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 640px) {

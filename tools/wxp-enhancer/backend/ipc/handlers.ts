@@ -1,9 +1,9 @@
-import type { WxpEnhancement, WxpOpenDevToolsPayload, WxpSettings } from '../../../../shared/types.js'
+import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.js'
 import { createRequire } from 'node:module'
-import { listPageTargets } from '../services/cdp-client.js'
-import { openDevToolsFromPayload, registerDevtoolsPauseListener } from '../services/devtools-service.js'
+import { collectWxpData } from '../services/data-collector.js'
 import { setWxpStatusEmitter, wxpService } from '../services/wxp-service.js'
 import { wxpConfigStore } from '../store/config-store.js'
+import { dataCacheStore } from '../store/data-cache-store.js'
 import { detectWxpExecutable } from '../utils/detect-executable.js'
 import { resolveExecutablePath } from '../utils/resolve-executable.js'
 import { WXP_IPC_CHANNELS } from './channels.js'
@@ -23,14 +23,6 @@ export function registerWxpHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
   setWxpStatusEmitter(state => broadcast(WXP_IPC_CHANNELS.EVENT_STATUS_CHANGED, state))
-  // DevTools 调试期间暂停注入，关闭后恢复（计数归零才通知 resume）
-  registerDevtoolsPauseListener((port, action) => {
-    if (action === 'pause') {
-      wxpService.onDevtoolsPause(port)
-    } else {
-      wxpService.onDevtoolsResume(port)
-    }
-  })
 
   ipcMain.handle(WXP_IPC_CHANNELS.GET_ALL, async () => {
     const config = await wxpConfigStore.getAll()
@@ -77,14 +69,15 @@ export function registerWxpHandlers(): void {
 
   ipcMain.handle(WXP_IPC_CHANNELS.REINJECT, async () => wxpService.reinject())
 
-  ipcMain.handle(WXP_IPC_CHANNELS.GET_TARGETS, async (_event, port: number) => {
-    if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-      throw new Error('无效的调试端口')
-    }
-    return listPageTargets(port)
-  })
+  ipcMain.handle(WXP_IPC_CHANNELS.CLEAR_LOGIN_CACHE, async () => wxpService.clearLoginCache())
 
-  ipcMain.handle(WXP_IPC_CHANNELS.OPEN_DEVTOOLS, async (_event, payload: string | WxpOpenDevToolsPayload) => {
-    return openDevToolsFromPayload(payload)
+  ipcMain.handle(WXP_IPC_CHANNELS.GET_DATA_CACHE, async () => dataCacheStore.get())
+
+  ipcMain.handle(WXP_IPC_CHANNELS.COLLECT_DATA, async () => {
+    const running = wxpService.getRunning()
+    if (!running) {
+      throw new Error('WXP 未在运行，无法读取数据；请先启动 WXP')
+    }
+    return collectWxpData(running.port)
   })
 }

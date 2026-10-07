@@ -2,8 +2,9 @@ import type { ShellMenuAction } from '../shared/types.js'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { registerAppIpcHandlers } from '../backend/ipc/handlers.js'
 import { SHELL_MENUS } from '../shared/menu.js'
-import { toolBackends } from './tool-registry.js'
+import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.js'
 
 const require = createRequire(import.meta.url)
 const { app, BrowserWindow, Menu, ipcMain } = require('electron') as typeof import('electron')
@@ -94,6 +95,9 @@ ipcMain.on('edt:menu-action', (_event, action: ShellMenuAction) => {
   }
   handlers[action]?.()
 })
+
+// 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理（preload 命名空间 edtApp）
+registerAppIpcHandlers({ notifyDataDirectoryChanged })
 
 async function initializeBackend(): Promise<void> {
   if (backendInitialized) return

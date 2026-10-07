@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WxpEnhancement, WxpEnhancementType, WxpRunningStatus, WxpTarget } from '../../../../shared/types'
+import type { WxpEnhancement, WxpEnhancementType, WxpRunningStatus } from '../../../../shared/types'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
 import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
@@ -62,9 +62,6 @@ const EMPTY_ENHANCEMENT_FORM = {
 
 const enhancementForm = reactive({ ...EMPTY_ENHANCEMENT_FORM })
 
-const targets = ref<WxpTarget[]>([])
-const targetsLoading = ref(false)
-
 async function handleLaunch(): Promise<void> {
   launching.value = true
   try {
@@ -83,7 +80,6 @@ async function handleStop(): Promise<void> {
   stopping.value = true
   try {
     await store.stop()
-    targets.value = []
   } catch (error) {
     ElMessage.error((error as Error).message || '停止失败')
   } finally {
@@ -97,6 +93,77 @@ async function handleReinject(): Promise<void> {
     ElMessage.success(`已重新应用界面增强（${count} 个页面）`)
   } catch (error) {
     ElMessage.error((error as Error).message || '重新应用失败')
+  }
+}
+
+async function handleClearLoginCache(): Promise<void> {
+  const runningNow = isRunning.value
+  const confirmText = runningNow
+    ? '将清除缓存的登录会话（快照/镜像）并刷新页面回到登录状态，需要重新登录。确定继续？'
+    : 'WXP 未在运行：将登记清除标记，下次启动 WXP 时自动清除登录缓存并回到登录页。确定继续？'
+  try {
+    await ElMessageBox.confirm(confirmText, '清除登录缓存', {
+      type: 'warning',
+      confirmButtonText: '清除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    const result = await store.clearLoginCache()
+    if (result.pending) {
+      ElMessage.success('已登记，将在下次启动 WXP 时自动清除登录缓存')
+    } else {
+      ElMessage.success(`已清除登录缓存（${result.pages} 个页面），请重新登录`)
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message || '清除登录缓存失败')
+  }
+}
+
+// —— 数据缓存（来自 WXP） ——
+const collecting = ref(false)
+const showPassword = ref(false)
+const dataLogin = computed(() => store.dataCache?.login ?? null)
+const userCode = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.code ?? '—'))
+const userName = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.name ?? '—'))
+const favRows = computed(() => {
+  const favorites = store.dataCache?.favorites ?? []
+  return favorites.map((key) => {
+    const parts = String(key).split('|')
+    return { key, env: parts[0] ?? '', name: parts[1] ?? '', access: parts[2] ?? '', target: parts.slice(3).join('|') }
+  })
+})
+
+function maskToken(v: string): string {
+  if (!v) return '—'
+  return v.length <= 14 ? v : `${v.slice(0, 8)}…${v.slice(-4)}`
+}
+
+function fmtTime(ms: number): string {
+  return ms ? new Date(ms).toLocaleString() : '—'
+}
+
+async function copyValue(v: string, label: string): Promise<void> {
+  if (!v) return
+  try {
+    await navigator.clipboard.writeText(v)
+    ElMessage.success(`${label}已复制`)
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+async function handleCollect(): Promise<void> {
+  collecting.value = true
+  try {
+    await store.collectData()
+    ElMessage.success('已从 WXP 读取并缓存')
+  } catch (error) {
+    ElMessage.error((error as Error).message || '读取失败')
+  } finally {
+    collecting.value = false
   }
 }
 
@@ -182,38 +249,6 @@ async function toggleEnhancement(row: WxpEnhancement, enabled: boolean | string 
   }
 }
 
-async function loadTargets(): Promise<void> {
-  if (!store.running) return
-  targetsLoading.value = true
-  try {
-    targets.value = await store.fetchTargets(store.running.port)
-  } catch (error) {
-    ElMessage.error((error as Error).message || '获取页面列表失败')
-  } finally {
-    targetsLoading.value = false
-  }
-}
-
-async function openDevTools(target: WxpTarget): Promise<void> {
-  try {
-    await store.openDevTools({
-      devToolsUrl: target.devToolsUrl,
-      title: `DevTools · ${target.title || target.url || 'page'}`,
-    })
-    ElMessage.success('已打开 DevTools（调试期间注入已暂停）')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '打开 DevTools 失败')
-  }
-}
-
-watch(() => store.running?.status, (status) => {
-  if (status === 'running') {
-    loadTargets()
-  } else {
-    targets.value = []
-  }
-})
-
 let unsubscribeStatus: (() => void) | null = null
 
 onMounted(async () => {
@@ -244,8 +279,14 @@ onUnmounted(() => {
           <span class="chip">端口 {{ store.running?.port }}</span>
           <span class="chip">页面 {{ store.running?.targetCount ?? 0 }}</span>
         </div>
+        <div v-else-if="store.loginCacheClearPending" class="status-meta">
+          <span class="chip">登录缓存待清除：下次启动时自动执行</span>
+        </div>
       </div>
       <div class="inline-group status-actions">
+        <el-button @click="handleClearLoginCache">
+          清除登录缓存
+        </el-button>
         <el-button v-if="isRunning" @click="handleReinject">
           重新应用
         </el-button>
@@ -320,7 +361,7 @@ onUnmounted(() => {
         <el-form-item label="缓存登录状态">
           <div class="switch-row">
             <el-switch v-model="settingsForm.cacheLogin" />
-            <span class="muted">登录一次后自动缓存，启动时恢复登录并直接进入主页（登出后失效）</span>
+            <span class="muted">登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；token 过期时不自动进入，登出后失效</span>
           </div>
         </el-form-item>
         <el-form-item label="额外启动参数">
@@ -332,6 +373,108 @@ onUnmounted(() => {
           />
         </el-form-item>
       </el-form>
+    </section>
+
+    <!-- 数据缓存（来自 WXP） -->
+    <section class="surface-card data-card">
+      <div class="card-header">
+        <h3>数据缓存（来自 WXP）</h3>
+        <div class="inline-group">
+          <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
+          <el-button
+            size="small"
+            type="primary"
+            plain
+            :loading="collecting"
+            :disabled="!isRunning"
+            @click="handleCollect"
+          >
+            从 WXP 读取
+          </el-button>
+        </div>
+      </div>
+      <p class="form-hint section-hint">
+        读取时把 WXP 页面里的登录令牌、用户信息与收藏数据缓存到工具数据目录（data-cache.json），此处查看；WXP 未运行时仍可查看上次采集结果。
+      </p>
+      <template v-if="dataLogin">
+        <div class="kv-list">
+          <div class="kv-row">
+            <span class="kv-label">登录账号</span>
+            <span class="kv-value">{{ dataLogin.username || '—' }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">登录密码</span>
+            <span class="kv-value mono">{{ showPassword ? dataLogin.password || '—' : '••••••••' }}</span>
+            <el-button link size="small" @click="showPassword = !showPassword">
+              {{ showPassword ? '隐藏' : '显示' }}
+            </el-button>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">访问令牌</span>
+            <span class="kv-value mono break">{{ dataLogin.accessToken || '—' }}</span>
+            <el-button link size="small" @click="copyValue(dataLogin.accessToken, '令牌')">
+              复制
+            </el-button>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">访问有效期至</span>
+            <span class="kv-value">{{ fmtTime(dataLogin.accessExpiresAt) }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">刷新令牌</span>
+            <span class="kv-value mono break">{{ maskToken(dataLogin.refreshToken) }}</span>
+            <el-button link size="small" @click="copyValue(dataLogin.refreshToken, '刷新令牌')">
+              复制
+            </el-button>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">刷新有效期至</span>
+            <span class="kv-value">{{ fmtTime(dataLogin.refreshExpiresAt) }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">用户编码</span>
+            <span class="kv-value">{{ userCode }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">用户名称</span>
+            <span class="kv-value">{{ userName }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">NameNode</span>
+            <span class="kv-value mono break">{{ dataLogin.nameNodeAddrs || '—' }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">状态源</span>
+            <span class="kv-value mono break">{{ dataLogin.statusQueryServers || '—' }}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">会话快照</span>
+            <span class="kv-value">{{ dataLogin.snapshotExists ? '存在' : '无' }}</span>
+          </div>
+        </div>
+        <el-collapse v-if="dataLogin.user" class="user-json">
+          <el-collapse-item name="user" title="用户信息 JSON">
+            <pre class="mono user-json-pre">{{ JSON.stringify(dataLogin.user, null, 2) }}</pre>
+          </el-collapse-item>
+        </el-collapse>
+        <template v-if="favRows.length">
+          <h4 class="fav-title">
+            收藏的转发（{{ favRows.length }}）
+          </h4>
+          <el-table :data="favRows" size="small" max-height="320">
+            <el-table-column prop="env" label="环境" width="90" />
+            <el-table-column prop="name" label="转发名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="access" label="接入点" min-width="140" />
+            <el-table-column prop="target" label="原地址" min-width="140" />
+          </el-table>
+        </template>
+        <p v-else class="form-hint">
+          暂无收藏数据。
+        </p>
+      </template>
+      <p v-else class="form-hint">
+        尚未读取，启动 WXP 后点击「从 WXP 读取」。
+      </p>
     </section>
 
     <!-- 界面增强 -->
@@ -375,41 +518,6 @@ onUnmounted(() => {
             </el-button>
             <el-button link type="danger" @click="removeEnhancement(row)">
               删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </section>
-
-    <!-- 页面目标 -->
-    <section v-if="isRunning" class="surface-card targets-card">
-      <div class="card-header">
-        <h3>页面目标</h3>
-        <div class="inline-group">
-          <el-button size="small" :loading="targetsLoading" @click="loadTargets">
-            刷新
-          </el-button>
-        </div>
-      </div>
-      <el-table
-        v-loading="targetsLoading"
-        :data="targets"
-        size="small"
-        empty-text="暂无页面，点击刷新获取"
-      >
-        <el-table-column prop="type" label="类型" width="90">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.type === 'iframe' ? 'warning' : 'primary'">
-              {{ row.type }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="url" label="URL" min-width="260" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openDevTools(row)">
-              打开 DevTools
             </el-button>
           </template>
         </el-table-column>
@@ -565,6 +673,40 @@ onUnmounted(() => {
 
 .section-hint {
   margin: 0 0 var(--spacing-md);
+}
+
+/* 数据缓存卡 */
+.data-card .kv-list {
+  margin-bottom: var(--spacing-md);
+}
+
+.data-card .kv-label {
+  width: 88px;
+}
+
+.data-card .kv-row {
+  align-items: center;
+}
+
+.data-card .kv-value.break {
+  word-break: break-all;
+}
+
+.user-json {
+  margin-bottom: var(--spacing-md);
+}
+
+.user-json-pre {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  font-size: var(--font-size-xs);
+}
+
+.fav-title {
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
 }
 
 @media (max-width: 760px) {

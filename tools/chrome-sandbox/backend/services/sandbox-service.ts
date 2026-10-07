@@ -212,6 +212,14 @@ export const sandboxService = {
     if (!sandboxStore.getById(sandboxId)) throw new Error('沙箱不存在')
     return refreshSandboxPid(sandboxId)
   },
+
+  /** 当前运行中沙箱的 userData 目录（缓存清理等平台功能用于整体跳过这些路径） */
+  getRunningUserDataPaths(): string[] {
+    return sandboxStore
+      .getAll()
+      .filter(sandbox => isRunning(sandbox.id, sandbox.userDataPath, { allowProcessQuery: sandbox.status === 'running' }))
+      .map(sandbox => sandbox.userDataPath)
+  },
 }
 
 export async function updateSandboxFingerprint(

@@ -1,4 +1,4 @@
-import type { WxpEnhancement, WxpOpenDevToolsPayload, WxpRunningState, WxpSettings, WxpTarget } from '../../../../shared/types'
+import type { WxpClearLoginCacheResult, WxpDataCache, WxpEnhancement, WxpRunningState, WxpSettings } from '../../../../shared/types'
 import { invokeWxpIpc, onWxpIpc, wxpIpcChannels } from '@renderer/shared/ipc/useWxpIpc'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
 
@@ -6,12 +6,15 @@ interface WxpGetAllResult {
   settings?: WxpSettings
   enhancements?: WxpEnhancement[]
   running?: WxpRunningState | null
+  clearLoginCachePending?: boolean
 }
 
 export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
   const settings = ref<WxpSettings>({ ...DEFAULT_WXP_SETTINGS })
   const enhancements = ref<WxpEnhancement[]>([])
   const running = ref<WxpRunningState | null>(null)
+  const loginCacheClearPending = ref(false)
+  const dataCache = ref<WxpDataCache | null>(null)
   const channels = wxpIpcChannels()
 
   async function load(): Promise<void> {
@@ -19,6 +22,8 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     if (data.settings) settings.value = data.settings
     enhancements.value = data.enhancements ?? []
     running.value = data.running ?? null
+    loginCacheClearPending.value = data.clearLoginCachePending === true
+    await loadDataCache()
   }
 
   function bindStatusEvents(): () => void {
@@ -61,6 +66,22 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     return invokeWxpIpc<number>(channels.REINJECT)
   }
 
+  async function clearLoginCache(): Promise<WxpClearLoginCacheResult> {
+    const result = await invokeWxpIpc<WxpClearLoginCacheResult>(channels.CLEAR_LOGIN_CACHE)
+    loginCacheClearPending.value = result.pending === true
+    return result
+  }
+
+  async function loadDataCache(): Promise<void> {
+    dataCache.value = await invokeWxpIpc<WxpDataCache | null>(channels.GET_DATA_CACHE)
+  }
+
+  async function collectData(): Promise<WxpDataCache> {
+    const result = await invokeWxpIpc<WxpDataCache>(channels.COLLECT_DATA)
+    dataCache.value = result
+    return result
+  }
+
   async function detectExecutable(): Promise<string | null> {
     return invokeWxpIpc<string | null>(channels.DETECT_EXECUTABLE)
   }
@@ -69,18 +90,12 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     return invokeWxpIpc<string | null>(channels.SELECT_EXECUTABLE)
   }
 
-  async function fetchTargets(port: number): Promise<WxpTarget[]> {
-    return invokeWxpIpc<WxpTarget[]>(channels.GET_TARGETS, port)
-  }
-
-  async function openDevTools(payload: WxpOpenDevToolsPayload): Promise<void> {
-    await invokeWxpIpc(channels.OPEN_DEVTOOLS, payload)
-  }
-
   return {
     settings,
     enhancements,
     running,
+    loginCacheClearPending,
+    dataCache,
     load,
     bindStatusEvents,
     saveSettings,
@@ -89,9 +104,9 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     launch,
     stop,
     reinject,
+    clearLoginCache,
+    collectData,
     detectExecutable,
     selectExecutable,
-    fetchTargets,
-    openDevTools,
   }
 })

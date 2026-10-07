@@ -33,6 +33,14 @@ function getDb(): import('better-sqlite3').Database {
   return db
 }
 
+/** 关闭并丢弃缓存的连接（数据根目录变更后由 backend index 调用，下次访问按新目录重开） */
+export function closeEnvDatabase(): void {
+  if (db) {
+    db.close()
+    db = null
+  }
+}
+
 function rowToEnv(row: Record<string, unknown>): EnvConfig {
   return {
     id: row.id as string,

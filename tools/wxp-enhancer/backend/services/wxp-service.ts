@@ -1,14 +1,15 @@
-import type { WxpRunningState, WxpSettings } from '../../../../shared/types.js'
+import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/types.js'
 import { logger } from '../../../../backend/utils/logger.js'
 import { sleep } from '../../../../shared/sleep.js'
 import { wxpConfigStore } from '../store/config-store.js'
 import { isExecutableRunning } from '../utils/process-detect.js'
-import { CdpInjectionSession, waitForCdpPort } from './cdp-client.js'
-import { buildEnhancementSource } from './enhancement-script.js'
+import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.js'
+import { buildClearLoginCacheSnippet, buildEnhancementSource } from './enhancement-script.js'
 import { processLauncher } from './launcher-service.js'
 
 const PROFILE_ID = 'wxp'
-const STARTUP_DELAY_MS = 2000
+/** 拉起后的最短等待：给进程一点启动时间，CDP 就绪探测由 waitForCdpPort 重试兜底 */
+const STARTUP_DELAY_MS = 500
 const CDP_TIMEOUT_MS = 30000
 const POLL_INTERVAL_MS = 2000
 
@@ -20,8 +21,6 @@ let runningState: WxpRunningState | null = null
 let activeSettings: WxpSettings | null = null
 
 let statusEmitter: ((state: WxpRunningState | null) => void) | null = null
-
-// DevTools 调试期间暂停注入：计数由 devtools-service 独占维护，这里只按端口转发给会话
 
 // 附加模式下没有子进程可跟踪，用存活看门狗检测应用自行退出
 const ATTACH_CHECK_INTERVAL_MS = 4000
@@ -122,7 +121,7 @@ function assertSettings(settings: WxpSettings): void {
   }
 }
 
-async function buildEnhancementSourceFromStore(): Promise<string> {
+async function buildEnhancementSourceFromStore(clearLoginCacheOnce = false): Promise<string> {
   const [enhancements, settings] = await Promise.all([
     wxpConfigStore.getEnhancements(),
     wxpConfigStore.getSettings(),
@@ -130,6 +129,7 @@ async function buildEnhancementSourceFromStore(): Promise<string> {
   return buildEnhancementSource(enhancements, {
     showStatusBadge: settings.showStatusBadge,
     cacheLogin: settings.cacheLogin,
+    clearLoginCacheOnce,
   })
 }
 
@@ -235,9 +235,11 @@ export const wxpService = {
   },
 
   async startSession(settings: WxpSettings, message: string): Promise<WxpRunningState> {
+    // 登记了「待清除登录缓存」时，首轮注入的脚本带清除块（先于还原执行）
+    const clearPending = await wxpConfigStore.getLoginCacheClearPending()
     const nextSession = new CdpInjectionSession({
       port: settings.debugPort,
-      scriptSource: await buildEnhancementSourceFromStore(),
+      scriptSource: await buildEnhancementSourceFromStore(clearPending),
       pollIntervalMs: POLL_INTERVAL_MS,
       onTargetsInjected: ({ total }) => {
         setState({
@@ -251,6 +253,15 @@ export const wxpService = {
     session = nextSession
     await nextSession.start()
 
+    if (clearPending) {
+      // 清除已在首轮注入完成，换回常规脚本并强制重注入：否则后续新文档会把用户
+      // 重新登录后写入的快照再次清掉
+      await wxpConfigStore.setLoginCacheClearPending(false)
+      nextSession.setScriptSource(await buildEnhancementSourceFromStore())
+      await nextSession.scanAndInject(true).catch(() => {})
+      logger.info('wxp:login cache cleared on boot')
+    }
+
     return setState({
       status: 'running',
       message,
@@ -263,12 +274,28 @@ export const wxpService = {
     return teardownSession()
   },
 
+  /**
+   * 清除登录缓存。运行中：在全部页面移除工具写入的会话快照 / 镜像与会话内用户
+   * 缓存（不动应用自身的 wxp_access_token）并刷新页面，重新加载后的文档无快照可
+   * 还原，路由守卫会把应用送回登录页。未运行：登记待清除标记，下次启动注入的
+   * 脚本会在文档最早时刻先行清除，随后自动换回常规脚本。
+   */
+  async clearLoginCache(): Promise<WxpClearLoginCacheResult> {
+    if (session && runningState) {
+      const port = runningState.port
+      const cleared = await evaluateInPageTargets(port, buildClearLoginCacheSnippet())
+      await evaluateInPageTargets(port, 'location.reload();').catch(() => 0)
+      await wxpConfigStore.setLoginCacheClearPending(false)
+      setState({ message: `已清除登录缓存（${cleared} 个页面），请重新登录` })
+      return { pages: cleared }
+    }
+    await wxpConfigStore.setLoginCacheClearPending(true)
+    return { pages: 0, pending: true }
+  },
+
   async reinject(): Promise<number> {
     if (!session) {
       throw new Error('WXP 未在运行，请先启动')
-    }
-    if (session.paused) {
-      throw new Error('DevTools 调试中，注入已暂停，请先关闭 DevTools 窗口')
     }
     const count = await session.scanAndInject(true)
     setState({
@@ -279,29 +306,11 @@ export const wxpService = {
     return count
   },
 
-  /** 增强规则保存后若在运行，自动重新应用（DevTools 调试暂停期间跳过，失败不影响保存） */
+  /** 增强规则保存后若在运行，自动重新应用（失败不影响保存） */
   async applyIfRunning(): Promise<boolean> {
-    if (!session || session.paused) return false
+    if (!session) return false
     session.setScriptSource(await buildEnhancementSourceFromStore())
     await this.reinject()
     return true
-  },
-
-  /** DevTools 开始调试（devtools-service 的计数归零前只 pause 不 resume） */
-  onDevtoolsPause(port: number): void {
-    if (runningState?.port !== port) return
-    session?.pause().catch(() => {})
-    if (runningState?.status === 'running') {
-      setState({ message: '注入已暂停（DevTools 调试中）' })
-    }
-  },
-
-  /** DevTools 全部关闭（计数归零）后恢复注入 */
-  onDevtoolsResume(port: number): void {
-    if (runningState?.port !== port) return
-    session?.resume()
-    if (runningState?.status === 'running') {
-      setState({ message: '注入会话已恢复' })
-    }
   },
 }

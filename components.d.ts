@@ -12,7 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ActionBar: typeof import('./tools/chrome-sandbox/renderer/components/ActionBar.vue')['default']
-    AppMenuBar: typeof import('./renderer/shared/components/AppMenuBar.vue')['default']
+    AppSettingsDialog: typeof import('./renderer/shared/components/AppSettingsDialog.vue')['default']
     CreateDialog: typeof import('./tools/chrome-sandbox/renderer/components/CreateDialog.vue')['default']
     DataDirectoryField: typeof import('./tools/chrome-sandbox/renderer/components/DataDirectoryField.vue')['default']
     DataDirectorySetupDialog: typeof import('./tools/chrome-sandbox/renderer/components/DataDirectorySetupDialog.vue')['default']
@@ -26,9 +26,6 @@ declare module 'vue' {
     ElCollapseItem: typeof import('element-plus/es')['ElCollapseItem']
     ElDatePicker: typeof import('element-plus/es')['ElDatePicker']
     ElDialog: typeof import('element-plus/es')['ElDialog']
-    ElDropdown: typeof import('element-plus/es')['ElDropdown']
-    ElDropdownItem: typeof import('element-plus/es')['ElDropdownItem']
-    ElDropdownMenu: typeof import('element-plus/es')['ElDropdownMenu']
     ElForm: typeof import('element-plus/es')['ElForm']
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
     ElInput: typeof import('element-plus/es')['ElInput']

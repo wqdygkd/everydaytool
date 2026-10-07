@@ -8,8 +8,9 @@ export const WXP_IPC_CHANNELS = {
   LAUNCH: 'wxp:launch',
   STOP: 'wxp:stop',
   REINJECT: 'wxp:reinject',
-  GET_TARGETS: 'wxp:get-targets',
-  OPEN_DEVTOOLS: 'wxp:open-devtools',
+  CLEAR_LOGIN_CACHE: 'wxp:clear-login-cache',
+  GET_DATA_CACHE: 'wxp:get-data-cache',
+  COLLECT_DATA: 'wxp:collect-data',
   EVENT_STATUS_CHANGED: 'wxp:status-changed',
 } as const
 

@@ -8,11 +8,14 @@ import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.js'
 interface WxpConfigFile {
   settings: WxpSettings
   enhancements: WxpEnhancement[]
+  /** 待清除登录缓存：WXP 未运行时登记，下次启动注入时在文档最早时刻自动清除 */
+  clearLoginCachePending?: boolean
 }
 
 const DEFAULT_CONFIG: WxpConfigFile = {
   settings: { ...DEFAULT_WXP_SETTINGS },
   enhancements: [],
+  clearLoginCachePending: false,
 }
 
 function getConfigPath(): string {
@@ -27,9 +30,18 @@ async function readConfig(): Promise<WxpConfigFile> {
     return structuredClone(DEFAULT_CONFIG)
   }
   const data = await readJson<Partial<WxpConfigFile>>(configPath)
+  const raw = { ...DEFAULT_WXP_SETTINGS, ...data.settings }
   return {
-    settings: { ...DEFAULT_WXP_SETTINGS, ...data.settings },
+    // 只保留已知字段：旧版 cdp-injector 遗留的 autoLogin / homeUrl 等就地滤除，不再回写
+    settings: {
+      executablePath: String(raw.executablePath ?? ''),
+      debugPort: Number.isFinite(Number(raw.debugPort)) ? Number(raw.debugPort) : DEFAULT_WXP_SETTINGS.debugPort,
+      cacheLogin: raw.cacheLogin !== false,
+      showStatusBadge: raw.showStatusBadge !== false,
+      extraArgs: String(raw.extraArgs ?? ''),
+    },
     enhancements: data.enhancements ?? [],
+    clearLoginCachePending: data.clearLoginCachePending === true,
   }
 }
 
@@ -44,6 +56,16 @@ export const wxpConfigStore = {
 
   async getSettings(): Promise<WxpSettings> {
     return (await readConfig()).settings
+  },
+
+  async getLoginCacheClearPending(): Promise<boolean> {
+    return (await readConfig()).clearLoginCachePending === true
+  },
+
+  async setLoginCacheClearPending(pending: boolean): Promise<void> {
+    const config = await readConfig()
+    config.clearLoginCachePending = pending
+    await writeConfig(config)
   },
 
   async saveSettings(patch: Partial<WxpSettings>): Promise<WxpSettings> {

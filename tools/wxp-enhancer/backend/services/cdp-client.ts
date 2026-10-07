@@ -1,10 +1,4 @@
-import type { WxpTarget } from '../../../../shared/types.js'
 import { sleep } from '../../../../shared/sleep.js'
-
-function buildDevToolsUrl(webSocketDebuggerUrl: string, port: number): string {
-  const wsPath = webSocketDebuggerUrl.replace(/^wss?:\/\//, '')
-  return `http://127.0.0.1:${port}/devtools/inspector.html?ws=${wsPath}`
-}
 
 interface CdpTargetRaw {
   id: string
@@ -16,33 +10,7 @@ interface CdpTargetRaw {
   webSocketDebuggerUrl?: string
 }
 
-function resolveDevToolsUrl(target: CdpTargetRaw, port: number): string {
-  const frontend = target.devtoolsFrontendUrl
-  if (frontend?.startsWith('http://') || frontend?.startsWith('https://')) {
-    return frontend
-  }
-  if (frontend?.startsWith('/')) {
-    return `http://127.0.0.1:${port}${frontend}`
-  }
-  return buildDevToolsUrl(target.webSocketDebuggerUrl as string, port)
-}
-
-export function isAllowedDevToolsUrl(url: string): boolean {
-  return /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\//.test(url)
-}
-
 const DEBUGGABLE_TARGET_TYPES = new Set(['page', 'iframe'])
-
-function mapTarget(target: CdpTargetRaw, port: number): WxpTarget {
-  return {
-    id: target.id,
-    title: target.title || '(无标题)',
-    url: target.url || '',
-    type: target.type,
-    parentId: target.parentId ?? null,
-    devToolsUrl: resolveDevToolsUrl(target, port),
-  }
-}
 
 async function fetchTargets(port: number): Promise<CdpTargetRaw[]> {
   const response = await fetch(`http://127.0.0.1:${port}/json`)
@@ -134,9 +102,56 @@ async function injectTarget(
   }
 }
 
-export async function listPageTargets(port: number): Promise<WxpTarget[]> {
+/**
+ * 在全部可调试页面执行一段表达式（逐目标短连接，单个失败不影响其余）。
+ * 用于清除登录缓存这类一次性操作；返回成功求值的页面数。
+ */
+export async function evaluateInPageTargets(port: number, expression: string): Promise<number> {
   const targets = await fetchTargets(port)
-  return targets.map(target => mapTarget(target, port))
+  let evaluated = 0
+  for (const target of targets) {
+    if (!target.webSocketDebuggerUrl) continue
+    try {
+      const ws = await connectWebSocket(target.webSocketDebuggerUrl)
+      const call = createCdpCaller(ws)
+      try {
+        await call('Runtime.evaluate', { expression, returnByValue: true })
+        evaluated += 1
+      } finally {
+        ws.close()
+      }
+    } catch {
+      // 目标可能已被 DevTools 占用或已关闭，跳过
+    }
+  }
+  return evaluated
+}
+
+/**
+ * 在 WXP 主页面（app:// 优先）执行表达式并返回求值结果（returnByValue）。
+ * 用于数据采集这类需要拿返回值的一次性操作。
+ */
+export async function evaluateOnMainPage(port: number, expression: string): Promise<unknown> {
+  const targets = await fetchTargets(port)
+  const pages = targets.filter(item => item.type === 'page' && !(item.url || '').startsWith('devtools://'))
+  const main = pages.find(item => (item.url || '').startsWith('app://')) ?? pages[0]
+  if (!main?.webSocketDebuggerUrl) {
+    throw new Error('未找到可调试的 WXP 页面，请确认 WXP 已完全启动')
+  }
+  const ws = await connectWebSocket(main.webSocketDebuggerUrl)
+  const call = createCdpCaller(ws)
+  try {
+    const result = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    const details = result.exceptionDetails as
+      | { exception?: { description?: string }, text?: string }
+      | undefined
+    if (details) {
+      throw new Error(`采集脚本执行失败: ${details.exception?.description || details.text || '未知错误'}`)
+    }
+    return (result as { result?: { value?: unknown } }).result?.value
+  } finally {
+    ws.close()
+  }
 }
 
 export async function waitForCdpPort(port: number, timeoutMs = 30000): Promise<CdpTargetRaw[]> {
@@ -172,7 +187,6 @@ export class CdpInjectionSession {
   scriptSource: string
   pollIntervalMs: number
   onTargetsInjected?: (info: { count: number, total: number }) => void
-  paused = false
   private targetState = new Map<string, TargetInjectionState>()
   private stopped = false
   private pollTimer: NodeJS.Timeout | null = null
@@ -187,17 +201,6 @@ export class CdpInjectionSession {
 
   get injectedTargetCount(): number {
     return this.targetState.size
-  }
-
-  async pause(): Promise<void> {
-    this.paused = true
-    while (this.injecting) {
-      await sleep(50)
-    }
-  }
-
-  resume(): void {
-    this.paused = false
   }
 
   async start(): Promise<void> {
@@ -238,7 +241,7 @@ export class CdpInjectionSession {
 
   /** 扫描全部可调试页面并注入；force 为 true 时忽略 URL 去重强制重注入 */
   async scanAndInject(force = false): Promise<number> {
-    if (this.stopped || this.injecting || (this.paused && !force)) return 0
+    if (this.stopped || this.injecting) return 0
 
     this.injecting = true
     try {
