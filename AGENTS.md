@@ -98,3 +98,4 @@ pnpm dist         # 打包安装程序
 | 沙箱数据库 | `tools/chrome-sandbox/backend/store/database.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录） | `backend/utils/` |
 | 应用数据根目录 / 共享数据库路径 | `backend/utils/data-root.ts` |
+| **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
