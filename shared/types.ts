@@ -120,9 +120,7 @@ export interface SetupState extends AppConfig {
   dataDirectoryChanged?: boolean
 }
 
-// ---- WXP 增强（CDP 启动 + 登录缓存 + CSS/JS 界面注入） ----
-
-export type WxpEnhancementType = 'css' | 'js'
+// ---- WXP 增强（CDP 启动 + 登录缓存 + 内置页面增强） ----
 
 export type WxpRunningStatus = 'launching' | 'waiting' | 'connecting' | 'running' | 'error' | 'stopped'
 
@@ -143,16 +141,6 @@ export const DEFAULT_WXP_SETTINGS: WxpSettings = {
   cacheLogin: true,
   showStatusBadge: true,
   extraArgs: '',
-}
-
-export interface WxpEnhancement {
-  id: string
-  name: string
-  type: WxpEnhancementType
-  code: string
-  enabled: boolean
-  /** 非空时仅在 URL 包含该子串的页面生效 */
-  urlPattern?: string
 }
 
 export interface WxpRunningState {

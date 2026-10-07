@@ -1,5 +1,4 @@
-import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.ts'
-import { randomUUID } from 'node:crypto'
+import type { WxpSettings } from '../../../../shared/types.ts'
 import path from 'node:path'
 import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
@@ -7,14 +6,12 @@ import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.ts'
 
 interface WxpConfigFile {
   settings: WxpSettings
-  enhancements: WxpEnhancement[]
   /** 待清除登录缓存：WXP 未运行时登记，下次启动注入时在文档最早时刻自动清除 */
   clearLoginCachePending?: boolean
 }
 
 const DEFAULT_CONFIG: WxpConfigFile = {
   settings: { ...DEFAULT_WXP_SETTINGS },
-  enhancements: [],
   clearLoginCachePending: false,
 }
 
@@ -40,7 +37,6 @@ async function readConfig(): Promise<WxpConfigFile> {
       showStatusBadge: raw.showStatusBadge !== false,
       extraArgs: String(raw.extraArgs ?? ''),
     },
-    enhancements: data.enhancements ?? [],
     clearLoginCachePending: data.clearLoginCachePending === true,
   }
 }
@@ -73,34 +69,5 @@ export const wxpConfigStore = {
     config.settings = { ...config.settings, ...patch }
     await writeConfig(config)
     return config.settings
-  },
-
-  async getEnhancements(): Promise<WxpEnhancement[]> {
-    return (await readConfig()).enhancements
-  },
-
-  async saveEnhancement(enhancement: WxpEnhancement): Promise<WxpEnhancement> {
-    const config = await readConfig()
-    const payload: WxpEnhancement = { ...enhancement }
-    if (!payload.id) {
-      payload.id = randomUUID()
-      config.enhancements.push(payload)
-    } else {
-      const index = config.enhancements.findIndex(item => item.id === payload.id)
-      if (index === -1) {
-        config.enhancements.push(payload)
-      } else {
-        config.enhancements[index] = { ...config.enhancements[index], ...payload }
-      }
-    }
-    await writeConfig(config)
-    return payload
-  },
-
-  async deleteEnhancement(id: string): Promise<WxpEnhancement[]> {
-    const config = await readConfig()
-    config.enhancements = config.enhancements.filter(item => item.id !== id)
-    await writeConfig(config)
-    return config.enhancements
   },
 }

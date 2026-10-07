@@ -1,8 +1,6 @@
 export const WXP_IPC_CHANNELS = {
   GET_ALL: 'wxp:get-all',
   SAVE_SETTINGS: 'wxp:save-settings',
-  ENHANCEMENT_SAVE: 'wxp:enhancement-save',
-  ENHANCEMENT_DELETE: 'wxp:enhancement-delete',
   SELECT_EXECUTABLE: 'wxp:select-executable',
   DETECT_EXECUTABLE: 'wxp:detect-executable',
   LAUNCH: 'wxp:launch',

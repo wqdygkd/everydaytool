@@ -10,3 +10,4 @@ yarn.lock
 Thumbs.db
 .pnpm-store
 .agents
+.workbuddy

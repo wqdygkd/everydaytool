@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WxpEnhancement, WxpEnhancementType, WxpRunningStatus } from '../../../../shared/types'
+import type { WxpRunningStatus } from '../../../../shared/types'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
 import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
@@ -50,25 +50,13 @@ const statusTagType = computed(() => {
   return 'info'
 })
 
-const enhancementDialogVisible = ref(false)
-const EMPTY_ENHANCEMENT_FORM = {
-  id: '',
-  name: '',
-  type: 'css' as WxpEnhancementType,
-  urlPattern: '',
-  code: '',
-  enabled: true,
-}
-
-const enhancementForm = reactive({ ...EMPTY_ENHANCEMENT_FORM })
-
 async function handleLaunch(): Promise<void> {
   launching.value = true
   try {
     await store.saveSettings({ ...settingsForm })
     settingsDirty.value = false
     await store.launch()
-    ElMessage.success('启动成功，界面增强已生效')
+    ElMessage.success('启动成功，脚本注入已生效')
   } catch (error) {
     ElMessage.error((error as Error).message || '启动失败')
   } finally {
@@ -90,7 +78,7 @@ async function handleStop(): Promise<void> {
 async function handleReinject(): Promise<void> {
   try {
     const count = await store.reinject()
-    ElMessage.success(`已重新应用界面增强（${count} 个页面）`)
+    ElMessage.success(`已重新注入（${count} 个页面）`)
   } catch (error) {
     ElMessage.error((error as Error).message || '重新应用失败')
   }
@@ -193,59 +181,6 @@ async function saveSettings(): Promise<void> {
     ElMessage.success('设置已保存')
   } catch (error) {
     ElMessage.error((error as Error).message || '保存失败')
-  }
-}
-
-function openEnhancementDialog(row?: WxpEnhancement): void {
-  if (row) {
-    Object.assign(enhancementForm, {
-      id: row.id,
-      name: row.name,
-      type: row.type,
-      urlPattern: row.urlPattern ?? '',
-      code: row.code,
-      enabled: row.enabled,
-    })
-  } else {
-    Object.assign(enhancementForm, EMPTY_ENHANCEMENT_FORM)
-  }
-  enhancementDialogVisible.value = true
-}
-
-async function saveEnhancement(): Promise<void> {
-  if (!enhancementForm.name.trim() || !enhancementForm.code.trim()) {
-    ElMessage.warning('请填写名称和代码内容')
-    return
-  }
-  try {
-    const applied = await store.saveEnhancement({
-      id: enhancementForm.id,
-      name: enhancementForm.name.trim(),
-      type: enhancementForm.type,
-      code: enhancementForm.code,
-      enabled: enhancementForm.enabled,
-      urlPattern: enhancementForm.urlPattern.trim(),
-    })
-    enhancementDialogVisible.value = false
-    ElMessage.success(applied ? '已保存并重新应用' : '已保存')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '保存失败')
-  }
-}
-
-async function removeEnhancement(row: WxpEnhancement): Promise<void> {
-  await ElMessageBox.confirm(`确定删除「${row.name}」？`, '确认', { type: 'warning' })
-  const applied = await store.deleteEnhancement(row.id)
-  ElMessage.success(applied ? '已删除并重新应用' : '已删除')
-}
-
-async function toggleEnhancement(row: WxpEnhancement, enabled: boolean | string | number): Promise<void> {
-  try {
-    const applied = await store.saveEnhancement({ ...row, enabled: Boolean(enabled) })
-    ElMessage.success(applied ? '已重新应用' : '已更新')
-  } catch (error) {
-    row.enabled = !enabled
-    ElMessage.error((error as Error).message || '更新失败')
   }
 }
 
@@ -476,102 +411,6 @@ onUnmounted(() => {
         尚未读取，启动 WXP 后点击「从 WXP 读取」。
       </p>
     </section>
-
-    <!-- 界面增强 -->
-    <section class="surface-card enhancements-card">
-      <div class="card-header">
-        <h3>界面增强</h3>
-        <el-button size="small" type="primary" @click="openEnhancementDialog()">
-          新增增强
-        </el-button>
-      </div>
-      <p class="form-hint section-hint">
-        CSS / JS 规则会在每次页面加载前自动注入，保存后若 WXP 正在运行将立即重新应用；可按 URL 片段限定生效页面。
-      </p>
-      <el-table :data="store.enhancements" empty-text="暂无增强规则，点击「新增增强」添加">
-        <el-table-column prop="name" label="名称" min-width="140" show-overflow-tooltip />
-        <el-table-column label="类型" width="90">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.type === 'css' ? 'primary' : 'warning'">
-              {{ row.type.toUpperCase() }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="生效范围" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.urlPattern" class="mono">{{ row.urlPattern }}</span>
-            <span v-else class="muted">全部页面</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="启用" width="80">
-          <template #default="{ row }">
-            <el-switch
-              :model-value="row.enabled"
-              @change="(value: any) => toggleEnhancement(row, value)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openEnhancementDialog(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="removeEnhancement(row)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </section>
-
-    <!-- 增强 编辑弹窗 -->
-    <el-dialog
-      v-model="enhancementDialogVisible"
-      :title="enhancementForm.id ? '编辑增强' : '新增增强'"
-      width="720px"
-    >
-      <el-form label-width="90px">
-        <el-form-item label="名称" required>
-          <el-input v-model="enhancementForm.name" placeholder="例如：夜间模式" />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-radio-group v-model="enhancementForm.type">
-            <el-radio-button value="css">
-              CSS
-            </el-radio-button>
-            <el-radio-button value="js">
-              JS
-            </el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="生效范围">
-          <el-input
-            v-model="enhancementForm.urlPattern"
-            placeholder="可选，URL 包含该片段时生效，留空为全部页面"
-            class="mono"
-          />
-        </el-form-item>
-        <el-form-item label="代码" required>
-          <el-input
-            v-model="enhancementForm.code"
-            type="textarea"
-            :rows="14"
-            class="mono"
-            :placeholder="enhancementForm.type === 'css'
-              ? '/* 示例：调整侧栏底色 */\n.sidebar { background: #fbf3f1 !important; }'
-              : '// 示例：页面加载后执行\nconsole.log(\'[wxp-enhancer]\', location.href);'"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="enhancementDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" @click="saveEnhancement">
-          保存
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 

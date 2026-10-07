@@ -1,4 +1,4 @@
-import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.ts'
+import type { WxpSettings } from '../../../../shared/types.ts'
 import { createRequire } from 'node:module'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
@@ -37,18 +37,6 @@ export function registerWxpHandlers(): void {
     // 角标开关等影响注入脚本的设置，保存后在运行中的 WXP 上立即生效
     await wxpService.applyIfRunning().catch(() => false)
     return settings
-  })
-
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.ENHANCEMENT_SAVE, async (_event, enhancement: WxpEnhancement) => {
-    const saved = await wxpConfigStore.saveEnhancement(enhancement)
-    const applied = await wxpService.applyIfRunning().catch(() => false)
-    return { enhancement: saved, applied }
-  })
-
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.ENHANCEMENT_DELETE, async (_event, id: string) => {
-    const enhancements = await wxpConfigStore.deleteEnhancement(id)
-    const applied = await wxpService.applyIfRunning().catch(() => false)
-    return { enhancements, applied }
   })
 
   safeHandle(ipcMain, WXP_IPC_CHANNELS.SELECT_EXECUTABLE, async () => {

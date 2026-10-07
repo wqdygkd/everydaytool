@@ -11,7 +11,6 @@
   prefer-arrow-callback,
   prefer-template,
   prefer-rest-params,
-  no-new-func,
   object-shorthand,
   style/semi,
   style/max-statements-per-line,
@@ -63,8 +62,6 @@ export function injectionMain(): void {
   var CLEAR_PENDING = env.clearPending
   var SHOW_BADGE = env.showBadge
   var BADGE_STYLE = env.badgeStyle
-  var SIGNATURE = env.signature
-  var RULES = JSON.parse(env.rulesJson)
   // —— 待清除登录缓存（WXP 未运行时登记的标记）：先于还原执行，本轮注入完成后换回常规脚本；
   // 清除键列表与 buildClearLoginCacheSnippet 同源（键值都来自 env.keys 单一来源）——
   if (CLEAR_PENDING) {
@@ -527,7 +524,7 @@ export function injectionMain(): void {
   };
   if (document.body) startFavObserver();
   else document.addEventListener('DOMContentLoaded', startFavObserver, { once: true });
-  // —— 「增强中」角标：幂等，先于签名去重执行 ——
+  // —— 「增强中」角标：幂等，跟随开关即时增删 ——
   if (!SHOW_BADGE) {
     var staleBadge = document.getElementById('wxp-enhancer-badge');
     staleBadge && staleBadge.parentNode && staleBadge.parentNode.removeChild(staleBadge);
@@ -545,31 +542,6 @@ export function injectionMain(): void {
       badge.id = 'wxp-enhancer-badge';
       badge.textContent = '增强中';
       (document.body || document.documentElement).appendChild(badge);
-    }
-  }
-  // —— 增强规则 ——
-  if (window.__wxpEnhancer === SIGNATURE) return;
-  window.__wxpEnhancer = SIGNATURE;
-  var mount = document.head || document.documentElement;
-  if (!mount) return;
-  var staleStyles = document.querySelectorAll('style[id^="wxp-enhancer-css-"]');
-  for (var s = 0; s < staleStyles.length; s++) {
-    staleStyles[s].parentNode && staleStyles[s].parentNode.removeChild(staleStyles[s]);
-  }
-  for (var i = 0; i < RULES.length; i++) {
-    var rule = RULES[i];
-    try {
-      if (rule.urlPattern && location.href.indexOf(rule.urlPattern) === -1) continue;
-      if (rule.type === 'css') {
-        var style = document.createElement('style');
-        style.id = 'wxp-enhancer-css-' + rule.id;
-        style.textContent = rule.code;
-        mount.appendChild(style);
-      } else {
-        (new Function(rule.code))();
-      }
-    } catch (error) {
-      console.error('[wxp-enhancer] 规则「' + rule.name + '」执行失败', error);
     }
   }
 }

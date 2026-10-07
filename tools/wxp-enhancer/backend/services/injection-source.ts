@@ -1,16 +1,6 @@
-import type { WxpEnhancement } from '../../../../shared/types.ts'
-import { createHash } from 'node:crypto'
 import { buildInjectionScript } from './injection-script.ts'
 
-interface WxpRuntimeRule {
-  id: string
-  name: string
-  type: WxpEnhancement['type']
-  urlPattern: string
-  code: string
-}
-
-export interface EnhancementSourceOptions {
+export interface InjectionSourceOptions {
   /** 在页面左下角显示「增强中」呼吸灯角标（默认开启） */
   showStatusBadge?: boolean
   /**
@@ -65,29 +55,17 @@ const HOME_HASH = '#/home'
 const ENTRY_DELAY_MS = 800
 
 /**
- * 把增强规则（CSS / JS）合并成一段自举脚本。脚本本体在 injection-script.ts（String.raw
- * 承载，正则可自然书写），本文件只负责运行时参数收集与键名单一来源；行为说明
- * （登录态缓存 / 引导补跑 / 链接收藏 / 角标）见 injection-script.ts 各节注释。
+ * 装配注入脚本：脚本本体在 injection-script.ts（真实函数序列化），本文件只负责
+ * 运行时参数收集与键名单一来源；行为说明（登录态缓存 / 引导补跑 / 链接收藏 / 角标）
+ * 见 injection-main.ts 各节注释。
  */
-export function buildEnhancementSource(enhancements: WxpEnhancement[], options: EnhancementSourceOptions = {}): string {
-  const rules: WxpRuntimeRule[] = enhancements
-    .filter(item => item.enabled && item.code.trim())
-    .map(item => ({
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      urlPattern: (item.urlPattern ?? '').trim(),
-      code: item.code,
-    }))
-
+export function buildInjectionSource(options: InjectionSourceOptions = {}): string {
   return buildInjectionScript({
     cacheLogin: options.cacheLogin !== false,
     clearPending: options.clearLoginCacheOnce === true,
     showBadge: options.showStatusBadge !== false,
     entryDelayMs: ENTRY_DELAY_MS,
     homeHash: HOME_HASH,
-    signature: createHash('sha1').update(JSON.stringify(rules)).digest('hex').slice(0, 12),
-    rulesJson: JSON.stringify(rules),
     badgeStyle: BADGE_STYLE,
     clearSnippet: buildClearLoginCacheSnippet(),
     keys: {

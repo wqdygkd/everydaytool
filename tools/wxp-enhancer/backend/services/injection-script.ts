@@ -2,7 +2,7 @@ import { injectionMain } from './injection-main.ts'
 
 /**
  * 注入脚本的运行时参数：injection-main.ts（脚本本体，真实函数）从这里拿运行时值，
- * 键名单一来源在 enhancement-script.ts。
+ * 键名单一来源在 injection-source.ts。
  */
 export interface WxpInjectionEnv {
   cacheLogin: boolean
@@ -10,10 +10,6 @@ export interface WxpInjectionEnv {
   showBadge: boolean
   entryDelayMs: number
   homeHash: string
-  /** 增强规则签名（内容哈希，用于跳过重复执行） */
-  signature: string
-  /** 增强规则 JSON */
-  rulesJson: string
   /** 「增强中」角标样式 */
   badgeStyle: string
   /** 清除登录缓存的页面端片段（与 buildClearLoginCacheSnippet 同源） */

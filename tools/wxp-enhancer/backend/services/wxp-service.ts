@@ -4,7 +4,7 @@ import { sleep } from '../../../../shared/sleep.ts'
 import { wxpConfigStore } from '../store/config-store.ts'
 import { isExecutableRunning } from '../utils/process-detect.ts'
 import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.ts'
-import { buildClearLoginCacheSnippet, buildEnhancementSource } from './enhancement-script.ts'
+import { buildClearLoginCacheSnippet, buildInjectionSource } from './injection-source.ts'
 import { processLauncher } from './launcher-service.ts'
 
 const PROFILE_ID = 'wxp'
@@ -122,12 +122,9 @@ export function assertSettings(settings: WxpSettings): void {
   }
 }
 
-async function buildEnhancementSourceFromStore(clearLoginCacheOnce = false): Promise<string> {
-  const [enhancements, settings] = await Promise.all([
-    wxpConfigStore.getEnhancements(),
-    wxpConfigStore.getSettings(),
-  ])
-  return buildEnhancementSource(enhancements, {
+async function buildInjectionSourceFromStore(clearLoginCacheOnce = false): Promise<string> {
+  const settings = await wxpConfigStore.getSettings()
+  return buildInjectionSource({
     showStatusBadge: settings.showStatusBadge,
     cacheLogin: settings.cacheLogin,
     clearLoginCacheOnce,
@@ -159,7 +156,7 @@ export const wxpService = {
         message: `发现 WXP 已在运行，附加调试端口 ${settings.debugPort}…`,
         targetCount: 0,
       })
-      const attachedState = await this.startSession(settings, '已附加到运行中的 WXP，界面增强生效')
+      const attachedState = await this.startSession(settings, '已附加到运行中的 WXP，脚本注入生效')
       startAttachWatchdog(settings)
       return attachedState
     }
@@ -203,7 +200,7 @@ export const wxpService = {
 
       await waitForCdpPort(settings.debugPort, CDP_TIMEOUT_MS)
 
-      const state = await this.startSession(settings, '界面增强运行中，新页面将自动注入')
+      const state = await this.startSession(settings, '注入运行中，新页面将自动应用')
       logger.info('wxp:launch success', { port: settings.debugPort, pid })
       return state
     } catch (error) {
@@ -240,12 +237,12 @@ export const wxpService = {
     const clearPending = await wxpConfigStore.getLoginCacheClearPending()
     const nextSession = new CdpInjectionSession({
       port: settings.debugPort,
-      scriptSource: await buildEnhancementSourceFromStore(clearPending),
+      scriptSource: await buildInjectionSourceFromStore(clearPending),
       pollIntervalMs: POLL_INTERVAL_MS,
       onTargetsInjected: ({ total }) => {
         setState({
           status: 'running',
-          message: '界面增强运行中，新页面将自动注入',
+          message: '注入运行中，新页面将自动应用',
           targetCount: total,
         })
       },
@@ -258,7 +255,7 @@ export const wxpService = {
       // 清除已在首轮注入完成，换回常规脚本并强制重注入：否则后续新文档会把用户
       // 重新登录后写入的快照再次清掉
       await wxpConfigStore.setLoginCacheClearPending(false)
-      nextSession.setScriptSource(await buildEnhancementSourceFromStore())
+      nextSession.setScriptSource(await buildInjectionSourceFromStore())
       await nextSession.scanAndInject(true).catch(() => {})
       logger.info('wxp:login cache cleared on boot')
     }
@@ -301,16 +298,16 @@ export const wxpService = {
     const count = await session.scanAndInject(true)
     setState({
       status: 'running',
-      message: `已重新应用界面增强（${count} 个页面）`,
+      message: `已重新注入（${count} 个页面）`,
       targetCount: session.injectedTargetCount,
     })
     return count
   },
 
-  /** 增强规则保存后若在运行，自动重新应用（失败不影响保存） */
+  /** 设置保存后若在运行，自动用新脚本重新注入（失败不影响保存） */
   async applyIfRunning(): Promise<boolean> {
     if (!session) return false
-    session.setScriptSource(await buildEnhancementSourceFromStore())
+    session.setScriptSource(await buildInjectionSourceFromStore())
     await this.reinject()
     return true
   },

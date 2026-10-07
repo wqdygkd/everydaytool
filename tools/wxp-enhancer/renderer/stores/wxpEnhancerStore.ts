@@ -1,17 +1,15 @@
-import type { WxpClearLoginCacheResult, WxpDataCache, WxpEnhancement, WxpRunningState, WxpSettings } from '../../../../shared/types'
+import type { WxpClearLoginCacheResult, WxpDataCache, WxpRunningState, WxpSettings } from '../../../../shared/types'
 import { invokeWxpIpc, onWxpIpc, wxpIpcChannels } from '@renderer/shared/ipc/useWxpIpc'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
 
 interface WxpGetAllResult {
   settings?: WxpSettings
-  enhancements?: WxpEnhancement[]
   running?: WxpRunningState | null
   clearLoginCachePending?: boolean
 }
 
 export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
   const settings = ref<WxpSettings>({ ...DEFAULT_WXP_SETTINGS })
-  const enhancements = ref<WxpEnhancement[]>([])
   const running = ref<WxpRunningState | null>(null)
   const loginCacheClearPending = ref(false)
   const dataCache = ref<WxpDataCache | null>(null)
@@ -20,7 +18,6 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
   async function load(): Promise<void> {
     const data = await invokeWxpIpc<WxpGetAllResult>(channels.GET_ALL)
     if (data.settings) settings.value = data.settings
-    enhancements.value = data.enhancements ?? []
     running.value = data.running ?? null
     loginCacheClearPending.value = data.clearLoginCachePending === true
     await loadDataCache()
@@ -34,23 +31,6 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
 
   async function saveSettings(patch: Partial<WxpSettings>): Promise<void> {
     settings.value = await invokeWxpIpc<WxpSettings>(channels.SAVE_SETTINGS, patch)
-  }
-
-  async function saveEnhancement(enhancement: WxpEnhancement): Promise<boolean> {
-    const result = await invokeWxpIpc<{ enhancement: WxpEnhancement, applied: boolean }>(channels.ENHANCEMENT_SAVE, enhancement)
-    const index = enhancements.value.findIndex(item => item.id === result.enhancement.id)
-    if (index === -1) {
-      enhancements.value.push(result.enhancement)
-    } else {
-      enhancements.value[index] = result.enhancement
-    }
-    return result.applied
-  }
-
-  async function deleteEnhancement(id: string): Promise<boolean> {
-    const result = await invokeWxpIpc<{ enhancements: WxpEnhancement[], applied: boolean }>(channels.ENHANCEMENT_DELETE, id)
-    enhancements.value = result.enhancements
-    return result.applied
   }
 
   async function launch(): Promise<void> {
@@ -92,15 +72,12 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
 
   return {
     settings,
-    enhancements,
     running,
     loginCacheClearPending,
     dataCache,
     load,
     bindStatusEvents,
     saveSettings,
-    saveEnhancement,
-    deleteEnhancement,
     launch,
     stop,
     reinject,
