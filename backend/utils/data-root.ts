@@ -5,8 +5,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureDir, pathExists, readJson, removeIfExists, writeJson } from './file-ops.js'
-import { logger } from './logger.js'
+import { ensureDir, pathExists, readJson, removeIfExists, writeJson } from './file-ops.ts'
+import { logger } from './logger.ts'
 
 const require = createRequire(import.meta.url)
 const { app } = require('electron') as typeof import('electron')

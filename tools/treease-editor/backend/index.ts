@@ -1,5 +1,5 @@
-import { registerTreeaseHandlers } from './ipc/handlers.js'
-import { installCacheHandlers, interceptService } from './services/intercept-service.js'
+import { registerTreeaseHandlers } from './ipc/handlers.ts'
+import { installCacheHandlers, interceptService } from './services/intercept-service.ts'
 
 export const treeaseEditorBackend = {
   initialize(): void {

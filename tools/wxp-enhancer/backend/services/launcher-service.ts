@@ -1,10 +1,12 @@
-import { exec, spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { sleep } from '../../../../shared/sleep.js'
-import { resolveExecutablePath } from '../utils/resolve-executable.js'
+import { sleep } from '../../../../shared/sleep.ts'
+import { resolveExecutablePath } from '../utils/resolve-executable.ts'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
+
+const KILL_TIMEOUT_MS = 6000
 
 const DEBUG_PORT_RE = /--remote-debugging-port(?:=|\s+)\d+/i
 // Chromium 111+ 默认拒绝带 Origin 的调试 WebSocket（前端页会被 403，报 connection was closed）
@@ -66,14 +68,14 @@ async function killProcessTree(pid: number, options: KillOptions = {}): Promise<
     if (graceful) {
       // taskkill 不带 /F 时向进程树窗口投递 WM_CLOSE，给应用留出落盘会话的机会
       try {
-        await execAsync(`taskkill /PID ${pid} /T`)
+        await execFileAsync('taskkill', ['/PID', String(pid), '/T'], { timeout: KILL_TIMEOUT_MS, windowsHide: true })
       } catch {
         // 进程可能已退出
       }
       if (await waitForExit(pid, timeoutMs)) return
     }
     try {
-      await execAsync(`taskkill /PID ${pid} /T /F`)
+      await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F'], { timeout: KILL_TIMEOUT_MS, windowsHide: true })
     } catch {
       // process may already exit
     }

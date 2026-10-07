@@ -4,27 +4,29 @@ import type {
   Sandbox,
   SandboxCreatePayload,
   SandboxUpdatePayload,
-} from '../../../../shared/types.js'
+} from '../../../../shared/types.ts'
 import { randomUUID } from 'node:crypto'
-import { ensureDir, removeIfExists } from '../../../../backend/utils/file-ops.js'
-import { logger } from '../../../../backend/utils/logger.js'
-import { setupSandboxDeveloperMode, shouldSkipDeveloperModeSetup } from '../chrome/developer-mode.js'
-import { launchChrome } from '../chrome/launcher.js'
-import { findRunningPid, isRunning, killProcess, onProcessExit, queryChromeSandboxProcesses } from '../chrome/process-manager.js'
-import { focusChromeWindow } from '../chrome/window-controller.js'
-import { SANDBOX_COLORS } from '../constants/sandbox.js'
-import { prepareFingerprintExtension, updateFingerprintConfig } from '../fingerprint/config-writer.js'
-import { generateRandomFingerprint } from '../fingerprint/generator.js'
-import { IPC_CHANNELS } from '../ipc/channels.js'
-import { initSandboxUserData, repairSandboxProfile } from '../profile/cloner.js'
-import { fingerprintStore } from '../store/fingerprint-store.js'
-import { sandboxStore } from '../store/sandbox-store.js'
+import { ensureDir, removeIfExists } from '../../../../backend/utils/file-ops.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { isPathWithin } from '../../../../shared/path-guard.ts'
+import { setupSandboxDeveloperMode, shouldSkipDeveloperModeSetup } from '../chrome/developer-mode.ts'
+import { launchChrome } from '../chrome/launcher.ts'
+import { findRunningPid, isRunning, killProcess, onProcessExit, queryChromeSandboxProcesses } from '../chrome/process-manager.ts'
+import { focusChromeWindow } from '../chrome/window-controller.ts'
+import { SANDBOX_COLORS } from '../constants/sandbox.ts'
+import { prepareFingerprintExtension, updateFingerprintConfig } from '../fingerprint/config-writer.ts'
+import { generateRandomFingerprint } from '../fingerprint/generator.ts'
+import { IPC_CHANNELS } from '../ipc/channels.ts'
+import { initSandboxUserData, repairSandboxProfile } from '../profile/cloner.ts'
+import { fingerprintStore } from '../store/fingerprint-store.ts'
+import { sandboxStore } from '../store/sandbox-store.ts'
 import {
   getDefaultChromeProfilePath,
+  getSandboxesDirectory,
   getSandboxFingerprintExtPath,
   getSandboxPath,
   getSandboxProfileDirectoryName,
-} from '../utils/path-helper.js'
+} from '../utils/path-helper.ts'
 
 let statusEmitter: ((channel: string, payload: unknown) => void) | null = null
 
@@ -195,6 +197,14 @@ export const sandboxService = {
 
     if (sandbox.status === 'running') {
       await this.close(sandboxId)
+    }
+
+    // 删除是递归强制删除：必须先确认目标仍在沙箱目录内，
+    // 避免 DB 被篡改 / 历史脏数据把路径指向业务目录之外后误删任意目录
+    const guard = isPathWithin(getSandboxesDirectory(), sandbox.userDataPath)
+    if (!guard.ok) {
+      logger.error('Refused to delete sandbox outside sandboxes directory', { sandboxId })
+      throw new Error('沙箱目录异常，已阻止删除')
     }
 
     await removeIfExists(sandbox.userDataPath)

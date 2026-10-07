@@ -1,7 +1,7 @@
-import { chromeSandboxBackend } from '../tools/chrome-sandbox/backend/index.js'
-import { envBrowserBackend } from '../tools/env-browser/backend/index.js'
-import { treeaseEditorBackend } from '../tools/treease-editor/backend/index.js'
-import { wxpEnhancerBackend } from '../tools/wxp-enhancer/backend/index.js'
+import { chromeSandboxBackend } from '../tools/chrome-sandbox/backend/index.ts'
+import { envBrowserBackend } from '../tools/env-browser/backend/index.ts'
+import { treeaseEditorBackend } from '../tools/treease-editor/backend/index.ts'
+import { wxpEnhancerBackend } from '../tools/wxp-enhancer/backend/index.ts'
 
 export interface ToolBackend {
   initialize: () => Promise<void> | void

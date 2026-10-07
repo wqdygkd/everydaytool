@@ -1,6 +1,6 @@
-import type { WxpEnhancement } from '../../../../shared/types.js'
+import type { WxpEnhancement } from '../../../../shared/types.ts'
 import { createHash } from 'node:crypto'
-import { buildInjectionScript } from './injection-script.js'
+import { buildInjectionScript } from './injection-script.ts'
 
 interface WxpRuntimeRule {
   id: string

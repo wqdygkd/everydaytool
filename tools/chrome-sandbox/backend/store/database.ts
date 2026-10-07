@@ -1,8 +1,5 @@
-import { mkdirSync } from 'node:fs'
-import path from 'node:path'
-import Database from 'better-sqlite3'
-import { getDatabasePath } from '../../../../backend/utils/data-root.js'
-import { logger } from '../../../../backend/utils/logger.js'
+import type BetterSqlite3 from 'better-sqlite3'
+import { closeSharedDatabase, getSharedDatabase, registerSchema } from '../../../../backend/utils/database.ts'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sandboxes (
@@ -52,29 +49,21 @@ CREATE TABLE IF NOT EXISTS global_config (
 CREATE INDEX IF NOT EXISTS idx_sandboxes_status ON sandboxes(status);
 `
 
-let db: Database.Database | null = null
+registerSchema(SCHEMA)
 
-export function getDatabase(): Database.Database {
-  if (db) return db
-
-  const dbPath = getDatabasePath()
-  mkdirSync(path.dirname(dbPath), { recursive: true })
-  db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA)
-  logger.info('Database initialized', { dbPath })
-  return db
+/**
+ * 沙箱域使用的共享数据库连接（与 env-browser 等工具域同一连接）：
+ * 保留本模块是为了不破坏既有导入路径，实际生命周期由 backend/utils/database.ts 统一管理。
+ */
+export function getDatabase(): BetterSqlite3.Database {
+  return getSharedDatabase()
 }
 
-export function reloadDatabase(): Database.Database {
-  closeDatabase()
-  return getDatabase()
+export function reloadDatabase(): BetterSqlite3.Database {
+  closeSharedDatabase()
+  return getSharedDatabase()
 }
 
 export function closeDatabase(): void {
-  if (db) {
-    db.close()
-    db = null
-  }
+  closeSharedDatabase()
 }

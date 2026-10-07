@@ -1,4 +1,4 @@
-import type { Fingerprint } from '../../../../shared/types.js'
+import type { Fingerprint } from '../../../../shared/types.ts'
 import { randomInt, randomUUID } from 'node:crypto'
 import process from 'node:process'
 

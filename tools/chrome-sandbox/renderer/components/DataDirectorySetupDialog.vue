@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+import { appIpcChannels, invokeAppIpc } from '@renderer/shared/ipc/useAppIpc'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'completed', 'cancel'])
@@ -9,7 +9,6 @@ const loading = ref(false)
 const dataDirectory = ref('')
 const saved = ref(false)
 const visible = useDialogVisible(props, emit)
-const channels = ipcChannels()
 
 watch(visible, (open) => {
   if (!open) return
@@ -35,7 +34,8 @@ async function save() {
 
   loading.value = true
   try {
-    const result = await invokeIpc(channels.CONFIG_UPDATE, { dataDirectory: trimmed })
+    // 首次引导同样走平台级通道，保证所有工具域都切换到新目录
+    const result = await invokeAppIpc<{ changed: boolean }>(appIpcChannels.DATA_DIRECTORY_UPDATE, trimmed)
     saved.value = true
     visible.value = false
     emit('completed', result)

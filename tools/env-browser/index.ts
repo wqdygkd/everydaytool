@@ -1,5 +1,4 @@
 import { defineTool } from '../../renderer/shared/tool/defineTool'
-import EnvBrowserPage from './renderer/pages/EnvBrowserPage.vue'
 
 const tool = defineTool({
   id: 'env-browser',
@@ -14,7 +13,7 @@ const tool = defineTool({
   route: {
     path: 'env-browser',
     name: 'tool-env-browser',
-    component: EnvBrowserPage,
+    component: () => import('./renderer/pages/EnvBrowserPage.vue'),
     meta: { toolId: 'env-browser', title: '环境浏览器' },
   },
 })

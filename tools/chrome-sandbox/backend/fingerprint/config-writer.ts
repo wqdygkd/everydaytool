@@ -1,8 +1,8 @@
-import type { Fingerprint } from '../../../../shared/types.js'
+import type { Fingerprint } from '../../../../shared/types.ts'
 import path from 'node:path'
-import { copyPath, ensureDir, linkOrCopyTree, pathExists, writeJson } from '../../../../backend/utils/file-ops.js'
-import { logger } from '../../../../backend/utils/logger.js'
-import { getExtensionTemplatePath, getSharedFingerprintExtPath } from '../utils/path-helper.js'
+import { copyPath, ensureDir, linkOrCopyTree, pathExists, writeJson } from '../../../../backend/utils/file-ops.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { getExtensionTemplatePath, getSharedFingerprintExtPath } from '../utils/path-helper.ts'
 
 const CONFIG_FILE = 'fingerprint-config.json'
 

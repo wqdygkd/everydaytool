@@ -1,6 +1,6 @@
 // 应用菜单动作清单的单一事实来源（electron/main.ts 系统菜单使用），避免清单漂移。
 // 仅常量，无运行时逻辑。
-import type { ShellMenuAction } from './types.js'
+import type { ShellMenuAction } from './types.ts'
 
 export interface ShellMenuItem {
   label: string

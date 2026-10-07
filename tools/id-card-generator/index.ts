@@ -1,5 +1,4 @@
 import { defineTool } from '../../renderer/shared/tool/defineTool'
-import IdCardGeneratorPage from './renderer/pages/IdCardGenerator.vue'
 
 const tool = defineTool({
   id: 'id-card-generator',
@@ -14,7 +13,7 @@ const tool = defineTool({
   route: {
     path: 'id-card-generator',
     name: 'tool-id-card-generator',
-    component: IdCardGeneratorPage,
+    component: () => import('./renderer/pages/IdCardGenerator.vue'),
     meta: { toolId: 'id-card-generator', title: '身份证号生成器' },
   },
 })

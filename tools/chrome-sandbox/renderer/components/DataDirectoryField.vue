@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+import { appIpcChannels, invokeAppIpc } from '@renderer/shared/ipc/useAppIpc'
 
 defineProps({
   modelValue: { type: String, default: '' },
@@ -9,7 +9,7 @@ const emit = defineEmits(['update:modelValue'])
 
 async function pickDirectory() {
   try {
-    const selected = await invokeIpc<string | null>(ipcChannels().CONFIG_SELECT_DATA_DIRECTORY)
+    const selected = await invokeAppIpc<string | null>(appIpcChannels.DATA_DIRECTORY_SELECT)
     if (selected) {
       emit('update:modelValue', selected)
     }

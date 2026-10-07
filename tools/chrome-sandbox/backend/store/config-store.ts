@@ -1,6 +1,6 @@
-import type { AppConfig, AppConfigUpdate } from '../../../../shared/types.js'
-import { getDataDirectory, getDefaultDataDirectory, normalizeDataDirectory } from '../../../../backend/utils/data-root.js'
-import { getDatabase } from './database.js'
+import type { AppConfig, AppConfigUpdate } from '../../../../shared/types.ts'
+import { getDataDirectory, getDefaultDataDirectory, normalizeDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { getDatabase } from './database.ts'
 
 const DEFAULTS: AppConfig = {
   chromePath: '',

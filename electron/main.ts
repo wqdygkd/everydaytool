@@ -1,16 +1,23 @@
-import type { ShellMenuAction } from '../shared/types.js'
+import type { ShellMenuAction } from '../shared/types.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
-import { registerAppIpcHandlers } from '../backend/ipc/handlers.js'
-import { SHELL_MENUS } from '../shared/menu.js'
-import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.js'
+import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
+import { logger } from '../backend/utils/logger.ts'
+import { isTrustedIpcSenderUrl } from '../shared/ipc-sender.ts'
+import { SHELL_MENUS } from '../shared/menu.ts'
+import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.ts'
 
 const require = createRequire(import.meta.url)
-const { app, BrowserWindow, Menu, ipcMain } = require('electron') as typeof import('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron') as typeof import('electron')
 
-// everydaytool 本体不对外暴露 Chromium 远程调试端口（CDP 仅用于注入外部应用）
-app.commandLine.appendSwitch('remote-debugging-port', '0')
+// 调试端口只在开发态（或 EDT_REMOTE_DEBUG=1 显式开启）下启用：
+// Chromium 的 --remote-debugging-port=0 表示“启用并监听随机端口”，生产包必须完全不设置，
+// 否则本机任意进程可发现并连接应用自身的 CDP。
+const isDev = process.env.NODE_ENV === 'development' || process.env.EDT_REMOTE_DEBUG === '1'
+if (isDev) {
+  app.commandLine.appendSwitch('remote-debugging-port', '9222')
+}
 
 // 页内菜单动作 → Electron role（role 自带标准行为与快捷键）。zoom 系列的 role 语义
 // 与下方 ipc 处理器一致（±0.5 / 重置为 0）。Record 键穷举 ShellMenuAction：新增动作
@@ -52,8 +59,6 @@ const menuTemplate: Electron.MenuItemConstructorOptions[] = [
 ]
 
 Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
-
-const isDev = process.env.NODE_ENV === 'development'
 
 // 编译产物 dist-electron/electron/main.js 中 import.meta.url 仍指向本文件所在目录，
 // preload.cjs 与 ../dist/index.html 的相对关系与源码一致。
@@ -114,6 +119,57 @@ async function disposeBackend(): Promise<void> {
   }
 }
 
+// 新窗口 / webview 的协议白名单：只允许 http(s)。
+// file://、data: 等一律拒绝，避免远程页面借 window.open / <webview src> 读本地文件或执行脚本。
+function isSafeWebUrl(rawUrl: string | undefined): boolean {
+  if (!rawUrl || !rawUrl.trim()) return false
+  try {
+    const { protocol } = new URL(rawUrl.trim())
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 窗口级安全加固：
+ * 1) will-attach-webview —— webview 的 preload 默认带 Node 集成，必须剥离；
+ *    同时拒绝非 http(s) 的 src（防止 file:// 读本地文件）。
+ * 2) setWindowOpenHandler —— 新窗口会继承父窗口的安全相关 webPreferences（含 preload），
+ *    远程页面可借 window.open 拿到应用自身能力；这里全部 deny，外跳改走 edt:open-external。
+ */
+function hardenWindow(win: Electron.BrowserWindow): void {
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
+
+    const src = params?.src
+    // src 为空时由业务代码稍后 loadURL 导航，此处只校验显式指定的地址
+    if (src && !isSafeWebUrl(src)) {
+      event.preventDefault()
+    }
+  })
+
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+}
+
+// 「外部打开」统一入口：window.open 已全部 deny，页面需要外跳时调用本通道，
+// 由主进程校验协议后用系统默认浏览器打开（不再创建会继承父窗口配置的子窗口）。
+ipcMain.on('edt:open-external', (event, rawUrl: string) => {
+  if (!isSafeWebUrl(rawUrl)) return
+  const frame = event.senderFrame as { origin?: string, url?: string } | null
+  const sender = frame?.origin || frame?.url
+  if (!isTrustedIpcSenderUrl(sender)) {
+    logger.warn('Blocked untrusted open-external request')
+    return
+  }
+  void shell.openExternal(rawUrl.trim())
+})
+
 async function createWindow(): Promise<void> {
   const isMac = process.platform === 'darwin'
   mainWindow = new BrowserWindow({
@@ -140,6 +196,13 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
       webviewTag: true,
     },
+  })
+
+  hardenWindow(mainWindow)
+
+  mainWindow.on('closed', () => {
+    // 置空避免后续菜单 / IPC 操作已销毁的 webContents 而抛异常
+    mainWindow = null
   })
 
   if (isDev) {
@@ -171,6 +234,20 @@ app.on('activate', async () => {
   }
 })
 
-app.on('before-quit', async () => {
-  await disposeBackend()
+// Electron 不会等待 async 的 before-quit 监听器：这里先阻止默认退出、显式完成清理后再退出，
+// 保证数据库关闭（WAL checkpoint）、CDP 会话与外部子进程收尾真正执行完。
+let quitting = false
+app.on('before-quit', (event) => {
+  if (quitting) return
+  quitting = true
+  event.preventDefault()
+  void (async () => {
+    try {
+      await disposeBackend()
+    } catch (error) {
+      logger.error('Failed to dispose backend', { error: (error as Error).message })
+    } finally {
+      app.quit()
+    }
+  })()
 })

@@ -32,6 +32,24 @@ declare const location: any
 declare const MutationObserver: any
 export function injectionMain(): void {
   var env = window.__wxpEnv
+
+  // —— 生命周期：所有 interval / observer / 监听都登记到这里 ——
+  // 注入脚本会在每个新文档执行，只靠「找到目标后清理」时未命中分支会留下常驻定时器；
+  // 页面卸载（pagehide）统一回收，避免长会话下定时器与观察器持续累积。
+  var disposers: any[] = [];
+  function addDisposer(fn: any) {
+    disposers.push(fn);
+  }
+  function disposeAll() {
+    for (var i = 0; i < disposers.length; i++) {
+      try { disposers[i](); } catch (e) {}
+    }
+    disposers.length = 0;
+  }
+  if (window.addEventListener) {
+    window.addEventListener('pagehide', disposeAll, { once: true });
+  }
+
   var CACHE_LOGIN = env.cacheLogin
   var TOKEN_KEY = env.keys.token
   var USER_CACHE_KEY = env.keys.userCache
@@ -167,6 +185,10 @@ export function injectionMain(): void {
         }
       } catch (e) {}
     }, 3000);
+    addDisposer(function () {
+      clearInterval(window.__wxpEnhancerSessionMirror);
+      window.__wxpEnhancerSessionMirror = null;
+    });
   }
   // —— 自动进入主页：已还原用户且停在登录/根页面时，先宽限 ENTRY_DELAY_MS 给应用
   // 自行恢复（静默重连可能自己跳转），仍未进入才设 hash 后整页刷新 ——
@@ -196,10 +218,15 @@ export function injectionMain(): void {
     window.__wxpEnhancerBootstrap = setInterval(function () {
       bootstrapTries++;
       try {
-        if (bootstrapTries > 40) return clearInterval(window.__wxpEnhancerBootstrap);
+        if (bootstrapTries > 40) {
+          clearInterval(window.__wxpEnhancerBootstrap);
+          window.__wxpEnhancerBootstrap = null;
+          return;
+        }
         var store = readStore();
         if (!store || !store.getters || !store.getters.user || !store.getters.baseURL) return;
         clearInterval(window.__wxpEnhancerBootstrap);
+        window.__wxpEnhancerBootstrap = null;
         var baseUrl = store.getters.baseURL;
         var params: any = {};
         try { params = JSON.parse(localStorage.getItem(LOGIN_PARAMS_KEY) || '{}'); } catch (e) { params = {}; }
@@ -231,9 +258,15 @@ export function injectionMain(): void {
         // 4) iframe SSO（研发/交付/运维中心）
         store.dispatch('WxpLogin', { domain: baseUrl }).catch(function () {});
       } catch (e) {
+        // 异常分支同样要及时停表：否则找不到目标时会一直轮询到 40 次上限
         clearInterval(window.__wxpEnhancerBootstrap);
+        window.__wxpEnhancerBootstrap = null;
       }
     }, 500);
+    addDisposer(function () {
+      if (window.__wxpEnhancerBootstrap) clearInterval(window.__wxpEnhancerBootstrap);
+      window.__wxpEnhancerBootstrap = null;
+    });
   }
   // —— 链接收藏（内置增强）：链接中心表格每行「转发名称」旁注入星标与「医院域名
   // 打开」按钮，点击收藏/取消（localStorage，行内容作键）；并在数据层处理接口响应
@@ -385,7 +418,7 @@ export function injectionMain(): void {
   // （捕获阶段拦截，不触发行内事件）
   if (!window.__wxpEnhancerFavClick) {
     window.__wxpEnhancerFavClick = true;
-    document.addEventListener('click', function (ev: any) {
+    var onFavClick = function (ev: any) {
       var el = ev.target && ev.target.closest ? ev.target.closest('.wxp-fav-star, .wxp-open-btn') : null;
       if (!el) return;
       ev.preventDefault();
@@ -407,13 +440,18 @@ export function injectionMain(): void {
         if (link) openHospitalLink(lc, link);
       }
       refreshStars();
-    }, true);
+    };
+    document.addEventListener('click', onFavClick, true);
+    addDisposer(function () {
+      document.removeEventListener('click', onFavClick, true);
+      window.__wxpEnhancerFavClick = false;
+    });
   }
   // 数据层接线：包装接口响应入口（getCurrentHospitalLinks），每次拉取后标记+置顶；
   // row-class 给收藏行加高亮（isFav 随每次排序触发的重渲染而刷新到行 class 上）
   if (!window.__wxpEnhancerFavDataScan) {
     var favDataTries = 0;
-    window.__wxpEnhancerFavDataScan = setInterval(function () {
+    var favDataScan = setInterval(function () {
       favDataTries++;
       try {
         var lc = findLinkCenterVm(readRootVm());
@@ -444,13 +482,26 @@ export function injectionMain(): void {
           }
           applyMarkSort(lc);
           refreshStars();
-          clearInterval(window.__wxpEnhancerFavDataScan);
+          clearInterval(favDataScan);
+          window.__wxpEnhancerFavDataDone = true;
+          return;
         }
-        if (favDataTries > 600) clearInterval(window.__wxpEnhancerFavDataScan);
+        // 找不到链接中心时不无限轮询：3000ms × 600 次相当于最长 30 分钟常驻定时器，
+        // 这里降到 60 次（3 分钟），未命中就交还给下一次文档注入重试
+        if (favDataTries > 60) {
+          clearInterval(favDataScan);
+          window.__wxpEnhancerFavDataScan = false;
+        }
       } catch (e) {
-        clearInterval(window.__wxpEnhancerFavDataScan);
+        clearInterval(favDataScan);
+        window.__wxpEnhancerFavDataScan = false;
       }
     }, 3000);
+    window.__wxpEnhancerFavDataScan = true;
+    addDisposer(function () {
+      clearInterval(favDataScan);
+      window.__wxpEnhancerFavDataScan = false;
+    });
   }
   // 表格重渲染（切医院/筛选/翻页）后补挂/刷新星标；body 在文档启动早段可能还不存在
   var startFavObserver = function () {
@@ -460,10 +511,19 @@ export function injectionMain(): void {
       window.__wxpEnhancerFavScanTimer = setTimeout(function () {
         window.__wxpEnhancerFavScanTimer = null;
         refreshStars();
-      }, 150);
+      }, 300);
     });
+    // 观察范围仍为 body（链接中心容器会被整体替换，收窄到容器会漏掉重挂载），
+    // 但抖动从 150ms 提到 300ms，并且 refreshStars 内部找不到容器时直接返回，
+    // 避免表格重渲染时高频全量遍历行 DOM。
     window.__wxpEnhancerFavObserver.observe(document.body, { childList: true, subtree: true });
     refreshStars();
+    addDisposer(function () {
+      if (window.__wxpEnhancerFavScanTimer) clearTimeout(window.__wxpEnhancerFavScanTimer);
+      window.__wxpEnhancerFavScanTimer = null;
+      window.__wxpEnhancerFavObserver.disconnect();
+      window.__wxpEnhancerFavObserver = null;
+    });
   };
   if (document.body) startFavObserver();
   else document.addEventListener('DOMContentLoaded', startFavObserver, { once: true });

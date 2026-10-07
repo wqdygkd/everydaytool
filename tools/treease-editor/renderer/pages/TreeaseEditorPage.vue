@@ -2,12 +2,13 @@
 import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/types'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
+import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { freshBuiltInRules, mergeStoredRules } from '../shared/interceptRules'
 
 const SRC = 'https://treease.com/editor'
-const RULES_STORAGE_KEY = 'edt:treease-intercept-rules'
-const ENABLED_STORAGE_KEY = 'edt:treease-intercept-enabled'
+const RULES_STORAGE_KEY = STORAGE_KEYS.treeaseInterceptRules
+const ENABLED_STORAGE_KEY = STORAGE_KEYS.treeaseInterceptEnabled
 
 interface PatchRow {
   path: string
@@ -123,8 +124,13 @@ function hasActiveRule(rules: TreeaseInterceptRule[]): boolean {
 }
 
 function persistRules(rules: TreeaseInterceptRule[]) {
-  localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules))
-  localStorage.setItem(ENABLED_STORAGE_KEY, interceptEnabled.value ? '1' : '0')
+  // 配额满 / 隐私模式下 localStorage 写入会抛错，不能让规则保存连带中断后续流程
+  try {
+    localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules))
+    localStorage.setItem(ENABLED_STORAGE_KEY, interceptEnabled.value ? '1' : '0')
+  } catch (error) {
+    logger.warn('Failed to persist intercept rules', { error: (error as Error).message })
+  }
 }
 
 function ensureLogSubscription() {

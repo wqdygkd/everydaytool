@@ -1,9 +1,9 @@
-import type { LaunchOptions } from '../../../../shared/types.js'
+import type { LaunchOptions } from '../../../../shared/types.ts'
 import { spawn } from 'node:child_process'
-import { logger } from '../../../../backend/utils/logger.js'
-import { detectChromePath } from './detector.js'
-import { getFreePort } from './developer-mode.js'
-import { findRunningPid, registerProcess } from './process-manager.js'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { detectChromePath } from './detector.ts'
+import { getFreePort } from './developer-mode.ts'
+import { findRunningPid, registerProcess } from './process-manager.ts'
 
 interface LaunchChromeOptions {
   sandboxId: string

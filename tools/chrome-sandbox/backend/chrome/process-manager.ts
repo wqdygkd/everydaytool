@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { logger } from '../../../../backend/utils/logger.js'
+import { logger } from '../../../../backend/utils/logger.ts'
 
 const execFileAsync = promisify(execFile)
 

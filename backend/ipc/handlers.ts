@@ -6,18 +6,20 @@ import type {
   AppDataDirectoryUpdateResult,
   CacheCleanResult,
   DataRootUsage,
-} from '../../shared/types.js'
+} from '../../shared/types.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { clearDataRootCaches, scanDataRoot } from '../utils/data-root-scan.js'
+import { isSafeDataDirectory } from '../../shared/path-guard.ts'
+import { clearDataRootCaches, invalidateScanCache, scanDataRoot } from '../utils/data-root-scan.ts'
 import {
   applyDataDirectoryChange,
   getDataDirectory,
   getDefaultDataDirectory,
   markDataDirectoryConfigured,
-} from '../utils/data-root.js'
-import { logger } from '../utils/logger.js'
-import { EDT_APP_IPC_CHANNELS } from './channels.js'
+} from '../utils/data-root.ts'
+import { safeHandle } from '../utils/ipc-safety.ts'
+import { logger } from '../utils/logger.ts'
+import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
 const require = createRequire(import.meta.url)
 const { dialog, ipcMain, session, shell } = require('electron') as typeof import('electron')
@@ -37,9 +39,9 @@ function getDataDirectoryInfo(): AppDataDirectoryInfo {
 }
 
 export function registerAppIpcHandlers(options: AppIpcOptions): void {
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_GET, () => getDataDirectoryInfo())
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_GET, () => getDataDirectoryInfo())
 
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_SELECT, async () => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_SELECT, async () => {
     const result = await dialog.showOpenDialog({
       title: '选择数据目录',
       properties: ['openDirectory', 'createDirectory'],
@@ -48,32 +50,40 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_UPDATE, async (_event, nextDirectory: string): Promise<AppDataDirectoryUpdateResult> => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_UPDATE, async (_event, nextDirectory: string): Promise<AppDataDirectoryUpdateResult> => {
+    // 数据目录可被改到任意位置并承载递归删除/写文件，先做边界校验
+    const guard = isSafeDataDirectory(nextDirectory)
+    if (!guard.ok) {
+      throw new Error(guard.reason || '数据目录不合法')
+    }
+
     const result = await applyDataDirectoryChange(nextDirectory)
     if (result.changed) {
       await options.notifyDataDirectoryChanged()
       await markDataDirectoryConfigured()
-      logger.info('Data directory changed', { dataDirectory: result.dataDirectory })
+      // 目录已切换，缓存的扫描结果不再有效
+      invalidateScanCache()
+      logger.info('Data directory changed', { changed: true })
     }
     return { ...getDataDirectoryInfo(), changed: result.changed }
   })
 
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_OPEN, async () => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_OPEN, async () => {
     const dataDirectory = getDataDirectory()
     const errorMessage = await shell.openPath(dataDirectory)
     if (errorMessage) {
-      logger.warn('Failed to open data directory', { dataDirectory, error: errorMessage })
+      logger.warn('Failed to open data directory', { error: errorMessage })
       throw new Error(errorMessage)
     }
     return true
   })
 
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.DATA_USAGE_GET, async (): Promise<DataRootUsage> => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_USAGE_GET, async (): Promise<DataRootUsage> => {
     const { cacheDirs: _cacheDirs, ...usage } = await scanDataRoot()
     return usage
   })
 
-  ipcMain.handle(EDT_APP_IPC_CHANNELS.CACHE_CLEAR, async (): Promise<CacheCleanResult> => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.CACHE_CLEAR, async (): Promise<CacheCleanResult> => {
     const result = await clearDataRootCaches()
     // 应用自身（渲染层）的 HTTP 缓存一并清掉；体积不并入统计
     try {

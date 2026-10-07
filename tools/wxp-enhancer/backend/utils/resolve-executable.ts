@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { pathExists } from '../../../../backend/utils/file-ops.js'
+import { pathExists } from '../../../../backend/utils/file-ops.ts'
 
 /**
  * macOS .app 为目录，需解析到 Contents/MacOS 下的真实二进制。

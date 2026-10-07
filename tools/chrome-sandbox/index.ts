@@ -1,5 +1,4 @@
 import { defineTool } from '../../renderer/shared/tool/defineTool'
-import ChromeSandboxPage from './renderer/pages/ChromeSandbox.vue'
 
 const tool = defineTool({
   id: 'chrome-sandbox',
@@ -14,7 +13,8 @@ const tool = defineTool({
   route: {
     path: 'chrome-sandbox',
     name: 'tool-chrome-sandbox',
-    component: ChromeSandboxPage,
+    // 工具页按需加载：不进主包，进入工具时才拉对应 chunk
+    component: () => import('./renderer/pages/ChromeSandbox.vue'),
     meta: { toolId: 'chrome-sandbox', title: 'Chrome沙箱' },
   },
 })

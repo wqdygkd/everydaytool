@@ -1,6 +1,6 @@
 import path from 'node:path'
 import process from 'node:process'
-import { pathExists } from '../../../../backend/utils/file-ops.js'
+import { pathExists } from '../../../../backend/utils/file-ops.ts'
 
 // 目标应用是 WxP Client（Electron 应用，产品名 "WxP Client"）。
 // 注意与微信（Weixin / WeChat）无关：名字相近但安装路径、进程完全不同，勿混入微信候选。

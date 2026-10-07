@@ -52,13 +52,15 @@ export default antfu(
     files: [
       'electron/**/*.ts',
       'tools/*/backend/**/*.ts',
+      'backend/**/*.ts',
+      'shared/**/*.ts',
     ],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [
           {
-            group: ['**/*.ts', '**/*.tsx'],
-            message: 'Electron/Node ESM 源码使用 .js 运行时后缀导入，不导入 .ts/.tsx。',
+            group: ['**/*.js', '**/*.jsx', '**/*.cjs', '**/*.mjs'],
+            message: 'Node/Electron 侧源码统一使用 .ts 后缀导入（构建期由 esbuild rewriteExtensions 还原为 .js）；.js 后缀会让编辑器无法跳转到 .ts 源且拿不到类型。',
           },
         ],
       }],

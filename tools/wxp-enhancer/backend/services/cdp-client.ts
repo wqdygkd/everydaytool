@@ -1,4 +1,4 @@
-import { sleep } from '../../../../shared/sleep.js'
+import { sleep } from '../../../../shared/sleep.ts'
 
 interface CdpTargetRaw {
   id: string
@@ -12,13 +12,28 @@ interface CdpTargetRaw {
 
 const DEBUGGABLE_TARGET_TYPES = new Set(['page', 'iframe'])
 
-async function fetchTargets(port: number): Promise<CdpTargetRaw[]> {
-  const response = await fetch(`http://127.0.0.1:${port}/json`)
+const CDP_HTTP_TIMEOUT_MS = 5000
+const CDP_WS_TIMEOUT_MS = 15000
+
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(CDP_HTTP_TIMEOUT_MS) })
   if (!response.ok) {
     throw new Error(`CDP /json 请求失败: ${response.status}`)
   }
-  const list = await response.json() as CdpTargetRaw[]
-  return list.filter(item => DEBUGGABLE_TARGET_TYPES.has(item.type) && item.webSocketDebuggerUrl)
+  return response.json()
+}
+
+async function fetchTargets(port: number): Promise<CdpTargetRaw[]> {
+  const list = await fetchJson(`http://127.0.0.1:${port}/json`) as CdpTargetRaw[]
+  // 只信任本机同端口的调试入口：避免把任意服务的响应当作可信的 CDP 目标列表
+  return list.filter(item => DEBUGGABLE_TARGET_TYPES.has(item.type) && isLocalDebuggerUrl(item.webSocketDebuggerUrl, port))
+}
+
+function isLocalDebuggerUrl(wsUrl: string | undefined, port: number): boolean {
+  if (!wsUrl) return false
+  const prefix = `ws://127.0.0.1:${port}/`
+  const altPrefix = `ws://localhost:${port}/`
+  return wsUrl.startsWith(prefix) || wsUrl.startsWith(altPrefix)
 }
 
 interface CdpMessage {
@@ -27,12 +42,32 @@ interface CdpMessage {
   result?: Record<string, unknown>
 }
 
-interface PendingCall { resolve: (value: Record<string, unknown>) => void, reject: (reason: Error) => void }
+interface PendingCall {
+  resolve: (value: Record<string, unknown>) => void
+  reject: (reason: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
 type CdpCaller = (method: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>
 
 function createCdpCaller(ws: WebSocket): CdpCaller {
   let messageId = 0
   const pending = new Map<number, PendingCall>()
+
+  function settle(id: number, action: (call: PendingCall) => void): void {
+    const pendingCall = pending.get(id)
+    if (!pendingCall) return
+    pending.delete(id)
+    // 成功/失败都要清掉超时定时器，避免长时运行时持续累积 timer 句柄
+    clearTimeout(pendingCall.timer)
+    action(pendingCall)
+  }
+
+  // 连接意外关闭时让所有挂起调用立即失败，避免永久悬挂
+  ws.addEventListener('close', () => {
+    for (const id of [...pending.keys()]) {
+      settle(id, call => call.reject(new Error('CDP 连接已关闭')))
+    }
+  })
 
   ws.addEventListener('message', (event) => {
     let message: CdpMessage
@@ -43,26 +78,21 @@ function createCdpCaller(ws: WebSocket): CdpCaller {
     }
     if (!message.id) return
 
-    const pendingCall = pending.get(message.id)
-    if (!pendingCall) return
-    pending.delete(message.id)
     if (message.error) {
-      pendingCall.reject(new Error(message.error.message || 'CDP 调用失败'))
+      settle(message.id, call => call.reject(new Error(message.error?.message || 'CDP 调用失败')))
       return
     }
-    pendingCall.resolve(message.result ?? {})
+    settle(message.id, call => call.resolve(message.result ?? {}))
   })
 
   const call: CdpCaller = (method, params = {}) =>
     new Promise((resolve, reject) => {
       const id = ++messageId
-      pending.set(id, { resolve, reject })
+      const timer = setTimeout(() => {
+        settle(id, pendingCall => pendingCall.reject(new Error(`CDP 超时: ${method}`)))
+      }, CDP_WS_TIMEOUT_MS)
+      pending.set(id, { resolve, reject, timer })
       ws.send(JSON.stringify({ id, method, params }))
-      setTimeout(() => {
-        if (!pending.has(id)) return
-        pending.delete(id)
-        reject(new Error(`CDP 超时: ${method}`))
-      }, 15000)
     })
 
   return call
@@ -71,8 +101,14 @@ function createCdpCaller(ws: WebSocket): CdpCaller {
 async function connectWebSocket(wsUrl: string): Promise<WebSocket> {
   const ws = new WebSocket(wsUrl)
   await new Promise<void>((resolve, reject) => {
-    ws.addEventListener('open', () => resolve(), { once: true })
-    ws.addEventListener('error', () => reject(new Error(`WebSocket 连接失败: ${wsUrl}`)), { once: true })
+    const timer = setTimeout(() => reject(new Error(`WebSocket 连接超时: ${wsUrl}`)), CDP_WS_TIMEOUT_MS)
+    const finish = (error?: Error) => {
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve()
+    }
+    ws.addEventListener('open', () => finish(), { once: true })
+    ws.addEventListener('error', () => finish(new Error(`WebSocket 连接失败: ${wsUrl}`)), { once: true })
   })
   return ws
 }

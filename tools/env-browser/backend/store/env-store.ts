@@ -1,11 +1,7 @@
-import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types.js'
+import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types.ts'
 import { randomUUID } from 'node:crypto'
-import { createRequire } from 'node:module'
-import { getDatabasePath } from '../../../../backend/utils/data-root.js'
-import { logger } from '../../../../backend/utils/logger.js'
-
-const require = createRequire(import.meta.url)
-const Database = require('better-sqlite3') as typeof import('better-sqlite3')
+import { closeSharedDatabase, getSharedDatabase, registerSchema } from '../../../../backend/utils/database.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
 
 const ENV_SCHEMA = `
 CREATE TABLE IF NOT EXISTS env_browser_configs (
@@ -21,24 +17,17 @@ CREATE TABLE IF NOT EXISTS env_browser_configs (
 );
 `
 
-let db: import('better-sqlite3').Database | null = null
+// 建表语句交给平台层统一执行（与 chrome-sandbox 共用同一连接）
+registerSchema(ENV_SCHEMA)
 
+// 共享连接由平台层统一管理（建目录 / WAL / 外键 / 关闭），这里不再自建连接
 function getDb(): import('better-sqlite3').Database {
-  if (db) return db
-  const dbPath = getDatabasePath()
-  db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
-  db.exec(ENV_SCHEMA)
-  logger.info('EnvBrowser table ensured', { dbPath })
-  return db
+  return getSharedDatabase()
 }
 
-/** 关闭并丢弃缓存的连接（数据根目录变更后由 backend index 调用，下次访问按新目录重开） */
+/** 关闭共享连接（数据根目录变更后 / 退出时调用，下次访问按新目录重开） */
 export function closeEnvDatabase(): void {
-  if (db) {
-    db.close()
-    db = null
-  }
+  closeSharedDatabase()
 }
 
 function rowToEnv(row: Record<string, unknown>): EnvConfig {

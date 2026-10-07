@@ -1,4 +1,4 @@
-import { injectionMain } from './injection-main.js'
+import { injectionMain } from './injection-main.ts'
 
 /**
  * 注入脚本的运行时参数：injection-main.ts（脚本本体，真实函数）从这里拿运行时值，

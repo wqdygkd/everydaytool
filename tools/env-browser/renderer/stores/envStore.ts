@@ -1,10 +1,11 @@
 import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types'
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { defineStore } from 'pinia'
+import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 
 export type { EnvConfig, EnvCreatePayload, EnvUpdatePayload }
 
-const STORAGE_KEY = 'edt:env-browser:configs'
+const STORAGE_KEY = STORAGE_KEYS.envBrowserConfigs
 
 const { getApi: getEnvBrowserApi } = createIpcHelpers('envBrowser', '环境浏览器')
 

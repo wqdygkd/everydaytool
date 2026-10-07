@@ -1,6 +1,6 @@
-import type { WxpDataCache } from '../../../../shared/types.js'
-import { evaluateOnMainPage } from '../services/cdp-client.js'
-import { dataCacheStore } from '../store/data-cache-store.js'
+import type { WxpDataCache } from '../../../../shared/types.ts'
+import { evaluateOnMainPage } from '../services/cdp-client.ts'
+import { dataCacheStore } from '../store/data-cache-store.ts'
 
 /**
  * 采集脚本（在 WXP 主页面执行）：读取 localStorage 的令牌 / 参数镜像 / 收藏，

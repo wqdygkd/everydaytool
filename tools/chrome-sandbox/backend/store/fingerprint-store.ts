@@ -2,8 +2,8 @@ import type {
   Fingerprint,
   FingerprintCreatePayload,
   FingerprintUpdatePayload,
-} from '../../../../shared/types.js'
-import { getDatabase } from './database.js'
+} from '../../../../shared/types.ts'
+import { getDatabase } from './database.ts'
 
 interface FingerprintRow {
   id: string
@@ -116,7 +116,28 @@ const INSERT_FIELDS = FIELDS.filter(f => f.key !== 'id')
 const INSERT_COLS = INSERT_FIELDS.map(f => f.col).join(', ')
 const INSERT_PARAMS = INSERT_FIELDS.map(f => `@${f.col}`).join(', ')
 
-const UPDATE_CLAUSES = INSERT_FIELDS.map(f => `${f.col} = @${f.col}`).join(', ')
+/** 判断嵌套路径在对象里是否真的存在（区分「显式 null」与「未提供」） */
+function hasNestedKey(obj: unknown, path: string): boolean {
+  const keys = path.split('.')
+  let current: unknown = obj
+  for (const key of keys) {
+    if (typeof current !== 'object' || current === null) return false
+    if (!(key in (current as Record<string, unknown>))) return false
+    current = (current as Record<string, unknown>)[key]
+  }
+  return true
+}
+
+/** 只收集本次实际传入的字段，避免把未提供的值写成 NULL */
+function buildUpdateParams(data: FingerprintData): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+  for (const f of INSERT_FIELDS) {
+    if (!hasNestedKey(data, f.key)) continue
+    const value = getNestedValue(data, f.key)
+    params[f.col] = f.transform ? f.transform(value) : value
+  }
+  return params
+}
 
 export const fingerprintStore = {
   getById(id: string): Fingerprint | null {
@@ -133,10 +154,19 @@ export const fingerprintStore = {
     return this.getById(data.id)
   },
 
+  /**
+   * 部分更新：只更新传入的字段（dynamic SET 子句）。
+   * 早期实现会把 Partial 强转成完整对象写满所有列，缺失字段会写 undefined 或把已有值覆盖为 NULL。
+   */
   update(id: string, data: FingerprintUpdatePayload): Fingerprint | null {
+    const params = buildUpdateParams(data as FingerprintData)
+    const columns = Object.keys(params)
+    if (!columns.length) return this.getById(id)
+
+    const assignments = columns.map(col => `${col} = @${col}`).join(', ')
     getDatabase().prepare(`
-      UPDATE fingerprints SET ${UPDATE_CLAUSES}, updated_at = CURRENT_TIMESTAMP WHERE id = @id
-    `).run({ id, ...buildParams(data as FingerprintData) })
+      UPDATE fingerprints SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = @id
+    `).run({ id, ...params })
     return this.getById(id)
   },
 

@@ -1,5 +1,4 @@
 import { defineTool } from '../../renderer/shared/tool/defineTool'
-import TreeaseEditorPage from './renderer/pages/TreeaseEditorPage.vue'
 
 const tool = defineTool({
   id: 'treease-editor',
@@ -14,7 +13,7 @@ const tool = defineTool({
   route: {
     path: 'treease-editor',
     name: 'tool-treease-editor',
-    component: TreeaseEditorPage,
+    component: () => import('./renderer/pages/TreeaseEditorPage.vue'),
     meta: { toolId: 'treease-editor', title: 'Treease 编辑器' },
   },
 })

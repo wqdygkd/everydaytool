@@ -3,9 +3,9 @@ import type {
   SandboxMetadata,
   SandboxStatus,
   SandboxUpdatePayload,
-} from '../../../../shared/types.js'
-import { SANDBOX_COLORS } from '../constants/sandbox.js'
-import { getDatabase } from './database.js'
+} from '../../../../shared/types.ts'
+import { SANDBOX_COLORS } from '../constants/sandbox.ts'
+import { getDatabase } from './database.ts'
 
 interface SandboxRow {
   id: string

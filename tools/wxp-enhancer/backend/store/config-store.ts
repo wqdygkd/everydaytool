@@ -1,9 +1,9 @@
-import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.js'
+import type { WxpEnhancement, WxpSettings } from '../../../../shared/types.ts'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { getDataDirectory } from '../../../../backend/utils/data-root.js'
-import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.js'
-import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.js'
+import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
+import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.ts'
 
 interface WxpConfigFile {
   settings: WxpSettings

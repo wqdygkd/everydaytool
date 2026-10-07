@@ -24,13 +24,19 @@ watch(visible, (open) => {
 })
 
 async function loadInfo() {
-  info.value = await invokeAppIpc<AppDataDirectoryInfo>(appIpcChannels.DATA_DIRECTORY_GET)
+  try {
+    info.value = await invokeAppIpc<AppDataDirectoryInfo>(appIpcChannels.DATA_DIRECTORY_GET)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '读取数据目录失败')
+  }
 }
 
 async function loadUsage() {
   usageLoading.value = true
   try {
     usage.value = await invokeAppIpc<DataRootUsage>(appIpcChannels.DATA_USAGE_GET)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '计算空间占用失败')
   } finally {
     usageLoading.value = false
   }
@@ -45,7 +51,13 @@ async function openDirectory() {
 }
 
 async function selectDirectory() {
-  const directory = await invokeAppIpc<string | null>(appIpcChannels.DATA_DIRECTORY_SELECT)
+  let directory: string | null = null
+  try {
+    directory = await invokeAppIpc<string | null>(appIpcChannels.DATA_DIRECTORY_SELECT)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '选择目录失败')
+    return
+  }
   if (!directory) return
 
   changing.value = true

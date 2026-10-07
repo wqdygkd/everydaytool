@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { STORAGE_KEYS } from '../../shared/storage-keys'
 import { getToolRegistry } from '../config/tools'
 
 export interface ToolTab {
@@ -7,7 +8,7 @@ export interface ToolTab {
   routeName: string
 }
 
-const STORAGE_KEY = 'edt:tool-tabs'
+const STORAGE_KEY = STORAGE_KEYS.toolTabs
 
 function readStored(): string[] {
   try {

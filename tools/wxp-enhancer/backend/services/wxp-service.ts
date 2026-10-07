@@ -1,11 +1,11 @@
-import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/types.js'
-import { logger } from '../../../../backend/utils/logger.js'
-import { sleep } from '../../../../shared/sleep.js'
-import { wxpConfigStore } from '../store/config-store.js'
-import { isExecutableRunning } from '../utils/process-detect.js'
-import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.js'
-import { buildClearLoginCacheSnippet, buildEnhancementSource } from './enhancement-script.js'
-import { processLauncher } from './launcher-service.js'
+import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/types.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { sleep } from '../../../../shared/sleep.ts'
+import { wxpConfigStore } from '../store/config-store.ts'
+import { isExecutableRunning } from '../utils/process-detect.ts'
+import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.ts'
+import { buildClearLoginCacheSnippet, buildEnhancementSource } from './enhancement-script.ts'
+import { processLauncher } from './launcher-service.ts'
 
 const PROFILE_ID = 'wxp'
 /** 拉起后的最短等待：给进程一点启动时间，CDP 就绪探测由 waitForCdpPort 重试兜底 */
@@ -22,8 +22,9 @@ let activeSettings: WxpSettings | null = null
 
 let statusEmitter: ((state: WxpRunningState | null) => void) | null = null
 
-// 附加模式下没有子进程可跟踪，用存活看门狗检测应用自行退出
-const ATTACH_CHECK_INTERVAL_MS = 4000
+// 附加模式下没有子进程可跟踪，用存活看门狗检测应用自行退出。
+// 频率从 4s 降到 15s：看门狗每次都要拉起一次进程查询，过高的频率会持续消耗 CPU/电量。
+const ATTACH_CHECK_INTERVAL_MS = 15000
 const ATTACH_MAX_MISSES = 2
 
 let attachWatchdog: NodeJS.Timeout | null = null
@@ -112,7 +113,7 @@ function clearState(): void {
   emitStatus()
 }
 
-function assertSettings(settings: WxpSettings): void {
+export function assertSettings(settings: WxpSettings): void {
   if (!settings.executablePath.trim()) {
     throw new Error('未设置 WXP 路径，请先选择可执行文件')
   }

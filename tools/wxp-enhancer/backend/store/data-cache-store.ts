@@ -1,7 +1,7 @@
-import type { WxpDataCache } from '../../../../shared/types.js'
+import type { WxpDataCache } from '../../../../shared/types.ts'
 import path from 'node:path'
-import { getDataDirectory } from '../../../../backend/utils/data-root.js'
-import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.js'
+import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
 
 function getCachePath(): string {
   return path.join(getDataDirectory(), 'wxp-enhancer', 'data-cache.json')

@@ -1,6 +1,6 @@
-import { pathExists } from '../../../../backend/utils/file-ops.js'
-import { configStore } from '../store/config-store.js'
-import { getDefaultChromePaths } from '../utils/path-helper.js'
+import { pathExists } from '../../../../backend/utils/file-ops.ts'
+import { configStore } from '../store/config-store.ts'
+import { getDefaultChromePaths } from '../utils/path-helper.ts'
 
 export async function detectChromePath(): Promise<string> {
   const configured = configStore.get<string>('chromePath')

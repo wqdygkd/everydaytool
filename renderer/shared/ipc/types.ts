@@ -7,6 +7,7 @@ export interface EdtRuntimeApi {
   target: ToolClientTarget
   platform: string
   menuAction: (action: ShellMenuAction) => void
+  openExternal?: (url: string) => void
 }
 
 export interface IpcInvokeApi {
@@ -20,6 +21,8 @@ declare global {
     edtRuntime?: EdtRuntimeApi
     edtApp: IpcInvokeApi
     chromeSandbox: IpcInvokeApi
+    envBrowser: IpcInvokeApi
+    treeaseEditor: IpcInvokeApi
     wxpEnhancer: IpcInvokeApi
   }
 }

@@ -1,8 +1,8 @@
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { copyIfExists, copyPath, ensureDir, movePath, pathExists, readJson, readJsonFile, removeIfExists, writeJson } from '../../../../backend/utils/file-ops.js'
-import { logger } from '../../../../backend/utils/logger.js'
-import { getChromeUserDataRoot, getDefaultChromeProfilePath, getSandboxProfileDirectoryName } from '../utils/path-helper.js'
+import { copyIfExists, copyPath, ensureDir, movePath, pathExists, readJson, readJsonFile, removeIfExists, writeJson } from '../../../../backend/utils/file-ops.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { getChromeUserDataRoot, getDefaultChromeProfilePath, getSandboxProfileDirectoryName } from '../utils/path-helper.ts'
 
 type JsonObject = Record<string, any>
 

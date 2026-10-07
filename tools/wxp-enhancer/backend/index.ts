@@ -1,5 +1,5 @@
-import { registerWxpHandlers } from './ipc/handlers.js'
-import { wxpService } from './services/wxp-service.js'
+import { registerWxpHandlers } from './ipc/handlers.ts'
+import { wxpService } from './services/wxp-service.ts'
 
 export const wxpEnhancerBackend = {
   initialize(): void {

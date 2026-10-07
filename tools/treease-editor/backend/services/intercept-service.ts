@@ -1,11 +1,12 @@
-import type { TreeaseInterceptLog, TreeaseInterceptPatch, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/types.js'
+import type { TreeaseInterceptLog, TreeaseInterceptPatch, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/types.ts'
 import { Buffer } from 'node:buffer'
 import { createRequire } from 'node:module'
-import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview.js'
-import { TREEASE_IPC_CHANNELS } from '../ipc/channels.js'
+import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
+import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview.ts'
+import { TREEASE_IPC_CHANNELS } from '../ipc/channels.ts'
 
 const require = createRequire(import.meta.url)
-const { BrowserWindow, session: electronSession, webContents } = require('electron') as typeof import('electron')
+const { session: electronSession, webContents } = require('electron') as typeof import('electron')
 
 type GuestSession = import('electron').Session
 
@@ -13,8 +14,11 @@ type GuestSession = import('electron').Session
 // 相对旧的 debugger + CDP Fetch 方案：不占用调试通道，可与 DevTools 同时使用。
 const HANDLED_SCHEMES = ['http', 'https']
 const NULL_BODY_STATUS = new Set([204, 205, 304])
-const CACHEABLE = 'public, max-age=31536000, immutable'
+// 缓存周期从 1 年降到 5 分钟：immutable 一年会让页面内容长期不更新
+// （用户必须手动清缓存才能拿到新版本），也会把登录态页面写入分区磁盘缓存。
+const CACHE_CONTROL_CACHEABLE = 'public, max-age=300'
 const BYPASS_CACHE = 'no-store'
+const MAX_URL_PATTERN_LENGTH = 512
 
 interface ActiveIntercept {
   webContentsId: number
@@ -36,15 +40,23 @@ function recordHit(): void {
     webContentsId: active.webContentsId,
     hits: active.hits,
   }
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(TREEASE_IPC_CHANNELS.EVENT_INTERCEPT_LOG, log)
-  }
+  broadcastToWindows(TREEASE_IPC_CHANNELS.EVENT_INTERCEPT_LOG, log)
 }
 
-function matchesPattern(url: string, pattern: string): boolean {
+// 规则 → 预编译正则：避免每个请求、每条规则都重新构造 RegExp（并限制 pattern 长度防 ReDoS）
+const compiledRules = new WeakMap<TreeaseInterceptRule, RegExp>()
+
+function matchesPattern(url: string, rule: TreeaseInterceptRule): boolean {
+  const pattern = rule.urlPattern
   if (!pattern.trim()) return true
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-  return new RegExp(`^${escaped}$`).test(url)
+
+  let regex = compiledRules.get(rule)
+  if (!regex) {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+    regex = new RegExp(`^${escaped}$`)
+    compiledRules.set(rule, regex)
+  }
+  return regex.test(url)
 }
 
 function isBlockRule(rule: TreeaseInterceptRule): boolean {
@@ -100,7 +112,7 @@ function findRule(url: string, action: 'modify' | 'block'): TreeaseInterceptRule
     if (!isRuleActive(rule)) continue
     const kind = isBlockRule(rule) ? 'block' : 'modify'
     if (kind !== action) continue
-    if (matchesPattern(url, rule.urlPattern)) return rule
+    if (matchesPattern(url, rule)) return rule
   }
   return null
 }
@@ -110,7 +122,7 @@ function responseHeaders(headers: Headers, mode: 'cache' | 'bypass'): Headers {
   const out = new Headers(headers)
   out.delete('content-length')
   out.delete('content-encoding')
-  out.set('cache-control', mode === 'cache' ? CACHEABLE : BYPASS_CACHE)
+  out.set('cache-control', mode === 'cache' ? CACHE_CONTROL_CACHEABLE : BYPASS_CACHE)
   return out
 }
 
@@ -217,7 +229,10 @@ function sanitizeRules(rules: TreeaseInterceptRule[]): TreeaseInterceptRule[] {
       id: typeof r.id === 'string' && r.id ? r.id : `rule_${i}`,
       name: typeof r.name === 'string' ? r.name : '',
       enabled: r.enabled !== false,
-      urlPattern: r.urlPattern,
+      // 限制 pattern 长度与通配符数量，避免用户规则触发灾难性回溯
+      urlPattern: r.urlPattern.length > MAX_URL_PATTERN_LENGTH
+        ? r.urlPattern.slice(0, MAX_URL_PATTERN_LENGTH)
+        : r.urlPattern,
       action: r.action === 'block' ? 'block' as const : 'modify' as const,
       patches: r.patches.filter(p => p && typeof p.path === 'string'),
     }))

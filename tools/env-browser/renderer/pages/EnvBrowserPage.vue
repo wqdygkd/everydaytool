@@ -27,6 +27,7 @@ const {
   getPartition,
   setWebviewRef,
   cleanup,
+  cleanupAll,
   triggerAutoLogin,
 } = useWebview((id: string) => store.envs.find(e => e.id === id))
 
@@ -95,10 +96,17 @@ async function inspectStorage(id: string) {
     try {
       url = wv.getURL()
     } catch {}
+    // 远程页面的 cookie / storage / URL 完全不可信：
+    // 必须用纯文本渲染（Element Plus 的 message-box message 即纯文本，不再走 HTML 字符串），
+    // 否则页面写入的 <img onerror=…> 会在宿主渲染层执行 JS 并进一步调用 IPC。
     ElMessageBox.alert(
-      `<div style="text-align:left;word-break:break-all"><b>URL:</b> ${url}<br/><b>document.cookie:</b> ${cookie || '(空)'}<br/><b>localStorage:</b> ${ls}<br/><b>sessionStorage:</b> ${ss}</div>`,
+      [
+        `URL: ${url || '(空)'}`,
+        `document.cookie: ${cookie || '(空)'}`,
+        `localStorage: ${ls}`,
+        `sessionStorage: ${ss}`,
+      ].join('\n'),
       '存储检查',
-      { dangerouslyUseHTMLString: true },
     )
   } catch (e) {
     ElMessage.error(String(e))
@@ -116,9 +124,13 @@ function handleNav(
   }
   if (action === 'openExternal') {
     const url = webviewStatus[id]?.url || activeEnv.value?.url
-    if (url) {
-      window.open(url, '_blank')
-      ElMessage.info('已尝试在外部打开')
+    if (!url) return
+    // Electron：window.open 已被主进程 deny，改走受控通道（主进程校验协议后交系统浏览器）
+    if (isElectron && window.edtRuntime?.openExternal) {
+      window.edtRuntime.openExternal(url)
+      ElMessage.info('已在系统浏览器中打开')
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
     return
   }
@@ -188,6 +200,11 @@ function onAddressKeydown(e: KeyboardEvent) {
 
 onMounted(async () => {
   await store.loadAll()
+})
+
+// 页面卸载（关闭工具页签）时释放全部 webview 监听器与状态，避免长期残留
+onUnmounted(() => {
+  cleanupAll()
 })
 </script>
 
@@ -359,7 +376,6 @@ onMounted(async () => {
               disablewebsecurity
               webpreferences="allowRunningInsecureContent, webSecurity=no, contextIsolation=no, nativeWindowOpen=yes"
               useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-              httpreferrer="http://172.16.7.105/"
               style="flex:1; width:100%; height:100%; border:0"
             />
             <iframe

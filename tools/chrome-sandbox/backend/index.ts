@@ -1,14 +1,15 @@
-import { registerCacheSkipProvider } from '../../../backend/utils/data-root-scan.js'
-import { getDataDirectory, loadDataDirectoryOverride } from '../../../backend/utils/data-root.js'
-import { ensureDir } from '../../../backend/utils/file-ops.js'
-import { registerIpcHandlers } from './ipc/handlers.js'
-import { sandboxService } from './services/sandbox-service.js'
-import { closeDatabase, getDatabase, reloadDatabase } from './store/database.js'
+import { registerCacheSkipProvider } from '../../../backend/utils/data-root-scan.ts'
+import { getDataDirectory, loadDataDirectoryOverride } from '../../../backend/utils/data-root.ts'
+import { ensureDir } from '../../../backend/utils/file-ops.ts'
+import { registerIpcHandlers } from './ipc/handlers.ts'
+import { sandboxService } from './services/sandbox-service.ts'
+import { closeDatabase, getDatabase, reloadDatabase } from './store/database.ts'
 
 export const chromeSandboxBackend = {
   async initialize(): Promise<void> {
     await loadDataDirectoryOverride()
     await ensureDir(getDataDirectory())
+    // 建共享连接时会执行所有工具域已注册的建表语句（含 env-browser）
     getDatabase()
     registerIpcHandlers()
     // 缓存清理时跳过运行中沙箱的 userData 目录（进程占用 + 避免破坏浏览器状态）
@@ -21,6 +22,7 @@ export const chromeSandboxBackend = {
   },
 
   dispose(): void {
+    // 共享连接由平台层统一管理，关闭前会做 WAL checkpoint
     closeDatabase()
   },
 }

@@ -3,7 +3,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { APP_ROOT_DEV, getDataDirectory, isDev } from '../../../../backend/utils/data-root.js'
+import { APP_ROOT_DEV, getDataDirectory, isDev } from '../../../../backend/utils/data-root.ts'
 
 interface ChromePaths {
   userDataRoot: string
@@ -64,7 +64,8 @@ export function getDefaultChromePaths(): string[] {
   return getChromePaths().executables
 }
 
-function getSandboxesDirectory(): string {
+/** 所有沙箱 profile 的根目录：删除等写操作必须局限在此目录内 */
+export function getSandboxesDirectory(): string {
   return path.join(getDataDirectory(), 'sandboxes')
 }
 

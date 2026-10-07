@@ -1,11 +1,14 @@
-import type { Sandbox } from '../../../../shared/types.js'
+import type { Sandbox } from '../../../../shared/types.ts'
 import { readdir } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'
-import { pathExists, readJsonFile } from '../../../../backend/utils/file-ops.js'
-import { logger } from '../../../../backend/utils/logger.js'
-import { sleep } from '../../../../shared/sleep.js'
-import { getSandboxProfilePath } from '../utils/path-helper.js'
+import { pathExists, readJsonFile } from '../../../../backend/utils/file-ops.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import { sleep } from '../../../../shared/sleep.ts'
+import { getSandboxProfilePath } from '../utils/path-helper.ts'
+
+const CDP_HTTP_TIMEOUT_MS = 5000
+const CDP_WS_TIMEOUT_MS = 8000
 
 export function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -41,11 +44,20 @@ export async function shouldSkipDeveloperModeSetup(sandbox: Sandbox): Promise<bo
   return prefs?.extensions?.ui?.developer_mode === true
 }
 
+async function fetchJson(url: string): Promise<unknown> {
+  // 统一加超时：CDP 端口存在但不响应时，未加超时的 fetch 会让激活流程永久挂起
+  const response = await fetch(url, { signal: AbortSignal.timeout(CDP_HTTP_TIMEOUT_MS) })
+  if (!response.ok) {
+    throw new Error(`CDP 请求失败: ${response.status}`)
+  }
+  return response.json()
+}
+
 async function waitForCdp(port: number, timeoutMs = 20000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/version`)
+      const res = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(CDP_HTTP_TIMEOUT_MS) })
       if (res.ok) return true
     } catch {
       // Chrome still starting
@@ -64,21 +76,39 @@ interface CdpMessage {
 async function cdpCall(wsUrl: string, method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const ws = new WebSocket(wsUrl)
   await new Promise((resolve, reject) => {
-    ws.addEventListener('open', resolve, { once: true })
-    ws.addEventListener('error', reject, { once: true })
+    const timer = setTimeout(() => reject(new Error('CDP WebSocket 连接超时')), CDP_WS_TIMEOUT_MS)
+    const finish = (error?: Error) => {
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve(null)
+    }
+    ws.addEventListener('open', () => finish(), { once: true })
+    ws.addEventListener('error', () => finish(new Error('CDP WebSocket 连接失败')), { once: true })
   })
 
   const id = 1
-  return new Promise((resolve, reject) => {
-    ws.addEventListener('message', (event) => {
-      const message = JSON.parse((event as MessageEvent).data) as CdpMessage
-      if (message.id !== id) return
-      ws.close()
-      if (message.error) reject(new Error(message.error.message || JSON.stringify(message.error)))
-      else resolve(message.result ?? {})
+  try {
+    return await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`CDP 调用超时: ${method}`)), CDP_WS_TIMEOUT_MS)
+      const finish = (error: Error | null, result?: Record<string, unknown>) => {
+        clearTimeout(timer)
+        if (error) reject(error)
+        else resolve(result ?? {})
+      }
+      ws.addEventListener('message', (event) => {
+        const message = JSON.parse((event as MessageEvent).data) as CdpMessage
+        if (message.id !== id) return
+        if (message.error) finish(new Error(message.error.message || JSON.stringify(message.error)))
+        else finish(null, message.result ?? {})
+      })
+      ws.addEventListener('close', () => finish(new Error('CDP 连接已关闭')))
+      ws.addEventListener('error', () => finish(new Error('CDP 连接异常')))
+      ws.send(JSON.stringify({ id, method, params }))
     })
-    ws.send(JSON.stringify({ id, method, params }))
-  })
+  } finally {
+    // 无论成功失败都关闭 socket，避免异常路径残留连接
+    ws.close()
+  }
 }
 
 async function cdpEval(wsUrl: string, expression: string): Promise<unknown> {
@@ -98,12 +128,21 @@ interface PageTarget {
 }
 
 async function getBrowserWsUrl(port: number): Promise<string> {
-  const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json() as { webSocketDebuggerUrl: string }
-  return version.webSocketDebuggerUrl
+  const version = await fetchJson(`http://127.0.0.1:${port}/json/version`) as { webSocketDebuggerUrl: string }
+  const wsUrl = version?.webSocketDebuggerUrl
+  if (!isLocalDebuggerUrl(wsUrl, port)) {
+    throw new Error('CDP 调试地址不是本机端口')
+  }
+  return wsUrl
+}
+
+function isLocalDebuggerUrl(wsUrl: string | undefined, port: number): boolean {
+  if (!wsUrl) return false
+  return wsUrl.startsWith(`ws://127.0.0.1:${port}/`) || wsUrl.startsWith(`ws://localhost:${port}/`)
 }
 
 async function listPageTargets(port: number): Promise<PageTarget[]> {
-  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as PageTarget[]
+  const list = await fetchJson(`http://127.0.0.1:${port}/json/list`) as PageTarget[]
   return list.filter(item => item.type === 'page')
 }
 

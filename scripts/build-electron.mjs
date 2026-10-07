@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rm } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +25,23 @@ const backendAssets = [
   'tools/chrome-sandbox/backend/chrome/chrome-process-query.ps1',
 ]
 
+// 源码里相对导入统一写 .ts（编辑器可跳转、类型完整），产出改为纯 ESM 的 .js 目录
+// （Node 只认运行时后缀）。esbuild 无 rewriteExtensions 选项，用插件在产物里做后缀改写。
+const IMPORT_SPEC_RE = /(from\s+|import\s*\(\s*)('|")(\.{1,2}\/[^'"]*?)\.ts\2/g
+
+const rewriteTsImportsToJs = {
+  name: 'rewrite-ts-imports',
+  setup(pluginBuild) {
+    pluginBuild.onLoad({ filter: /\.ts$/ }, async ({ path: filePath }) => {
+      const contents = await readFile(filePath, 'utf8')
+      return {
+        contents: contents.replace(IMPORT_SPEC_RE, (_m, head, quote, spec) => `${head}${quote}${spec}.js${quote}`),
+        loader: 'ts',
+      }
+    })
+  },
+}
+
 export async function buildElectron(options = {}) {
   const { log = true } = options
 
@@ -40,6 +57,7 @@ export async function buildElectron(options = {}) {
     bundle: false,
     sourcemap: false,
     outbase: rootDir,
+    plugins: [rewriteTsImportsToJs],
     logLevel: log ? 'info' : 'silent',
   })
 
