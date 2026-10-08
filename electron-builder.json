@@ -16,6 +16,7 @@
   "directories": {
     "output": "release"
   },
+  "afterSign": "scripts/after-sign.mjs",
   "files": [
     "dist-electron/**/*",
     "electron/**/*",
@@ -43,7 +44,11 @@
   },
   "mac": {
     "target": "dmg",
-    "icon": "resources/icons/icon.icns"
+    "icon": "resources/icons/icon.icns",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.inherit.plist"
   },
   "linux": {
     "target": "AppImage",
