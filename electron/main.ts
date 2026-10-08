@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
+import { initIpcSafety } from '../backend/utils/ipc-safety.ts'
 import { logger } from '../backend/utils/logger.ts'
 import { isTrustedIpcSenderUrl } from '../shared/ipc-sender.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
@@ -102,6 +103,12 @@ ipcMain.on('edt:menu-action', (_event, action: ShellMenuAction) => {
   handlers[action]?.()
 })
 
+// IPC 来源白名单的根路径注入：必须在任何 safeHandle 注册之前执行。
+// 不注就会导致打包后（file:// 协议）所有 IPC 调用被误判为不可信。
+// 白名单规则见 shared/ipc-sender.ts：file: 必须位于 appPath 下，
+// http(s) 仅限 localhost / 127.0.0.1 / [::1]（dev server），其余一律拒绝。
+initIpcSafety({ appPath: app.getAppPath() })
+
 // 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理（preload 命名空间 edtApp）
 registerAppIpcHandlers({ notifyDataDirectoryChanged })
 
@@ -163,8 +170,8 @@ function hardenWindow(win: Electron.BrowserWindow): void {
 ipcMain.on('edt:open-external', (event, rawUrl: string) => {
   if (!isSafeWebUrl(rawUrl)) return
   const frame = event.senderFrame as { origin?: string, url?: string } | null
-  const sender = frame?.origin || frame?.url
-  if (!isTrustedIpcSenderUrl(sender)) {
+  const sender = frame?.url || frame?.origin
+  if (!isTrustedIpcSenderUrl(sender, { appPath: app.getAppPath() })) {
     logger.warn('Blocked untrusted open-external request')
     return
   }

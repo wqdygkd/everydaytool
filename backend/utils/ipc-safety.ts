@@ -11,19 +11,33 @@ export function createIpcForbiddenError(): Error {
   return new Error('IPC 调用来源不被信任，已拒绝')
 }
 
-function resolveSenderUrl(event: IpcMainInvokeEvent): string | undefined {
+// 打包后渲染页是 file://.../app.asar/dist/index.html，校验 file: 来源时必须用
+// app.getAppPath() 做前缀比对；electron/main.ts 在注册任何 handler 之前注入。
+let trustedAppPath: string | undefined
+
+export function initIpcSafety(options: { appPath?: string }): void {
+  trustedAppPath = options.appPath?.trim() || undefined
+}
+
+function resolveSenderUrls(event: IpcMainInvokeEvent): string[] {
+  const urls: string[] = []
   try {
     const frame = event.senderFrame as { origin?: string, url?: string } | null
-    return frame?.origin || frame?.url || undefined
+    // file: 页面的 origin 是不透明源（"null"/"file://"），不带路径，必须用 url 判；
+    // http(s) 的 origin 则更干净。两个候选有一个通过即信任。
+    if (frame?.url) urls.push(frame.url)
+    if (frame?.origin) urls.push(frame.origin)
+    const contentsUrl = (event.sender as { getURL?: () => string } | null)?.getURL?.()
+    if (contentsUrl) urls.push(contentsUrl)
   } catch {
-    return undefined
+    // 取不到则按不可信处理（默认拒绝）
   }
+  return urls
 }
 function isSenderTrusted(event: IpcMainInvokeEvent): boolean {
-  // senderFrame.origin 需要 Electron 43；缺失时降级用 url，都取不到则按不可信处理（默认拒绝）
-  const url = resolveSenderUrl(event)
-  if (!url) return false
-  return isTrustedIpcSenderUrl(url)
+  const candidates = resolveSenderUrls(event)
+  if (candidates.length === 0) return false
+  return candidates.some(url => isTrustedIpcSenderUrl(url, { appPath: trustedAppPath }))
 }
 
 /**
