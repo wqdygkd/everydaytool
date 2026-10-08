@@ -3,12 +3,33 @@ import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
 import { getToolRegistry } from './config/tools'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
+import { appIpcChannels, onAppIpc } from './shared/ipc/useAppIpc'
 import { useToolTabsStore } from './stores/toolTabs'
 
 const route = useRoute()
 const router = useRouter()
 const tabsStore = useToolTabsStore()
-const platform = window.edtRuntime?.platform ?? 'web'
+// 平台判断必须强韧：preload 读不到 process.platform 时会回退成 'win32'（真值），
+// 在 mac 上将误判导致红绿灯边距丢失；纯浏览器调试时 edtRuntime 还可能完全缺失。
+// 因此用 UA 交叉校验：两者矛盾时以 UA 为准（UA 反映渲染进程真实运行环境）
+function platformFromUA(): string | null {
+  const ua = navigator.userAgent ?? ''
+  if (/Macintosh|MacIntel|Mac OS/i.test(ua))
+    return 'darwin'
+  if (/Windows/i.test(ua))
+    return 'win32'
+  if (/Linux/i.test(ua))
+    return 'linux'
+  return null
+}
+function detectPlatform(): string {
+  const fromPreload = window.edtRuntime?.platform
+  const fromUA = platformFromUA()
+  if (fromUA && fromPreload && fromUA !== fromPreload)
+    return fromUA
+  return fromPreload || fromUA || 'web'
+}
+const platform = detectPlatform()
 
 // 路由 → tab 同步（含回主页清空高亮）
 watch(
@@ -28,6 +49,18 @@ const toolComponents = computed<Record<string, Component>>(() =>
 
 const shellEl = ref<HTMLElement | null>(null)
 let motion: MotionScope | undefined
+// 全屏时原生窗口控件隐藏（mac 红绿灯 / Win 右上按钮），收回标题栏预留边距；
+// mac 原生全屏不触发 DOM fullscreen API，主来源是主进程推送事件，DOM 监听只做兜底
+const isFullscreen = ref(false)
+let offFullscreenIpc: (() => void) | undefined
+function syncDomFullscreen() {
+  // 有主进程推送时以推送为准（mac 原生全屏不经过 DOM API），DOM 只补“进入”事件；
+  // 纯浏览器调试（无推送）时才用 DOM 做双向同步
+  if (document.fullscreenElement != null)
+    isFullscreen.value = true
+  else if (!offFullscreenIpc)
+    isFullscreen.value = false
+}
 
 onMounted(() => {
   const el = shellEl.value
@@ -37,9 +70,18 @@ onMounted(() => {
   motion = createMotionScope(() => {
     gsap.from('.app-header', { y: -16, autoAlpha: 0, duration: 0.5, ease: 'power3.out', clearProps: 'transform,opacity,visibility' })
   }, el)
+  try {
+    const channel: string = appIpcChannels().EVENT_FULLSCREEN_CHANGED
+    offFullscreenIpc = onAppIpc<boolean>(channel, fullscreen => isFullscreen.value = fullscreen === true)
+  } catch {
+    // 纯浏览器调试（无 edtApp 注入）：仅靠 DOM 全屏状态兜底
+  }
+  document.addEventListener('fullscreenchange', syncDomFullscreen)
 })
 
 onUnmounted(() => {
+  offFullscreenIpc?.()
+  document.removeEventListener('fullscreenchange', syncDomFullscreen)
   motion?.revert()
 })
 
@@ -62,7 +104,7 @@ function handleTabRemove(toolId: string) {
 </script>
 
 <template>
-  <div ref="shellEl" class="app-shell" :class="`platform-${platform}`">
+  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, { 'is-fullscreen': isFullscreen }]">
     <header class="app-header">
       <span class="brand-mark" role="button" tabindex="0" @click="goHome" @keydown.enter="goHome">edt</span>
       <div v-if="tabsStore.openTabs.length" class="header-tabs">
@@ -114,6 +156,8 @@ function handleTabRemove(toolId: string) {
   gap: 16px;
   flex-shrink: 0;
   min-height: 44px;
+  // 基座保持常规边距；mac 红绿灯安全边距由下方 .platform-darwin 规则提供，
+  // win/linux 右侧按钮预留由下方规则提供（各平台互不干扰）
   padding: 0 16px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-light);
@@ -159,9 +203,10 @@ function handleTabRemove(toolId: string) {
   padding-right: 148px;
 }
 
-// macOS 红绿灯按钮在左上（hiddenInset），预留其宽度
+// macOS 红绿灯按钮在左上（hiddenInset，位置见 electron/main.ts 的 trafficLightPosition）：
+// x=20 + 三灯 52px + 16px 间隙 = 88px 起放内容
 .platform-darwin .app-header {
-  padding-left: 84px;
+  padding-left: 88px;
 }
 
 // 工具页签：内嵌标题栏行（品牌标右侧），Telegram 文件夹页签风格（胶囊高亮）
@@ -286,5 +331,21 @@ function handleTabRemove(toolId: string) {
     gap: 8px;
     padding: 10px 12px;
   }
+
+  // 窄窗口 / 页面放大时 mac 仍需红绿灯安全边距（特异性高于上方基座规则）
+  .platform-darwin .app-header {
+    padding-left: 88px;
+  }
+}
+
+// 全屏时原生窗口控件隐藏（mac 红绿灯 / Win 右上按钮），收回标题栏预留边距；
+// 放媒体查询之后，特异性也高于各平台规则，窄窗口全屏同样生效
+.app-shell.is-fullscreen.platform-darwin .app-header {
+  padding-left: 16px;
+}
+
+.app-shell.is-fullscreen.platform-win32 .app-header,
+.app-shell.is-fullscreen.platform-linux .app-header {
+  padding-right: 16px;
 }
 </style>

@@ -2,6 +2,7 @@ import type { ShellMenuAction } from '../shared/types.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { logger } from '../backend/utils/logger.ts'
 import { isTrustedIpcSenderUrl } from '../shared/ipc-sender.ts'
@@ -182,7 +183,9 @@ async function createWindow(): Promise<void> {
     // Windows/Linux 右上角保留原生最小化/最大化/关闭按钮，高度与 .app-header(44px) 对齐
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac
-      ? {}
+      // 红绿灯位置钉死（44px 顶栏内垂直居中），与 App.vue 中
+      // .platform-darwin .app-header 的 padding-left 联动：改一处必须同步改另一处
+      ? { trafficLightPosition: { x: 20, y: 16 } }
       : {
           titleBarOverlay: {
             color: TITLEBAR_COLORS.color,
@@ -199,6 +202,19 @@ async function createWindow(): Promise<void> {
   })
 
   hardenWindow(mainWindow)
+
+  // 全屏时原生窗口控件隐藏（mac 红绿灯 / Win 右上按钮），通知渲染层收回标题栏预留边距；
+  // mac 点绿灯进的是原生全屏，不经过 DOM fullscreen API，只能走主进程事件桥接
+  const win = mainWindow
+  const notifyFullscreen = () => {
+    if (win.isDestroyed())
+      return
+    win.webContents.send(EDT_APP_IPC_CHANNELS.EVENT_FULLSCREEN_CHANGED, win.isFullScreen())
+  }
+  win.on('enter-full-screen', notifyFullscreen)
+  win.on('leave-full-screen', notifyFullscreen)
+  // 页面加载完成后推一次初始状态，避免渲染层默认值与窗口实际状态不一致
+  win.webContents.on('did-finish-load', notifyFullscreen)
 
   mainWindow.on('closed', () => {
     // 置空避免后续菜单 / IPC 操作已销毁的 webContents 而抛异常

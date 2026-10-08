@@ -7,6 +7,8 @@ export const EDT_APP_IPC_CHANNELS = {
   DATA_DIRECTORY_OPEN: 'edt-app:data-directory:open',
   DATA_USAGE_GET: 'edt-app:data-usage:get',
   CACHE_CLEAR: 'edt-app:cache:clear',
+  // 主进程 → 渲染层推送：窗口进/出全屏（EVENT_ 开头，preload on() 白名单要求）
+  EVENT_FULLSCREEN_CHANGED: 'edt-app:event:fullscreen-changed',
 } as const
 
 export type EdtAppIpcChannel = (typeof EDT_APP_IPC_CHANNELS)[keyof typeof EDT_APP_IPC_CHANNELS]
