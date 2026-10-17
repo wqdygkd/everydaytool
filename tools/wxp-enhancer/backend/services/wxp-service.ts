@@ -1,10 +1,13 @@
 import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/types.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { sleep } from '../../../../shared/sleep.ts'
+import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite.ts'
 import { wxpConfigStore } from '../store/config-store.ts'
+import { dataCacheStore } from '../store/data-cache-store.ts'
 import { isExecutableRunning } from '../utils/process-detect.ts'
+import { startAutoCollect, stopAutoCollect } from './auto-collect-service.ts'
 import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.ts'
-import { buildClearLoginCacheSnippet, buildInjectionSource } from './injection-source.ts'
+import { buildClearLoginCacheSnippet, buildInjectionSource, WXP_INJECTION_REV } from './injection-source.ts'
 import { processLauncher } from './launcher-service.ts'
 
 const PROFILE_ID = 'wxp'
@@ -60,6 +63,7 @@ async function checkAttachedAlive(settings: WxpSettings): Promise<void> {
 /** 结束注入会话并清理运行状态（应用退出、看门狗判定退出、手动停止共用） */
 async function teardownSession(): Promise<boolean> {
   stopAttachWatchdog()
+  stopAutoCollect()
   if (session) {
     await session.stop()
     session = null
@@ -81,6 +85,7 @@ async function handleAppExit(): Promise<void> {
   }
   session = null
   stopAttachWatchdog()
+  stopAutoCollect()
   void current.stop().catch(() => {})
   logger.info('wxp:app exited by user')
   clearState()
@@ -124,10 +129,14 @@ export function assertSettings(settings: WxpSettings): void {
 
 async function buildInjectionSourceFromStore(clearLoginCacheOnce = false): Promise<string> {
   const settings = await wxpConfigStore.getSettings()
+  const dataCache = await dataCacheStore.get().catch(() => null)
   return buildInjectionSource({
     showStatusBadge: settings.showStatusBadge,
     cacheLogin: settings.cacheLogin,
     clearLoginCacheOnce,
+    favoritesBackup: dataCache
+      ? { favs: normalizeWxpLinkFavorites(dataCache.favorites), updatedAt: dataCache.favoritesUpdatedAt || 0 }
+      : undefined,
   })
 }
 
@@ -238,6 +247,7 @@ export const wxpService = {
     const nextSession = new CdpInjectionSession({
       port: settings.debugPort,
       scriptSource: await buildInjectionSourceFromStore(clearPending),
+      scriptRev: WXP_INJECTION_REV,
       pollIntervalMs: POLL_INTERVAL_MS,
       onTargetsInjected: ({ total }) => {
         setState({
@@ -253,12 +263,15 @@ export const wxpService = {
 
     if (clearPending) {
       // 清除已在首轮注入完成，换回常规脚本并强制重注入：否则后续新文档会把用户
-      // 重新登录后写入的快照再次清掉
+      // 重新登录写入的快照再次清掉
       await wxpConfigStore.setLoginCacheClearPending(false)
       nextSession.setScriptSource(await buildInjectionSourceFromStore())
       await nextSession.scanAndInject(true).catch(() => {})
       logger.info('wxp:login cache cleared on boot')
     }
+
+    // 会话建立后开始登录探测：登录成功即自动采集登录信息与收藏到数据缓存
+    startAutoCollect(settings.debugPort)
 
     return setState({
       status: 'running',
@@ -274,7 +287,7 @@ export const wxpService = {
 
   /**
    * 清除登录缓存。运行中：在全部页面移除工具写入的会话快照 / 镜像与会话内用户
-   * 缓存（不动应用自身的 wxp_access_token）并刷新页面，重新加载后的文档无快照可
+   * 缓存（不动应用自身的凭据缓存）并刷新页面，重新加载后的文档无快照可
    * 还原，路由守卫会把应用送回登录页。未运行：登记待清除标记，下次启动注入的
    * 脚本会在文档最早时刻先行清除，随后自动换回常规脚本。
    */

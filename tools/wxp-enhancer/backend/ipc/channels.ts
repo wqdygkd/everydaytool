@@ -10,6 +10,7 @@ export const WXP_IPC_CHANNELS = {
   GET_DATA_CACHE: 'wxp:get-data-cache',
   COLLECT_DATA: 'wxp:collect-data',
   EVENT_STATUS_CHANGED: 'wxp:status-changed',
+  EVENT_DATA_CACHE_UPDATED: 'wxp:data-cache-updated',
 } as const
 
 export type WxpIpcChannel = (typeof WXP_IPC_CHANNELS)[keyof typeof WXP_IPC_CHANNELS]

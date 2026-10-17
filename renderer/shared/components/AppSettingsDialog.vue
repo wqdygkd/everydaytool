@@ -25,7 +25,7 @@ watch(visible, (open) => {
 
 async function loadInfo() {
   try {
-    info.value = await invokeAppIpc<AppDataDirectoryInfo>(appIpcChannels.DATA_DIRECTORY_GET)
+    info.value = await invokeAppIpc<AppDataDirectoryInfo>(appIpcChannels().DATA_DIRECTORY_GET)
   } catch (error) {
     ElMessage.error((error as Error).message || '读取数据目录失败')
   }
@@ -34,7 +34,7 @@ async function loadInfo() {
 async function loadUsage() {
   usageLoading.value = true
   try {
-    usage.value = await invokeAppIpc<DataRootUsage>(appIpcChannels.DATA_USAGE_GET)
+    usage.value = await invokeAppIpc<DataRootUsage>(appIpcChannels().DATA_USAGE_GET)
   } catch (error) {
     ElMessage.error((error as Error).message || '计算空间占用失败')
   } finally {
@@ -44,7 +44,7 @@ async function loadUsage() {
 
 async function openDirectory() {
   try {
-    await invokeAppIpc(appIpcChannels.DATA_DIRECTORY_OPEN)
+    await invokeAppIpc(appIpcChannels().DATA_DIRECTORY_OPEN)
   } catch (error) {
     ElMessage.error((error as Error).message || '打开文件夹失败')
   }
@@ -53,7 +53,7 @@ async function openDirectory() {
 async function selectDirectory() {
   let directory: string | null = null
   try {
-    directory = await invokeAppIpc<string | null>(appIpcChannels.DATA_DIRECTORY_SELECT)
+    directory = await invokeAppIpc<string | null>(appIpcChannels().DATA_DIRECTORY_SELECT)
   } catch (error) {
     ElMessage.error((error as Error).message || '选择目录失败')
     return
@@ -63,7 +63,7 @@ async function selectDirectory() {
   changing.value = true
   try {
     const result = await invokeAppIpc<AppDataDirectoryInfo & { changed: boolean }>(
-      appIpcChannels.DATA_DIRECTORY_UPDATE,
+      appIpcChannels().DATA_DIRECTORY_UPDATE,
       directory,
     )
     info.value = result
@@ -93,7 +93,7 @@ async function clearCache() {
 
   cleaning.value = true
   try {
-    const result = await invokeAppIpc<CacheCleanResult>(appIpcChannels.CACHE_CLEAR)
+    const result = await invokeAppIpc<CacheCleanResult>(appIpcChannels().CACHE_CLEAR)
     if (result.skippedDirs > 0) {
       ElMessage.warning(`已释放 ${formatBytes(result.freedBytes)}，${result.skippedDirs} 个目录被占用或跳过`)
     } else if (result.cleanedDirs > 0) {

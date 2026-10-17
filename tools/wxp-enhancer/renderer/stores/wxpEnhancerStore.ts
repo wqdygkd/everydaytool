@@ -24,9 +24,16 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
   }
 
   function bindStatusEvents(): () => void {
-    return onWxpIpc<WxpRunningState | null>(channels.EVENT_STATUS_CHANGED, (state) => {
+    const offStatus = onWxpIpc<WxpRunningState | null>(channels.EVENT_STATUS_CHANGED, (state) => {
       running.value = state
     })
+    const offCache = onWxpIpc<WxpDataCache>(channels.EVENT_DATA_CACHE_UPDATED, (cache) => {
+      if (cache) dataCache.value = cache
+    })
+    return () => {
+      offStatus()
+      offCache()
+    }
   }
 
   async function saveSettings(patch: Partial<WxpSettings>): Promise<void> {

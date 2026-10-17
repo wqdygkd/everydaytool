@@ -139,6 +139,26 @@ async function injectTarget(
 }
 
 /**
+ * 存活探针：页面里的注入脚本是否仍在当前文档执行。实测 CDP 的
+ * addScriptToEvaluateOnNewDocument 随调试会话关闭失效，且整页刷新（entry 的
+ * location.reload）后的新文档无脚本——只靠 URL 去重会永远跳过重注。
+ * 探针读脚本写入的版本指纹，无 rev 的旧脚本视为过期。
+ */
+async function probeInjectionAlive(wsUrl: string, rev: number): Promise<boolean> {
+  const ws = await connectWebSocket(wsUrl)
+  const call = createCdpCaller(ws)
+  try {
+    const result = await call('Runtime.evaluate', {
+      expression: `!!(window.__wxpEnv&&window.__wxpEnv.rev===${rev})`,
+      returnByValue: true,
+    })
+    return (result as { result?: { value?: unknown } }).result?.value === true
+  } finally {
+    ws.close()
+  }
+}
+
+/**
  * 在全部可调试页面执行一段表达式（逐目标短连接，单个失败不影响其余）。
  * 用于清除登录缓存这类一次性操作；返回成功求值的页面数。
  */
@@ -214,23 +234,32 @@ interface TargetInjectionState {
 interface CdpInjectionSessionOptions {
   port: number
   scriptSource: string
+  /** 注入脚本版本（window.__wxpEnv.rev）：存活探针用 */
+  scriptRev: number
   pollIntervalMs?: number
   onTargetsInjected?: (info: { count: number, total: number }) => void
 }
 
+/** 存活探针节流：每 N 轮 poll 轮转抽查一个已注入目标，避免每轮全量建连 */
+const VERIFY_EVERY_POLLS = 5
+
 export class CdpInjectionSession {
   port: number
   scriptSource: string
+  scriptRev: number
   pollIntervalMs: number
   onTargetsInjected?: (info: { count: number, total: number }) => void
   private targetState = new Map<string, TargetInjectionState>()
   private stopped = false
   private pollTimer: NodeJS.Timeout | null = null
   private injecting = false
+  private pollCount = 0
+  private verifyCursor = 0
 
-  constructor({ port, scriptSource, pollIntervalMs = 2000, onTargetsInjected }: CdpInjectionSessionOptions) {
+  constructor({ port, scriptSource, scriptRev, pollIntervalMs = 2000, onTargetsInjected }: CdpInjectionSessionOptions) {
     this.port = port
     this.scriptSource = scriptSource
+    this.scriptRev = scriptRev
     this.pollIntervalMs = pollIntervalMs
     this.onTargetsInjected = onTargetsInjected
   }
@@ -298,6 +327,11 @@ export class CdpInjectionSession {
         }
       }
 
+      this.pollCount += 1
+      if (!force && this.pollCount % VERIFY_EVERY_POLLS === 0) {
+        injectedCount += await this.verifyOne(targets)
+      }
+
       if (injectedCount > 0) {
         this.onTargetsInjected?.({ count: injectedCount, total: targets.length })
       }
@@ -306,5 +340,30 @@ export class CdpInjectionSession {
     } finally {
       this.injecting = false
     }
+  }
+
+  /**
+   * 轮转抽查一个已注入目标的脚本存活性：整页刷新后的新文档无脚本时强制重注
+   * （addScript 随调试会话关闭失效，URL 去重会跳过这种目标）。
+   */
+  private async verifyOne(targets: CdpTargetRaw[]): Promise<number> {
+    const candidates = targets.filter(item => this.targetState.has(item.id) && item.webSocketDebuggerUrl)
+    if (candidates.length === 0) return 0
+    const target = candidates[this.verifyCursor++ % candidates.length]
+    let alive = false
+    try {
+      alive = await probeInjectionAlive(target.webSocketDebuggerUrl as string, this.scriptRev)
+    } catch {
+      // 目标正忙或已关闭：下轮继续，不视为死亡
+      return 0
+    }
+    if (!alive && !this.stopped) {
+      try {
+        if (await this.injectIntoTarget(target, true)) return 1
+      } catch {
+        // 重注失败下轮继续
+      }
+    }
+    return 0
   }
 }

@@ -9,7 +9,7 @@ const emit = defineEmits(['update:modelValue'])
 
 async function pickDirectory() {
   try {
-    const selected = await invokeAppIpc<string | null>(appIpcChannels.DATA_DIRECTORY_SELECT)
+    const selected = await invokeAppIpc<string | null>(appIpcChannels().DATA_DIRECTORY_SELECT)
     if (selected) {
       emit('update:modelValue', selected)
     }

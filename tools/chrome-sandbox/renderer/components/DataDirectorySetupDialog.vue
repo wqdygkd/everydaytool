@@ -35,7 +35,7 @@ async function save() {
   loading.value = true
   try {
     // 首次引导同样走平台级通道，保证所有工具域都切换到新目录
-    const result = await invokeAppIpc<{ changed: boolean }>(appIpcChannels.DATA_DIRECTORY_UPDATE, trimmed)
+    const result = await invokeAppIpc<{ changed: boolean }>(appIpcChannels().DATA_DIRECTORY_UPDATE, trimmed)
     saved.value = true
     visible.value = false
     emit('completed', result)

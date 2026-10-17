@@ -50,11 +50,10 @@ const menuTemplate: Electron.MenuItemConstructorOptions[] = [
   ...SHELL_MENUS.map<Electron.MenuItemConstructorOptions>(({ label, items }) => ({
     label,
     submenu: [
-      ...items.map<Electron.MenuItemConstructorOptions>(({ label: itemLabel, action, divided }) => ({
-        label: itemLabel,
-        role: ACTION_ROLES[action],
-        ...(divided ? { type: 'separator' as const } : {}),
-      })),
+      ...items.flatMap<Electron.MenuItemConstructorOptions>(({ label: itemLabel, action, divided }) => [
+        ...(divided ? [{ type: 'separator' as const }] : []),
+        { label: itemLabel, role: ACTION_ROLES[action] },
+      ]),
       ...(label === '视图' ? [{ type: 'separator' as const }, { role: 'togglefullscreen' as const, label: '全屏' }] : []),
     ],
   })),

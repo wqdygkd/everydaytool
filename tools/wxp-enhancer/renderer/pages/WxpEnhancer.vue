@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { WxpRunningStatus } from '../../../../shared/types'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
+import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
 import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
 const store = useWxpEnhancerStore()
@@ -112,17 +113,52 @@ async function handleClearLoginCache(): Promise<void> {
 
 // —— 数据缓存（来自 WXP） ——
 const collecting = ref(false)
-const showPassword = ref(false)
 const dataLogin = computed(() => store.dataCache?.login ?? null)
 const userCode = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.code ?? '—'))
 const userName = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.name ?? '—'))
-const favRows = computed(() => {
-  const favorites = store.dataCache?.favorites ?? []
-  return favorites.map((key) => {
-    const parts = String(key).split('|')
-    return { key, env: parts[0] ?? '', name: parts[1] ?? '', access: parts[2] ?? '', target: parts.slice(3).join('|') }
-  })
+const UNKNOWN_HOSPITAL = '未知医院'
+interface FavTreeRow {
+  id: string
+  name: string
+  sceneformal: string
+  accessPoint: string
+  targetPoint: string
+  children?: FavTreeRow[]
+}
+const favTree = computed<FavTreeRow[]>(() => {
+  const groups = new Map<string, FavTreeRow[]>()
+  for (const fav of normalizeWxpLinkFavorites(store.dataCache?.favorites)) {
+    const hospital = fav.hospital || UNKNOWN_HOSPITAL
+    const rows = groups.get(hospital) ?? []
+    rows.push({
+      id: `${hospital}\0${rows.length}\0${fav.simpleName}`,
+      name: fav.simpleName,
+      sceneformal: fav.sceneformal,
+      accessPoint: fav.accessPoint,
+      targetPoint: fav.targetPoint,
+    })
+    groups.set(hospital, rows)
+  }
+  return [...groups.entries()]
+    .sort((a, b) => {
+      if (a[0] === UNKNOWN_HOSPITAL) return 1
+      if (b[0] === UNKNOWN_HOSPITAL) return -1
+      return a[0].localeCompare(b[0], 'zh')
+    })
+    .map(([hospital, children]) => ({
+      id: hospital,
+      name: `${hospital}（${children.length}）`,
+      sceneformal: '',
+      accessPoint: '',
+      targetPoint: '',
+      children,
+    }))
 })
+const favCount = computed(() => favTree.value.reduce((sum, row) => sum + (row.children?.length ?? 0), 0))
+
+function favRowClass({ row }: { row: FavTreeRow }): string {
+  return row.children ? 'fav-hospital-row' : ''
+}
 
 function maskToken(v: string): string {
   if (!v) return '—'
@@ -290,13 +326,13 @@ onUnmounted(() => {
         <el-form-item label="状态角标">
           <div class="switch-row">
             <el-switch v-model="settingsForm.showStatusBadge" />
-            <span class="muted">在 WXP 窗口左下角显示「增强中」呼吸灯，保存后立即生效</span>
+            <span class="muted">在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效</span>
           </div>
         </el-form-item>
         <el-form-item label="缓存登录状态">
           <div class="switch-row">
             <el-switch v-model="settingsForm.cacheLogin" />
-            <span class="muted">登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；token 过期时不自动进入，登出后失效</span>
+            <span class="muted">登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；快照超期（14 天）则不自动进入，需重新登录</span>
           </div>
         </el-form-item>
         <el-form-item label="额外启动参数">
@@ -329,7 +365,7 @@ onUnmounted(() => {
         </div>
       </div>
       <p class="form-hint section-hint">
-        读取时把 WXP 页面里的登录令牌、用户信息与收藏数据缓存到工具数据目录（data-cache.json），此处查看；WXP 未运行时仍可查看上次采集结果。
+        WXP 登录后自动把登录信息与收藏数据缓存到工具数据目录（data-cache.json），此处查看；收藏变化或每 5 分钟自动刷新，也可手动刷新。WXP 未运行时仍可查看上次采集结果。
       </p>
       <template v-if="dataLogin">
         <div class="kv-list">
@@ -339,10 +375,7 @@ onUnmounted(() => {
           </div>
           <div class="kv-row">
             <span class="kv-label">登录密码</span>
-            <span class="kv-value mono">{{ showPassword ? dataLogin.password || '—' : '••••••••' }}</span>
-            <el-button link size="small" @click="showPassword = !showPassword">
-              {{ showPassword ? '隐藏' : '显示' }}
-            </el-button>
+            <span class="kv-value mono muted">应用 RSA 加密存储，工具不读取</span>
           </div>
           <div class="kv-row">
             <span class="kv-label">访问令牌</span>
@@ -392,15 +425,25 @@ onUnmounted(() => {
             <pre class="mono user-json-pre">{{ JSON.stringify(dataLogin.user, null, 2) }}</pre>
           </el-collapse-item>
         </el-collapse>
-        <template v-if="favRows.length">
+        <template v-if="favCount">
           <h4 class="fav-title">
-            收藏的转发（{{ favRows.length }}）
+            收藏的转发（{{ favCount }}）
+            <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted">工具侧备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}，WXP 重装/清缓存后自动恢复</span>
           </h4>
-          <el-table :data="favRows" size="small" max-height="320">
-            <el-table-column prop="env" label="环境" width="90" />
-            <el-table-column prop="name" label="转发名称" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="access" label="接入点" min-width="140" />
-            <el-table-column prop="target" label="原地址" min-width="140" />
+          <el-table
+            class="fav-table"
+            :data="favTree"
+            row-key="id"
+            :tree-props="{ children: 'children' }"
+            default-expand-all
+            size="small"
+            max-height="420"
+            :row-class-name="favRowClass"
+          >
+            <el-table-column prop="name" label="医院 / 转发" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="sceneformal" label="环境" width="90" />
+            <el-table-column prop="accessPoint" label="接入点" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
           </el-table>
         </template>
         <p v-else class="form-hint">
@@ -408,7 +451,7 @@ onUnmounted(() => {
         </p>
       </template>
       <p v-else class="form-hint">
-        尚未读取，启动 WXP 后点击「从 WXP 读取」。
+        尚未读取，启动 WXP 并登录后自动采集，也可点击「从 WXP 读取」手动刷新。
       </p>
     </section>
   </div>
@@ -545,6 +588,10 @@ onUnmounted(() => {
 .fav-title {
   margin: var(--spacing-md) 0 var(--spacing-sm);
   font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.fav-table :deep(.fav-hospital-row) {
   font-weight: var(--font-weight-semibold);
 }
 

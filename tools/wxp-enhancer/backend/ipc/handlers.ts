@@ -2,6 +2,7 @@ import type { WxpSettings } from '../../../../shared/types.ts'
 import { createRequire } from 'node:module'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
+import { setWxpDataCacheEmitter } from '../services/auto-collect-service.ts'
 import { collectWxpData } from '../services/data-collector.ts'
 import { assertSettings, setWxpStatusEmitter, wxpService } from '../services/wxp-service.ts'
 import { wxpConfigStore } from '../store/config-store.ts'
@@ -23,6 +24,7 @@ export function registerWxpHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
   setWxpStatusEmitter(state => broadcast(WXP_IPC_CHANNELS.EVENT_STATUS_CHANGED, state))
+  setWxpDataCacheEmitter(cache => broadcast(WXP_IPC_CHANNELS.EVENT_DATA_CACHE_UPDATED, cache))
 
   safeHandle(ipcMain, WXP_IPC_CHANNELS.GET_ALL, async () => {
     const config = await wxpConfigStore.getAll()
