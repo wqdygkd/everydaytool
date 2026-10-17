@@ -1,3 +1,4 @@
+import { browserBridgeBackend } from '../tools/browser-bridge/backend/index.ts'
 import { chromeSandboxBackend } from '../tools/chrome-sandbox/backend/index.ts'
 import { envBrowserBackend } from '../tools/env-browser/backend/index.ts'
 import { treeaseEditorBackend } from '../tools/treease-editor/backend/index.ts'
@@ -10,7 +11,7 @@ export interface ToolBackend {
   onDataDirectoryChanged?: () => Promise<void> | void
 }
 
-export const toolBackends: ToolBackend[] = [chromeSandboxBackend, envBrowserBackend, treeaseEditorBackend, wxpEnhancerBackend]
+export const toolBackends: ToolBackend[] = [browserBridgeBackend, chromeSandboxBackend, envBrowserBackend, treeaseEditorBackend, wxpEnhancerBackend]
 
 /** 数据根目录变更后依次通知各工具域重载（backend/ipc 的应用设置处理器经 main.ts 注入调用） */
 export async function notifyDataDirectoryChanged(): Promise<void> {

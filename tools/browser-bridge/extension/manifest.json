@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "edt 浏览器桥",
+  "version": "1.0.0",
+  "description": "配合 everydaytool（edt）浏览器桥：流量挂载、处理名单、脚本注入。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvz5NkoroLG/XlehZs3O74LLgrkl4nWWEoz2jNZb3QhM2oi+qBABCq29t/yGhUjZZ9RQWieeWBnKwJfJiXdXu7APStmMhZlmeiF5wiZmSUpLaT1qtZS9Os6qvzZ8WkcVfAvtdu5Vu4IEyM2EKeFVG5b1qE03fb24+mxi3bDXuzWau+JEHROWrdKvd6z8O3tN7rGpfthe3qgsnmfO7KkgI/uARbQ+7TeMZIKTjBX76DEHzXyjk/MfQo0uKSPFMKmg6GXxNKAdE+L1NeU4AMqsIzo/ofbKIkKv7u+2abpe4xx+cEfkzHoIoA7Zgz7UTmCrAXt/vgRQU0/jdGsIpF8K3UwIDAQAB",
+  "minimum_chrome_version": "120",
+  "permissions": ["proxy", "storage", "tabs", "scripting", "alarms", "userScripts"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "edt 浏览器桥"
+  }
+}

@@ -30,6 +30,8 @@ export interface ToolDefinition {
     component: Component
     meta?: { toolId?: string, title?: string }
   }
+  /** 工具内子路由：拍平为 `/tools/<工具>/<子路径>`；声明后主路由重定向到第一个子路由 */
+  subRoutes?: ToolSubRoute[]
 }
 
 /** 工具定义的输入形态：component 允许同步组件或异步加载器，由 defineTool 统一包装 */
@@ -37,6 +39,14 @@ export type ToolDefinitionInput = Omit<ToolDefinition, 'route' | 'isNew'> & {
   route: Omit<ToolDefinition['route'], 'component'> & {
     component: ToolRouteComponentInput
   }
+}
+
+/** 工具子路由（页签 / 列表分类等深链）：component 与 meta.toolId 继承自主路由 */
+export interface ToolSubRoute {
+  /** 相对工具根路径，如 'status' / 'rules/redirect' */
+  path: string
+  name: string
+  meta?: { toolId?: string, title?: string }
 }
 
 export interface ToolCategoryGroup {

@@ -1,10 +1,13 @@
-shellEmulator: true
+minimumReleaseAgeExcludePrune: true
 trustPolicy: no-downgrade
+shellEmulator: true
+
 packages:
   - .
   - '!data/**'
   - '!release/**'
   - '!dist/**'
+
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - better-sqlite3

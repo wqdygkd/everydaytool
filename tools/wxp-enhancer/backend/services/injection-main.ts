@@ -14,7 +14,6 @@
   object-shorthand,
   style/semi,
   style/max-statements-per-line,
-  style/operator-linebreak,
   unicorn/prefer-includes,
   unicorn/prefer-dom-node-text-content,
   e18e/prefer-includes,
@@ -245,7 +244,7 @@ export function injectionMain(): void {
     'border:3px solid #d6e4f5;border-top-color:#2d5afa;animation:wxpLoginSpin .8s linear infinite}',
     '#wxp-enhancer-login-loading .wxp-login-text{margin-top:14px;',
     'font:14px/1.4 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#333}',
-    '@keyframes wxpLoginSpin{to{transform:rotate(360deg)}}'
+    '@keyframes wxpLoginSpin{to{transform:rotate(360deg)}}',
   ].join('');
   var loginLoadingStarted = function () {
     try { return Number(sessionStorage.getItem(LOGIN_LOADING_KEY)) || 0; } catch (e) { return 0; }
@@ -407,7 +406,7 @@ export function injectionMain(): void {
         targetPoint: String(item.targetPoint || '').trim(),
         hospital: String(item.hospital || '').trim(),
         tenantId: String(item.tenantId || '').trim(),
-        code: String(item.code || '').trim()
+        code: String(item.code || '').trim(),
       };
     }
     if (typeof item !== 'string' || item.indexOf('|') === -1) return null;
@@ -421,7 +420,7 @@ export function injectionMain(): void {
       targetPoint: String(parts.slice(3).join('|') || '').trim(),
       hospital: '',
       tenantId: '',
-      code: ''
+      code: '',
     };
   };
   // 转发四字段相同才是同一条。两边都有租户 id 时还必须是同一家医院，避免医院改名后串到别的租户
@@ -431,7 +430,8 @@ export function injectionMain(): void {
     return true;
   };
   var findFav = function (favs: any, fav: any) {
-    for (var i = 0; i < favs.length; i++) if (sameFav(favs[i], fav)) return i;
+    for (var i = 0; i < favs.length; i++) { if (sameFav(favs[i], fav)) return i;
+    }
     return -1;
   };
   // touchTs 只在用户点星标或补上医院名时写入。迁移旧字符串 / 恢复备份若打上 Date.now()，会把页面标成更新，备份就恢复不回来
@@ -507,7 +507,7 @@ export function injectionMain(): void {
         targetPoint: tds[5] ? tds[5].innerText.trim() : '',
         hospital: '',
         tenantId: '',
-        code: ''
+        code: '',
       };
     } catch (e) { return null; }
   };
@@ -523,7 +523,7 @@ export function injectionMain(): void {
       targetPoint: String(link.targetPoint || '').trim(),
       hospital: '',
       tenantId: String(h.id || '').trim(),
-      code: String(h.code || '').trim()
+      code: String(h.code || '').trim(),
     };
   };
   var findLinkCenterVm = function (vm: any): any {
@@ -774,7 +774,7 @@ export function injectionMain(): void {
     '#wxp-enhancer-fav-tab .copy{border:1px solid #dcdfe6;background:#fff;color:#2d5afa;border-radius:4px;padding:2px 12px;cursor:pointer}',
     '#wxp-enhancer-fav-tab .remove{border:0;background:transparent;color:#e34d59;border-radius:4px;padding:2px 8px;cursor:pointer}',
     '#wxp-enhancer-fav-tab .open:disabled,#wxp-enhancer-fav-tab .copy:disabled{opacity:.6;cursor:default}',
-    '#wxp-enhancer-fav-tab .empty{padding:32px 12px;text-align:center;color:#707579}'
+    '#wxp-enhancer-fav-tab .empty{padding:32px 12px;text-align:center;color:#707579}',
   ].join('');
   var ensureFavTabStyle = function () {
     var style: any = document.getElementById('wxp-enhancer-fav-tab-style');
@@ -814,7 +814,8 @@ export function injectionMain(): void {
     var saved = String((fav && fav.hospital) || '').trim();
     var i;
     if (id) {
-      for (i = 0; i < tenants.length; i++) if (String(tenants[i].id || '') === id) return tenants[i];
+      for (i = 0; i < tenants.length; i++) { if (String(tenants[i].id || '') === id) return tenants[i];
+      }
       return null;
     }
     for (i = 0; i < tenants.length; i++) {
@@ -836,7 +837,8 @@ export function injectionMain(): void {
       var store = readStore();
       var views = (store && store.state && store.state.menuView && store.state.menuView.visitedViews) || [];
       var linkView = null;
-      for (var i = 0; i < views.length; i++) if (String(views[i].id) === '4') linkView = views[i];
+      for (var i = 0; i < views.length; i++) { if (String(views[i].id) === '4') linkView = views[i];
+      }
       if (linkView && store.dispatch) store.dispatch('menuView/SetActiveView', linkView);
     } catch (e) {}
     var lc = findLinkCenterVm(readRootVm());
@@ -1036,44 +1038,44 @@ export function injectionMain(): void {
     var body: any[] = [];
     for (var g = 0; g < keys.length; g++) {
       (function (items: any) {
-      var live = tenantOfFav(items[0]);
-      var label = (live && live.name) || items[0].hospital || '未知医院';
-      body.push(h('tr', { class: 'hospital' }, [
-        h('td', {
-          attrs: { colspan: 5, title: '在链接中心打开这家医院' },
-          on: { click: function () { showHospitalInLinkCenter(items[0]); } },
-        }, label + '（' + items.length + '）'),
-      ]));
-      for (var r = 0; r < items.length; r++) {
-        (function (fav: any) {
-          var channel = channelOfFav(fav);
-          body.push(h('tr', [
-            h('td', { class: 'name', attrs: { title: fav.simpleName } }, fav.simpleName),
-            h('td', fav.sceneformal || '—'),
-            h('td', { attrs: { title: fav.accessPoint || '' } }, fav.accessPoint || '—'),
-            h('td', { attrs: { title: fav.targetPoint || '' } }, fav.targetPoint || '—'),
-            h('td', [
-              h('div', { class: 'actions' }, [
-                h('button', {
-                  class: 'open',
-                  attrs: { disabled: favOpening ? 'disabled' : null, title: channel.text || '与链接中心相同：运维/交付在 WXP 内打开，其余用浏览器' },
-                  on: { click: function () { openFavoriteInWxp(fav); } },
-                }, '打开'),
-                h('button', {
-                  class: 'copy',
-                  attrs: { disabled: favOpening ? 'disabled' : null, title: '复制打开时使用的地址' },
-                  on: { click: function () { copyFavoriteLink(fav); } },
-                }, '复制'),
-                h('button', {
-                  class: 'remove',
-                  attrs: { title: '从收藏中移除' },
-                  on: { click: function () { removeFavorite(fav); } },
-                }, '删除'),
+        var live = tenantOfFav(items[0]);
+        var label = (live && live.name) || items[0].hospital || '未知医院';
+        body.push(h('tr', { class: 'hospital' }, [
+          h('td', {
+            attrs: { colspan: 5, title: '在链接中心打开这家医院' },
+            on: { click: function () { showHospitalInLinkCenter(items[0]); } },
+          }, label + '（' + items.length + '）'),
+        ]));
+        for (var r = 0; r < items.length; r++) {
+          (function (fav: any) {
+            var channel = channelOfFav(fav);
+            body.push(h('tr', [
+              h('td', { class: 'name', attrs: { title: fav.simpleName } }, fav.simpleName),
+              h('td', fav.sceneformal || '—'),
+              h('td', { attrs: { title: fav.accessPoint || '' } }, fav.accessPoint || '—'),
+              h('td', { attrs: { title: fav.targetPoint || '' } }, fav.targetPoint || '—'),
+              h('td', [
+                h('div', { class: 'actions' }, [
+                  h('button', {
+                    class: 'open',
+                    attrs: { disabled: favOpening ? 'disabled' : null, title: channel.text || '与链接中心相同：运维/交付在 WXP 内打开，其余用浏览器' },
+                    on: { click: function () { openFavoriteInWxp(fav); } },
+                  }, '打开'),
+                  h('button', {
+                    class: 'copy',
+                    attrs: { disabled: favOpening ? 'disabled' : null, title: '复制打开时使用的地址' },
+                    on: { click: function () { copyFavoriteLink(fav); } },
+                  }, '复制'),
+                  h('button', {
+                    class: 'remove',
+                    attrs: { title: '从收藏中移除' },
+                    on: { click: function () { removeFavorite(fav); } },
+                  }, '删除'),
+                ]),
               ]),
-            ]),
-          ]));
-        })(items[r]);
-      }
+            ]));
+          })(items[r]);
+        }
       })(grouped[keys[g]]);
     }
     var table = h('table', [
@@ -1150,14 +1152,16 @@ export function injectionMain(): void {
     }
     if (linkAt === -1) return;
     if (favAt === linkAt + 1) return;
-    var view = favAt >= 0 ? views.splice(favAt, 1)[0] : {
-      id: FAV_VIEW_ID,
-      title: '收藏',
-      component: 'WxpFavLinks',
-      sysView: true,
-      enableClose: false,
-      elementHeight: views[linkAt].elementHeight || 618,
-    };
+    var view = favAt >= 0
+      ? views.splice(favAt, 1)[0]
+      : {
+          id: FAV_VIEW_ID,
+          title: '收藏',
+          component: 'WxpFavLinks',
+          sysView: true,
+          enableClose: false,
+          elementHeight: views[linkAt].elementHeight || 618,
+        };
     if (favAt >= 0 && favAt < linkAt) linkAt -= 1;
     views.splice(linkAt + 1, 0, view);
   };

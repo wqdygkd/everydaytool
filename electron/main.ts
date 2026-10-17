@@ -116,7 +116,12 @@ async function initializeBackend(): Promise<void> {
   backendInitialized = true
 
   for (const backend of toolBackends) {
-    await backend.initialize()
+    try {
+      await backend.initialize()
+    } catch (error) {
+      // 单工具初始化失败（如端口段耗尽）不拖垮其它工具：记错继续
+      logger.error('Tool backend initialize failed', { error: (error as Error).message })
+    }
   }
 }
 

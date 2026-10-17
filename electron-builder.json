@@ -29,6 +29,10 @@
     {
       "from": "tools/chrome-sandbox/extension",
       "to": "extension"
+    },
+    {
+      "from": "tools/browser-bridge/extension",
+      "to": "extension-browser-bridge"
     }
   ],
   "win": {

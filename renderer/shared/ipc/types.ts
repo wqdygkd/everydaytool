@@ -20,6 +20,7 @@ declare global {
   interface Window {
     edtRuntime?: EdtRuntimeApi
     edtApp: IpcInvokeApi
+    browserBridge: IpcInvokeApi
     chromeSandbox: IpcInvokeApi
     envBrowser: IpcInvokeApi
     treeaseEditor: IpcInvokeApi

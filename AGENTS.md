@@ -47,6 +47,7 @@ Element Plus 的 `--el-*` 变量已在 `main.scss` 的 `:root` 中绑定到上�
 
 - 主壳 `renderer/App.vue`：自定义标题栏（`electron/main.ts` 用 `titleBarStyle: 'hidden'` 隐藏系统标题栏，外壳视觉为 Telegram 浮岛风格）：Header 即标题栏（品牌标 `edt` + 工具页签 `.header-tabs` 内嵌同一行，胶囊高亮式页签，无打开页签时仅显示品牌标；页内菜单已移除，菜单动作仅由主进程系统菜单提供，清单见 `shared/menu.ts`）；标题栏整行 `-webkit-app-region: drag`（页签区 no-drag）；右上角原生窗口按钮用 `titleBarOverlay`，固定浅色配色。路由切换使用 `.page-*` 过渡类（底部状态栏已删除，主区直抵窗口底缘）。
 - 首页 `renderer/pages/HomePage.vue`：工具网格用 `TransitionGroup`（`.card-*` 类）实现搜索 / 收藏平滑重排动画。
+- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：browser-bridge（4 页签 + 10 规则类型），映射集中在 `tools/browser-bridge/renderer/tabs.ts`。
 - 动效尊重 `prefers-reduced-motion`（已在 `main.scss` 全局降级）。
 
 ### 通用工具类（`main.scss`，新工具优先复用）

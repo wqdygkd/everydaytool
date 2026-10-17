@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>edt 浏览器桥</title>
+</head>
+<body>
+  <header class="header">
+    <span class="brand">edt 浏览器桥</span>
+    <span id="status-dot" class="dot dot-off"></span>
+  </header>
+
+  <section id="error-box" class="error-box hidden">
+    <p id="error-text"></p>
+    <div class="row">
+      <input id="token-input" class="input" type="text" placeholder="粘贴 edt 页面上的配对码" />
+      <button id="token-save" class="btn">保存</button>
+    </div>
+    <button id="reconnect" class="btn btn-ghost">重新连接</button>
+  </section>
+
+  <section class="section">
+    <div class="row row-between">
+      <span class="label">状态</span>
+      <span id="conn-state" class="value muted">检测中…</span>
+    </div>
+    <div class="row row-between">
+      <span class="label">代理端口</span>
+      <span id="proxy-port" class="value mono muted">—</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="row row-between">
+      <span class="label">挂载代理（启用 edt 处理）</span>
+      <label class="switch">
+        <input id="proxy-toggle" type="checkbox" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <p class="hint">edt 断开时自动恢复直连；处理范围由 edt 侧处理名单决定。</p>
+  </section>
+
+  <section class="section">
+    <div class="label">当前站点</div>
+    <p id="current-host" class="host">—</p>
+    <div class="row">
+      <button id="add-exact" class="btn">加入名单</button>
+      <button id="add-suffix" class="btn btn-ghost">含子域</button>
+      <button id="remove-target" class="btn btn-danger hidden">移出名单</button>
+    </div>
+  </section>
+
+  <section class="section" id="suggest-section">
+    <div class="label">相关域名（来自 edt 流量）</div>
+    <ul id="suggest-list" class="suggest-list">
+      <li class="muted">—</li>
+    </ul>
+  </section>
+
+  <footer class="footer">
+    在 edt「浏览器桥」页面管理规则 / 脚本 / 流量日志。
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

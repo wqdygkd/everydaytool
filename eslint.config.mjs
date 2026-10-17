@@ -28,6 +28,14 @@ export default antfu(
     },
   },
   {
+    // ESLint 10 下 unused-imports 对纯 JS 文件误报（把使用中的变量判为仅类型引用），
+    // 仅对扩展 / 构建脚本这类纯 JS 关闭该规则，其余文件保持检查
+    files: ['tools/**/extension/**/*.js', 'scripts/**/*.mjs', '*.mjs'],
+    rules: {
+      'unused-imports/no-unused-vars': 'off',
+    },
+  },
+  {
     files: [
       'renderer/**/*.{ts,vue}',
       'tools/*/renderer/**/*.{ts,vue}',
@@ -71,6 +79,16 @@ export default antfu(
     languageOptions: {
       globals: {
         chrome: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['tools/browser-bridge/extension/**/*.js'],
+    languageOptions: {
+      globals: {
+        chrome: 'readonly',
+        crypto: 'readonly',
+        WebSocket: 'readonly',
       },
     },
   },
