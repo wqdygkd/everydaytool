@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   favoriteTools: 'edt:favorite-tools',
   toolTabs: 'edt:tool-tabs',
   envBrowserConfigs: 'edt:env-browser:configs',
+  offlinePackDockerMirror: 'edt:offline-pack:docker-mirror',
   treeaseInterceptRules: 'edt:treease-intercept-rules',
   treeaseInterceptEnabled: 'edt:treease-intercept-enabled',
 } as const

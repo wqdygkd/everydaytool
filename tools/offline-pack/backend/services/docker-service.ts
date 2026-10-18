@@ -13,7 +13,7 @@ import path from 'node:path'
 import { decompressLayer } from '../utils/decompress.ts'
 import { emitProgress, ensureOfflinePackDownloadDir, registerActiveDownload, unregisterActiveDownload } from '../utils/downloads.ts'
 import { addHistory } from '../utils/history.ts'
-import { fetchBuffer, fetchJson } from '../utils/http.ts'
+import { fetchBuffer, fetchJson, fetchRaw } from '../utils/http.ts'
 import { TarWriter } from '../utils/tar-builder.ts'
 
 const MANIFEST_ACCEPT = [
@@ -29,11 +29,11 @@ const IMAGE_MANIFEST_ACCEPT = [
 ].join(', ')
 
 interface RegistryConfig {
-  /** token 端点（scope 动态拼） */
-  tokenUrl: string
+  /** token 端点（scope 动态拼）；缺省走 Bearer challenge（加速服务 / 未知 registry） */
+  tokenUrl?: string
   /** token 请求的 service 参数 */
-  tokenService: string
-  /** registry API base（https://registry-1.docker.io / https://ghcr.io） */
+  tokenService?: string
+  /** registry API base（https://registry-1.docker.io / https://ghcr.io / 加速服务基址） */
   registryBase: string
   /** tags 查询模式：hub = Docker Hub 专有 API；registry = OCI /tags/list */
   tagsMode: 'hub' | 'registry'
@@ -41,13 +41,28 @@ interface RegistryConfig {
   hubBase?: string
 }
 
-/** 按 registry 分发端点；ghcr.io 走 OCI，其余默认 Docker Hub */
-function getRegistryConfig(registry: string): RegistryConfig {
+/** 归一化加速服务基址：补协议、去尾部斜杠；空值返回空串（直连） */
+function normalizeMirrorBase(mirror?: string): string {
+  if (!mirror) return ''
+  const trimmed = mirror.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+/** 按 registry 分发端点；ghcr.io 走 OCI，docker.io 支持加速服务代理，其余默认 Docker Hub */
+function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
   if (registry === 'ghcr.io') {
     return {
       tokenUrl: 'https://ghcr.io/token',
       tokenService: 'ghcr.io',
       registryBase: 'https://ghcr.io',
+      tagsMode: 'registry',
+    }
+  }
+  const mirrorBase = normalizeMirrorBase(mirror)
+  if (mirrorBase) {
+    return {
+      registryBase: mirrorBase,
       tagsMode: 'registry',
     }
   }
@@ -80,43 +95,70 @@ export async function searchImages(keyword: string, pageSize = 5): Promise<Offli
     .filter(item => Boolean(item.repository))
 }
 
-export async function getTagList(registry: string, namespace: string, repository: string): Promise<string[]> {
-  const cfg = getRegistryConfig(registry)
+export async function getTagList(registry: string, namespace: string, repository: string, mirror?: string): Promise<string[]> {
+  const cfg = getRegistryConfig(registry, mirror)
   if (cfg.tagsMode === 'hub') {
     const url = `${cfg.hubBase}/v2/repositories/${namespace}/${repository}/tags?page_size=100`
     const data = await fetchJson<{ results?: Array<{ name?: string }> }>(url)
     return (data.results ?? []).map(tag => tag.name ?? '').filter(Boolean)
   }
-  // OCI registry：/v2/<repo>/tags/list，需要 token
-  const token = await getToken(registry, namespace, repository)
+  // OCI registry：/v2/<repo>/tags/list，需要 token（加速服务可能免鉴权）
+  const token = await getToken(registry, namespace, repository, mirror)
   const url = `${cfg.registryBase}/v2/${namespace}/${repository}/tags/list`
-  const data = await fetchJson<{ tags?: string[] }>(url, { headers: { Authorization: `Bearer ${token}` } })
+  const data = await fetchJson<{ tags?: string[] }>(url, { headers: authHeaders(token) })
   return data.tags ?? []
 }
 
-export async function getToken(registry: string, namespace: string, repository: string): Promise<string> {
-  const cfg = getRegistryConfig(registry)
-  const repoPath = `${namespace}/${repository}`
-  const url = `${cfg.tokenUrl}?service=${cfg.tokenService}&scope=repository:${repoPath}:pull`
-  const data = await fetchJson<{ token?: string }>(url)
-  if (!data.token) throw new Error('Docker 认证服务未返回 token')
-  return data.token
+/** Bearer 头：加速服务可能免鉴权（空 token），此时不带 Authorization */
+function authHeaders(token: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-function buildManifestUrl(registry: string, namespace: string, repository: string, ref: string): string {
-  const cfg = getRegistryConfig(registry)
+/** 标准 Bearer challenge 鉴权：探测 /v2/，401 时按 WWW-Authenticate 的 realm/service 换 token */
+async function acquireTokenViaChallenge(registryBase: string, repoPath: string): Promise<string> {
+  const res = await fetchRaw(`${registryBase}/v2/`)
+  if (res.ok) return ''
+  if (res.status !== 401) throw new Error(`镜像仓库响应 ${res.status}`)
+  const challenge = res.headers.get('www-authenticate') ?? ''
+  const realm = challenge.match(/realm="([^"]+)"/)?.[1]
+  if (!realm) throw new Error('加速服务未返回认证信息，请更换加速服务')
+  const service = challenge.match(/service="([^"]+)"/)?.[1]
+  const params = new URLSearchParams()
+  if (service) params.set('service', service)
+  params.set('scope', `repository:${repoPath}:pull`)
+  const tokenUrl = `${realm}${realm.includes('?') ? '&' : '?'}${params.toString()}`
+  const data = await fetchJson<{ token?: string, access_token?: string }>(tokenUrl)
+  const token = data.token ?? data.access_token
+  if (!token) throw new Error('Docker 认证服务未返回 token')
+  return token
+}
+
+export async function getToken(registry: string, namespace: string, repository: string, mirror?: string): Promise<string> {
+  const cfg = getRegistryConfig(registry, mirror)
+  const repoPath = `${namespace}/${repository}`
+  if (cfg.tokenUrl) {
+    const url = `${cfg.tokenUrl}?service=${cfg.tokenService}&scope=repository:${repoPath}:pull`
+    const data = await fetchJson<{ token?: string }>(url)
+    if (!data.token) throw new Error('Docker 认证服务未返回 token')
+    return data.token
+  }
+  return acquireTokenViaChallenge(cfg.registryBase, repoPath)
+}
+
+function buildManifestUrl(registry: string, namespace: string, repository: string, ref: string, mirror?: string): string {
+  const cfg = getRegistryConfig(registry, mirror)
   return `${cfg.registryBase}/v2/${namespace}/${repository}/manifests/${ref}`
 }
 
-function buildLayerUrl(registry: string, namespace: string, repository: string, digest: string): string {
-  const cfg = getRegistryConfig(registry)
+function buildLayerUrl(registry: string, namespace: string, repository: string, digest: string, mirror?: string): string {
+  const cfg = getRegistryConfig(registry, mirror)
   return `${cfg.registryBase}/v2/${namespace}/${repository}/blobs/${digest}`
 }
 
 /** 不传 platform：返回可用平台列表（过滤 unknown） */
-export async function getPlatforms(registry: string, namespace: string, repository: string, tag: string, token: string): Promise<OfflinePackDockerPlatform[]> {
-  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag), {
-    headers: { Authorization: `Bearer ${token}`, Accept: MANIFEST_ACCEPT },
+export async function getPlatforms(registry: string, namespace: string, repository: string, tag: string, token: string, mirror?: string): Promise<OfflinePackDockerPlatform[]> {
+  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
+    headers: { ...authHeaders(token), Accept: MANIFEST_ACCEPT },
   })
   if (!isManifestList(data.mediaType)) return []
   const manifests = (data.manifests ?? []) as Array<Record<string, unknown>>
@@ -156,9 +198,10 @@ export async function getManifest(
   tag: string,
   token: string,
   platform?: string,
+  mirror?: string,
 ): Promise<OfflinePackDockerManifest> {
-  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag), {
-    headers: { Authorization: `Bearer ${token}`, Accept: MANIFEST_ACCEPT },
+  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
+    headers: { ...authHeaders(token), Accept: MANIFEST_ACCEPT },
   })
 
   let normalized: OfflinePackDockerManifest
@@ -182,23 +225,23 @@ export async function getManifest(
       throw new Error(`未找到 ${platform} 平台的镜像`)
     }
 
-    const specific = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, matched.digest), {
-      headers: { Authorization: `Bearer ${token}`, Accept: IMAGE_MANIFEST_ACCEPT },
+    const specific = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, matched.digest, mirror), {
+      headers: { ...authHeaders(token), Accept: IMAGE_MANIFEST_ACCEPT },
     })
     normalized = normalizeManifest(specific)
   }
 
   // 提取真实版本号（下载 config blob 解析 OCI Labels / Env）
-  normalized.version = await extractImageVersion(registry, namespace, repository, token, normalized.config.digest)
+  normalized.version = await extractImageVersion(registry, namespace, repository, token, normalized.config.digest, mirror)
   return normalized
 }
 
 /** 下载镜像 config blob，从 OCI Labels / Env 提取真实版本号 */
-async function extractImageVersion(registry: string, namespace: string, repository: string, token: string, configDigest: string): Promise<string | undefined> {
+async function extractImageVersion(registry: string, namespace: string, repository: string, token: string, configDigest: string, mirror?: string): Promise<string | undefined> {
   if (!configDigest) return undefined
   try {
-    const blob = await fetchBuffer(buildLayerUrl(registry, namespace, repository, configDigest), {
-      headers: { Authorization: `Bearer ${token}` },
+    const blob = await fetchBuffer(buildLayerUrl(registry, namespace, repository, configDigest, mirror), {
+      headers: authHeaders(token),
     })
     const data = JSON.parse(blob.toString('utf8')) as { config?: { Labels?: Record<string, string>, Env?: string[] } }
     const labels = data.config?.Labels ?? {}
@@ -251,6 +294,7 @@ export interface DockerDownloadSpec {
   repository: string
   tag: string
   platform?: string
+  mirror?: string
   filename: string
 }
 
@@ -373,15 +417,15 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
   const { taskId } = spec
 
   try {
-    const token = await getToken(registry, namespace, spec.repository)
-    const manifest = await getManifest(registry, namespace, spec.repository, spec.tag, token, spec.platform)
+    const token = await getToken(registry, namespace, spec.repository, spec.mirror)
+    const manifest = await getManifest(registry, namespace, spec.repository, spec.tag, token, spec.platform, spec.mirror)
     const layers = manifest.layers
 
     const processed: ProcessedLayer[] = []
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i]
       // 每层下载前刷新 token，避免大层下载期间 token 过期（默认 300s）
-      const freshToken = await getToken(registry, namespace, spec.repository)
+      const freshToken = await getToken(registry, namespace, spec.repository, spec.mirror)
       emitProgress({
         taskId,
         kind: 'docker',
@@ -392,8 +436,8 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
         totalLayers: layers.length,
         message: `下载层 ${i + 1}/${layers.length}`,
       })
-      const blob = await fetchBuffer(buildLayerUrl(registry, namespace, spec.repository, layer.digest), {
-        headers: { Authorization: `Bearer ${freshToken}` },
+      const blob = await fetchBuffer(buildLayerUrl(registry, namespace, spec.repository, layer.digest, spec.mirror), {
+        headers: authHeaders(freshToken),
         signal: controller.signal,
         onProgress: (downloaded, total) => emitProgress({
           taskId,

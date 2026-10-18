@@ -91,6 +91,11 @@ function assertOk(res: Response): void {
   throw err
 }
 
+/** 原始响应（不校验状态码），供 Docker Bearer challenge 读取 401 的 WWW-Authenticate 头 */
+export async function fetchRaw(url: string, options: HttpOptions = {}): Promise<Response> {
+  return request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+}
+
 export async function fetchText(url: string, options: HttpOptions = {}): Promise<string> {
   const res = await request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   assertOk(res)

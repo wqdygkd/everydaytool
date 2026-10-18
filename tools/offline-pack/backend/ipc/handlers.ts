@@ -50,6 +50,10 @@ function resolveRegistry(value: unknown): string {
   return typeof value === 'string' && value ? value : 'docker.io'
 }
 
+function resolveMirror(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
 function requireNamespace(value: unknown): string {
   if (typeof value !== 'string') throw new Error('namespace非法')
   const ns = value.trim()
@@ -88,28 +92,30 @@ export function registerOfflinePackHandlers(): void {
   safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_SEARCH, async (_event, keyword: unknown) => {
     return guard(() => searchImages(requireString(keyword, '搜索关键词')), '搜索镜像')
   })
-  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_TAGS, async (_event, registry: unknown, namespace: unknown, repository: unknown) => {
+  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_TAGS, async (_event, registry: unknown, namespace: unknown, repository: unknown, mirror: unknown) => {
     const reg = resolveRegistry(registry)
-    return guard(() => getTagList(reg, requireNamespace(namespace), requireString(repository, '仓库名')), '获取标签')
+    return guard(() => getTagList(reg, requireNamespace(namespace), requireString(repository, '仓库名'), resolveMirror(mirror)), '获取标签')
   })
-  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_PLATFORMS, async (_event, registry: unknown, namespace: unknown, repository: unknown, tag: unknown) => {
+  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_PLATFORMS, async (_event, registry: unknown, namespace: unknown, repository: unknown, tag: unknown, mirror: unknown) => {
     const reg = resolveRegistry(registry)
     const ns = requireNamespace(namespace)
     const repo = requireString(repository, '仓库名')
     const refTag = requireString(tag, '标签')
+    const mir = resolveMirror(mirror)
     return guard(async () => {
-      const token = await getToken(reg, ns, repo)
-      return getPlatforms(reg, ns, repo, refTag, token)
+      const token = await getToken(reg, ns, repo, mir)
+      return getPlatforms(reg, ns, repo, refTag, token, mir)
     }, '获取可用平台')
   })
-  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_MANIFEST, async (_event, registry: unknown, namespace: unknown, repository: unknown, tag: unknown, platform: unknown) => {
+  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.DOCKER_MANIFEST, async (_event, registry: unknown, namespace: unknown, repository: unknown, tag: unknown, platform: unknown, mirror: unknown) => {
     const reg = resolveRegistry(registry)
     const ns = requireNamespace(namespace)
     const repo = requireString(repository, '仓库名')
     const refTag = requireString(tag, '标签')
+    const mir = resolveMirror(mirror)
     return guard(async () => {
-      const token = await getToken(reg, ns, repo)
-      return getManifest(reg, ns, repo, refTag, token, typeof platform === 'string' && platform ? platform : undefined)
+      const token = await getToken(reg, ns, repo, mir)
+      return getManifest(reg, ns, repo, refTag, token, typeof platform === 'string' && platform ? platform : undefined, mir)
     }, '获取镜像清单')
   })
 
@@ -133,6 +139,7 @@ export function registerOfflinePackHandlers(): void {
         repository: requireString(docker.repository, '仓库名'),
         tag: requireString(docker.tag, '标签'),
         platform: typeof docker.platform === 'string' ? docker.platform : undefined,
+        mirror: resolveMirror(docker.mirror),
         filename,
       })
     }

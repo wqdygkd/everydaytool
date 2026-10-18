@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OfflinePackDockerImageInfo, OfflinePackDockerManifest, OfflinePackDockerPlatform, OfflinePackDockerSearchItem } from '@shared/offline-pack'
 import { extractDockerImageInfo } from '@shared/offline-pack'
+import { STORAGE_KEYS } from '@shared/storage-keys'
 import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
@@ -8,6 +9,25 @@ import { getOfflinePackApi, openExternal } from '../ipc'
 import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
+
+// Docker Hub 加速服务（registry 镜像代理）；'' 表示直连，filterable+allow-create 支持自定义地址
+const MIRRORS = [
+  { label: 'dockerproxy.net', value: 'https://dockerproxy.net' },
+  { label: 'docker.1ms.run', value: 'https://docker.1ms.run' },
+  { label: 'docker.1panel.live', value: 'https://docker.1panel.live' },
+]
+
+const MIRROR_STORAGE_KEY = STORAGE_KEYS.offlinePackDockerMirror
+
+function readMirror(): string {
+  try {
+    return localStorage.getItem(MIRROR_STORAGE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+const mirror = ref(readMirror())
 
 const input = ref('')
 const tags = ref<string[]>([])
@@ -73,6 +93,17 @@ function useExample(value: string): void {
   void handleSubmit()
 }
 
+/** 切换加速服务：持久化选择，并重新解析已输入的镜像（走新端点） */
+function onMirrorChange(): void {
+  try {
+    if (mirror.value) localStorage.setItem(MIRROR_STORAGE_KEY, mirror.value)
+    else localStorage.removeItem(MIRROR_STORAGE_KEY)
+  } catch {
+    // 持久化失败不影响本次使用
+  }
+  if (input.value.trim()) void handleSubmit()
+}
+
 async function handleSubmit(): Promise<void> {
   if (!api) {
     ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
@@ -96,7 +127,7 @@ async function handleSubmit(): Promise<void> {
   try {
     const parsed = extractDockerImageInfo(trimmed)
     info.value = parsed
-    const res = await api.invoke(api.channels.DOCKER_TAGS, registry.value, namespace.value, parsed.repository) as string[]
+    const res = await api.invoke(api.channels.DOCKER_TAGS, registry.value, namespace.value, parsed.repository, mirror.value || undefined) as string[]
     tags.value = res ?? []
     if (tags.value.length) {
       selectedTag.value = parsed.tag && parsed.tag !== 'latest' ? parsed.tag : (tags.value[0] ?? 'latest')
@@ -133,7 +164,7 @@ async function loadPlatforms(): Promise<void> {
   platforms.value = []
   selectedPlatform.value = ''
   try {
-    const res = await api.invoke(api.channels.DOCKER_PLATFORMS, registry.value, namespace.value, info.value.repository, selectedTag.value) as OfflinePackDockerPlatform[]
+    const res = await api.invoke(api.channels.DOCKER_PLATFORMS, registry.value, namespace.value, info.value.repository, selectedTag.value, mirror.value || undefined) as OfflinePackDockerPlatform[]
     platforms.value = res ?? []
     if (platforms.value.length) {
       const defaultPlatform = platforms.value.find(p => p.architecture === 'amd64' && p.os === 'linux') ?? platforms.value[0]
@@ -150,7 +181,7 @@ async function fetchManifest(): Promise<void> {
   manifestLoading.value = true
   manifest.value = null
   try {
-    manifest.value = await api.invoke(api.channels.DOCKER_MANIFEST, registry.value, namespace.value, info.value.repository, selectedTag.value, selectedPlatform.value || undefined) as OfflinePackDockerManifest
+    manifest.value = await api.invoke(api.channels.DOCKER_MANIFEST, registry.value, namespace.value, info.value.repository, selectedTag.value, selectedPlatform.value || undefined, mirror.value || undefined) as OfflinePackDockerManifest
   } catch {
     manifest.value = null
   } finally {
@@ -181,6 +212,7 @@ async function handleDownload(): Promise<void> {
     repository: info.value.repository,
     tag: selectedTag.value,
     platform: selectedPlatform.value || undefined,
+    mirror: mirror.value || undefined,
     filename: buildFilename(),
   })
 }
@@ -192,6 +224,21 @@ async function handleDownload(): Promise<void> {
       输入完整镜像名或 Docker Hub 仓库链接，或前往
       <a class="offline-pack-link" href="https://hub.docker.com/search" @click.prevent="openExternal('https://hub.docker.com/search')">Docker Hub</a>
     </p>
+
+    <div class="mirror-row">
+      <span class="muted mirror-label">加速服务</span>
+      <el-select
+        v-model="mirror"
+        class="mirror-select"
+        filterable
+        allow-create
+        clearable
+        placeholder="直连 Docker Hub（不使用加速）"
+        @change="onMirrorChange"
+      >
+        <el-option v-for="m in MIRRORS" :key="m.value" :label="m.label" :value="m.value" />
+      </el-select>
+    </div>
 
     <el-input
       v-model="input"
@@ -330,6 +377,22 @@ async function handleDownload(): Promise<void> {
 
 .offline-pack-link:hover {
   text-decoration: underline;
+}
+
+.mirror-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mirror-label {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}
+
+.mirror-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .offline-pack-input :deep(.el-input__wrapper) {
