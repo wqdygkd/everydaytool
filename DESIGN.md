@@ -4,10 +4,10 @@
 
 ## 1. 设计原则与视觉语言
 
-- **Telegram 风格浅色**：整体视觉移植自 Telegram Web A 浅色主题——轻盈、低饱和、圆角友好、以品牌蓝作为唯一强调色。
+- **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为唯一强调色。
 - **固定浅色**：无主题切换，颜色一律走语义令牌，禁止硬编码。
 - **令牌优先**：所有组件通过 `var(--token)` 引用设计令牌，禁止硬编码颜色 / 圆角 / 阴影。
-- **胶囊与浮岛**：按钮、徽章、页签、头像为胶囊形；卡片与面板为白底浮岛，靠细边框与轻阴影分层。
+- **圆角与浮岛**：按钮、页签为圆角矩形；头像、FAB、徽章保持圆形/胶囊；卡片与面板为浮岛，靠细边框与轻阴影分层。
 - **组件减法**：能用 Element Plus（`el-*`）组件的不自造，覆写只写几何差异，颜色与状态交给全局令牌绑定。
 - **反过度设计**：间距、宽度、圆角严格取令牌阶梯，不为一两像素差异新增魔法数字。
 
@@ -20,9 +20,10 @@
 | 品牌蓝（Primary） | `#3390ec` | 主按钮、链接、选中态、焦点环 |
 | 画布（App BG） | `#f4f4f5` | 应用背景、工具页底色 |
 | 表面（Surface） | `#ffffff` | 卡片、面板、输入框、表格 |
+| 主文本 | `#000000` | 正文 |
 | 次级文本 | `#707579` | 说明文字、弱化内容 |
 | 边框 | `#dadce0` | 输入边框、分隔线 |
-| 成功绿 | `#00c73e` | 运行中、已启用、未读徽章 |
+| 成功绿 | `#10b981` | 运行中、已启用、未读徽章 |
 
 ## 3. 设计令牌
 
@@ -32,13 +33,13 @@
 
 | 令牌 | 值 | 用途 |
 |------|-----|------|
-| `--color-primary` | `#3390ec` | 品牌蓝 |
-| `--color-primary-hover` | `#4a95d6` | 主按钮 hover（Telegram 原生的「变浅」行为） |
+| `--color-primary` | `#3390ec` | 品牌蓝（唯一强调色） |
+| `--color-primary-hover` | `#4a95d6` | 主按钮 hover |
 | `--color-primary-soft` | `rgba(51,144,236,.1)` | 选中行 / 选中项浅底 |
 | `--color-primary-light` | `rgba(51,144,236,.2)` | 品牌标 / 页签选中浅底 |
-| `--color-success` | `#00c73e` | 成功 / 运行态 |
-| `--color-warning` | `#fb8c00` | 警告 / 固定标记 |
-| `--color-error` | `#e53935` | 错误 / 危险操作 |
+| `--color-success` | `#10b981` | 成功 / 运行态 |
+| `--color-warning` | `#f59e0b` | 警告 / 固定标记 |
+| `--color-error` | `#ef4343` | 错误 / 危险操作 |
 | `--color-app-bg` | `#f4f4f5` | 画布 / 工具页底 |
 | `--color-surface` | `#ffffff` | 基础表面（表格行、编辑器卡片） |
 | `--color-surface-raised` | `#ffffff` | 浮岛表面（卡片/面板，与 surface 成语义对） |
@@ -97,26 +98,26 @@
 
 ### 3.5 圆角
 
-Telegram 阶梯：
+圆角阶梯：
 
 | 令牌 | 值 | 对应 |
 |------|-----|------|
-| `--radius-xs` | `6px` | 小件（图标钮 hover 底、代码块） |
-| `--radius-sm` | `10px` | 控件（输入框、编辑器卡片、弹层菜单） |
+| `--radius-xs` | `8px` | 小件（图标钮 hover 底、代码块） |
+| `--radius-sm` | `12px` | 控件（输入框、编辑器卡片、弹层菜单） |
 | `--radius-md` | `16px` | 行 / 菜单（弹层、消息） |
-| `--radius-lg` | `24px` | 浮岛（卡片、面板、表格容器） |
-| `--radius-xl` | `32px` | 模态（对话框） |
+| `--radius-lg` | `20px` | 浮岛（卡片、面板、表格容器） |
+| `--radius-xl` | `28px` | 模态（对话框） |
 
-> 按钮、徽章、页签、头像为**胶囊形**（`999px`）。
+> 按钮、页签为**圆角矩形**（14px / 12px）；头像、FAB、徽章保持圆形 / 胶囊（`999px`）。
 
 ### 3.6 阴影
 
 | 令牌 | 值 | 用途 |
 |------|-----|------|
-| `--shadow-sm` | `0 1px 4px rgba(0,0,0,.05)` | 浮岛卡片 / 面板 |
-| `--shadow-md` | `0 1px 5px -1px rgba(0,0,0,.21)` | 菜单、FAB、消息 |
-| `--shadow-lg` | `0 4px 8px 2px rgba(114,114,114,.25)` | 对话框、批量操作栏 |
-| `--shadow-focus` | `0 0 0 3px rgba(51,144,236,.18)` | 键盘焦点环 |
+| `--shadow-sm` | `0 1px 2px rgba(0,0,0,.05)` | 浮岛卡片 / 面板 |
+| `--shadow-md` | `0 8px 22px rgba(0,0,0,.08)` | 菜单、FAB、消息 |
+| `--shadow-lg` | `0 16px 32px rgba(0,0,0,.12)` | 对话框、批量操作栏 |
+| `--shadow-focus` | `0 0 0 3px rgba(255,109,56,.2)` | 键盘焦点环 |
 
 ### 3.7 过渡
 
@@ -176,7 +177,7 @@ Telegram 阶梯：
 |------|-------------|------|
 | `UiPathField` | `modelValue`、`placeholder`、`disabled`、`mono`、`#actions` 插槽 | 路径输入（等宽 + 右侧动作） |
 | `UiSwitchField` | `modelValue`、`disabled`、`align` | 开关 + 说明文字的组合 |
-| `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 胶囊（42px 大搜索），`box` 方形（32px 面板内搜索） |
+| `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 圆角（42px 大搜索），`box` 方形（32px 面板内搜索） |
 | `UiCodeArea` | `modelValue`、`rows`（8）、`placeholder`、`disabled`、`meta` | 等宽多行输入 + 右下角元信息 |
 
 ### 5.5 图标 / 按钮 / 头像
@@ -201,8 +202,8 @@ Telegram 阶梯：
 | 状态 | 表现 |
 |------|------|
 | hover | 卡片浮岛 hover 变浅底或抬描边；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
-| active / 选中 | 品牌蓝描边 + `--color-primary-soft` 浅底（列表卡、行、分段钮）；固定/警示用 warning |
-| focus | `--shadow-focus` 蓝色内环（输入框为蓝边框 + 无外发光） |
+| active / 选中 | 品牌橙描边 + `--color-primary-soft` 浅底（列表卡、行、分段钮）；固定/警示用 warning |
+| focus | `--shadow-focus` 橙色内环（输入框为橙边框 + 无外发光） |
 | disabled | EP 默认禁用灰（走全局绑定），图标/文字按钮降低透明度 |
 
 ## 6. 通用工具类
@@ -221,7 +222,7 @@ Telegram 阶梯：
 
 ### 7.1 应用外壳
 
-- 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 胶囊，primary-light 底 + primary 字）+ 工具页签（胶囊高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
+- 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，primary-light 底 + primary 字）+ 工具页签（圆角高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
 - 标题栏整行 `-webkit-app-region: drag`，页签区 no-drag。
 - 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
 - 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
@@ -263,7 +264,7 @@ Telegram 阶梯：
 - 图标按钮提供 `aria-label` / `title`。
 - 键盘焦点统一 `--shadow-focus` 焦点环。
 - 交互元素可键盘触发（列表卡支持 Enter / Space）。
-- 文本对比遵循 Telegram 浅色的主/次级/三级分层。
+- 文本对比遵循主/次级/三级分层。
 
 ---
 

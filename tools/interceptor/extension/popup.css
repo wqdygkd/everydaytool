@@ -6,9 +6,9 @@
   --border: #dadce0;
   --primary: #3390ec;
   --primary-hover: #2f84d9;
-  --danger: #e53935;
-  --success: #00c73e;
-  --radius: 10px;
+  --danger: #ef4343;
+  --success: #10b981;
+  --radius: 12px;
 }
 
 * {
@@ -44,7 +44,7 @@ body {
 }
 
 .dot-on { background: var(--success); }
-.dot-warn { background: #f0a62e; }
+.dot-warn { background: #f59e0b; }
 .dot-off { background: var(--border); }
 
 .section {
@@ -100,7 +100,7 @@ body {
   cursor: pointer;
   background: var(--primary);
   border: none;
-  border-radius: 999px;
+  border-radius: 10px;
 }
 
 .btn:hover { background: var(--primary-hover); }
@@ -119,7 +119,7 @@ body {
   border: 1px solid var(--danger);
 }
 
-.btn-danger:hover { background: rgb(229 57 53 / 8%); }
+.btn-danger:hover { background: rgb(239 67 67 / 8%); }
 
 .btn:disabled {
   cursor: not-allowed;
@@ -142,8 +142,8 @@ body {
 .error-box {
   padding: 10px;
   margin-bottom: 8px;
-  background: rgb(229 57 53 / 8%);
-  border: 1px solid rgb(229 57 53 / 30%);
+  background: rgb(239 67 67 / 8%);
+  border: 1px solid rgb(239 67 67 / 30%);
   border-radius: var(--radius);
 }
 
@@ -212,7 +212,7 @@ body {
   cursor: pointer;
   background: none;
   border: 1px solid var(--primary);
-  border-radius: 999px;
+  border-radius: 10px;
 }
 
 .footer {

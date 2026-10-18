@@ -26,13 +26,24 @@
   --el-box-shadow: var(--shadow-lg);
   --el-mask-color: rgba(0, 0, 0, 0.25);
   --el-mask-color-light: rgba(0, 0, 0, 0.35);
+
+  /* 默认按钮 = 玻璃钮（半透明底 + 细描边） */
+  --el-button-bg-color: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+  --el-button-border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
+  --el-button-text-color: var(--color-text-primary);
+  --el-button-hover-bg-color: var(--color-surface-raised);
+  --el-button-hover-border-color: var(--color-border);
+  --el-button-hover-text-color: var(--color-text-primary);
+  --el-button-active-bg-color: var(--color-muted);
+  --el-button-active-border-color: var(--color-border);
+  --el-button-active-text-color: var(--color-text-primary);
 }
 
 /* ── Element Plus 定制 ── */
 .el-button {
   font-weight: var(--font-weight-medium);
-  /* telegram 按钮 = 胶囊 */
-  border-radius: 999px;
+  /* 按钮 = 圆角矩形（非胶囊） */
+  border-radius: 14px;
 
   &--primary {
     --el-button-bg-color: var(--color-primary);
@@ -70,7 +81,7 @@
   }
 }
 
-/* telegram 输入聚焦 = 蓝色边框 + 内圈蓝环(无外发光) */
+/* 输入聚焦 = 橙色边框 + 内圈橙环(无外发光) */
 .el-input__wrapper.is-focus,
 .el-select__wrapper.is-focused {
   box-shadow: 0 0 0 1px var(--color-primary) inset;
@@ -78,8 +89,11 @@
 
 .el-dialog {
   --el-dialog-border-radius: var(--radius-xl);
+  --el-dialog-bg-color: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
   border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(16px);
 
   .el-dialog__header {
     padding-bottom: 14px;
@@ -111,12 +125,18 @@
 .el-dropdown__popper,
 .el-select__popper {
   --el-box-shadow: var(--shadow-lg);
+  --el-bg-color-overlay: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  border: 1px solid var(--color-border-light);
+  backdrop-filter: blur(12px);
 }
 
 /* 消息提示 */
 .el-message {
   border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-md);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 /* 空状态与占位 */
@@ -135,7 +155,7 @@
   color: var(--color-text-primary);
 }
 
-/* telegram 占位符灰 #A2ACB4 ≈ 次级文本 55% */
+/* 占位符 ≈ 次级文本 55% */
 .el-input__inner::placeholder,
 .el-textarea__inner::placeholder {
   color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);

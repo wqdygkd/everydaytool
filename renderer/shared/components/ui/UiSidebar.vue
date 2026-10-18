@@ -40,7 +40,8 @@ withDefaults(defineProps<{
   flex-shrink: 0;
   min-height: 0;
   border-right: 1px solid var(--color-border-light);
-  background: var(--color-surface-raised);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  backdrop-filter: blur(12px);
 }
 
 .ui-sidebar-header {

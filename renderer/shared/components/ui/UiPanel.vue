@@ -46,6 +46,7 @@ withDefaults(defineProps<{
 
   &.is-raised {
     background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-light);
     border-radius: var(--radius-lg);
   }
 
@@ -70,6 +71,8 @@ withDefaults(defineProps<{
   justify-content: space-between;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .ui-panel-title {

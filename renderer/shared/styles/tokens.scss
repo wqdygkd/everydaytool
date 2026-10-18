@@ -1,43 +1,43 @@
 // 设计令牌：全局唯一来源（颜色 / 字阶 / 间距 / 几何 / 圆角 / 阴影 / 过渡 / 字体栈）。
 // Element Plus 的 --el-* 绑定见 element-plus.scss。
 :root {
-  /* ── 品牌色:Telegram Web(A) 浅色主题（telegram-tt themes.json 移植）= Telegram 蓝 ── */
+  /* ── 品牌色：品牌蓝（唯一强调色） ── */
   --color-primary: #3390ec;
-  --color-primary-hover: #4a95d6; /* telegram --color-primary-shade */
-  --color-primary-soft: rgba(51, 144, 236, 0.1); /* telegram --color-primary-tint */
-  --color-primary-light: rgba(51, 144, 236, 0.2); /* telegram --color-primary-opacity */
+  --color-primary-hover: #4a95d6;
+  --color-primary-soft: rgba(51, 144, 236, 0.1);
+  --color-primary-light: rgba(51, 144, 236, 0.2);
 
   /* ── 语义色 ── */
-  --color-success: #00c73e; /* telegram 草绿(unread badge / --color-green) */
-  --color-warning: #fb8c00;
-  --color-error: #e53935;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4343;
 
-  /* ── surfaces ── */
-  --color-app-bg: #f4f4f5; /* 画布 = telegram --color-background-secondary */
-  --color-surface: #ffffff; /* telegram --color-background */
+  /* ── surfaces（冷灰） ── */
+  --color-app-bg: #f4f4f5;
+  --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-muted: #f4f4f5; /* telegram item hover 填充 */
+  --color-muted: #f4f4f5;
 
   /* ── lines ── */
-  --color-border-light: #e4e4e5; /* telegram --color-background-secondary-accent */
-  --color-border: #dadce0; /* telegram --color-borders / 输入边框 */
+  --color-border-light: #e4e4e5;
+  --color-border: #dadce0;
 
   /* ── text ── */
   --color-text-primary: #000000;
   --color-text-secondary: #707579;
-  --color-text-tertiary: #686c72; /* telegram meta(时间戳) */
+  --color-text-tertiary: #686c72;
 
-  /* ── shape(telegram 阶梯:小件 6 / 控件 10 / 行·菜单 16 / 浮岛 24 / 模态 32) ── */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
+  /* ── shape(阶梯:小件 8 / 控件 12 / 卡片 16 / 浮岛 20 / 模态 28) ── */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
   --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
 
-  /* ── shadows(telegram 浮岛 / 面板 / 菜单) ── */
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 1px 5px -1px rgba(0, 0, 0, 0.21);
-  --shadow-lg: 0 4px 8px 2px rgba(114, 114, 114, 0.25);
+  /* ── shadows(柔和低对比 + 品牌色焦点环) ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12);
   --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18);
 
   --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1);

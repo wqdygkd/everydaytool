@@ -44,7 +44,7 @@ defineEmits<{
 </template>
 
 <style scoped lang="scss">
-/* Telegram 聊天条目式卡片：白底浮岛 + 头像行，hover 灰底轻提示 */
+/* 浮岛卡片：头像行 + 细描边，hover 抬升 + 阴影 */
 .tool-card {
   /* 收藏钮是绝对定位浮层：尺寸 / 内缩集中定义，工具名预留宽度与之联动 */
   --favorite-size: 26px;
@@ -58,13 +58,16 @@ defineEmits<{
   overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  transition: background-color var(--transition-base), border-color var(--transition-base), transform var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
 
   &:hover {
     border-color: var(--color-border);
-    background: var(--color-muted);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
   }
 
   &:active {
@@ -83,7 +86,7 @@ defineEmits<{
     padding: 0;
     border: 1px solid var(--color-border-light);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+    background: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;
     transition: var(--transition-fast);
@@ -91,7 +94,7 @@ defineEmits<{
     &:hover,
     &.active {
       border-color: var(--color-warning);
-      background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface-raised));
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       color: var(--color-warning);
     }
 

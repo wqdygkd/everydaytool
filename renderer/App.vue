@@ -159,7 +159,8 @@ function handleTabRemove(toolId: string) {
   // 基座保持常规边距；mac 红绿灯安全边距由下方 .platform-darwin 规则提供，
   // win/linux 右侧按钮预留由下方规则提供（各平台互不干扰）
   padding: 0 var(--spacing-lg);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--color-border-light);
   color: var(--color-text-primary);
   // 自定义标题栏（系统标题栏已隐藏）：整行可拖拽移动窗口，交互元素各自排除
@@ -173,8 +174,8 @@ function handleTabRemove(toolId: string) {
     flex-shrink: 0;
     height: 34px;
     padding: 0 13px;
-    border-radius: 999px;
-    /* 品牌标：与工具页签同款胶囊（primary-light 底 + primary 字） */
+    border-radius: 14px;
+    /* 品牌标：圆角矩形（primary-light 底 + primary 字） */
     background: var(--color-primary-light);
     color: var(--color-primary);
     font-family: "Nunito", "Roboto", inherit;
@@ -209,7 +210,7 @@ function handleTabRemove(toolId: string) {
   padding-left: 88px;
 }
 
-// 工具页签：内嵌标题栏行（品牌标右侧），Telegram 文件夹页签风格（胶囊高亮）
+// 工具页签：内嵌标题栏行（品牌标右侧），圆角高亮
 .header-tabs {
   flex: 1;
   min-width: 0;
@@ -234,7 +235,7 @@ function handleTabRemove(toolId: string) {
 
   :deep(.el-tabs__item) {
     border: none !important;
-    border-radius: 999px;
+    border-radius: 12px;
     // EP 卡片页签有三套 padding（基础 20 / hover 13 / 激活 20）且 hover 才把关闭图标
     // 从 0 撑到 14px，任何一项变化都会让页签变宽变窄、邻居左右跳。
     // 此处全部钉死为常量（需 !important 压过 EP 的 is-active/is-closable:hover 规则），

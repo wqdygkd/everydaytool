@@ -58,12 +58,12 @@ function onEsc() {
 </template>
 
 <style scoped lang="scss">
-/* 胶囊搜索框：白底浮岛（画布是灰 #f4f4f5，Telegram 的灰底胶囊在灰画布上不可见），聚焦蓝框 */
+/* 圆角搜索框：白底浮岛，聚焦橙框 */
 .ui-search-pill {
   :deep(.el-input__wrapper) {
     height: 42px;
     padding: 0 var(--spacing-lg);
-    border-radius: 999px;
+    border-radius: 14px;
     background: var(--color-surface-raised);
     box-shadow: 0 0 0 2px var(--color-border-light) inset;
 

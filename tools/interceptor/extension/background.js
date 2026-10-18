@@ -48,7 +48,7 @@ async function getSettings() {
 
 function setBadge(enabled) {
   chrome.action.setBadgeText({ text: enabled ? 'ON' : '' }).catch(() => {})
-  chrome.action.setBadgeBackgroundColor({ color: enabled ? '#00c73e' : '#707579' }).catch(() => {})
+  chrome.action.setBadgeBackgroundColor({ color: enabled ? '#10b981' : '#707579' }).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------
