@@ -341,6 +341,7 @@ onUnmounted(() => {
             placeholder="可选，空格分隔，如 --lang=zh-CN；调试端口会自动附加"
             :disabled="isRunning"
             class="mono"
+            spellcheck="false"
           />
         </el-form-item>
       </el-form>

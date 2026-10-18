@@ -26,6 +26,7 @@ const value = computed({
       :class="{ 'is-mono': mono }"
       :placeholder="placeholder"
       :disabled="disabled"
+      spellcheck="false"
     >
       <template v-if="$slots.prepend" #prepend>
         <slot name="prepend" />
