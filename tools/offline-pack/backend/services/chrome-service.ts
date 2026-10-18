@@ -43,8 +43,9 @@ export function buildChromeDownloadUrl(id: string): string {
     os_arch: 'x86_64',
     nacl_arch: 'x86-64',
     prod: 'chromecrx',
-    prodchannel: 'beta',
-    prodversion: '131.0.6778.86',
+    prodchannel: 'stable',
+    // 更新服务要求客户端版本号以匹配扩展 minimum_chrome_version；随 CHROME_UA 周期更新
+    prodversion: CHROME_UA.match(/Chrome\/([\d.]+)/)?.[1] ?? '131.0.0.0',
     lang: 'zh-CN',
     acceptformat: 'crx2,crx3',
     x: `id=${id}&installsource=ondemand&uc`,

@@ -20,5 +20,5 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'envBrowser', channels: ENV_BROWSER_IPC_CHANNELS },
   { preloadNamespace: 'treeaseEditor', channels: TREEASE_IPC_CHANNELS },
   { preloadNamespace: 'wxpEnhancer', channels: WXP_IPC_CHANNELS },
-  { preloadNamespace: 'offline-pack', channels: OFFLINE_PACK_IPC_CHANNELS },
+  { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },
 ]

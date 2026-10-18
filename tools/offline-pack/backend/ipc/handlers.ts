@@ -51,7 +51,9 @@ function resolveRegistry(value: unknown): string {
 }
 
 function requireNamespace(value: unknown): string {
-  return requireString(value, 'namespace') || 'library'
+  if (typeof value !== 'string') throw new Error('namespace非法')
+  const ns = value.trim()
+  return ns || 'library'
 }
 
 export function registerOfflinePackHandlers(): void {

@@ -268,7 +268,7 @@ function generateImageId(imageTag: string): string {
   let hash = 0
   for (let i = 0; i < imageTag.length; i++) {
     hash = ((hash << 5) - hash) + imageTag.charCodeAt(i)
-    hash = hash & hash
+    hash = hash | 0 // 32 位截断，防止左移溢出
   }
   return Math.abs(hash).toString(16).padStart(12, '0')
 }
