@@ -1,4 +1,4 @@
-import type { ShellMenuAction } from '../shared/types.ts'
+import type { ShellMenuAction } from '../shared/menu.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
@@ -77,7 +77,7 @@ function adjustZoom(delta: number) {
   if (wc) wc.setZoomLevel(wc.getZoomLevel() + delta)
 }
 
-// 页内菜单动作的 IPC 入口（页内菜单已移除，桥接保留备用；动作定义见 shared/types.ts）。
+// 页内菜单动作的 IPC 入口（页内菜单已移除，桥接保留备用；动作定义见 shared/menu.ts）。
 // Record 键穷举 ShellMenuAction：新增动作漏实现时在编译期报错；IPC 载荷运行时不经类型校验，未知值忽略。
 ipcMain.on('edt:menu-action', (_event, action: ShellMenuAction) => {
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow

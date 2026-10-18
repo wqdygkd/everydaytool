@@ -48,7 +48,7 @@ async function save() {
 </script>
 
 <template>
-  <el-dialog
+  <UiDialog
     v-model="visible"
     title="首次使用 - 设置数据目录"
     width="520px"
@@ -71,12 +71,12 @@ async function save() {
         保存并继续
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <style scoped lang="scss">
 .setup-intro {
-  margin: 0 0 16px;
+  margin: 0 0 var(--spacing-lg);
   color: var(--color-text-secondary);
   line-height: 1.5;
 }

@@ -1,4 +1,4 @@
-import type { TreeaseInterceptRule } from '../../../../shared/types'
+import type { TreeaseInterceptRule } from '../../../../shared/treease'
 
 // 内置拦截规则：每个接口独立配置
 // - modify：命中后解析 JSON 响应，按 JSON 路径覆盖指定字段，其余原样透传

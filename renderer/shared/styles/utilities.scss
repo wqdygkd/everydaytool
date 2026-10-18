@@ -1,0 +1,58 @@
+// 通用工具类：工具页容器 / 文本 / 控件定宽 / 按钮间距 / 占满宽。
+// 卡片 / 网格 / 键值 / 提示 / 行内组等模式已收敛至 renderer/shared/components/ui。
+
+/* 工具页容器:填充主区域并在内部滚动 */
+.tool-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-app-bg);
+}
+
+/* 弱化文本 */
+.muted {
+  color: var(--color-text-secondary);
+}
+
+/* 等宽数字字体 */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 覆盖 Element Plus 的 .el-button + .el-button { margin-left: 12px }：
+   flex gap 布局下间距以 gap 为准，不再叠加原生左边距（原 ActionBar / UiSidebar /
+   UiToolbar 三处重复的 :deep 覆写收敛至此）。 */
+.btn-flush .el-button + .el-button {
+  margin-left: 0;
+}
+
+/* 占满容器宽度的按钮 / 输入框（如侧栏底部整行按钮） */
+.full-width {
+  width: 100%;
+}
+
+/* 表单控件定宽阶梯：选择器 / 输入框按阶梯取宽，禁止一处一个 px 的内联宽度。
+   EP 组件样式按需懒加载（运行时注入，文档序晚于本文件），宽度须 !important
+   才能稳定压过 .el-input / .el-select / .el-input-number 根元素的默认宽度。 */
+.ctl-xs {
+  width: 90px !important;
+}
+
+.ctl-sm {
+  width: 140px !important;
+}
+
+.ctl-md {
+  width: 200px !important;
+}
+
+.ctl-lg {
+  width: 280px !important;
+}
+
+/* 填充剩余空间（min-width 防 wrap 组内被过度压缩） */
+.ctl-fill {
+  flex: 1;
+  min-width: 200px;
+}

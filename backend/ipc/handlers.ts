@@ -6,7 +6,7 @@ import type {
   AppDataDirectoryUpdateResult,
   CacheCleanResult,
   DataRootUsage,
-} from '../../shared/types.ts'
+} from '../../shared/app.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { isSafeDataDirectory } from '../../shared/path-guard.ts'

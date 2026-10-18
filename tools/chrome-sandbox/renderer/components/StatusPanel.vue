@@ -32,24 +32,23 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
         :sandbox="sandbox"
       />
 
-      <div class="panel-header">
+      <UiGroup gap="md" class="panel-header">
         <h2>{{ sandbox.name }}</h2>
         <el-tag :type="sandbox.status === 'running' ? 'success' : 'info'" size="small">
           {{ formatSandboxStatus(sandbox.status) }}
         </el-tag>
-      </div>
+      </UiGroup>
 
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span>PID</span><strong>{{ sandbox.chromePid || '-' }}</strong>
-        </div>
-        <div class="detail-item">
-          <span>路径</span><strong class="path">{{ sandbox.userDataPath }}</strong>
-        </div>
-      </div>
+      <UiDetailGrid class="detail-grid">
+        <UiDetailItem label="PID">
+          <strong>{{ sandbox.chromePid || '-' }}</strong>
+        </UiDetailItem>
+        <UiDetailItem label="路径">
+          <strong class="path">{{ sandbox.userDataPath }}</strong>
+        </UiDetailItem>
+      </UiDetailGrid>
 
-      <div class="section-block">
-        <h3>沙箱配置</h3>
+      <UiPanel variant="outlined" title="沙箱配置" class="section-block">
         <div class="sandbox-config">
           <div class="config-row">
             <span class="config-label">继承扩展</span>
@@ -76,10 +75,9 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
             <span v-else class="config-value muted">无</span>
           </div>
         </div>
-      </div>
+      </UiPanel>
 
-      <div class="section-block">
-        <h3>指纹状态</h3>
+      <UiPanel variant="outlined" title="指纹状态" class="section-block">
         <div v-if="fingerprint" class="fingerprint-summary">
           <p>UA: {{ fingerprint.navigator?.userAgent?.slice(0, 60) }}...</p>
           <p>Platform: {{ fingerprint.navigator?.platform }} | 分辨率: {{ fingerprint.screen?.width }}x{{ fingerprint.screen?.height }}</p>
@@ -88,7 +86,7 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
         <p v-else class="muted">
           暂无指纹信息
         </p>
-      </div>
+      </UiPanel>
     </template>
 
     <div v-else class="empty-panel">
@@ -98,27 +96,51 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
 </template>
 
 <style scoped lang="scss">
+.status-panel {
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-2xl);
+  overflow: auto;
+}
+
+.panel-header {
+  margin-bottom: var(--spacing-xl);
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.detail-grid {
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* 原 .section-block 的块间距 */
+.section-block {
+  margin-bottom: var(--spacing-lg);
+}
+
 .sandbox-config {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-md);
 
   .config-row {
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
-    gap: 8px 12px;
+    gap: var(--spacing-sm) var(--spacing-md);
     align-items: start;
   }
 
   .config-label {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    line-height: 22px;
+    line-height: var(--line-height-control);
   }
 
   .config-value {
     min-width: 0;
-    line-height: 22px;
+    line-height: var(--line-height-control);
 
     :deep(.el-tag) {
       width: fit-content;
@@ -130,14 +152,14 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: var(--spacing-sm);
   }
 
   .custom-args {
     display: flex;
     flex-basis: 100%;
     align-items: baseline;
-    gap: 8px;
+    gap: var(--spacing-sm);
 
     .label {
       color: var(--color-text-secondary);
@@ -145,11 +167,27 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
     }
 
     code {
-      padding: 2px 6px;
+      padding: 2px var(--spacing-sm);
       border-radius: var(--radius-xs);
       background: var(--el-fill-color-light);
-      font-size: 12px;
+      font-size: var(--font-size-sm);
     }
   }
+}
+
+.fingerprint-summary p {
+  margin: var(--spacing-xs) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.empty-panel {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* 原页面级 :deep(.muted) 的字号约束，随样式回收落到本组件（颜色由全局 .muted 提供） */
+.muted {
+  font-size: var(--font-size-sm);
 }
 </style>

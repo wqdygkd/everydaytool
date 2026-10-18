@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+import { invokeIpc, ipcChannels } from '../ipc'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -43,7 +43,7 @@ async function save() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="编辑指纹" width="640px">
+  <UiDialog v-model="visible" title="编辑指纹" width="640px">
     <el-form v-if="local" :model="local" label-width="120px">
       <el-form-item label="User-Agent">
         <el-input v-model="local.navigator.userAgent" type="textarea" :rows="2" />
@@ -52,11 +52,11 @@ async function save() {
         <el-input v-model="local.navigator.platform" />
       </el-form-item>
       <el-form-item label="分辨率">
-        <div class="inline-group">
+        <UiGroup gap="sm">
           <el-input-number v-model="local.screen.width" :min="800" />
           <span>x</span>
           <el-input-number v-model="local.screen.height" :min="600" />
-        </div>
+        </UiGroup>
       </el-form-item>
       <el-form-item label="Canvas 噪点">
         <el-select v-model="local.canvas.noiseLevel">
@@ -80,5 +80,5 @@ async function save() {
         保存
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>

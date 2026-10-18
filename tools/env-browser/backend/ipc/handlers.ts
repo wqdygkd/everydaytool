@@ -1,4 +1,4 @@
-import type { EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types.ts'
+import type { EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env.ts'
 import { createRequire } from 'node:module'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { envStore } from '../store/env-store.ts'

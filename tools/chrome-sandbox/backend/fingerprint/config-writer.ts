@@ -1,4 +1,4 @@
-import type { Fingerprint } from '../../../../shared/types.ts'
+import type { Fingerprint } from '../../../../shared/sandbox.ts'
 import path from 'node:path'
 import { copyPath, ensureDir, linkOrCopyTree, pathExists, writeJson } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'

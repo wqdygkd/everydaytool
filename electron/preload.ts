@@ -1,4 +1,4 @@
-import type { ShellMenuAction } from '../shared/types.ts'
+import type { ShellMenuAction } from '../shared/menu.ts'
 import { contextBridge, ipcRenderer } from 'electron'
 import { isAllowedIpcChannel, isAllowedIpcEventChannel } from '../shared/ipc-validation.ts'
 import { ipcNamespaces } from './ipc-namespaces.ts'

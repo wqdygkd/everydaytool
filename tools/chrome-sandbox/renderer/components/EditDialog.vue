@@ -68,7 +68,7 @@ async function save() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="编辑沙箱设置" width="420px" @close="reset">
+  <UiDialog v-model="visible" title="编辑沙箱设置" width="420px" @close="reset">
     <el-form :model="form" label-width="120px">
       <el-form-item label="名称">
         <el-input v-model="form.name" placeholder="沙箱名称" />
@@ -85,5 +85,5 @@ async function save() {
         保存
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/types'
+import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
@@ -346,9 +346,9 @@ onUnmounted(() => {
 
 <template>
   <div class="treease-page">
-    <div class="treease-toolbar">
+    <UiToolbar bordered surface gap="sm" padding="8px 12px">
       <span class="muted toolbar-src">{{ SRC }}</span>
-      <div class="toolbar-actions">
+      <template #end>
         <el-tag v-if="attached" size="small" type="success">
           拦截中 · {{ ruleCount }} 个接口{{ hits > 0 ? ` · 命中 ${hits} 次` : '' }}
         </el-tag>
@@ -364,8 +364,8 @@ onUnmounted(() => {
         <el-button size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
           刷新
         </el-button>
-      </div>
-    </div>
+      </template>
+    </UiToolbar>
     <div class="treease-body">
       <webview
         v-if="isElectron"
@@ -385,21 +385,21 @@ onUnmounted(() => {
       />
     </div>
 
-    <el-dialog v-model="showDialog" title="接口响应拦截" width="680px" destroy-on-close>
+    <UiDialog v-model="showDialog" title="接口响应拦截" width="680px" destroy-on-close>
       <el-alert
         type="info"
+        class="intercept-alert"
         :closable="false"
         show-icon
         title="每个接口独立规则"
         description="修改模式：命中后改写 JSON 响应体并返回，其余透传；屏蔽模式：请求直接失败不发出（如 sentry.io 上报）。协议层实现，规则保存后立即动态生效。"
-        style="margin-bottom:12px"
       />
       <el-collapse v-model="expanded">
         <el-collapse-item v-for="(form, ri) in ruleForms" :key="form.id" :name="form.id">
           <template #title>
             <el-switch v-model="form.enabled" size="small" @click.stop />
             <span class="rule-title-name">{{ form.name || '未命名接口' }}</span>
-            <el-tag v-if="form.action === 'block'" size="small" type="danger" style="margin:0 4px">
+            <el-tag v-if="form.action === 'block'" size="small" type="danger" class="rule-action-tag">
               屏蔽
             </el-tag>
             <span class="rule-title-pattern">{{ form.urlPattern || '未配置匹配' }}</span>
@@ -412,13 +412,13 @@ onUnmounted(() => {
               <el-input v-model="form.urlPattern" placeholder="*api.treease.com/v1/usage*，屏蔽如 *sentry.io*" />
             </el-form-item>
             <el-form-item label="动作">
-              <el-select v-model="form.action" style="width:100%">
+              <el-select v-model="form.action">
                 <el-option label="修改响应字段" value="modify" />
                 <el-option label="屏蔽请求（不发出）" value="block" />
               </el-select>
             </el-form-item>
             <el-form-item v-if="form.action === 'modify'" label="修改字段">
-              <div class="patch-list">
+              <UiGroup direction="column" gap="sm" block>
                 <div v-for="(row, i) in form.rows" :key="i" class="patch-row">
                   <el-input v-model="row.path" placeholder="JSON 路径，如 limits.aiProcessingMonthly.limit" />
                   <el-input v-model="row.text" placeholder="新值，JSON 格式，如 9999" />
@@ -426,36 +426,36 @@ onUnmounted(() => {
                     删除
                   </el-button>
                 </div>
-                <div class="patch-actions">
+                <UiGroup gap="sm">
                   <el-button size="small" plain @click="addRow(form)">
                     新增字段
                   </el-button>
                   <el-button size="small" type="danger" link @click="removeRule(ri)">
                     删除该接口
                   </el-button>
-                </div>
-              </div>
+                </UiGroup>
+              </UiGroup>
             </el-form-item>
             <el-form-item v-else label="说明">
-              <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm)">命中该匹配的请求将在发出前被拦截（BlockedByClient），上报/遥测类接口适用。</span>
-              <div class="patch-actions" style="margin-top:8px">
+              <UiHint>命中该匹配的请求将在发出前被拦截（BlockedByClient），上报/遥测类接口适用。</UiHint>
+              <UiGroup gap="sm" class="rule-delete-group">
                 <el-button size="small" type="danger" link @click="removeRule(ri)">
                   删除该接口
                 </el-button>
-              </div>
+              </UiGroup>
             </el-form-item>
           </el-form>
         </el-collapse-item>
       </el-collapse>
-      <div class="rule-actions">
+      <UiGroup gap="sm" class="rule-actions">
         <el-button size="small" plain @click="addRule">
           新增接口
         </el-button>
         <el-button size="small" plain @click="resetToBuiltIn">
           恢复内置
         </el-button>
-      </div>
-      <div class="dialog-status">
+      </UiGroup>
+      <UiGroup gap="sm" class="dialog-status">
         <span class="muted">状态：</span>
         <el-tag v-if="attached" size="small" type="success">
           拦截中 · {{ ruleCount }} 个接口{{ hits > 0 ? ` · 已命中 ${hits} 次` : ' · 等待请求' }}
@@ -463,7 +463,7 @@ onUnmounted(() => {
         <el-tag v-else size="small" type="info">
           未启动
         </el-tag>
-      </div>
+      </UiGroup>
       <template #footer>
         <el-button v-if="!attached" type="primary" :loading="starting" @click="startIntercept">
           启动拦截
@@ -475,7 +475,7 @@ onUnmounted(() => {
           停止拦截
         </el-button>
       </template>
-    </el-dialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -488,28 +488,11 @@ onUnmounted(() => {
   background: var(--color-surface);
 }
 
-.treease-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border-light);
-  background: var(--color-surface-raised);
-
-  .toolbar-src {
-    font-size: var(--font-size-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .toolbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
+.toolbar-src {
+  font-size: var(--font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .treease-body {
@@ -526,9 +509,17 @@ onUnmounted(() => {
   border: 0;
 }
 
+.intercept-alert {
+  margin-bottom: var(--spacing-md);
+}
+
 .rule-title-name {
-  margin: 0 8px;
+  margin: 0 var(--spacing-sm);
   font-weight: var(--font-weight-semibold);
+}
+
+.rule-action-tag {
+  margin: 0 var(--spacing-xs);
 }
 
 .rule-title-pattern {
@@ -539,37 +530,23 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.patch-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
 .patch-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--spacing-sm);
   align-items: center;
 }
 
-.patch-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.rule-delete-group {
+  margin-top: var(--spacing-sm);
 }
 
 .rule-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  margin-top: var(--spacing-md);
 }
 
 .dialog-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  margin-top: var(--spacing-md);
   font-size: var(--font-size-sm);
 }
 </style>

@@ -1,6 +1,6 @@
-import type { WxpClearLoginCacheResult, WxpDataCache, WxpRunningState, WxpSettings } from '../../../../shared/types'
-import { invokeWxpIpc, onWxpIpc, wxpIpcChannels } from '@renderer/shared/ipc/useWxpIpc'
-import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
+import type { WxpClearLoginCacheResult, WxpDataCache, WxpRunningState, WxpSettings } from '../../../../shared/wxp'
+import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
+import { invokeWxpIpc, onWxpIpc, wxpIpcChannels } from '../ipc'
 
 interface WxpGetAllResult {
   settings?: WxpSettings

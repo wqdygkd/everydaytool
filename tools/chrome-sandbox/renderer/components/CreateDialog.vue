@@ -48,14 +48,16 @@ async function submit() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="新建沙箱" width="420px" @close="reset">
+  <UiDialog v-model="visible" title="新建沙箱" width="420px" @close="reset">
     <el-form :model="form" label-width="120px">
       <el-form-item label="名称">
         <el-input v-model="form.name" placeholder="例如：工作账号 A" />
       </el-form-item>
       <el-form-item label="继承扩展">
         <el-switch v-model="form.inheritExtensions" />
-        <span class="form-hint">开启后从系统 Chrome 复制已安装扩展（较慢、占用更多磁盘）</span>
+        <UiHint>
+          开启后从系统 Chrome 复制已安装扩展（较慢、占用更多磁盘）
+        </UiHint>
       </el-form-item>
       <el-form-item label="启动参数">
         <LaunchOptionsFields :form="form" />
@@ -69,5 +71,5 @@ async function submit() {
         创建
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>

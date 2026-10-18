@@ -1,4 +1,4 @@
-import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types'
+import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env'
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'

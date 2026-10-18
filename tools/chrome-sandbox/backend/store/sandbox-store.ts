@@ -3,7 +3,7 @@ import type {
   SandboxMetadata,
   SandboxStatus,
   SandboxUpdatePayload,
-} from '../../../../shared/types.ts'
+} from '../../../../shared/sandbox.ts'
 import { SANDBOX_COLORS } from '../constants/sandbox.ts'
 import { getDatabase } from './database.ts'
 

@@ -1,4 +1,4 @@
-import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/types.ts'
+import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../../../../shared/wxp.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { sleep } from '../../../../shared/sleep.ts'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite.ts'

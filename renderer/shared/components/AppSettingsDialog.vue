@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../../shared/types'
+import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../../shared/app'
 import { appIpcChannels, invokeAppIpc } from '../ipc/useAppIpc'
 
 const props = defineProps({ modelValue: Boolean })
@@ -120,33 +120,35 @@ function formatBytes(bytes: number): string {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="应用设置" width="600px">
+  <UiDialog v-model="visible" title="应用设置" width="600px">
     <section class="settings-section">
       <h3>数据目录</h3>
       <div class="directory-row">
         <span class="directory-path mono">{{ info?.dataDirectory }}</span>
-        <span class="chip">{{ info?.isCustom ? '自定义' : '默认' }}</span>
+        <UiChip>{{ info?.isCustom ? '自定义' : '默认' }}</UiChip>
       </div>
-      <div class="inline-group">
+      <UiGroup>
         <el-button size="small" @click="openDirectory">
           打开文件夹
         </el-button>
         <el-button size="small" :loading="changing" @click="selectDirectory">
           更改…
         </el-button>
-      </div>
-      <p class="form-hint">
+      </UiGroup>
+      <UiHint block>
         所有工具的数据库、配置与产出都存放在此目录；更改后立即生效，已有数据不会自动迁移到新目录。
-      </p>
+      </UiHint>
     </section>
 
     <section class="settings-section">
-      <div class="section-header">
+      <UiToolbar>
         <h3>空间占用</h3>
-        <el-button link size="small" :disabled="usageLoading" @click="loadUsage">
-          刷新
-        </el-button>
-      </div>
+        <template #end>
+          <el-button link size="small" :disabled="usageLoading" @click="loadUsage">
+            刷新
+          </el-button>
+        </template>
+      </UiToolbar>
       <p v-if="usage" class="usage-summary">
         总计 <span class="mono">{{ formatBytes(usage.totalBytes) }}</span>
         <span class="muted">·</span>
@@ -158,21 +160,21 @@ function formatBytes(bytes: number): string {
           <span class="mono usage-bytes">{{ formatBytes(entry.bytes) }}</span>
         </li>
       </ul>
-      <p v-if="usageLoading" class="form-hint">
+      <UiHint v-if="usageLoading" block>
         正在计算磁盘占用…
-      </p>
+      </UiHint>
     </section>
 
     <section class="settings-section">
       <h3>清理缓存</h3>
-      <p class="form-hint">
+      <UiHint block>
         清除沙箱浏览器产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
-      </p>
+      </UiHint>
       <el-button :loading="cleaning" @click="clearCache">
         清除缓存
       </el-button>
     </section>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <style scoped lang="scss">
@@ -191,14 +193,9 @@ function formatBytes(bytes: number): string {
   }
 }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  h3 {
-    margin-bottom: 0;
-  }
+/* UiToolbar 行内的 h3 不需要节标题的默认下边距 */
+.settings-section .ui-toolbar h3 {
+  margin-bottom: 0;
 }
 
 .directory-row {
@@ -239,7 +236,7 @@ function formatBytes(bytes: number): string {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
-  padding: 6px 0;
+  padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--color-border-light);
   font-size: var(--font-size-sm);
 }

@@ -1,0 +1,91 @@
+// 全局基础：字体声明 / reset / 滚动条 / 选中 / 焦点 / 动效降级。
+
+/* Telegram 字母头像 / 品牌标字体（Nunito ExtraBold，同 telegram-tt 的头像字形） */
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("./fonts/Nunito-ExtraBold.woff2") format("woff2");
+}
+
+html {
+  background: var(--color-app-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-app-bg);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+#app {
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.el-button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+::selection {
+  background: var(--color-primary-light);
+}
+
+/* telegram 细滚动条：透明轨道 + 细圆角拇指(rgba(90,90,90,.3)) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(90, 90, 90, 0.3);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+
+  &:hover {
+    background-color: rgba(90, 90, 90, 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

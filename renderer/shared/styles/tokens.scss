@@ -1,0 +1,79 @@
+// 设计令牌：全局唯一来源（颜色 / 字阶 / 间距 / 几何 / 圆角 / 阴影 / 过渡 / 字体栈）。
+// Element Plus 的 --el-* 绑定见 element-plus.scss。
+:root {
+  /* ── 品牌色:Telegram Web(A) 浅色主题（telegram-tt themes.json 移植）= Telegram 蓝 ── */
+  --color-primary: #3390ec;
+  --color-primary-hover: #4a95d6; /* telegram --color-primary-shade */
+  --color-primary-soft: rgba(51, 144, 236, 0.1); /* telegram --color-primary-tint */
+  --color-primary-light: rgba(51, 144, 236, 0.2); /* telegram --color-primary-opacity */
+
+  /* ── 语义色 ── */
+  --color-success: #00c73e; /* telegram 草绿(unread badge / --color-green) */
+  --color-warning: #fb8c00;
+  --color-error: #e53935;
+
+  /* ── surfaces ── */
+  --color-app-bg: #f4f4f5; /* 画布 = telegram --color-background-secondary */
+  --color-surface: #ffffff; /* telegram --color-background */
+  --color-surface-raised: #ffffff;
+  --color-muted: #f4f4f5; /* telegram item hover 填充 */
+
+  /* ── lines ── */
+  --color-border-light: #e4e4e5; /* telegram --color-background-secondary-accent */
+  --color-border: #dadce0; /* telegram --color-borders / 输入边框 */
+
+  /* ── text ── */
+  --color-text-primary: #000000;
+  --color-text-secondary: #707579;
+  --color-text-tertiary: #686c72; /* telegram meta(时间戳) */
+
+  /* ── shape(telegram 阶梯:小件 6 / 控件 10 / 行·菜单 16 / 浮岛 24 / 模态 32) ── */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  /* ── shadows(telegram 浮岛 / 面板 / 菜单) ── */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 5px -1px rgba(0, 0, 0, 0.21);
+  --shadow-lg: 0 4px 8px 2px rgba(114, 114, 114, 0.25);
+  --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18);
+
+  --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+  --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1);
+
+  /* ── 字阶 / 字重 / 间距 ── */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+
+  /* ── 控件 / 外壳尺寸（全应用统一，禁止一处一个 px） ── */
+  --control-height: 32px; /* 表单控件与 ghost 按钮同高 */
+  --line-height-control: 20px; /* 控件 / 表格 / 徽标统一行高 */
+  --content-max-width: 1360px; /* 首页内容最大宽 */
+  --titlebar-height: 44px; /* 自定义标题栏行高 */
+
+  color-scheme: light;
+  /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-synthesis-weight: none;
+  background: var(--color-app-bg);
+  color: var(--color-text-primary);
+}

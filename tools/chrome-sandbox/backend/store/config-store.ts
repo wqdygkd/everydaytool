@@ -1,4 +1,4 @@
-import type { AppConfig, AppConfigUpdate } from '../../../../shared/types.ts'
+import type { AppConfig, AppConfigUpdate } from '../../../../shared/sandbox.ts'
 import { getDataDirectory, getDefaultDataDirectory, normalizeDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { getDatabase } from './database.ts'
 

@@ -1,4 +1,4 @@
-import type { TreeaseInterceptLog, TreeaseInterceptPatch, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/types.ts'
+import type { TreeaseInterceptLog, TreeaseInterceptPatch, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease.ts'
 import { Buffer } from 'node:buffer'
 import { createRequire } from 'node:module'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'

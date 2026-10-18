@@ -1,4 +1,4 @@
-import type { WxpDataCache, WxpLinkFavorite } from '../../../../shared/types.ts'
+import type { WxpDataCache, WxpLinkFavorite } from '../../../../shared/wxp.ts'
 import { normalizeWxpLinkFavorites, sameWxpLinkFavorite } from '../../../../shared/wxp-favorite.ts'
 import { evaluateOnMainPage } from '../services/cdp-client.ts'
 import { dataCacheStore } from '../store/data-cache-store.ts'

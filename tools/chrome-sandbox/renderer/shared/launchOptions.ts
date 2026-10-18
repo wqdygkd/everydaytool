@@ -1,4 +1,4 @@
-import type { LaunchOptions, SandboxMetadata } from '../../../../shared/types'
+import type { LaunchOptions, SandboxMetadata } from '../../../../shared/sandbox'
 
 export interface LaunchOptionsForm {
   disableSafetyChecks: boolean

@@ -13,7 +13,7 @@ const showLaunchOptions = computed(() => hasLaunchOptions(props.sandbox?.metadat
 </script>
 
 <template>
-  <div class="sandbox-card" :class="{ active }" @click="$emit('click')">
+  <UiListCard :active="active" @click="$emit('click')">
     <div class="card-header">
       <span class="color-dot" :style="{ background: sandbox.color }" />
       <span class="name">{{ sandbox.name }}</span>
@@ -33,15 +33,22 @@ const showLaunchOptions = computed(() => hasLaunchOptions(props.sandbox?.metadat
         自定义参数
       </el-tag>
     </div>
-  </div>
+  </UiListCard>
 </template>
 
 <style scoped lang="scss">
 .card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .name {
@@ -50,14 +57,25 @@ const showLaunchOptions = computed(() => hasLaunchOptions(props.sandbox?.metadat
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+}
+
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.status.running {
+  color: var(--color-success);
 }
 
 .launch-options-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 8px;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
 }
 </style>

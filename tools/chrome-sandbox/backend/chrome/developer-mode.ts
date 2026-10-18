@@ -1,4 +1,4 @@
-import type { Sandbox } from '../../../../shared/types.ts'
+import type { Sandbox } from '../../../../shared/sandbox.ts'
 import { readdir } from 'node:fs/promises'
 import net from 'node:net'
 import path from 'node:path'

@@ -1,12 +1,12 @@
 import type { ToolCategoryGroup, ToolClientTarget, ToolDefinition } from '../shared/types/tool'
-import browserBridge from '@tools/browser-bridge/index'
 import chromeSandbox from '@tools/chrome-sandbox/index'
 import envBrowser from '@tools/env-browser/index'
 import idCardGenerator from '@tools/id-card-generator/index'
+import interceptor from '@tools/interceptor/index'
 import treeaseEditor from '@tools/treease-editor/index'
 import wxpEnhancer from '@tools/wxp-enhancer/index'
 
-export const allToolRegistry: ToolDefinition[] = [browserBridge, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator]
+export const allToolRegistry: ToolDefinition[] = [interceptor, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
   // 兼容预加载时序：优先读 window.edtRuntime，兜底 UA 判断

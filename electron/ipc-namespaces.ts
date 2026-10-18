@@ -1,7 +1,7 @@
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
-import { BROWSER_BRIDGE_IPC_CHANNELS } from '../tools/browser-bridge/backend/ipc/channels.ts'
 import { IPC_CHANNELS } from '../tools/chrome-sandbox/backend/ipc/channels.ts'
 import { ENV_BROWSER_IPC_CHANNELS } from '../tools/env-browser/backend/ipc/channels.ts'
+import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/channels.ts'
 import { TREEASE_IPC_CHANNELS } from '../tools/treease-editor/backend/ipc/channels.ts'
 import { WXP_IPC_CHANNELS } from '../tools/wxp-enhancer/backend/ipc/channels.ts'
 
@@ -14,7 +14,7 @@ export interface IpcNamespace {
 
 export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'edtApp', channels: EDT_APP_IPC_CHANNELS },
-  { preloadNamespace: 'browserBridge', channels: BROWSER_BRIDGE_IPC_CHANNELS },
+  { preloadNamespace: 'interceptor', channels: INTERCEPTOR_IPC_CHANNELS },
   { preloadNamespace: 'chromeSandbox', channels: IPC_CHANNELS },
   { preloadNamespace: 'envBrowser', channels: ENV_BROWSER_IPC_CHANNELS },
   { preloadNamespace: 'treeaseEditor', channels: TREEASE_IPC_CHANNELS },

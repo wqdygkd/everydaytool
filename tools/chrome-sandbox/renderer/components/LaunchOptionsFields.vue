@@ -6,7 +6,7 @@ defineProps({
 
 <!-- eslint-disable vue/no-mutating-props -->
 <template>
-  <div class="launch-options">
+  <UiGroup direction="column" gap="sm" class="launch-options">
     <el-checkbox v-model="form.disableSafetyChecks">
       禁用安全检查
     </el-checkbox>
@@ -22,17 +22,11 @@ defineProps({
       placeholder="例如：--window-size=800,600"
       class="custom-args-input"
     />
-  </div>
+  </UiGroup>
 </template>
 
 <style scoped lang="scss">
-.launch-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-
-  .custom-args-input {
-    margin-top: 4px;
-  }
+.custom-args-input {
+  margin-top: var(--spacing-xs);
 }
 </style>

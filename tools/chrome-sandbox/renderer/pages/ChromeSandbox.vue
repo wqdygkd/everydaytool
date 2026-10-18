@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { MotionScope } from '@renderer/shared/composables/useGsap'
 import { createMotionScope, gsap } from '@renderer/shared/composables/useGsap'
-import { useNavigation } from '@renderer/shared/composables/useNavigation'
-import { invokeIpc, ipcChannels, onIpc } from '@renderer/shared/ipc/useIpc'
+import { invokeIpc, ipcChannels, onIpc } from '../ipc'
 import { useSandboxStore } from '../stores/sandboxStore'
 
-const { goToHome } = useNavigation()
+const router = useRouter()
+function goToHome(): void {
+  router.push({ name: 'home' })
+}
+
 const store = useSandboxStore()
 const ready = ref(false)
 const showCreate = ref(false)
@@ -39,7 +42,7 @@ watch(ready, async (r) => {
   if (!el)
     return
   motion = createMotionScope(() => {
-    gsap.from('.sidebar', { x: -24, autoAlpha: 0, duration: 0.45, ease: 'power3.out', clearProps: 'transform,opacity,visibility' })
+    gsap.from('.ui-sidebar', { x: -24, autoAlpha: 0, duration: 0.45, ease: 'power3.out', clearProps: 'transform,opacity,visibility' })
     gsap.from('.status-panel', { x: 24, autoAlpha: 0, duration: 0.45, ease: 'power3.out', delay: 0.08, clearProps: 'transform,opacity,visibility' })
   }, el)
 })
@@ -115,175 +118,24 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="scss">
+/* 侧栏与状态面板的样式已回收至 Sidebar.vue / StatusPanel.vue 及各 UI 组件，
+   本页只保留网格布局；GSAP 入场动画选择器同步为 .ui-sidebar */
 .chrome-sandbox-page {
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   background: var(--color-app-bg);
-
-  :deep(.sidebar) {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-    padding: 18px 14px;
-    border-right: 1px solid var(--color-border-light);
-    background: var(--color-surface-raised);
-  }
-
-  :deep(.sidebar-title) {
-    margin-bottom: 14px;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-  }
-
-  :deep(.sandbox-list) {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  :deep(.sandbox-list .empty-tip) {
-    padding: var(--spacing-lg);
-    text-align: center;
-  }
-
-  :deep(.sidebar-actions) {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 14px;
-  }
-
-  :deep(.sidebar-actions .el-button),
-  :deep(.action-bar .el-button) {
-    margin-left: 0;
-  }
-
-  :deep(.full-width) {
-    width: 100%;
-  }
-
-  :deep(.sandbox-card) {
-    padding: 14px;
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface);
-    cursor: pointer;
-    transition: var(--transition-base);
-  }
-
-  :deep(.sandbox-card:hover),
-  :deep(.sandbox-card.active) {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
-    box-shadow: var(--shadow-sm);
-  }
-
-  :deep(.card-header) {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    margin-bottom: 6px;
-  }
-
-  :deep(.color-dot) {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-  }
-
-  :deep(.name) {
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-  }
-
-  :deep(.card-meta) {
-    display: flex;
-    justify-content: space-between;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
-  :deep(.status.running) {
-    color: var(--color-success);
-  }
-
-  :deep(.status-panel) {
-    flex: 1;
-    min-height: 0;
-    padding: 24px;
-    overflow: auto;
-  }
-
-  :deep(.panel-header) {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-xl);
-  }
-
-  :deep(.panel-header h2) {
-    margin: 0;
-  }
-
-  :deep(.detail-grid) {
-    margin-bottom: 24px;
-  }
-
-  :deep(.section-block) {
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-lg);
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface-raised);
-  }
-
-  :deep(.section-block h3) {
-    margin: 0 0 10px;
-    font-size: var(--font-size-base);
-  }
-
-  :deep(.fingerprint-summary p) {
-    margin: 4px 0;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
-  :deep(.action-bar) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-    padding-bottom: var(--spacing-lg);
-    border-bottom: 1px solid var(--color-border-light);
-  }
-
-  :deep(.empty-tip),
-  :deep(.empty-panel),
-  :deep(.muted) {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
 }
 
 @media (max-width: 760px) {
   .chrome-sandbox-page {
     grid-template-columns: 1fr;
 
-    :deep(.sidebar) {
+    :deep(.ui-sidebar) {
       max-height: 280px;
       border-right: 0;
       border-bottom: 1px solid var(--color-border-light);
-    }
-
-    :deep(.detail-grid) {
-      grid-template-columns: 1fr;
     }
   }
 }

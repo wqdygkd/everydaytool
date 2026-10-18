@@ -20,24 +20,15 @@ async function pickDirectory() {
 </script>
 
 <template>
-  <div class="data-directory-row inline-group">
-    <el-input
-      :model-value="modelValue"
-      placeholder="沙箱与配置文件存储位置"
-      @update:model-value="emit('update:modelValue', $event)"
-    />
-    <el-button @click="pickDirectory">
-      选择
-    </el-button>
-  </div>
+  <UiPathField
+    :model-value="modelValue"
+    placeholder="沙箱与配置文件存储位置"
+    @update:model-value="emit('update:modelValue', $event)"
+  >
+    <template #actions>
+      <el-button @click="pickDirectory">
+        选择
+      </el-button>
+    </template>
+  </UiPathField>
 </template>
-
-<style scoped lang="scss">
-.data-directory-row {
-  width: 100%;
-
-  .el-input {
-    flex: 1;
-  }
-}
-</style>

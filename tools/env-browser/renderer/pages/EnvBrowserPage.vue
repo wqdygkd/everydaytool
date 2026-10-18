@@ -210,61 +210,35 @@ onUnmounted(() => {
 
 <template>
   <div class="env-browser-page">
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-title">环境列表</span>
+    <UiSidebar title="环境列表" width="300px" padding="var(--spacing-lg) var(--spacing-md)">
+      <template #actions>
         <el-button type="primary" size="small" @click="onCreate">
           新增
         </el-button>
-      </div>
+      </template>
       <el-input
         v-model="search"
+        class="env-search"
         placeholder="搜索名称/地址/账号"
         size="small"
         clearable
-        style="margin-bottom:12px"
       />
       <div v-loading="store.loading" class="env-list">
-        <div v-if="!filteredEnvs.length" class="empty-tip">
+        <UiEmpty v-if="!filteredEnvs.length" center padding="var(--spacing-lg)">
           暂无环境
-        </div>
-        <div
+        </UiEmpty>
+        <EnvCard
           v-for="env in filteredEnvs"
           :key="env.id"
-          class="env-card"
-          :class="{ active: store.activeId === env.id }"
-          @click="handleOpen(env)"
-        >
-          <div class="card-header">
-            <span class="name">{{ env.name }}</span>
-            <el-tag v-if="store.openIds.includes(env.id)" size="small" type="success">
-              已打开
-            </el-tag>
-          </div>
-          <div class="card-url" :title="env.url">
-            {{ env.url }}
-          </div>
-          <div class="card-meta">
-            <span class="muted">{{ env.username }}</span>
-            <span
-              class="muted"
-              style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-            >{{ env.remark || '' }}</span>
-          </div>
-          <div class="card-actions" @click.stop>
-            <el-button size="small" link type="primary" @click="onEdit(env)">
-              编辑
-            </el-button>
-            <el-button size="small" link type="danger" @click="onDelete(env)">
-              删除
-            </el-button>
-            <el-button size="small" type="primary" plain @click="handleOpen(env)">
-              打开
-            </el-button>
-          </div>
-        </div>
+          :env="env"
+          :active="store.activeId === env.id"
+          :opened="store.openIds.includes(env.id)"
+          @open="handleOpen"
+          @edit="onEdit"
+          @delete="onDelete"
+        />
       </div>
-    </div>
+    </UiSidebar>
 
     <div class="main">
       <div v-if="store.openIds.length" class="tab-bar">
@@ -285,7 +259,7 @@ onUnmounted(() => {
         </el-tabs>
       </div>
 
-      <div v-if="store.activeId" class="toolbar">
+      <UiToolbar v-if="store.activeId" bordered surface padding="8px">
         <el-button-group>
           <el-button
             size="small"
@@ -311,9 +285,9 @@ onUnmounted(() => {
         </el-button-group>
         <el-input
           :model-value="webviewStatus[store.activeId]?.url"
+          class="address-input"
           placeholder="地址"
           size="small"
-          style="flex:1"
           @update:model-value="(v: string) => onAddressInput(v)"
           @keydown="onAddressKeydown"
         />
@@ -338,7 +312,7 @@ onUnmounted(() => {
         <el-button size="small" plain @click="handleNav('inspect')">
           存储
         </el-button>
-      </div>
+      </UiToolbar>
 
       <div class="browser-area">
         <div v-if="!isElectron" class="web-tip">
@@ -349,7 +323,7 @@ onUnmounted(() => {
             title="当前为网页预览模式"
             description="检测到 window.envBrowser 为空（不在 Electron 内）。请在标题为 “everydaytool” 的原生窗口中操作，而非浏览器标签 http://localhost:5173。已执行 pnpm dev 重启仍提示时，请在当前窗口 DevTools Console 执行 window.envBrowser / window.edtRuntime / navigator.userAgent 查看，并确认 Electron 窗口已弹出。"
           />
-          <div style="margin-top:8px;font-size:var(--font-size-sm);color:var(--color-text-secondary)">
+          <div class="web-debug-info">
             调试：envBrowser={{ webDebugInfo.envBrowser }}
             edtRuntime={{ webDebugInfo.edtRuntime }}
             UA={{ webDebugInfo.ua }}
@@ -359,7 +333,7 @@ onUnmounted(() => {
           <p class="muted">
             请选择左侧环境点击“打开”，支持多环境同时打开、Tab 切换，Cookie/存储按环境隔离（partition 持久化）
           </p>
-          <p class="muted" style="margin-top:8px">
+          <p class="muted empty-browser-hint">
             点击后将自动填充账号密码并尝试登录；若页面无密码框则保持已登录态
           </p>
         </div>
@@ -376,14 +350,12 @@ onUnmounted(() => {
               disablewebsecurity
               webpreferences="allowRunningInsecureContent, webSecurity=no, contextIsolation=no, nativeWindowOpen=yes"
               useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-              style="flex:1; width:100%; height:100%; border:0"
             />
             <iframe
               v-else
               :key="`${env.id}-iframe`"
               :src="env.url"
               :name="`env-browser-${env.id}`"
-              style="flex:1; width:100%; height:100%; border:0"
               allow="fullscreen"
               referrerpolicy="no-referrer"
             />
@@ -420,88 +392,16 @@ onUnmounted(() => {
   min-height: 0;
   background: var(--color-app-bg);
 }
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 16px 12px;
-  border-right: 1px solid var(--color-border-light);
-  background: var(--color-surface-raised);
-}
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.sidebar-title {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
 .env-list {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-md);
   min-height: 0;
   overflow-y: auto;
 }
-.empty-tip {
-  padding: var(--spacing-lg);
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-.env-card {
-  padding: 12px;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-.env-card:hover,
-.env-card.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  box-shadow: var(--shadow-sm);
-}
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.name {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.card-url {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 6px;
-}
-.card-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: var(--font-size-sm);
-}
-.card-actions {
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
+.env-search {
+  margin-bottom: var(--spacing-md);
 }
 .main {
   display: flex;
@@ -509,24 +409,24 @@ onUnmounted(() => {
   min-height: 0;
   overflow: hidden;
 }
+.address-input {
+  flex: 1;
+}
 .tab-bar {
   border-bottom: 1px solid var(--color-border-light);
   background: var(--color-surface);
-  padding: 6px 8px 0;
+  padding: var(--spacing-sm) var(--spacing-sm) 0;
   :deep(.el-tabs__header) {
     margin: 0;
   }
 }
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border-bottom: 1px solid var(--color-border-light);
-  background: var(--color-surface-raised);
-}
 .web-tip {
-  padding: 8px;
+  padding: var(--spacing-sm);
+}
+.web-debug-info {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 .browser-area {
   flex: 1;
@@ -542,17 +442,29 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: var(--spacing-3xl);
   text-align: center;
   font-size: var(--font-size-sm);
+}
+.empty-browser-hint {
+  margin-top: var(--spacing-sm);
 }
 .webview-wrapper {
   flex: 1;
   min-height: 0;
   display: flex;
+
+  /* webview / iframe 铺满 wrapper：布局结构，不进间距阶梯 */
+  > webview,
+  > iframe {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
 }
 .webview-debug {
-  padding: 16px;
+  padding: var(--spacing-lg);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: 1.6;
@@ -561,7 +473,7 @@ onUnmounted(() => {
   .env-browser-page {
     grid-template-columns: 1fr;
   }
-  .sidebar {
+  :deep(.ui-sidebar) {
     max-height: 40%;
     border-right: 0;
     border-bottom: 1px solid var(--color-border-light);

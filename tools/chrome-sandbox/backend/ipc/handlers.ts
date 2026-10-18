@@ -3,7 +3,7 @@ import type {
   FingerprintUpdatePayload,
   SandboxCreatePayload,
   SandboxUpdatePayload,
-} from '../../../../shared/types.ts'
+} from '../../../../shared/sandbox.ts'
 import { createRequire } from 'node:module'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'

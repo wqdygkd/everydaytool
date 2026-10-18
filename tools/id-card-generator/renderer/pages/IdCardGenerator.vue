@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IdCardResult } from '../shared/generator'
+import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
 import { GENDER, generateIdCards } from '../shared/generator'
 
@@ -29,23 +30,14 @@ function handleGenerate() {
   results.value = generateIdCards(buildOptions(), count.value)
 }
 
-async function copyText(text: string, successMessage: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    ElMessage.success(successMessage)
-  } catch {
-    ElMessage.error('复制失败，请手动复制')
-  }
-}
-
-function handleCopyAll() {
+async function handleCopyAll() {
   if (results.value.length > 0) {
-    copyText(results.value.map(r => r.id).join('\n'), `已复制 ${results.value.length} 条到剪贴板`)
+    await useCopy(results.value.map(r => r.id).join('\n'), `${results.value.length} 条身份证号`)
   }
 }
 
-function handleCopyId(id: string) {
-  copyText(id, '已复制该条身份证号')
+async function handleCopyId(id: string) {
+  await useCopy(id, '身份证号')
 }
 
 onMounted(handleGenerate)
@@ -53,7 +45,7 @@ onMounted(handleGenerate)
 
 <template>
   <div class="id-card-page tool-page">
-    <div class="generator-card surface-card">
+    <UiPanel class="generator-card" shadow="md" padding="">
       <el-form label-width="80px" class="config-form">
         <el-form-item label="出生方式">
           <el-radio-group v-model="birthMode">
@@ -73,11 +65,11 @@ onMounted(handleGenerate)
         <el-form-item v-else label="出生日期">
           <el-date-picker
             v-model="dateRange"
+            class="form-fill"
             type="daterange"
             range-separator="至"
             start-placeholder="开始日期"
             end-placeholder="结束日期"
-            style="width: 100%"
           />
         </el-form-item>
 
@@ -98,11 +90,11 @@ onMounted(handleGenerate)
         <el-form-item label="地区">
           <el-cascader
             v-model="areaPath"
+            class="form-fill"
             :options="AREA_TREE"
             :props="{ expandTrigger: 'hover' }"
             clearable
             placeholder="随机全国"
-            style="width: 100%"
           />
         </el-form-item>
 
@@ -111,16 +103,16 @@ onMounted(handleGenerate)
         </el-form-item>
       </el-form>
 
-      <div class="actions">
+      <UiGroup class="actions" gap="sm">
         <el-button type="primary" @click="handleGenerate">
           生成
         </el-button>
         <el-button :disabled="results.length === 0" @click="handleCopyAll">
           复制全部
         </el-button>
-      </div>
+      </UiGroup>
 
-      <div v-if="results.length > 0" class="result-section">
+      <UiPanel v-if="results.length > 0" variant="outlined" padding="18px" class="result-section">
         <div class="result-header">
           <span class="muted">共 {{ results.length }} 条</span>
         </div>
@@ -143,46 +135,44 @@ onMounted(handleGenerate)
             </template>
           </el-table-column>
         </el-table>
-      </div>
+      </UiPanel>
 
-      <p class="disclaimer muted">
+      <UiHint size="xs" align="center">
         仅供测试/开发用途，生成的号码为虚构数据，不代表真实身份。
-      </p>
-    </div>
+      </UiHint>
+    </UiPanel>
   </div>
 </template>
 
 <style scoped lang="scss">
+/* EP 选择类控件默认不满宽（daterange 350px / cascader 自适应）：表单内统一撑满 */
+.form-fill {
+  width: 100%;
+}
+
 .id-card-page {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 32px;
+  padding: var(--spacing-3xl);
   overflow: auto;
 }
 
 .generator-card {
   width: 100%;
   max-width: 720px;
-  padding: 28px;
-  box-shadow: var(--shadow-md);
+  padding: var(--spacing-2xl);
 
   .config-form {
     margin-bottom: var(--spacing-lg);
   }
 
   .actions {
-    display: flex;
-    gap: var(--spacing-sm);
     margin-bottom: var(--spacing-xl);
   }
 
   .result-section {
     margin-bottom: var(--spacing-lg);
-    padding: 18px;
-    border: 1px solid var(--color-border-light);
-    border-radius: var(--radius-md);
-    background: var(--color-muted);
   }
 
   .result-header {
@@ -204,22 +194,15 @@ onMounted(handleGenerate)
       text-decoration: underline;
     }
   }
-
-  .disclaimer {
-    margin: 0;
-    font-size: var(--font-size-xs);
-    line-height: 1.5;
-    text-align: center;
-  }
 }
 
 @media (max-width: 640px) {
   .id-card-page {
-    padding: 16px;
+    padding: var(--spacing-lg);
   }
 
   .generator-card {
-    padding: 20px;
+    padding: var(--spacing-xl);
 
     .actions {
       flex-direction: column;

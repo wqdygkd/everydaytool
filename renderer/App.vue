@@ -153,12 +153,12 @@ function handleTabRemove(toolId: string) {
 .app-header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--spacing-lg);
   flex-shrink: 0;
-  min-height: 44px;
+  min-height: var(--titlebar-height);
   // 基座保持常规边距；mac 红绿灯安全边距由下方 .platform-darwin 规则提供，
   // win/linux 右侧按钮预留由下方规则提供（各平台互不干扰）
-  padding: 0 16px;
+  padding: 0 var(--spacing-lg);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-light);
   color: var(--color-text-primary);
@@ -240,7 +240,7 @@ function handleTabRemove(toolId: string) {
     // 此处全部钉死为常量（需 !important 压过 EP 的 is-active/is-closable:hover 规则），
     // 页签宽度恒定，关闭按钮常驻占位、仅透明度显隐。
     padding: 0 13px !important;
-    margin-right: 4px;
+    margin-right: var(--spacing-xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
@@ -325,11 +325,11 @@ function handleTabRemove(toolId: string) {
 @media (max-width: 640px) {
   .app-header {
     height: auto;
-    min-height: 44px;
+    min-height: var(--titlebar-height);
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-md);
   }
 
   // 窄窗口 / 页面放大时 mac 仍需红绿灯安全边距（特异性高于上方基座规则）
@@ -341,11 +341,11 @@ function handleTabRemove(toolId: string) {
 // 全屏时原生窗口控件隐藏（mac 红绿灯 / Win 右上按钮），收回标题栏预留边距；
 // 放媒体查询之后，特异性也高于各平台规则，窄窗口全屏同样生效
 .app-shell.is-fullscreen.platform-darwin .app-header {
-  padding-left: 16px;
+  padding-left: var(--spacing-lg);
 }
 
 .app-shell.is-fullscreen.platform-win32 .app-header,
 .app-shell.is-fullscreen.platform-linux .app-header {
-  padding-right: 16px;
+  padding-right: var(--spacing-lg);
 }
 </style>

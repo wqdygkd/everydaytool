@@ -1,4 +1,4 @@
-import type { TreeaseInterceptRule } from '../../../../shared/types.ts'
+import type { TreeaseInterceptRule } from '../../../../shared/treease.ts'
 import { createRequire } from 'node:module'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { interceptService } from '../services/intercept-service.ts'

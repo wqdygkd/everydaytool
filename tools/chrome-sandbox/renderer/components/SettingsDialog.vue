@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
 import { appIpcChannels, invokeAppIpc } from '@renderer/shared/ipc/useAppIpc'
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+import { invokeIpc, ipcChannels } from '../ipc'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'saved'])
@@ -69,14 +69,16 @@ async function save() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="全局设置" width="560px">
+  <UiDialog v-model="visible" title="全局设置" width="560px">
     <el-form :model="form" label-width="140px">
       <el-form-item label="Chrome 路径">
         <el-input v-model="form.chromePath" placeholder="自动检测或手动填写" />
       </el-form-item>
       <el-form-item label="数据目录">
         <DataDirectoryField v-model="form.dataDirectory" />
-        <span class="form-hint">更改后会立即切换数据目录；已有沙箱数据不会自动迁移到新目录。</span>
+        <UiHint>
+          更改后会立即切换数据目录；已有沙箱数据不会自动迁移到新目录。
+        </UiHint>
       </el-form-item>
       <el-form-item label="启动时自动恢复">
         <el-switch v-model="form.autoRestoreOnStartup" />
@@ -93,5 +95,5 @@ async function save() {
         保存
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>

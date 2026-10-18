@@ -1,8 +1,8 @@
-import type { WxpSettings } from '../../../../shared/types.ts'
+import type { WxpSettings } from '../../../../shared/wxp.ts'
 import path from 'node:path'
 import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
-import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types.ts'
+import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp.ts'
 
 interface WxpConfigFile {
   settings: WxpSettings

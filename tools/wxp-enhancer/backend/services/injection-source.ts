@@ -1,4 +1,4 @@
-import type { WxpLinkFavorite } from '../../../../shared/types.ts'
+import type { WxpLinkFavorite } from '../../../../shared/wxp.ts'
 import { buildInjectionScript } from './injection-script.ts'
 
 export interface InjectionSourceOptions {

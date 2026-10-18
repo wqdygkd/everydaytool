@@ -1,4 +1,4 @@
-import type { LaunchOptions } from '../../../../shared/types.ts'
+import type { LaunchOptions } from '../../../../shared/sandbox.ts'
 import { spawn } from 'node:child_process'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { detectChromePath } from './detector.ts'

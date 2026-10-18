@@ -31,8 +31,8 @@
       "to": "extension"
     },
     {
-      "from": "tools/browser-bridge/extension",
-      "to": "extension-browser-bridge"
+      "from": "tools/interceptor/extension",
+      "to": "extension-interceptor"
     }
   ],
   "win": {

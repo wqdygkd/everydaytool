@@ -1,4 +1,4 @@
-import type { AppConfig, SetupState } from '../../../../shared/types.ts'
+import type { AppConfig, SetupState } from '../../../../shared/sandbox.ts'
 import { isDataDirectoryConfigured, markDataDirectoryConfigured } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { getDatabase } from './database.ts'

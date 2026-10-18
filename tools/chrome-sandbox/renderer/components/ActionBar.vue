@@ -18,7 +18,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-  <div class="action-bar">
+  <UiToolbar bordered wrap flush gap="sm" padding="0 0 var(--spacing-lg)">
     <el-button type="primary" @click="$emit('activate')">
       {{ activateLabel }}
     </el-button>
@@ -34,5 +34,5 @@ async function confirmDelete() {
     <el-button type="danger" plain @click="confirmDelete">
       删除
     </el-button>
-  </div>
+  </UiToolbar>
 </template>

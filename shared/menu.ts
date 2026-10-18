@@ -1,6 +1,23 @@
 // 应用菜单动作清单的单一事实来源（electron/main.ts 系统菜单使用），避免清单漂移。
 // 仅常量，无运行时逻辑。
-import type { ShellMenuAction } from './types.ts'
+
+// 应用菜单动作（preload `menuAction` → 主进程执行；页内菜单已移除，桥接保留）
+export type ShellMenuAction
+  = | 'quit'
+    | 'undo'
+    | 'redo'
+    | 'cut'
+    | 'copy'
+    | 'paste'
+    | 'selectAll'
+    | 'reload'
+    | 'reloadIgnoringCache'
+    | 'toggleDevTools'
+    | 'zoomIn'
+    | 'zoomOut'
+    | 'zoomReset'
+    | 'minimize'
+    | 'close'
 
 export interface ShellMenuItem {
   label: string

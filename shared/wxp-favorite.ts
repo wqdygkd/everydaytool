@@ -1,6 +1,4 @@
-import type { WxpLinkFavorite } from './types.ts'
-
-export type { WxpLinkFavorite }
+import type { WxpLinkFavorite } from './wxp.ts'
 
 function textOf(value: unknown): string {
   return String(value ?? '').trim()

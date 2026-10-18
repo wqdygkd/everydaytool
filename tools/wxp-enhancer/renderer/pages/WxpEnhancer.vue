@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { WxpRunningStatus } from '../../../../shared/types'
-import { DEFAULT_WXP_SETTINGS } from '../../../../shared/types'
+import type { WxpRunningStatus } from '../../../../shared/wxp'
+import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
+import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
 import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
@@ -50,6 +51,8 @@ const statusTagType = computed(() => {
   if (status) return 'warning'
   return 'info'
 })
+/** 状态点色板：UiStatusTag 无 info 档，「未运行」落 neutral（ tertiary 灰点） */
+const statusDotTone = computed(() => (statusTagType.value === 'info' ? 'neutral' : statusTagType.value))
 
 async function handleLaunch(): Promise<void> {
   launching.value = true
@@ -169,16 +172,6 @@ function fmtTime(ms: number): string {
   return ms ? new Date(ms).toLocaleString() : '—'
 }
 
-async function copyValue(v: string, label: string): Promise<void> {
-  if (!v) return
-  try {
-    await navigator.clipboard.writeText(v)
-    ElMessage.success(`${label}已复制`)
-  } catch {
-    ElMessage.error('复制失败')
-  }
-}
-
 async function handleCollect(): Promise<void> {
   collecting.value = true
   try {
@@ -236,25 +229,33 @@ onUnmounted(() => {
 <template>
   <div class="wxp-enhancer-page tool-page">
     <!-- 运行状态 -->
-    <section class="surface-card status-card">
+    <UiPanel class="status-card">
       <div class="status-info">
         <div class="status-line">
-          <span class="status-dot" :class="{ pulsing: statusTagType === 'success' }" :data-tone="statusTagType" />
+          <UiStatusTag :tone="statusDotTone" :pulsing="statusTagType === 'success'" />
           <span class="status-name">{{ statusLabel }}</span>
           <el-tag v-if="store.running" :type="statusTagType" size="small">
             {{ store.running.message || '—' }}
           </el-tag>
         </div>
-        <div v-if="isRunning" class="status-meta mono">
-          <span class="chip">PID {{ store.running?.pid ?? '-' }}</span>
-          <span class="chip">端口 {{ store.running?.port }}</span>
-          <span class="chip">页面 {{ store.running?.targetCount ?? 0 }}</span>
-        </div>
-        <div v-else-if="store.loginCacheClearPending" class="status-meta">
-          <span class="chip">登录缓存待清除：下次启动时自动执行</span>
-        </div>
+        <UiGroup v-if="isRunning" gap="xs" class="status-meta">
+          <UiChip mono>
+            PID {{ store.running?.pid ?? '-' }}
+          </UiChip>
+          <UiChip mono>
+            端口 {{ store.running?.port }}
+          </UiChip>
+          <UiChip mono>
+            页面 {{ store.running?.targetCount ?? 0 }}
+          </UiChip>
+        </UiGroup>
+        <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" class="status-meta">
+          <UiChip>
+            登录缓存待清除：下次启动时自动执行
+          </UiChip>
+        </UiGroup>
       </div>
-      <div class="inline-group status-actions">
+      <UiGroup gap="sm" class="status-actions">
         <el-button @click="handleClearLoginCache">
           清除登录缓存
         </el-button>
@@ -278,13 +279,12 @@ onUnmounted(() => {
         >
           停止
         </el-button>
-      </div>
-    </section>
+      </UiGroup>
+    </UiPanel>
 
     <!-- 启动设置 -->
-    <section class="surface-card settings-card">
-      <div class="card-header">
-        <h3>启动设置</h3>
+    <UiPanel title="启动设置">
+      <template #actions>
         <el-button
           size="small"
           type="primary"
@@ -294,26 +294,28 @@ onUnmounted(() => {
         >
           保存设置
         </el-button>
-      </div>
-      <el-form label-width="110px" class="settings-form">
+      </template>
+      <el-form label-width="110px">
         <el-form-item label="WXP 路径" required>
-          <div class="inline-group path-row">
-            <el-input
-              v-model="settingsForm.executablePath"
-              placeholder="例如 C:\Users\你\AppData\Local\Programs\Wxp Client\WxP Client.exe"
-              class="mono"
-            />
-            <el-button :disabled="isRunning" @click="pickExecutable">
-              浏览
-            </el-button>
-            <el-button :disabled="isRunning" @click="detectExecutable">
-              自动检测
-            </el-button>
-          </div>
-          <div class="form-hint">
+          <UiPathField
+            v-model="settingsForm.executablePath"
+            placeholder="例如 C:\Users\你\AppData\Local\Programs\Wxp Client\WxP Client.exe"
+            class="path-row"
+            mono
+          >
+            <template #actions>
+              <el-button :disabled="isRunning" @click="pickExecutable">
+                浏览
+              </el-button>
+              <el-button :disabled="isRunning" @click="detectExecutable">
+                自动检测
+              </el-button>
+            </template>
+          </UiPathField>
+          <UiHint block>
             使用 WXP 自身数据启动：登录一次后保持登录，再次启动直接进入应用主页；
             启动前请先退出已打开的 WXP（单实例应用）。
-          </div>
+          </UiHint>
         </el-form-item>
         <el-form-item label="调试端口">
           <el-input-number
@@ -324,16 +326,14 @@ onUnmounted(() => {
           />
         </el-form-item>
         <el-form-item label="状态角标">
-          <div class="switch-row">
-            <el-switch v-model="settingsForm.showStatusBadge" />
-            <span class="muted">在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效</span>
-          </div>
+          <UiSwitchField v-model="settingsForm.showStatusBadge">
+            在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效
+          </UiSwitchField>
         </el-form-item>
         <el-form-item label="缓存登录状态">
-          <div class="switch-row">
-            <el-switch v-model="settingsForm.cacheLogin" />
-            <span class="muted">登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；快照超期（14 天）则不自动进入，需重新登录</span>
-          </div>
+          <UiSwitchField v-model="settingsForm.cacheLogin">
+            登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；快照超期（14 天）则不自动进入，需重新登录
+          </UiSwitchField>
         </el-form-item>
         <el-form-item label="额外启动参数">
           <el-input
@@ -344,13 +344,12 @@ onUnmounted(() => {
           />
         </el-form-item>
       </el-form>
-    </section>
+    </UiPanel>
 
     <!-- 数据缓存（来自 WXP） -->
-    <section class="surface-card data-card">
-      <div class="card-header">
-        <h3>数据缓存（来自 WXP）</h3>
-        <div class="inline-group">
+    <UiPanel title="数据缓存（来自 WXP）">
+      <template #actions>
+        <UiGroup gap="sm">
           <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
           <el-button
             size="small"
@@ -362,67 +361,62 @@ onUnmounted(() => {
           >
             从 WXP 读取
           </el-button>
-        </div>
-      </div>
-      <p class="form-hint section-hint">
+        </UiGroup>
+      </template>
+      <UiHint class="section-hint">
         WXP 登录后自动把登录信息与收藏数据缓存到工具数据目录（data-cache.json），此处查看；收藏变化或每 5 分钟自动刷新，也可手动刷新。WXP 未运行时仍可查看上次采集结果。
-      </p>
+      </UiHint>
       <template v-if="dataLogin">
         <div class="kv-list">
-          <div class="kv-row">
-            <span class="kv-label">登录账号</span>
-            <span class="kv-value">{{ dataLogin.username || '—' }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">登录密码</span>
-            <span class="kv-value mono muted">应用 RSA 加密存储，工具不读取</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">访问令牌</span>
-            <span class="kv-value mono break">{{ dataLogin.accessToken || '—' }}</span>
-            <el-button link size="small" @click="copyValue(dataLogin.accessToken, '令牌')">
-              复制
-            </el-button>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">访问有效期至</span>
-            <span class="kv-value">{{ fmtTime(dataLogin.accessExpiresAt) }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">刷新令牌</span>
-            <span class="kv-value mono break">{{ maskToken(dataLogin.refreshToken) }}</span>
-            <el-button link size="small" @click="copyValue(dataLogin.refreshToken, '刷新令牌')">
-              复制
-            </el-button>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">刷新有效期至</span>
-            <span class="kv-value">{{ fmtTime(dataLogin.refreshExpiresAt) }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">用户编码</span>
-            <span class="kv-value">{{ userCode }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">用户名称</span>
-            <span class="kv-value">{{ userName }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">NameNode</span>
-            <span class="kv-value mono break">{{ dataLogin.nameNodeAddrs || '—' }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">状态源</span>
-            <span class="kv-value mono break">{{ dataLogin.statusQueryServers || '—' }}</span>
-          </div>
-          <div class="kv-row">
-            <span class="kv-label">会话快照</span>
-            <span class="kv-value">{{ dataLogin.snapshotExists ? '存在' : '无' }}</span>
-          </div>
+          <UiKeyValue label="登录账号" label-width="88px">
+            {{ dataLogin.username || '—' }}
+          </UiKeyValue>
+          <UiKeyValue label="登录密码" label-width="88px" mono>
+            <span class="muted">应用 RSA 加密存储，工具不读取</span>
+          </UiKeyValue>
+          <UiKeyValue label="访问令牌" label-width="88px" mono>
+            {{ dataLogin.accessToken || '—' }}
+            <template #actions>
+              <el-button link size="small" @click="useCopy(dataLogin.accessToken, '令牌')">
+                复制
+              </el-button>
+            </template>
+          </UiKeyValue>
+          <UiKeyValue label="访问有效期至" label-width="88px">
+            {{ fmtTime(dataLogin.accessExpiresAt) }}
+          </UiKeyValue>
+          <UiKeyValue label="刷新令牌" label-width="88px" mono>
+            {{ maskToken(dataLogin.refreshToken) }}
+            <template #actions>
+              <el-button link size="small" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
+                复制
+              </el-button>
+            </template>
+          </UiKeyValue>
+          <UiKeyValue label="刷新有效期至" label-width="88px">
+            {{ fmtTime(dataLogin.refreshExpiresAt) }}
+          </UiKeyValue>
+          <UiKeyValue label="用户编码" label-width="88px">
+            {{ userCode }}
+          </UiKeyValue>
+          <UiKeyValue label="用户名称" label-width="88px">
+            {{ userName }}
+          </UiKeyValue>
+          <UiKeyValue label="NameNode" label-width="88px" mono>
+            {{ dataLogin.nameNodeAddrs || '—' }}
+          </UiKeyValue>
+          <UiKeyValue label="状态源" label-width="88px" mono>
+            {{ dataLogin.statusQueryServers || '—' }}
+          </UiKeyValue>
+          <UiKeyValue label="会话快照" label-width="88px">
+            {{ dataLogin.snapshotExists ? '存在' : '无' }}
+          </UiKeyValue>
         </div>
         <el-collapse v-if="dataLogin.user" class="user-json">
           <el-collapse-item name="user" title="用户信息 JSON">
-            <pre class="mono user-json-pre">{{ JSON.stringify(dataLogin.user, null, 2) }}</pre>
+            <UiCodeBlock max-height="240px">
+              {{ JSON.stringify(dataLogin.user, null, 2) }}
+            </UiCodeBlock>
           </el-collapse-item>
         </el-collapse>
         <template v-if="favCount">
@@ -446,14 +440,14 @@ onUnmounted(() => {
             <el-table-column prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
           </el-table>
         </template>
-        <p v-else class="form-hint">
+        <UiHint v-else block>
           暂无收藏数据。
-        </p>
+        </UiHint>
       </template>
-      <p v-else class="form-hint">
+      <UiHint v-else block>
         尚未读取，启动 WXP 并登录后自动采集，也可点击「从 WXP 读取」手动刷新。
-      </p>
-    </section>
+      </UiHint>
+    </UiPanel>
   </div>
 </template>
 
@@ -462,27 +456,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  padding: 20px 24px 24px;
+  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl);
 }
 
-.surface-card {
-  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-md);
-
-  h3 {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-  }
-}
-
-/* 状态卡 */
+/* 状态卡：UiPanel 根上的左右分栏 */
 .status-card {
   display: flex;
   align-items: center;
@@ -501,88 +478,25 @@ onUnmounted(() => {
   font-weight: var(--font-weight-semibold);
 }
 
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: var(--radius-xs);
-  background: var(--color-text-tertiary);
-
-  &[data-tone='success'] {
-    background: var(--color-success);
-  }
-
-  &[data-tone='warning'] {
-    background: var(--color-warning);
-  }
-
-  &[data-tone='danger'] {
-    background: var(--color-error);
-  }
-
-  &.pulsing {
-    animation: wxp-status-pulse 2s ease-in-out infinite;
-  }
-}
-
-@keyframes wxp-status-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 45%, transparent);
-  }
-
-  50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-success) 0%, transparent);
-  }
-}
-
 .status-meta {
-  display: flex;
-  gap: var(--spacing-xs);
   margin-top: var(--spacing-sm);
-}
-
-/* 设置卡 */
-.path-row {
-  width: 100%;
-}
-
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  width: 100%;
 }
 
 .section-hint {
   margin: 0 0 var(--spacing-md);
 }
 
-/* 数据缓存卡 */
-.data-card .kv-list {
+.kv-list {
   margin-bottom: var(--spacing-md);
 }
 
-.data-card .kv-label {
-  width: 88px;
-}
-
-.data-card .kv-row {
-  align-items: center;
-}
-
-.data-card .kv-value.break {
+/* 原 .kv-value.break：长令牌 / 地址在窄容器内断行 */
+.kv-list :deep(.ui-kv-value) {
   word-break: break-all;
 }
 
 .user-json {
   margin-bottom: var(--spacing-md);
-}
-
-.user-json-pre {
-  margin: 0;
-  max-height: 240px;
-  overflow: auto;
-  font-size: var(--font-size-xs);
 }
 
 .fav-title {
@@ -597,7 +511,7 @@ onUnmounted(() => {
 
 @media (max-width: 760px) {
   .wxp-enhancer-page {
-    padding: 14px;
+    padding: var(--spacing-md);
   }
 
   .status-card {

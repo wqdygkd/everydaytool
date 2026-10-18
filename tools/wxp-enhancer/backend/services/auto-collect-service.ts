@@ -1,4 +1,4 @@
-import type { WxpDataCache } from '../../../../shared/types.ts'
+import type { WxpDataCache } from '../../../../shared/wxp.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { evaluateOnMainPage } from './cdp-client.ts'
 import { buildLoginStateExpression, collectWxpData } from './data-collector.ts'

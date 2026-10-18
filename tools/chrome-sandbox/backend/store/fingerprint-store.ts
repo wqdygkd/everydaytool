@@ -2,7 +2,7 @@ import type {
   Fingerprint,
   FingerprintCreatePayload,
   FingerprintUpdatePayload,
-} from '../../../../shared/types.ts'
+} from '../../../../shared/sandbox.ts'
 import { getDatabase } from './database.ts'
 
 interface FingerprintRow {

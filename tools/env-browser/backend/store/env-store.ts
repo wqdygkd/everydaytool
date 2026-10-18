@@ -1,4 +1,4 @@
-import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/types.ts'
+import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env.ts'
 import { randomUUID } from 'node:crypto'
 import { closeSharedDatabase, getSharedDatabase, registerSchema } from '../../../../backend/utils/database.ts'
 import { logger } from '../../../../backend/utils/logger.ts'

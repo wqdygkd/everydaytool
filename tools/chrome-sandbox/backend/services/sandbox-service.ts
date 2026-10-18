@@ -4,7 +4,7 @@ import type {
   Sandbox,
   SandboxCreatePayload,
   SandboxUpdatePayload,
-} from '../../../../shared/types.ts'
+} from '../../../../shared/sandbox.ts'
 import { randomUUID } from 'node:crypto'
 import { ensureDir, removeIfExists } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'

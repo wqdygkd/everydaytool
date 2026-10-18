@@ -3,8 +3,8 @@ import type {
   Sandbox,
   SandboxCreatePayload,
   SandboxUpdatePayload,
-} from '../../../../shared/types'
-import { invokeIpc, ipcChannels } from '@renderer/shared/ipc/useIpc'
+} from '../../../../shared/sandbox'
+import { invokeIpc, ipcChannels } from '../ipc'
 
 export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
   const sandboxes = ref<Sandbox[]>([])

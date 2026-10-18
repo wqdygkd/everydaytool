@@ -60,26 +60,17 @@ function readFavoriteIds(): string[] {
 <template>
   <div class="home-page">
     <section class="toolbar">
-      <div class="search-field">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          v-model.trim="searchText"
-          class="search-input"
-          type="search"
-          placeholder="搜索工具、能力或关键词"
-        >
-      </div>
+      <UiSearchInput
+        v-model="searchText"
+        trim
+        width="min(520px, 100%)"
+        placeholder="搜索工具、能力或关键词"
+      />
       <span class="tool-count">{{ visibleToolCount }} 个匹配</span>
     </section>
 
     <section v-if="favoriteTools.length > 0" class="favorite-section">
-      <div class="category-header">
-        <h2>我的收藏</h2>
-        <span>{{ favoriteTools.length }}</span>
-      </div>
+      <UiSectionHeader title="我的收藏" :count="favoriteTools.length" />
 
       <div class="tools-grid">
         <ToolCard
@@ -95,10 +86,7 @@ function readFavoriteIds(): string[] {
 
     <section v-if="filteredGroups.length > 0" class="category-list">
       <div v-for="group in filteredGroups" :key="group.category.key" class="category-section">
-        <div class="category-header">
-          <h2>{{ group.category.name }}</h2>
-          <span>{{ group.tools.length }}</span>
-        </div>
+        <UiSectionHeader :title="group.category.name" :count="group.tools.length" />
 
         <div class="tools-grid">
           <ToolCard
@@ -113,22 +101,11 @@ function readFavoriteIds(): string[] {
       </div>
     </section>
 
-    <section v-else class="empty-state">
+    <UiEmpty v-else variant="bordered" center padding="var(--spacing-3xl)">
       没有匹配的工具
-    </section>
+    </UiEmpty>
 
-    <button
-      class="settings-fab"
-      type="button"
-      title="应用设置"
-      aria-label="应用设置"
-      @click="settingsVisible = true"
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-      </svg>
-    </button>
+    <UiFab label="应用设置" @click="settingsVisible = true" />
 
     <AppSettingsDialog v-model="settingsVisible" />
   </div>
@@ -139,77 +116,16 @@ function readFavoriteIds(): string[] {
    width:100% 必须保留：flex 列子项 + 横向 auto margin 会禁用 stretch，缺了它宽度塌缩、网格掉回单列 */
 .home-page {
   width: 100%;
-  max-width: 1360px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: 24px 32px 32px;
+  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  margin-bottom: 28px;
-
-  /* 搜索框：白底浮岛胶囊（画布是灰 #f4f4f5，Telegram 的灰底胶囊在灰画布上不可见），聚焦蓝框 */
-  .search-field {
-    position: relative;
-    width: min(520px, 100%);
-  }
-
-  .search-icon {
-    position: absolute;
-    top: 50%;
-    left: 15px;
-    width: 18px;
-    height: 18px;
-    transform: translateY(-50%);
-    fill: none;
-    stroke: var(--color-text-secondary);
-    stroke-width: 2;
-    stroke-linecap: round;
-    pointer-events: none;
-    transition: stroke var(--transition-fast);
-  }
-
-  .search-input {
-    width: 100%;
-    height: 42px;
-    border: 2px solid var(--color-border-light);
-    border-radius: 999px;
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    font: inherit;
-    padding: 0 16px 0 42px;
-    outline: none;
-    appearance: none;
-    transition: var(--transition-fast);
-
-    /* type=search 原生装饰（内衬/清除按钮）在胶囊内错位，去掉，Esc 仍可清空 */
-    &::-webkit-search-cancel-button,
-    &::-webkit-search-decoration,
-    &::-webkit-search-results-button,
-    &::-webkit-search-results-decoration {
-      -webkit-appearance: none;
-      appearance: none;
-    }
-
-    &::placeholder {
-      color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
-    }
-
-    &:hover {
-      border-color: var(--color-border);
-    }
-
-    &:focus {
-      border-color: var(--color-primary);
-      caret-color: var(--color-primary);
-    }
-  }
-
-  .search-field:focus-within .search-icon {
-    stroke: var(--color-primary);
-  }
+  margin-bottom: var(--spacing-2xl);
 
   .tool-count {
     color: var(--color-text-secondary);
@@ -221,92 +137,22 @@ function readFavoriteIds(): string[] {
 .category-list {
   display: flex;
   flex-direction: column;
-  gap: 34px;
+  gap: var(--spacing-3xl);
 }
 
 .favorite-section {
-  margin-bottom: 36px;
-}
-
-.category-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border-light);
-
-  h2 {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-medium);
-  }
-
-  span {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
-  }
+  margin-bottom: var(--spacing-3xl);
 }
 
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 10px;
-}
-
-.empty-state {
-  padding: 42px;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  text-align: center;
-  color: var(--color-text-secondary);
-}
-
-/* 右下角悬浮设置按钮（fixed：随窗口底缘，不随内容滚动） */
-.settings-fab {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 40;
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #ffffff;
-  cursor: pointer;
-  box-shadow: var(--shadow-md);
-  transition: var(--transition-fast);
-
-  svg {
-    width: 22px;
-    height: 22px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  &:hover {
-    background: var(--color-primary-hover);
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-2px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
+  gap: var(--spacing-md);
 }
 
 @media (max-width: 640px) {
   .home-page {
-    padding: 24px 16px 36px;
+    padding: var(--spacing-2xl) var(--spacing-lg) var(--spacing-3xl);
   }
 
   .toolbar {

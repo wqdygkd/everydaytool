@@ -83,7 +83,7 @@ export default antfu(
     },
   },
   {
-    files: ['tools/browser-bridge/extension/**/*.js'],
+    files: ['tools/interceptor/extension/**/*.js'],
     languageOptions: {
       globals: {
         chrome: 'readonly',

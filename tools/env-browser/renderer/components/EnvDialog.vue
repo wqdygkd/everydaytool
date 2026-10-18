@@ -91,7 +91,7 @@ async function onSubmit() {
 </script>
 
 <template>
-  <el-dialog
+  <UiDialog
     v-model="visible"
     :title="editing ? '编辑环境' : '新增环境'"
     width="560px"
@@ -114,8 +114,9 @@ async function onSubmit() {
         <el-input v-model="form.remark" type="textarea" :rows="2" placeholder="可选备注" maxlength="200" />
       </el-form-item>
       <el-form-item label="自动登录">
-        <el-switch v-model="form.autoLogin" />
-        <span class="muted" style="margin-left:8px;font-size:var(--font-size-sm)">打开环境时自动填充并尝试提交</span>
+        <UiSwitchField v-model="form.autoLogin">
+          打开环境时自动填充并尝试提交
+        </UiSwitchField>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -126,5 +127,5 @@ async function onSubmit() {
         {{ editing ? '保存' : '创建' }}
       </el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>

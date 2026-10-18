@@ -1,4 +1,4 @@
-import type { WxpSettings } from '../../../../shared/types.ts'
+import type { WxpSettings } from '../../../../shared/wxp.ts'
 import { createRequire } from 'node:module'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
