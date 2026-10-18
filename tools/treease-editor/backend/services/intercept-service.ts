@@ -135,10 +135,10 @@ function isCacheableRequest(request: Request): boolean {
 
 async function handleProtocolRequest(session: GuestSession, request: Request): Promise<Response> {
   const url = request.url
-  // 屏蔽类规则：直接让请求失败（等价于旧方案的 BlockedByClient）
+  // 屏蔽类规则：返回空 403 响应（不再 throw，避免协议层把异常打印到主进程控制台）
   if (findRule(url, 'block')) {
     recordHit()
-    throw new Error(`BlockedByClient: ${url}`)
+    return new Response(null, { status: 403 })
   }
   const modifyRule = findRule(url, 'modify')
   // 同 session 透传（cookie/代理不变），跳过自定义协议避免递归

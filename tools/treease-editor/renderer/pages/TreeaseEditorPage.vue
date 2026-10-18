@@ -437,7 +437,7 @@ onUnmounted(() => {
               </UiGroup>
             </el-form-item>
             <el-form-item v-else label="说明">
-              <UiHint>命中该匹配的请求将在发出前被拦截（BlockedByClient），上报/遥测类接口适用。</UiHint>
+              <UiHint>命中该匹配的请求将被拦截并返回 403，上报/遥测类接口适用。</UiHint>
               <UiGroup gap="sm" class="rule-delete-group">
                 <el-button size="small" type="danger" link @click="removeRule(ri)">
                   删除该接口
