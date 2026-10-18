@@ -10,14 +10,22 @@ import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
 
-// Docker Hub 加速服务（registry 镜像代理）；'' 表示直连，filterable+allow-create 支持自定义地址
-const MIRRORS = [
-  { label: 'dockerproxy.net', value: 'https://dockerproxy.net' },
-  { label: 'docker.1ms.run', value: 'https://docker.1ms.run' },
-  { label: 'docker.1panel.live', value: 'https://docker.1panel.live' },
+// 加速服务（registry 镜像代理）：docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io
+type MirrorTarget = 'docker' | 'ghcr'
+interface MirrorOption {
+  label: string
+  value: string
+  target: MirrorTarget
+}
+
+const MIRRORS: MirrorOption[] = [
+  { label: 'dockerproxy.net（Docker Hub）', value: 'https://dockerproxy.net', target: 'docker' },
+  { label: 'docker.1ms.run（Docker Hub）', value: 'https://docker.1ms.run', target: 'docker' },
+  { label: 'docker.1panel.live（Docker Hub）', value: 'https://docker.1panel.live', target: 'docker' },
+  { label: 'ghcr.1ms.run（ghcr.io）', value: 'https://ghcr.1ms.run', target: 'ghcr' },
 ]
 
-const MIRROR_STORAGE_KEY = STORAGE_KEYS.offlinePackDockerMirror
+const MIRROR_STORAGE_KEY = STORAGE_KEYS.offlinePackRegistryMirror
 
 function readMirror(): string {
   try {
@@ -28,6 +36,12 @@ function readMirror(): string {
 }
 
 const mirror = ref(readMirror())
+
+// 选中加速服务的目标仓库（docker.io / ghcr.io）；未选择或自定义地址时为 null
+const mirrorTarget = computed<MirrorTarget | null>(() => MIRRORS.find(m => m.value === mirror.value)?.target ?? null)
+
+// 选中加速服务的主机名（去协议 / 尾斜杠），参考示例动态替换代理地址
+const mirrorHost = computed(() => mirror.value.replace(/^https?:\/\//i, '').replace(/\/+$/, ''))
 
 const input = ref('')
 const tags = ref<string[]>([])
@@ -133,10 +147,14 @@ async function handleSubmit(): Promise<void> {
       selectedTag.value = parsed.tag && parsed.tag !== 'latest' ? parsed.tag : (tags.value[0] ?? 'latest')
       await loadPlatforms()
     } else {
+      // 未找到：先结束「解析中」再异步搜索候选
+      loading.value = false
       imageNotFound.value = true
       await searchCandidatesFallback(trimmed)
     }
   } catch (error) {
+    // 出错即结束「解析中」
+    loading.value = false
     const msg = (error as Error).message || '解析失败'
     if (/404|未找到/.test(msg)) {
       imageNotFound.value = true
@@ -225,19 +243,48 @@ async function handleDownload(): Promise<void> {
       <a class="offline-pack-link" href="https://hub.docker.com/search" @click.prevent="openExternal('https://hub.docker.com/search')">Docker Hub</a>
     </p>
 
-    <div class="mirror-row">
-      <span class="muted mirror-label">加速服务</span>
+    <div class="mirror-card">
+      <div class="mirror-head">
+        <span class="mirror-title">加速服务</span>
+        <span class="muted mirror-note">docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io</span>
+      </div>
+
       <el-select
         v-model="mirror"
         class="mirror-select"
         filterable
         allow-create
         clearable
-        placeholder="直连 Docker Hub（不使用加速）"
+        placeholder="直连（不使用加速）"
         @change="onMirrorChange"
       >
         <el-option v-for="m in MIRRORS" :key="m.value" :label="m.label" :value="m.value" />
       </el-select>
+
+      <div v-if="mirrorTarget" class="mirror-examples">
+        <p class="muted mirror-example-title">
+          参考示例
+        </p>
+        <template v-if="mirrorTarget === 'docker'">
+          <p class="mirror-example-group">
+            Docker Hub
+          </p>
+          <p class="mono mirror-example">
+            nginx → docker.io/library/nginx → {{ mirrorHost }}/library/nginx
+          </p>
+          <p class="mono mirror-example">
+            apache/kafka → docker.io/apache/kafka → {{ mirrorHost }}/apache/kafka
+          </p>
+        </template>
+        <template v-else>
+          <p class="mirror-example-group">
+            ghcr.io
+          </p>
+          <p class="mono mirror-example">
+            ghcr.io/immich-app/immich-server → {{ mirrorHost }}/ghcr.io/immich-app/immich-server
+          </p>
+        </template>
+      </div>
     </div>
 
     <el-input
@@ -379,20 +426,64 @@ async function handleDownload(): Promise<void> {
   text-decoration: underline;
 }
 
-.mirror-row {
+.mirror-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  border-radius: 12px;
 }
 
-.mirror-label {
-  flex-shrink: 0;
+.mirror-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mirror-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.mirror-note {
   font-size: var(--font-size-xs);
 }
 
 .mirror-select {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+}
+
+.mirror-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.mirror-example-title {
+  margin: 0 0 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.mirror-example-group {
+  margin: 6px 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.mirror-example {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  word-break: break-all;
 }
 
 .offline-pack-input :deep(.el-input__wrapper) {

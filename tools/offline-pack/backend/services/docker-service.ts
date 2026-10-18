@@ -7,7 +7,7 @@ import type {
 } from '../../../../shared/offline-pack.ts'
 import { rename, rm } from 'node:fs/promises'
 // Docker Registry 代理：搜索、标签、鉴权、manifest 解析、镜像层下载与 docker load TAR 打包。
-// 按 registry 分发端点：ghcr.io 走 OCI 端点，其余（docker.io / 空）走 Docker Hub。
+// 按 registry 分发端点：ghcr.io / docker.io 走 OCI，均支持加速服务镜像代理；空 registry 默认 Docker Hub。
 // 打包在 Node 主进程完成（zlib 解压 + crypto 哈希 + 流式 TAR 写盘），避免浏览器内存/格式限制。
 import path from 'node:path'
 import { decompressLayer } from '../utils/decompress.ts'
@@ -39,6 +39,8 @@ interface RegistryConfig {
   tagsMode: 'hub' | 'registry'
   /** tagsMode=hub 时的 tags API base */
   hubBase?: string
+  /** 加速服务路径前缀（如 ghcr.io 镜像代理需 ghcr.io/ 前缀），直连为空 */
+  pathPrefix?: string
 }
 
 /** 归一化加速服务基址：补协议、去尾部斜杠；空值返回空串（直连） */
@@ -49,20 +51,26 @@ function normalizeMirrorBase(mirror?: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
 }
 
-/** 按 registry 分发端点；ghcr.io 走 OCI，docker.io 支持加速服务代理，其余默认 Docker Hub */
+/** 仓库路径：加速服务时按约定带前缀（docker.io 无前缀，ghcr.io 带 ghcr.io/） */
+function repoPath(cfg: RegistryConfig, namespace: string, repository: string): string {
+  return `${cfg.pathPrefix ?? ''}${namespace}/${repository}`
+}
+
+/** 按 registry 分发端点；ghcr.io / docker.io 均支持加速服务代理，其余默认 Docker Hub */
 function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
+  const mirrorBase = normalizeMirrorBase(mirror)
+  if (mirrorBase) {
+    return {
+      registryBase: mirrorBase,
+      tagsMode: 'registry',
+      pathPrefix: registry === 'ghcr.io' ? 'ghcr.io/' : '',
+    }
+  }
   if (registry === 'ghcr.io') {
     return {
       tokenUrl: 'https://ghcr.io/token',
       tokenService: 'ghcr.io',
       registryBase: 'https://ghcr.io',
-      tagsMode: 'registry',
-    }
-  }
-  const mirrorBase = normalizeMirrorBase(mirror)
-  if (mirrorBase) {
-    return {
-      registryBase: mirrorBase,
       tagsMode: 'registry',
     }
   }
@@ -104,7 +112,7 @@ export async function getTagList(registry: string, namespace: string, repository
   }
   // OCI registry：/v2/<repo>/tags/list，需要 token（加速服务可能免鉴权）
   const token = await getToken(registry, namespace, repository, mirror)
-  const url = `${cfg.registryBase}/v2/${namespace}/${repository}/tags/list`
+  const url = `${cfg.registryBase}/v2/${repoPath(cfg, namespace, repository)}/tags/list`
   const data = await fetchJson<{ tags?: string[] }>(url, { headers: authHeaders(token) })
   return data.tags ?? []
 }
@@ -135,24 +143,24 @@ async function acquireTokenViaChallenge(registryBase: string, repoPath: string):
 
 export async function getToken(registry: string, namespace: string, repository: string, mirror?: string): Promise<string> {
   const cfg = getRegistryConfig(registry, mirror)
-  const repoPath = `${namespace}/${repository}`
+  const path = repoPath(cfg, namespace, repository)
   if (cfg.tokenUrl) {
-    const url = `${cfg.tokenUrl}?service=${cfg.tokenService}&scope=repository:${repoPath}:pull`
+    const url = `${cfg.tokenUrl}?service=${cfg.tokenService}&scope=repository:${path}:pull`
     const data = await fetchJson<{ token?: string }>(url)
     if (!data.token) throw new Error('Docker 认证服务未返回 token')
     return data.token
   }
-  return acquireTokenViaChallenge(cfg.registryBase, repoPath)
+  return acquireTokenViaChallenge(cfg.registryBase, path)
 }
 
 function buildManifestUrl(registry: string, namespace: string, repository: string, ref: string, mirror?: string): string {
   const cfg = getRegistryConfig(registry, mirror)
-  return `${cfg.registryBase}/v2/${namespace}/${repository}/manifests/${ref}`
+  return `${cfg.registryBase}/v2/${repoPath(cfg, namespace, repository)}/manifests/${ref}`
 }
 
 function buildLayerUrl(registry: string, namespace: string, repository: string, digest: string, mirror?: string): string {
   const cfg = getRegistryConfig(registry, mirror)
-  return `${cfg.registryBase}/v2/${namespace}/${repository}/blobs/${digest}`
+  return `${cfg.registryBase}/v2/${repoPath(cfg, namespace, repository)}/blobs/${digest}`
 }
 
 /** 不传 platform：返回可用平台列表（过滤 unknown） */
