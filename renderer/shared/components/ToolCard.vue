@@ -25,7 +25,7 @@ defineEmits<{
       <span aria-hidden="true">★</span>
     </button>
     <div class="tool-head">
-      <UiAvatar :text="tool.name" :color="tool.color" :size="42" />
+      <UiAvatar :text="tool.name" :color="tool.color" :size="42" :icon="tool.icon" />
       <h3 class="tool-name">
         {{ tool.name }}
       </h3>

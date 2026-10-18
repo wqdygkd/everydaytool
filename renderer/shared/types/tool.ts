@@ -1,5 +1,6 @@
 import type { AsyncComponentLoader, Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
+import type { IconName } from '../components/ui/icons'
 
 export type ToolClientTarget = 'web' | 'win' | 'mac'
 
@@ -17,6 +18,8 @@ export interface ToolDefinition {
   description: string
   version: string
   color: string
+  /** 工具 logo 图标（icons.ts 图标名，展示在主页卡片头像内） */
+  icon: IconName
   category: ToolCategory
   keywords: readonly string[]
   supportedTargets: readonly ToolClientTarget[]

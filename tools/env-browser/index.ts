@@ -6,6 +6,7 @@ const tool = defineTool({
   description: '多环境独立登录、应用内沙箱、Tab 多开',
   version: '1.0.0',
   color: '#5caffa',
+  icon: 'envBrowser',
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['env', 'browser', 'login', '环境', '多开', '沙箱', 'tab'],
   supportedTargets: ['web', 'win', 'mac'],

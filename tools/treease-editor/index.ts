@@ -6,6 +6,7 @@ const tool = defineTool({
   description: '在线树形结构编辑器（treease.com/editor）',
   version: '1.0.0',
   color: '#6c61df',
+  icon: 'treease',
   category: { key: 'dev', name: '开发工具' },
   keywords: ['treease', 'editor', 'tree', '树形', '编辑器', 'json'],
   supportedTargets: ['web', 'win', 'mac'],

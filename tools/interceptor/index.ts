@@ -17,6 +17,7 @@ const tool = defineTool({
   description: '本地 MITM 代理：改包 / mock / 流量日志，配合浏览器扩展接管流量与脚本注入',
   version: '1.0.0',
   color: '#7c6cf0',
+  icon: 'intercept',
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['proxy', 'mitm', 'interceptor', '代理', '抓包', '改包', 'mock', '拦截', '拦截器', '脚本注入'],
   supportedTargets: ['web', 'win', 'mac'],
