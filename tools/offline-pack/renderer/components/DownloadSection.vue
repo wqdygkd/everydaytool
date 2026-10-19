@@ -80,7 +80,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
   padding: var(--spacing-md);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: var(--color-raised);
 }
 
 .download-row {
@@ -99,7 +99,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
 }
 
 .download-bar :deep(.el-progress-bar__outer) {
-  background: var(--color-muted);
+  background: var(--color-raised);
 }
 
 .download-error {

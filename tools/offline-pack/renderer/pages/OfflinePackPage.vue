@@ -84,14 +84,15 @@ function switchTab(key: string): void {
   color: var(--color-text-secondary);
 }
 
-/* 玻璃浮岛卡片：rounded 20px + apple-lg 双层阴影 + backdrop-blur */
+/* 玻璃浮岛卡片：rounded 20px + backdrop-blur。
+   不投影：本页画布已透明（与主页一致），卡片靠自身浅底 + 圆角分层，
+   再加一层大阴影会在透明画布上显得浮夸、与工具页整体扁平基调不一致。 */
 .offline-pack-card {
   max-width: 760px;
   margin: 0 auto;
   padding: 24px;
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   border-radius: 20px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 /* 圆角分段页签：border + 灰底容器 + 激活白底阴影 */
@@ -112,7 +113,7 @@ function switchTab(key: string): void {
   flex-wrap: wrap;
   gap: 6px;
   padding: 6px;
-  background: var(--color-muted);
+  background: var(--color-raised);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
 }
@@ -132,7 +133,7 @@ function switchTab(key: string): void {
 }
 
 .offline-pack-tabs :deep(.el-tabs__item.is-active) {
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   color: var(--color-text-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }

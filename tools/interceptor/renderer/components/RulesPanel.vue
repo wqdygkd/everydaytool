@@ -1343,7 +1343,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   padding: var(--spacing-md) var(--spacing-lg);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--color-raised);
   box-shadow: var(--shadow-lg);
 }
 
@@ -1419,7 +1419,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 .kbd-hint {
   margin-left: var(--spacing-sm);
   padding: 1px var(--spacing-sm);
-  border: 1px solid color-mix(in srgb, var(--color-surface) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-on-solid) 45%, transparent);
   border-radius: var(--radius-xs);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
@@ -1501,7 +1501,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 /* 编辑器卡片（If 卡 / 资源类型卡同构）；卡片间距由相邻兄弟规则承担 */
 .editor-card {
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--color-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
@@ -1595,7 +1595,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   flex-direction: column;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg) var(--spacing-xl);
-  background: var(--color-muted);
+  background: var(--color-raised);
   border-radius: var(--radius-sm);
 }
 
@@ -1611,7 +1611,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 }
 
 .dest-input :deep(.el-input__wrapper) {
-  background: var(--color-surface);
+  background: var(--color-raised);
 }
 
 .request-body-mode-group {
@@ -1716,9 +1716,11 @@ async function remove(rule: InterceptorRule): Promise<void> {
 <style>
 /* 行操作下拉（el-dropdown 传送至 body，非 scoped） */
 .rule-more-actions-dropdown {
-  --el-dropdown-menuItem-hover-fill: var(--color-muted);
+  --el-dropdown-menuItem-hover-fill: var(--color-fill);
   --el-dropdown-menuItem-hover-color: var(--color-text-primary);
-  --el-bg-color-overlay: var(--color-surface);
+  /* 必须走 --color-pop（下拉浮层角色）：这里写 --color-surface 会覆盖全局
+     .el-dropdown__popper 的 pop 底色，导致本工具的下拉在透明模式下变成实色白。 */
+  --el-bg-color-overlay: var(--color-pop);
   border-radius: var(--radius-xs);
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-md);
@@ -1758,7 +1760,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 .rule-picker-popover.el-popover.el-popper {
   padding: 0;
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--color-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
@@ -1815,7 +1817,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 }
 
 .rule-picker-popover .rule-picker-item:hover {
-  background: var(--color-muted);
+  background: var(--color-raised);
 }
 
 .rule-picker-popover .rule-picker-item .icon {

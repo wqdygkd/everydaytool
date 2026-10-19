@@ -45,7 +45,7 @@ onMounted(handleGenerate)
 
 <template>
   <div class="id-card-page tool-page">
-    <UiPanel class="generator-card" shadow="md" padding="">
+    <UiPanel class="generator-card" padding="">
       <el-form label-width="80px" class="config-form">
         <el-form-item label="出生方式">
           <el-radio-group v-model="birthMode">
@@ -158,10 +158,13 @@ onMounted(handleGenerate)
   overflow: auto;
 }
 
+/* 不投影：本页画布已透明（与主页一致），主卡片靠自身浅底 + 大圆角分层即可。
+   面板组件的 shadow prop 只有 sm / md 两档，没有「无」，故在此覆写。 */
 .generator-card {
   width: 100%;
   max-width: 720px;
   padding: var(--spacing-2xl);
+  box-shadow: none;
 
   .config-form {
     margin-bottom: var(--spacing-lg);

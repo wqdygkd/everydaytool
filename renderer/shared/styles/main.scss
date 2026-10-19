@@ -1,6 +1,8 @@
 // 全局样式入口：按依赖顺序引入各分片。
-// tokens（设计令牌）→ base（基础 reset）→ element-plus（EP 主题层）→ utilities（工具类）。
+// tokens（设计令牌）→ base（基础 reset）→ element-plus（EP 主题层）→ utilities（工具类）
+// → translucency（半透明窗口 alpha 控制层，需在最后覆写 EP 的背景绑定）。
 @use './tokens';
 @use './base';
 @use './element-plus';
 @use './utilities';
+@use './translucency';

@@ -21,7 +21,7 @@ withDefaults(defineProps<{
   padding: var(--spacing-sm);
   overflow: auto;
   border-radius: var(--radius-sm);
-  background: var(--color-app-bg);
+  background: var(--color-canvas);
   color: var(--color-text-primary);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);

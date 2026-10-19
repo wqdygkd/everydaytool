@@ -58,7 +58,7 @@ defineEmits<{
   overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
+  background: var(--color-raised);
   backdrop-filter: blur(12px);
   box-shadow: var(--shadow-sm);
   cursor: pointer;

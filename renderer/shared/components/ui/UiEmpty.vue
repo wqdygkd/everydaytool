@@ -39,7 +39,7 @@ const pad = computed(() => props.padding ?? (props.variant === 'bordered' ? 'var
   &.is-bordered {
     border: 1px dashed var(--color-border);
     border-radius: var(--radius-lg);
-    background: var(--color-surface-raised);
+    background: var(--color-raised);
   }
 
   &.is-center {

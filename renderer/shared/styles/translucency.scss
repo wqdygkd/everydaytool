@@ -1,0 +1,127 @@
+// 半透明窗口的 alpha 控制层：按「窗口模式」统一调节所有背景色的透明度。
+//
+// 设计约定（与 tokens.scss 的 alpha 体系配套）：
+//   1. 颜色与透明度分离——tokens.scss 只定义各表面角色的**不透明基准色**（*-base），
+//      本文件按模式覆写 **alpha**（--alpha-*），两者在消费端用 color-mix 合成。
+//   2. 消费端引用本文件导出的合成变量（--color-canvas / -raised / -input / -fill /
+//      -header / -pop / -overlay），**不要在组件里写死 rgba**。
+//   3. 新增模式 = 在本文件加一条模式规则覆写 alpha 组，组件零改动。
+//   4. 模式类同时由 App.vue 挂到 .app-shell 与 <html>（见下方 mode() 说明）。
+//
+// 为什么选择器要覆盖 html：EP 的弹层（select / cascader / dropdown / date-picker /
+// autocomplete / dialog / message）全部 teleport 到 body，DOM 上不在 .app-shell 内。
+// 只在 .app-shell 上覆写 alpha 的话，这些浮层继承不到，--color-overlay 会落空成透明。
+//
+// 为什么用 calc(var(--alpha-x) * 100%)：alpha 是 0~1 的小数，可读且便于统一缩放。
+
+// 模式类可能落在 <html> 或 .app-shell 上，两处都要命中（弹层在 body，只能靠 html）。
+@mixin mode($name) {
+  html.#{$name},
+  html.#{$name} .app-shell,
+  .app-shell.#{$name} {
+    @content;
+  }
+}
+
+/* ── acrylic：强模糊 + 透光的临时浮层材质 ──
+   壁纸细节会直接透上来，故各表面都压到较低 alpha；
+   但控件（input）要比卡片更稳，否则边框会与背后内容打架。 */
+@include mode('is-acrylic') {
+  --alpha-raised: 0.78; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 0.88; /* 其余非弹出层控件（树 / 上传 / 搜索框） */
+  --alpha-field: 0.88; /* 通用表单输入框（el-input / textarea / select） */
+  --alpha-table: 0.88; /* 表格行 */
+  --alpha-button: 0.88; /* 普通按钮 */
+  --alpha-fill: 0.8; /* 灰调填充（表头 / 行 hover） */
+  --alpha-header: 0.6; /* 标题栏 */
+  --alpha-pop: 0.94; /* 下拉类浮层（贴输入框、底下压表单，需最稳） */
+  --alpha-overlay: 0.92; /* 其它弹层（dialog / message） */
+}
+
+/* ── mica：壁纸取色的长驻窗口背景 ──
+   系统已做取色 + 轻模糊，表面只需轻微透（接近实色），
+   否则卡片会与壁纸糊在一起、文字对比度下降。 */
+@include mode('is-mica') {
+  --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 0.97; /* 非弹出层 el 控件 */
+  --alpha-field: 0.97; /* 通用表单输入框 */
+  --alpha-table: 0.97; /* 表格行 */
+  --alpha-button: 0.97; /* 普通按钮 */
+  --alpha-fill: 0.95; /* 灰调填充（表头 / hover） */
+  --alpha-header: 0.96; /* 标题栏 */
+  --alpha-pop: 0.98; /* 下拉类浮层 */
+  --alpha-overlay: 0.98; /* 其它弹层 */
+}
+
+/* ── tabbed：带页签标题栏的弱化材质 ──
+   与 mica 同源，取色更弱，故比 mica 再实一档。 */
+@include mode('is-tabbed') {
+  --alpha-raised: 0.98; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 0.99; /* 非弹出层 el 控件 */
+  --alpha-field: 0.99; /* 通用表单输入框 */
+  --alpha-table: 0.99; /* 表格行 */
+  --alpha-button: 0.99; /* 普通按钮 */
+  --alpha-fill: 0.98; /* 灰调填充（表头 / hover） */
+  --alpha-header: 0.98; /* 标题栏 */
+  --alpha-pop: 1; /* 下拉类浮层（此模式下不透明） */
+  --alpha-overlay: 1; /* 其它弹层（此模式下不透明） */
+}
+
+/* ── vibrancy（macOS）：系统轻模糊材质 ──
+   与 mica 同级：透得少，保持接近实色的稳重感。 */
+@include mode('is-vibrancy') {
+  --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 0.97; /* 非弹出层 el 控件 */
+  --alpha-field: 0.97; /* 通用表单输入框 */
+  --alpha-table: 0.97; /* 表格行 */
+  --alpha-button: 0.97; /* 普通按钮 */
+  --alpha-fill: 0.95; /* 灰调填充（表头 / hover） */
+  --alpha-header: 0.96; /* 标题栏 */
+  --alpha-pop: 0.98; /* 下拉类浮层 */
+  --alpha-overlay: 0.98; /* 其它弹层 */
+}
+
+/* ── 无材质的纯透明（transparent: true，旧版 Windows / 调试用） ──
+   没有系统模糊兜底，全部由 CSS 自己压：表面尽量稳，只让画布透。 */
+@include mode('is-transparent-only') {
+  --alpha-raised: 0.88; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 0.93; /* 非弹出层 el 控件 */
+  --alpha-field: 0.93; /* 通用表单输入框 */
+  --alpha-table: 0.93; /* 表格行 */
+  --alpha-button: 0.93; /* 普通按钮 */
+  --alpha-fill: 0.9; /* 灰调填充（表头 / hover） */
+  --alpha-header: 0.88; /* 标题栏 */
+  --alpha-pop: 0.96; /* 下拉类浮层 */
+  --alpha-overlay: 0.96; /* 其它弹层 */
+}
+
+/* ── 合成导出：供各组件与 EP 绑定层直接引用 ──
+   写在这里而不是每个组件里，是为了让「换模式只改 alpha」真正成立：
+   组件只认 --color-* 合成变量，永远不关心当前是哪种模式。
+
+   必须挂在 :root 而不是 .app-shell：EP 的弹层全部 teleport 到 body，
+   DOM 上不在 .app-shell 内，挂在 .app-shell 会让这些浮层取不到变量而变成透明。
+   模式 alpha 因此同时挂在 <html> 与 .app-shell 上（见上方 mode() mixin）。 */
+:root {
+  --color-canvas: transparent; /* 画布：恒透明，工具页与主页同一观感（透出窗口 / 桌面） */
+  --color-raised: color-mix(in srgb, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent); /* 卡片 / 面板 / 浮岛 */
+  --color-input: color-mix(in srgb, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层 el 控件底 */
+  --color-field: color-mix(in srgb, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent); /* 通用表单输入框底 */
+  --color-table: color-mix(in srgb, var(--color-table-base) calc(var(--alpha-table) * 100%), transparent); /* 表格行底 */
+  --color-button: color-mix(in srgb, var(--color-button-base) calc(var(--alpha-button) * 100%), transparent); /* 普通按钮底 */
+  --color-fill: color-mix(in srgb, var(--color-fill-base) calc(var(--alpha-fill) * 100%), transparent); /* 灰调填充：表头 / 行 hover / 灰底面版 */
+  --color-header: color-mix(in srgb, var(--color-header-base) calc(var(--alpha-header) * 100%), transparent); /* 标题栏 */
+  --color-pop: color-mix(in srgb, var(--color-pop-base) calc(var(--alpha-pop) * 100%), transparent); /* 下拉类浮层 */
+  --color-overlay: color-mix(in srgb, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent); /* 其它弹层：dialog / message */
+}
+
+/* 半透明窗口补回系统投影的缺失（透明窗口没有原生阴影） */
+.app-shell.is-transparent {
+  box-shadow: var(--shadow-window-frame); /* 窗口浮起感 */
+}
+
+/* 标题栏：仅 acrylic 铺半透明表面（其余模式不铺，见 DESIGN.md §7.1.1） */
+.app-shell.is-acrylic .app-header {
+  background: var(--color-header); /* 标题栏半透明表面：稳住原生按钮与页签文字对比度 */
+  backdrop-filter: blur(16px); /* 补偿 acrylic 强透光下的壁纸细节 */
+}

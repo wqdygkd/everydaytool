@@ -485,7 +485,7 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: var(--color-surface);
+  background: var(--color-raised);
 }
 
 .toolbar-src {

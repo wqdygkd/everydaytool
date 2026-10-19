@@ -1,67 +1,91 @@
 // 设计令牌：全局唯一来源（颜色 / 字阶 / 间距 / 几何 / 圆角 / 阴影 / 过渡 / 字体栈）。
-// Element Plus 的 --el-* 绑定见 element-plus.scss。
+// Element Plus 的 --el-* 绑定见 element-plus.scss；半透明 alpha 见 translucency.scss。
 :root {
   /* ── 品牌色：品牌蓝（唯一强调色） ── */
-  --color-primary: #3390ec;
-  --color-primary-hover: #4a95d6;
-  --color-primary-soft: rgba(51, 144, 236, 0.1);
-  --color-primary-light: rgba(51, 144, 236, 0.2);
+  --color-primary: #3390ec; /* 主按钮 / 链接 / 选中态 / 焦点环 */
+  --color-primary-hover: #4a95d6; /* 主按钮 hover */
+  --color-primary-soft: rgba(51, 144, 236, 0.1); /* 选中行 / 选中项浅底 */
+  --color-primary-light: rgba(51, 144, 236, 0.2); /* 品牌标 / 页签选中浅底 */
 
   /* ── 语义色 ── */
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4343;
+  --color-success: #10b981; /* 成功 / 运行中 */
+  --color-warning: #f59e0b; /* 警告 / 固定标记 */
+  --color-error: #ef4343; /* 错误 / 危险操作 */
 
   /* ── surfaces（冷灰） ── */
-  --color-app-bg: #f4f4f5;
-  --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-muted: #f4f4f5;
+  --color-app-bg: #f4f4f5; /* 工具页 / 内容区底色（兜底用，画布多为透明） */
+  --color-on-solid: #ffffff; /* 实底上的前景白：绿底徽章白字 / 头像字母 / 白分隔线，不随透明度变 */
+
+  /* ── 半透明窗口的 alpha 体系（基准色） ──
+     每个表面角色拆成「基准色(*-base) × alpha(--alpha-*)」两层：
+     本文件定义基准色，translucency.scss 按窗口模式覆写 alpha，
+     消费端用 --color-<role> 合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
+  --color-raised-base: #ffffff; /* 角色 raised：卡片 / 面板 / 浮岛的表面色 */
+  --color-input-base: #ffffff; /* 角色 input：其余非弹出层 el 控件底（树 / 上传 / 日历 / 搜索框 UiSearchInput） */
+  --color-field-base: #ffffff; /* 角色 field：通用表单输入框底（全局 el-input / textarea / select 输入区） */
+  --color-table-base: #ffffff; /* 角色 table：表格行底（el-table 的 tr），与其它控件分开以便单独调透明度 */
+  --color-button-base: #ffffff; /* 角色 button：普通按钮底（非 primary / danger 等实心按钮），单独一档 */
+  --color-fill-base: #f4f4f5; /* 角色 fill：灰调填充（表头 / 行 hover / 灰底面版），与控件同档 alpha 但取冷灰以拉开层次 */
+  --color-header-base: #ffffff; /* 角色 header：标题栏（原生窗口按钮 + 页签文字的底） */
+  --color-pop-base: #ffffff; /* 角色 pop：下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） */
+  --color-overlay-base: #ffffff; /* 角色 overlay：其它弹层（dialog / message / notification） */
+
+  /* 默认（不透明窗口）：全部实色，与旧版一致；各角色 1 = 完全不透明 */
+  --alpha-raised: 1; /* 卡片 / 面板 / 浮岛 */
+  --alpha-input: 1; /* 其余非弹出层控件 */
+  --alpha-field: 1; /* 通用表单输入框（el-input / textarea / select） */
+  --alpha-table: 1; /* 表格行 */
+  --alpha-button: 1; /* 普通按钮 */
+  --alpha-fill: 1; /* 灰调填充（表头 / hover） */
+  --alpha-header: 1; /* 标题栏 */
+  --alpha-pop: 1; /* 下拉类浮层 */
+  --alpha-overlay: 1; /* 其它弹层 */
 
   /* ── lines ── */
-  --color-border-light: #e4e4e5;
-  --color-border: #dadce0;
+  --color-border-light: #e4e4e5; /* 细分隔线 / 卡片描边 */
+  --color-border: #dadce0; /* 输入边框 / 强分隔线 */
 
   /* ── text ── */
-  --color-text-primary: #000000;
-  --color-text-secondary: #707579;
-  --color-text-tertiary: #686c72;
+  --color-text-primary: #000000; /* 主文本 / 正文 */
+  --color-text-secondary: #707579; /* 次级文本 / 说明 / 弱化 */
+  --color-text-tertiary: #686c72; /* 三级文本 / 元信息 / 时间戳 */
 
   /* ── shape(阶梯:小件 8 / 控件 12 / 卡片 16 / 浮岛 20 / 模态 28) ── */
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius-xs: 8px; /* 小件：图标钮 hover 底 / 代码块 / 键盘提示 */
+  --radius-sm: 12px; /* 控件：输入框 / 编辑器卡片 / 弹层菜单 */
+  --radius-md: 16px; /* 行 / 菜单：弹层 / 消息 */
+  --radius-lg: 20px; /* 浮岛：卡片 / 面板 / 表格容器 */
+  --radius-xl: 28px; /* 模态：对话框 */
 
   /* ── shadows(柔和低对比 + 品牌色焦点环) ── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12);
-  --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05); /* 浮岛卡片 / 面板 */
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08); /* 菜单 / FAB / 消息 */
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12); /* 对话框 / 批量操作栏 */
+  --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18); /* 键盘焦点环 */
+  --shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28); /* 半透明窗口的外阴影：补偿丢失的系统投影 */
 
-  --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-  --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1);
+  --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1); /* 微交互：图标钮 / 页签 / chip */
+  --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1); /* 卡片 hover / 边框 / 背景过渡 */
 
   /* ── 字阶 / 字重 / 间距 ── */
-  --font-size-xs: 11px;
-  --font-size-sm: 12px;
-  --font-size-base: 14px;
-  --font-size-lg: 16px;
-  --font-size-xl: 18px;
+  --font-size-xs: 11px; /* 徽章 / 表格辅助 / 代码 */
+  --font-size-sm: 12px; /* 说明 / 键值 / 表格正文 */
+  --font-size-base: 14px; /* 正文 / 面板标题 */
+  --font-size-lg: 16px; /* 区块标题 / 状态名 */
+  --font-size-xl: 18px; /* 大标题 */
 
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
+  --font-weight-regular: 400; /* 正文 */
+  --font-weight-medium: 500; /* 按钮 / 页签 / 标签 */
+  --font-weight-semibold: 600; /* 卡片名 / 面板标题 / 区块标题 */
+  --font-weight-bold: 700; /* 强调 / 数字看板 */
 
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 12px;
-  --spacing-lg: 16px;
-  --spacing-xl: 20px;
-  --spacing-2xl: 24px;
-  --spacing-3xl: 32px;
+  --spacing-xs: 4px; /* 最小间隙：图标与文字、紧邻元素 */
+  --spacing-sm: 8px; /* 紧凑间距：组内元素、徽章内边距 */
+  --spacing-md: 12px; /* 常规间距：卡片网格、按钮组 */
+  --spacing-lg: 16px; /* 宽松间距：卡片内边距、分区 */
+  --spacing-xl: 20px; /* 大间距：区块内边距 */
+  --spacing-2xl: 24px; /* 页面级间距：区块之间、页内边距 */
+  --spacing-3xl: 32px; /* 最大间距：页面上下留白、分组之间 */
 
   /* ── 控件 / 外壳尺寸（全应用统一，禁止一处一个 px） ── */
   --control-height: 32px; /* 表单控件与 ghost 按钮同高 */
@@ -69,11 +93,12 @@
   --content-max-width: 1360px; /* 首页内容最大宽 */
   --titlebar-height: 44px; /* 自定义标题栏行高 */
 
-  color-scheme: light;
+  color-scheme: light; /* 固定浅色：禁用系统深色表单控件 */
   /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
-  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
-  --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace;
-  font-synthesis-weight: none;
-  background: var(--color-app-bg);
-  color: var(--color-text-primary);
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif; /* 正文 UI */
+  --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace; /* 等宽 / 数字 */
+  font-synthesis-weight: none; /* 禁止合成字重，避免自托管字体发虚 */
+  /* 不设背景：底色由页面自理（工具页 .tool-page 自带 app-bg，首页透出窗口），
+     :root 留白才能让半透明窗口透出桌面 */
+  color: var(--color-text-primary); /* 全局默认文字色 */
 }

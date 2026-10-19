@@ -125,7 +125,7 @@ onUnmounted(() => {
   grid-template-columns: 252px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  background: var(--color-app-bg);
+  background: var(--color-canvas);
 }
 
 @media (max-width: 760px) {

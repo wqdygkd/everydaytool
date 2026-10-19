@@ -1,11 +1,18 @@
+import type { WindowAppearance } from '../shared/appearance.ts'
 import type { ShellMenuAction } from '../shared/menu.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
+import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
 import { initIpcSafety } from '../backend/utils/ipc-safety.ts'
 import { logger } from '../backend/utils/logger.ts'
+import {
+  parseWindowsBuild,
+  resolveAppearanceCapabilities,
+  sanitizeWindowAppearance,
+} from '../shared/appearance.ts'
 import { isTrustedIpcSenderUrl } from '../shared/ipc-sender.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
 import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.ts'
@@ -69,8 +76,71 @@ let mainWindow: Electron.BrowserWindow | null = null
 let backendInitialized = false
 
 // 自定义标题栏：header 即标题栏，右上角用原生 titleBarOverlay 窗口按钮。
-// overlay 是不透明矩形，配色取 .app-header 表面色（Telegram 浅色主题，纯白）。
-const TITLEBAR_COLORS = { color: '#ffffff', symbolColor: '#000000' } as const
+// overlay 底色透明：标题栏自身有半透明表面色（见 App.vue 的 .app-header），
+// 原生 overlay 若铺实色就会在右上角露出一块与整体不符的矩形，故放行 alpha 让其并入标题栏底色。
+const TITLEBAR_COLORS = { color: '#00000000', symbolColor: '#000000' } as const
+
+// 关闭半透明时的原生窗口底色：同样透明——外壳与各页面自理底色
+// （工具页 .tool-page 自带 app-bg，首页透出桌面），窗口层不兜实色。
+const OPAQUE_WINDOW_BG = '#00000000'
+
+// ── 窗口外观（半透明 / 系统材质） ──
+// 平台能力在进程启动时解析一次：Windows 要读系统版本判断是否 22H2+（否则 DWM 会忽略材质），
+// 之后所有窗口创建 / IPC 设置都复用同一份结论，避免各处重复探测。
+const APPEARANCE_CAPABILITIES = resolveAppearanceCapabilities(
+  process.platform,
+  process.platform === 'win32' ? parseWindowsBuild(process.getSystemVersion()) : null,
+)
+
+/**
+ * 把外观配置映射成 BrowserWindow 的构造参数。
+ * Windows：transparent 必须 frameless（Chromium 才会合成 alpha），且 thickFrame 决定
+ * 缩放边框/阴影——开启透明时保留 thickFrame 以留住缩放与阴影，圆角交给 roundedCorners。
+ * macOS：vibrancy 自带模糊背景，不能再叠 transparent（Electron 会报错），二者互斥。
+ */
+function buildAppearanceWindowOptions(appearance: WindowAppearance): Partial<Electron.BrowserWindowConstructorOptions> {
+  const safe = sanitizeWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
+  if (!safe.enabled) return {}
+
+  if (process.platform === 'darwin') {
+    return safe.vibrancy === 'none' ? {} : { vibrancy: safe.vibrancy }
+  }
+
+  if (process.platform === 'win32') {
+    const hasMaterial = safe.material !== 'none' && APPEARANCE_CAPABILITIES.supportsMaterial
+    // 有系统材质时由 DWM 画背景（此时不能再透明，否则两层效果打架）；
+    // 无材质（或旧系统）才走 transparent 让 CSS 背景的 alpha 透出桌面。
+    return {
+      ...(hasMaterial ? { backgroundMaterial: safe.material } : { transparent: true }),
+      thickFrame: true,
+      roundedCorners: true,
+    }
+  }
+
+  // linux：无系统材质，且 transparent 依赖合成器，默认不支持（能力表已声明）
+  return {}
+}
+
+/** 运行时切换外观：透明类开关只能改 CSS，材质 / vibrancy 走原生 setter */
+function applyWindowAppearance(appearance: WindowAppearance): void {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return
+  const safe = sanitizeWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
+
+  if (process.platform === 'darwin') {
+    win.setVibrancy(safe.enabled && safe.vibrancy !== 'none' ? safe.vibrancy : null)
+  } else if (process.platform === 'win32') {
+    const hasMaterial = safe.material !== 'none' && APPEARANCE_CAPABILITIES.supportsMaterial
+    win.setBackgroundMaterial(hasMaterial && safe.enabled ? safe.material : 'none')
+    // 透明开关随 CSS 类切换（见 App.vue 的 is-transparent）；此处只同步原生窗口底色
+    if (!safe.enabled || hasMaterial) {
+      win.setBackgroundColor(hasMaterial && safe.enabled ? '#00000000' : OPAQUE_WINDOW_BG)
+    }
+  }
+
+  win.webContents.send(EDT_APP_IPC_CHANNELS.EVENT_APPEARANCE_CHANGED, safe)
+  logger.info('Window appearance updated', { appearance: safe })
+}
 
 function adjustZoom(delta: number) {
   const wc = (BrowserWindow.getFocusedWindow() ?? mainWindow)?.webContents
@@ -108,8 +178,12 @@ ipcMain.on('edt:menu-action', (_event, action: ShellMenuAction) => {
 // http(s) 仅限 localhost / 127.0.0.1 / [::1]（dev server），其余一律拒绝。
 initIpcSafety({ appPath: app.getAppPath() })
 
-// 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理（preload 命名空间 edtApp）
-registerAppIpcHandlers({ notifyDataDirectoryChanged })
+// 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理 / 窗口外观（preload 命名空间 edtApp）
+registerAppIpcHandlers({
+  notifyDataDirectoryChanged,
+  applyWindowAppearance,
+  getAppearanceCapabilities: () => APPEARANCE_CAPABILITIES,
+})
 
 async function initializeBackend(): Promise<void> {
   if (backendInitialized) return
@@ -204,6 +278,8 @@ async function createWindow(): Promise<void> {
             height: 44,
           },
         }),
+    // 半透明 / 系统材质按持久化配置决定窗口形态（默认关闭，外观与旧版一致）
+    ...buildAppearanceWindowOptions(getWindowAppearance()),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -246,6 +322,9 @@ async function createWindow(): Promise<void> {
 
 app.whenReady().then(async () => {
   await initializeBackend()
+  // 外观必须先于 createWindow 读盘：窗口构造参数（transparent / vibrancy / backgroundMaterial）
+  // 只在创建时生效，之后再改只能部分切换，读不到就等于这次启动丢了用户选择。
+  await loadWindowAppearance()
   await createWindow()
 })
 

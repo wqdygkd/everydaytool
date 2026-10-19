@@ -40,7 +40,7 @@ withDefaults(defineProps<{
   flex-shrink: 0;
   min-height: 0;
   border-right: 1px solid var(--color-border-light);
-  background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+  background: var(--color-raised);
   backdrop-filter: blur(12px);
 }
 

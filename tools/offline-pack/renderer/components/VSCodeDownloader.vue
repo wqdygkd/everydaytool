@@ -170,12 +170,12 @@ async function copyLink(): Promise<void> {
   height: 48px;
   padding: 0 16px;
   border-radius: 12px;
-  background: var(--color-surface);
+  background: var(--color-raised);
   box-shadow: 0 0 0 1px var(--color-border) inset, 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .offline-pack-input :deep(.el-input__wrapper.is-focus) {
-  background: var(--color-surface);
+  background: var(--color-raised);
   box-shadow: 0 0 0 1px var(--color-primary) inset;
 }
 
@@ -193,13 +193,13 @@ async function copyLink(): Promise<void> {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-regular);
   color: var(--color-text-secondary);
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   border-color: transparent;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .offline-pack-examples :deep(.el-button:hover) {
-  background: var(--color-muted);
+  background: var(--color-raised);
   color: var(--color-text-primary);
 }
 
@@ -210,7 +210,7 @@ async function copyLink(): Promise<void> {
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--color-border-light);
-  background: var(--color-surface);
+  background: var(--color-raised);
   border-radius: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }

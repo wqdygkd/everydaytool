@@ -1,4 +1,5 @@
-// 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、磁盘用量、缓存清理。
+// 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、磁盘用量、缓存清理、
+// 窗口外观（半透明 / 系统材质）的读取与切换。
 // 由 electron/main.ts 注册；数据目录变更后的各工具域内重载通过
 // options.notifyDataDirectoryChanged 注入（避免 backend 反向依赖 electron/tool-registry）。
 import type {
@@ -7,9 +8,11 @@ import type {
   CacheCleanResult,
   DataRootUsage,
 } from '../../shared/app.ts'
+import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../shared/appearance.ts'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { isSafeDataDirectory } from '../../shared/path-guard.ts'
+import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
 import { clearDataRootCaches, invalidateScanCache, scanDataRoot } from '../utils/data-root-scan.ts'
 import {
   applyDataDirectoryChange,
@@ -26,6 +29,10 @@ const { dialog, ipcMain, session, shell } = require('electron') as typeof import
 
 export interface AppIpcOptions {
   notifyDataDirectoryChanged: () => Promise<void>
+  /** 外观变更后由 main.ts 应用到真实窗口，并回推最新值给渲染层 */
+  applyWindowAppearance: (appearance: WindowAppearance) => void
+  /** 平台能力由 main.ts 注入（需要读 process.platform / Windows build） */
+  getAppearanceCapabilities: () => WindowAppearanceCapabilities
 }
 
 function getDataDirectoryInfo(): AppDataDirectoryInfo {
@@ -81,6 +88,18 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_USAGE_GET, async (): Promise<DataRootUsage> => {
     const { cacheDirs: _cacheDirs, ...usage } = await scanDataRoot()
     return usage
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.APPEARANCE_GET, () => ({
+    appearance: getWindowAppearance(),
+    capabilities: options.getAppearanceCapabilities(),
+  }))
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.APPEARANCE_SET, async (_event, patch: WindowAppearanceUpdate): Promise<WindowAppearance> => {
+    const next = await updateWindowAppearance(patch, options.getAppearanceCapabilities())
+    // 先应用到真实窗口，再回推：渲染层收到的就是最终生效值（含平台降级）
+    options.applyWindowAppearance(next)
+    return next
   })
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.CACHE_CLEAR, async (): Promise<CacheCleanResult> => {

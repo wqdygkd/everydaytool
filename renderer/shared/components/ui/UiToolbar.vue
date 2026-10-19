@@ -68,7 +68,7 @@ withDefaults(defineProps<{
   }
 
   &.is-surface {
-    background: var(--color-surface-raised);
+    background: var(--color-raised);
   }
 }
 

@@ -45,7 +45,7 @@ withDefaults(defineProps<{
   min-width: 0;
 
   &.is-raised {
-    background: var(--color-surface-raised);
+    background: var(--color-raised);
     border: 1px solid var(--color-border-light);
     border-radius: var(--radius-lg);
   }
@@ -59,7 +59,7 @@ withDefaults(defineProps<{
   }
 
   &.is-outlined {
-    background: var(--color-surface-raised);
+    background: var(--color-raised);
     border: 1px solid var(--color-border-light);
     border-radius: var(--radius-lg);
   }

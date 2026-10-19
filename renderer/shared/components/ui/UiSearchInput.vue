@@ -58,13 +58,17 @@ function onEsc() {
 </template>
 
 <style scoped lang="scss">
-/* 圆角搜索框：白底浮岛，聚焦橙框 */
+/* 圆角搜索框：浮岛底 + 聚焦品牌框。
+   底色走 --color-input（非弹出层控件角色）——搜索框**刻意不复用** --color-field，
+   以便与通用表单输入框分开调节透明度（改 --alpha-field 不会影响这里）。
+   不能写 --color-raised：那是卡片角色（acrylic 下 0.78），会比输入框更透，
+   且 scoped 选择器优先级高于全局绑定、无法被覆盖修正。 */
 .ui-search-pill {
   :deep(.el-input__wrapper) {
     height: 42px;
     padding: 0 var(--spacing-lg);
     border-radius: 14px;
-    background: var(--color-surface-raised);
+    background: var(--color-input);
     box-shadow: 0 0 0 2px var(--color-border-light) inset;
 
     &:hover {

@@ -1,12 +1,14 @@
 // 通用工具类：工具页容器 / 文本 / 控件定宽 / 按钮间距 / 占满宽。
 // 卡片 / 网格 / 键值 / 提示 / 行内组等模式已收敛至 renderer/shared/components/ui。
 
-/* 工具页容器:填充主区域并在内部滚动 */
+/* 工具页容器:填充主区域并在内部滚动。
+   画布透明（translucency.scss 的 --color-canvas 恒为 transparent），
+   与主页同一观感：透出窗口 / 桌面，底色由卡片与控件自理。 */
 .tool-page {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: var(--color-app-bg);
+  background: var(--color-canvas);
 }
 
 /* 弱化文本 */

@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
 import { getToolRegistry } from './config/tools'
+import { useAppearance } from './shared/composables/useAppearance'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
 import { appIpcChannels, onAppIpc } from './shared/ipc/useAppIpc'
 import { useToolTabsStore } from './stores/toolTabs'
@@ -9,6 +10,24 @@ import { useToolTabsStore } from './stores/toolTabs'
 const route = useRoute()
 const router = useRouter()
 const tabsStore = useToolTabsStore()
+
+// 窗口外观（半透明 / 系统材质）：主进程是唯一事实来源，这里只镜像状态用于挂 CSS 类。
+// 半透明是「窗口形态」而非页面样式，因此必须由原生侧决定后回推，不能只靠本地开关。
+const { appearance, load: loadAppearance, subscribe: subscribeAppearance } = useAppearance()
+const isTransparent = computed(() => appearance.value?.enabled === true)
+// 当前生效的材质名 → CSS 类 is-<material>：translucency.scss 按类覆写 alpha，
+// 新增材质只在该文件加一条规则，此处无需改动。
+// vibrancy（macOS）在类型里是独立字段，这里统一归一成 material 类名。
+const materialClass = computed(() => {
+  const a = appearance.value
+  if (!a?.enabled) return null
+  if (a.vibrancy !== 'none') return `is-vibrancy`
+  return a.material !== 'none' ? `is-${a.material}` : 'is-transparent-only'
+})
+onMounted(() => {
+  void loadAppearance()
+  subscribeAppearance()
+})
 // 平台判断必须强韧：preload 读不到 process.platform 时会回退成 'win32'（真值），
 // 在 mac 上将误判导致红绿灯边距丢失；纯浏览器调试时 edtRuntime 还可能完全缺失。
 // 因此用 UA 交叉校验：两者矛盾时以 UA 为准（UA 反映渲染进程真实运行环境）
@@ -52,6 +71,27 @@ let motion: MotionScope | undefined
 // 全屏时原生窗口控件隐藏（mac 红绿灯 / Win 右上按钮），收回标题栏预留边距；
 // mac 原生全屏不触发 DOM fullscreen API，主来源是主进程推送事件，DOM 监听只做兜底
 const isFullscreen = ref(false)
+// 外壳模式类：is-transparent 表示「已开启半透明」，is-<material> 表示当前材质
+// （translucency.scss 按后者覆写 alpha）。放在 isFullscreen 之后定义，避免前向引用。
+const shellModeClasses = computed(() => ({
+  'is-fullscreen': isFullscreen,
+  'is-transparent': isTransparent,
+  ...(materialClass.value ? { [materialClass.value]: true } : {}),
+}))
+// 同一组模式类也要挂到 <html>：EP 弹层（select / cascader / dropdown / date-picker /
+// autocomplete / dialog / message）全部 teleport 到 body，不在 .app-shell 内，
+// 只挂外壳的话这些浮层继承不到 --alpha-*，会退化成「无背景」的透明面板。
+const MODE_CLASSES = ['is-fullscreen', 'is-transparent', 'is-acrylic', 'is-mica', 'is-tabbed', 'is-vibrancy', 'is-transparent-only'] as const
+watch(
+  shellModeClasses,
+  (classes) => {
+    const html = document.documentElement
+    for (const name of MODE_CLASSES) {
+      html.classList.toggle(name, name in classes)
+    }
+  },
+  { immediate: true, deep: true },
+)
 let offFullscreenIpc: (() => void) | undefined
 function syncDomFullscreen() {
   // 有主进程推送时以推送为准（mac 原生全屏不经过 DOM API），DOM 只补“进入”事件；
@@ -104,7 +144,7 @@ function handleTabRemove(toolId: string) {
 </script>
 
 <template>
-  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, { 'is-fullscreen': isFullscreen }]">
+  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, shellModeClasses]">
     <header class="app-header">
       <span class="brand-mark" role="button" tabindex="0" @click="goHome" @keydown.enter="goHome">edt</span>
       <div v-if="tabsStore.openTabs.length" class="header-tabs">
@@ -147,8 +187,12 @@ function handleTabRemove(toolId: string) {
   /* 锁死视口高度：顶栏固定，滚动只发生在内容区 */
   height: 100dvh;
   overflow: hidden;
-  background: var(--color-app-bg);
+  /* 不设背景：底色由各页面自理（工具页 .tool-page 自带 app-bg，首页透明跟随窗口），
+     外壳留白才能让半透明窗口透出桌面 */
 }
+
+/* 半透明窗口的画布 / 阴影 / 标题栏规则统一收敛到
+   renderer/shared/styles/translucency.scss（按模式覆写 alpha），此处不再重复。 */
 
 .app-header {
   display: flex;
@@ -159,9 +203,8 @@ function handleTabRemove(toolId: string) {
   // 基座保持常规边距；mac 红绿灯安全边距由下方 .platform-darwin 规则提供，
   // win/linux 右侧按钮预留由下方规则提供（各平台互不干扰）
   padding: 0 var(--spacing-lg);
-  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--color-border-light);
+  /* 无背景色：标题栏透出窗口画布（半透明窗口下即透出桌面），
+     分层靠下方内容区的边界，不再靠一条实色带 + 分隔线 */
   color: var(--color-text-primary);
   // 自定义标题栏（系统标题栏已隐藏）：整行可拖拽移动窗口，交互元素各自排除
   -webkit-app-region: drag;
@@ -255,7 +298,7 @@ function handleTabRemove(toolId: string) {
     }
 
     &:not(.is-active):hover {
-      background: var(--color-muted);
+      background: var(--color-fill);
       color: var(--color-primary);
     }
 

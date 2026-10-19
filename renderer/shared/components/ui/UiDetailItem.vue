@@ -27,7 +27,7 @@ withDefaults(defineProps<{
   padding: var(--spacing-md);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   font-size: var(--font-size-sm);
   min-width: 0;
 

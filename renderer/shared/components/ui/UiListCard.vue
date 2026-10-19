@@ -28,7 +28,7 @@ const emit = defineEmits<{
   padding: var(--spacing-md) var(--spacing-lg);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   cursor: pointer;
   transition:
     border-color var(--transition-base),

@@ -20,7 +20,7 @@ withDefaults(defineProps<{
   padding: 2px var(--spacing-sm);
   border: 1px solid var(--color-border-light);
   border-radius: 999px;
-  background: var(--color-surface-raised);
+  background: var(--color-raised);
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   line-height: 1.5;
@@ -42,7 +42,7 @@ withDefaults(defineProps<{
     padding: 1px var(--spacing-sm);
     border-color: transparent;
     background: var(--color-success);
-    color: var(--color-surface);
+    color: var(--color-on-solid);
     font-weight: var(--font-weight-medium);
   }
 

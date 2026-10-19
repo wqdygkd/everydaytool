@@ -1,151 +1,73 @@
 # everydaytool (edt)
 
-多功能工具平台（`everydaytool`，简称 `edt`），基于 Electron + Vue 3。首个工具模块 Chrome 沙箱提供多实例浏览器管理。
+多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Element Plus + Vite**。
 
-## 架构概览
+采用单体仓库子目录架构：主壳只负责首页导航、页签与设置，各工具独立存放在 `tools/` 下，
+按需加载、互不耦合。内置 7 个工具模块：
 
-采用单体仓库子目录架构，主仓库仅负责首页导航，各工具独立存放于 `tools/` 目录。
+| 工具 | 分类 | 说明 |
+| ------ | ------ | ------ |
+| Chrome沙箱 | 浏览器工具 | 多沙箱浏览器管理 |
+| 环境浏览器 | 浏览器工具 | 多环境独立登录、应用内沙箱、Tab 多开 |
+| 拦截器 | 浏览器工具 | 本地 MITM 代理：改包 / mock / 流量日志，配合浏览器扩展接管流量与脚本注入 |
+| 离线包下载 | 开发工具 | 下载 VSCode 插件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包 |
+| Treease 编辑器 | 开发工具 | 在线树形结构编辑器（treease.com/editor） |
+| WXP 增强 | 自动化工具 | 通过 CDP 启动 WXP，缓存登录状态并注入 CSS/JS 自定义界面 |
+| 身份证号生成器 | 生成器 | 随机生成中国大陆 18 位身份证号 |
 
-```
-project/
-├── renderer/                 # 主应用（首页导航）
-│   ├── App.vue               # 应用 Shell
-│   ├── router/               # 路由配置
-│   ├── layouts/              # 页面布局
-│   ├── pages/HomePage.vue    # 主页工具网格
-│   ├── shared/               # 前端共享资源
-│   └── config/tools.ts       # 工具注册表
-│
-├── tools/                    # 工具目录
-│   └── chrome-sandbox/       # Chrome沙箱 工具（完全独立）
-│       ├── index.ts          # 工具入口定义
-│       ├── renderer/         # 工具前端
-│       │   ├── components/   # Vue 组件
-│       │   ├── stores/       # Pinia 状态管理
-│       │   └── pages/        # 工具页面
-│       ├── backend/          # 工具后端（Electron 主进程）
-│       │   ├── ipc/          # IPC 通道与处理
-│       │   ├── services/     # 服务层
-│       │   ├── store/        # 数据库操作
-│       │   ├── chrome/       # Chrome 检测与启动
-│       │   ├── fingerprint/  # 指纹生成
-│       │   └── utils/        # 工具函数
-│       ├── extension/        # 指纹伪造 Chrome 扩展
-│       └── assets/           # 工具资源
-│
-├── electron/                 # Electron 入口
-│   ├── main.ts               # 主进程入口源码
-│   └── preload.ts            # 预加载脚本源码，构建为 preload.cjs
-│
-├── dist-electron/            # Electron 主进程与 preload 构建产物
-├── shared/                   # 跨工具共享代码（预留）
-├── data/                     # 运行时数据
-└── docs/                     # 文档
-```
+## 开发指南
 
-## 目录职责
-
-| 目录 | 职责 |
-|------|------|
-| `renderer/` | 仅首页导航，不含任何工具代码 |
-| `tools/<tool>/renderer/` | 工具前端代码 |
-| `tools/<tool>/backend/` | 工具后端代码（Electron 主进程） |
-| `tools/<tool>/index.ts` | 工具定义入口（导出 id, name, route 等） |
-| `electron/` | 仅入口，加载 `tools/*/backend/` |
-| `dist-electron/` | Electron 主进程、工具后端、preload 构建产物 |
-| `shared/` | 跨工具共享代码（预留） |
-| `data/` | 运行时数据（config.db, sandboxes/） |
-
-## Chrome沙箱 工具功能
-
-- 独立 Chrome Profile 沙箱管理（从系统 Chrome 可选继承书签、密码、扩展）
-- 指纹伪造扩展（Canvas / WebGL / Navigator）
-- 沙箱创建、启动、关闭、删除
-- 指纹参数编辑
-
-## 环境要求
+### 环境要求
 
 - Node.js 22+
 - pnpm 10+（勿用 npm）
 
-## 开发
+### 常用命令
 
 ```bash
-pnpm install
-pnpm dev
+pnpm install        # 安装依赖
+
+pnpm dev            # 开发模式（Vite HMR + Electron）
+EDT_DEVTOOLS=1 pnpm dev   # 同上，启动时自动打开 DevTools
+
+pnpm vite build     # 仅构建前端
+pnpm typecheck      # TS 类型检查（前端 + 后端两套 tsconfig）
+pnpm lint           # ESLint（含 tools 内文件）
+pnpm lint:fix       # ESLint 自动修复
+pnpm build          # 完整构建（Electron 主进程 + 前端）
+pnpm start          # 运行已构建产物
+pnpm dist           # 打包安装程序
 ```
 
-`pnpm dev` 会启动 Vite 前端 HMR，并监听 `electron/`、`shared/`、`tools/*/backend/` 变化，重建 `dist-electron/` 后自动重启 Electron。
+`pnpm dev` 会启动 Vite 前端 HMR，并监听 `electron/`、`shared/`、`backend/`、`tools/*/backend/` 的变化，
+重建 `dist-electron/` 后自动重启 Electron。
 
-## 构建
+### 编码规范
+
+完整规范见 **[AGENTS.md](./AGENTS.md)**（导入后缀、目录边界、IPC 调用、样式令牌等硬性约定）。
+上手只需记住两条最容易踩的：
+
+- **前端**（`renderer/**`、`tools/*/renderer/**`）：相对导入**无后缀**，Vue SFC 保留 `.vue`；
+  禁止直接 `import backend/**`，必须经 preload 暴露的 IPC API 调用。
+- **Electron / 后端**（`electron/**`、`backend/**`、`tools/*/backend/**`）：Node ESM，
+  源码相对 TS 导入写 **`.ts`** 后缀（构建时由 esbuild 插件还原为 `.js`）。
+
+### 添加新工具
 
 ```bash
-pnpm build        # 构建 Electron 侧与前端
-pnpm build:electron
-pnpm start        # 启动 Electron
-pnpm dist         # 打包安装程序
+pnpm create:tool <tool-id>    # 生成目录骨架并自动注册
 ```
 
-## TypeScript 与导入规范
+手动创建见 [AGENTS.md § 新增工具](./AGENTS.md#新增工具)（`defineTool` 完整字段说明与 `meta.toolId` 要求）。
+工具页由 `defineTool` 自动包 `defineAsyncComponent`，按需加载，主包只保留首页与应用壳。
 
-- 源码统一使用 TypeScript / Vue SFC；构建产物才是 JavaScript。
-- 前端范围（`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts`）导入 TS 模块使用无后缀，Vue SFC 保留 `.vue`。
-- Electron / 后端范围（`electron/**`、`tools/*/backend/**`）是 Node ESM，源码中的相对 TS 模块导入使用 `.js` 运行时后缀，不导入 `.ts`。
-- `preload` 源码为 `electron/preload.ts`，由 `scripts/build-electron.mjs` 打包为 `dist-electron/electron/preload.cjs`。
-- 前端不得直接导入 `backend/**`，统一通过 preload 暴露的 IPC API 调用。
+## 关联文档
 
-## 添加新工具
-
-1. 创建工具目录：
-   ```
-   tools/<tool>/
-   ├── index.ts        # 工具定义
-   ├── renderer/       # 前端
-   │   ├── components/
-   │   ├── stores/
-   │   └── pages/
-   └── backend/        # 后端（可选）
-   ```
-
-2. 实现 `index.ts`：
-   ```ts
-   import { defineTool } from '../../renderer/shared/tool/defineTool';
-   import ToolPage from './renderer/pages/ToolPage.vue';
-
-   export default defineTool({
-     id: 'tool-name',
-     name: '工具名称',
-     description: '工具描述',
-     version: '1.0.0',
-     color: '#color',
-     category: { key: 'general', name: '通用工具' },
-     keywords: ['tool-name'],
-     supportedTargets: ['web', 'win', 'mac'],
-     route: {
-       path: 'tool-name',
-       component: ToolPage,
-     },
-   });
-   ```
-
-3. 注册：`renderer/config/tools.ts`
-4. 路由由工具注册表自动汇总
-
-## 工具端支持配置
-
-工具在不同客户端的可用性配置在每个工具的 `index.ts` 中：
-
-```ts
-supportedTargets: ['web', 'win', 'mac'],
-```
-
-- `web`：网页端
-- `win`：Windows 桌面端
-- `mac`：macOS 桌面端
-
-`renderer/config/toolAvailability.ts` 负责识别当前客户端并过滤首页工具列表与路由。
-
-## 文档
-
-- [CLAUDE.md](CLAUDE.md) — Claude Code 项目指南
-- [docs/](docs/) — 设计文档和规范
+| 文档 | 内容 |
+| ------ | ------ |
+| [AGENTS.md](./AGENTS.md) | **开发约定**：目录边界、IPC 规范、编码规范、设计系统硬性要求 |
+| [DESIGN.md](./DESIGN.md) | **UI 设计**：设计令牌、半透明窗口透明度体系、UI 组件库、布局与动效 |
+| [CLAUDE.md](./CLAUDE.md) | 入口指引（指向上述两份权威文档） |
+| [docs/wxp-enhancer.md](./docs/wxp-enhancer.md) | WXP 增强模块记忆：目标应用逆向、注入脚本约束、验证手法 |
+| [docs/interceptor.md](./docs/interceptor.md) | 拦截器模块说明 |
+| [docs/offline-pack.md](./docs/offline-pack.md) | 离线包下载模块说明 |

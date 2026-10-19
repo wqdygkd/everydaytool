@@ -390,7 +390,7 @@ onUnmounted(() => {
   grid-template-columns: 300px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
-  background: var(--color-app-bg);
+  background: var(--color-canvas);
 }
 .env-list {
   display: flex;
@@ -414,7 +414,7 @@ onUnmounted(() => {
 }
 .tab-bar {
   border-bottom: 1px solid var(--color-border-light);
-  background: var(--color-surface);
+  background: var(--color-raised);
   padding: var(--spacing-sm) var(--spacing-sm) 0;
   :deep(.el-tabs__header) {
     margin: 0;
@@ -433,7 +433,7 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
+  background: var(--color-raised);
   position: relative;
 }
 .empty-browser {

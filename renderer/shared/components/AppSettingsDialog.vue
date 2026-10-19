@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../../shared/app'
+import type { MacVibrancy, WindowMaterial } from '../../../shared/appearance'
+import { useAppearance } from '../composables/useAppearance'
 import { appIpcChannels, invokeAppIpc } from '../ipc/useAppIpc'
 
 const props = defineProps({ modelValue: Boolean })
@@ -9,6 +11,8 @@ const visible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
+
+const { appearance, capabilities, load: loadAppearance, update: updateAppearance } = useAppearance()
 
 const info = ref<AppDataDirectoryInfo | null>(null)
 const usage = ref<DataRootUsage | null>(null)
@@ -20,8 +24,53 @@ watch(visible, (open) => {
   if (open) {
     loadInfo()
     loadUsage()
+    loadAppearance()
   }
 })
+
+// ── 窗口外观 ──
+// 平台能力由主进程给出：不支持半透明的平台直接禁用整组，而不是给一个点了没反应的开关。
+const isTransparentEnabled = computed(() => capabilities.value?.supportsTransparent === true)
+const isMaterialEnabled = computed(() => capabilities.value?.supportsMaterial === true)
+const isVibrancyEnabled = computed(() => (capabilities.value?.vibrancies.length ?? 0) > 0)
+const materialOptions = computed<Array<{ value: WindowMaterial, label: string, description: string }>>(() => [
+  { value: 'mica', label: 'Mica', description: '壁纸取色的长驻窗口背景' },
+  { value: 'acrylic', label: '亚克力', description: '更强的模糊与透光，偏向临时浮层' },
+  { value: 'tabbed', label: 'Tabbed', description: '带页签标题栏的弱化材质' },
+])
+const vibrancyOptions = computed<Array<{ value: MacVibrancy, label: string, description: string }>>(() => [
+  { value: 'sidebar', label: '侧栏', description: '接近系统侧栏的浅色模糊' },
+  { value: 'hud', label: 'HUD', description: '高对比深色浮动面板' },
+  { value: 'under-window', label: '窗下', description: '窗口背后的柔和模糊' },
+  { value: 'fullscreen-ui', label: '全屏 UI', description: '全屏界面用的轻模糊' },
+])
+
+const appearanceHint = computed(() => {
+  if (!capabilities.value) return ''
+  if (!capabilities.value.supportsTransparent) {
+    return '当前系统不支持半透明窗口（Linux 需合成器支持），该选项已禁用。'
+  }
+  if (appearance.value?.enabled) {
+    return '卡片、输入框与表格仍保持不透明以保证可读性；仅窗口画布与顶栏透出桌面。'
+  }
+  return '开启后窗口画布透出桌面壁纸，可再选择系统背景材质。'
+})
+
+async function toggleTransparent(value: boolean) {
+  await updateAppearance({ enabled: value })
+}
+
+async function selectMaterial(material: WindowMaterial) {
+  await updateAppearance({ material })
+}
+
+async function selectVibrancy(vibrancy: MacVibrancy) {
+  await updateAppearance({ vibrancy })
+}
+
+// 开关用 :model-value + @change 直接走 IPC：appearance 允许为 null（未加载），
+// 不能对它做 v-model 双向绑定。
+const transparentOn = computed(() => appearance.value?.enabled === true)
 
 async function loadInfo() {
   try {
@@ -166,6 +215,57 @@ function formatBytes(bytes: number): string {
     </section>
 
     <section class="settings-section">
+      <h3>窗口外观</h3>
+      <UiSwitchField :model-value="transparentOn" :disabled="!isTransparentEnabled" align="start" @update:model-value="toggleTransparent">
+        半透明窗口
+        <template v-if="!isTransparentEnabled">
+          （当前系统不支持）
+        </template>
+      </UiSwitchField>
+      <UiHint block>
+        {{ appearanceHint }}
+      </UiHint>
+
+      <div v-if="isTransparentEnabled && appearance?.enabled" class="material-picker">
+        <template v-if="isMaterialEnabled">
+          <span class="material-label">系统材质</span>
+          <div class="material-options">
+            <button
+              v-for="option in materialOptions"
+              :key="option.value"
+              type="button"
+              class="material-option"
+              :class="{ 'is-active': appearance.material === option.value }"
+              @click="selectMaterial(option.value)"
+            >
+              <span class="material-name">{{ option.label }}</span>
+              <span class="material-desc">{{ option.description }}</span>
+            </button>
+          </div>
+        </template>
+        <template v-else-if="isVibrancyEnabled">
+          <span class="material-label">系统材质</span>
+          <div class="material-options">
+            <button
+              v-for="option in vibrancyOptions"
+              :key="option.value"
+              type="button"
+              class="material-option"
+              :class="{ 'is-active': appearance.vibrancy === option.value }"
+              @click="selectVibrancy(option.value)"
+            >
+              <span class="material-name">{{ option.label }}</span>
+              <span class="material-desc">{{ option.description }}</span>
+            </button>
+          </div>
+        </template>
+        <UiHint v-else block>
+          当前系统没有可用的系统背景材质，仅窗口画布会透出桌面。
+        </UiHint>
+      </div>
+    </section>
+
+    <section class="settings-section">
       <h3>清理缓存</h3>
       <UiHint block>
         清除沙箱浏览器产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
@@ -211,6 +311,64 @@ function formatBytes(bytes: number): string {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   word-break: break-all;
+}
+
+/* 材质选择：卡片式单选（比 el-radio 更容易表达「这是哪种视觉」） */
+.material-picker {
+  margin-top: var(--spacing-md);
+}
+
+.material-label {
+  display: block;
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.material-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.material-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+
+  &:hover {
+    border-color: var(--color-border);
+  }
+
+  &.is-active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+.material-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.material-desc {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
 }
 
 .usage-summary {

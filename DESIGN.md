@@ -1,6 +1,6 @@
 # everydaytool UI 设计文档
 
-> 本文档描述 everydaytool（edt）的视觉语言、设计令牌与 UI 组件规范，是界面开发与评审的单一权威参考。实现细节（令牌定义、全局样式）位于 [`renderer/shared/styles/main.scss`](renderer/shared/styles/main.scss)，组件源码位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)。
+> 本文档描述 everydaytool（edt）的视觉语言、设计令牌与 UI 组件规范，是界面开发与评审的单一权威参考。实现细节（令牌定义、全局样式）位于 [`renderer/shared/styles/`](renderer/shared/styles/)（入口 `main.scss`，令牌 `tokens.scss`，半透明层 `translucency.scss`），组件源码位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)。
 
 ## 1. 设计原则与视觉语言
 
@@ -16,7 +16,7 @@
 固定浅色主题，核心色板如下：
 
 | 角色 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | 品牌蓝（Primary） | `#3390ec` | 主按钮、链接、选中态、焦点环 |
 | 画布（App BG） | `#f4f4f5` | 应用背景、工具页底色 |
 | 表面（Surface） | `#ffffff` | 卡片、面板、输入框、表格 |
@@ -27,12 +27,12 @@
 
 ## 3. 设计令牌
 
-令牌统一定义在 `main.scss` 的 `:root`。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
+令牌定义在 `renderer/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → element-plus → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
 
 ### 3.1 颜色
 
 | 令牌 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--color-primary` | `#3390ec` | 品牌蓝（唯一强调色） |
 | `--color-primary-hover` | `#4a95d6` | 主按钮 hover |
 | `--color-primary-soft` | `rgba(51,144,236,.1)` | 选中行 / 选中项浅底 |
@@ -40,20 +40,40 @@
 | `--color-success` | `#10b981` | 成功 / 运行态 |
 | `--color-warning` | `#f59e0b` | 警告 / 固定标记 |
 | `--color-error` | `#ef4343` | 错误 / 危险操作 |
-| `--color-app-bg` | `#f4f4f5` | 画布 / 工具页底 |
-| `--color-surface` | `#ffffff` | 基础表面（表格行、编辑器卡片） |
-| `--color-surface-raised` | `#ffffff` | 浮岛表面（卡片/面板，与 surface 成语义对） |
-| `--color-muted` | `#f4f4f5` | hover 填充、灰底面版、表头 |
+| `--color-app-bg` | `#f4f4f5` | 画布兜底色（实际画布为透明，见 7.1.1） |
+| `--color-on-solid` | `#ffffff` | 实底上的前景白（绿底徽章白字 / 头像字母 / 白分隔线），不随透明度变 |
 | `--color-border-light` | `#e4e4e5` | 细分隔线、卡片描边 |
 | `--color-border` | `#dadce0` | 输入边框 |
 | `--color-text-primary` | `#000000` | 主文本 |
 | `--color-text-secondary` | `#707579` | 次级文本 / 弱化 |
 | `--color-text-tertiary` | `#686c72` | 元信息 / 时间戳 |
 
+### 3.1.1 半透明表面角色（颜色 × alpha 两层）
+
+每个表面角色拆成「基准色（`--color-<role>-base`）× 透明度（`--alpha-<role>`）」，
+两者在 `translucency.scss` 里用 `color-mix` 合成出 `--color-<role>` 供组件引用。
+**新增角色需同时改三处**：tokens.scss 的 base + alpha，translucency.scss 的合成与各模式取值。
+
+| 角色 | 用途 | 独立调节入口 |
+| ------ | ------ | ------------- |
+| `raised` | 卡片 / 面板 / 浮岛 | `--alpha-raised` |
+| `input` | 其余非弹出层 el 控件（树 / 上传 / 日历 / 搜索框 UiSearchInput） | `--alpha-input` |
+| `field` | 通用表单输入框（el-input / textarea / select） | `--alpha-field` |
+| `table` | 表格行（el-table 的 tr） | `--alpha-table` |
+| `button` | 普通按钮（玻璃钮；primary/danger 实心钮不走此角色） | `--alpha-button` |
+| `fill` | 灰调填充（表头 / 行 hover / 灰底面版） | `--alpha-fill` |
+| `header` | 标题栏 | `--alpha-header` |
+| `pop` | 下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） | `--alpha-pop` |
+| `overlay` | 其它弹层（dialog / message / notification） | `--alpha-overlay` |
+| `canvas` | 画布 | 不参与 alpha，恒为 `transparent` |
+
+> 所有基准色除 `fill` 为 `#f4f4f5` 外均为 `#ffffff`；默认（不透明）模式下 alpha 全为 `1`。
+> 各模式的 alpha 取值见 §7.1.1。
+
 ### 3.2 字阶与字体
 
 | 令牌 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--font-size-xs` | `11px` | 徽章、表格辅助、代码 |
 | `--font-size-sm` | `12px` | 说明、键值、表格正文 |
 | `--font-size-base` | `14px` | 正文、面板标题 |
@@ -67,7 +87,7 @@
 **字体栈**
 
 | 用途 | 字体 |
-|------|------|
+| ------ | ------ |
 | 正文 UI | `Roboto`(400/500，自托管) + 系统中文字体（PingFang SC / Microsoft YaHei 等） |
 | 等宽 / 数字 | `--font-mono`：Cascadia Mono / Roboto Mono / SF Mono / Menlo / Consolas |
 | 字母头像 / 品牌标 | `Nunito` ExtraBold 800 |
@@ -79,7 +99,7 @@
 `--spacing-*` 阶梯（唯一间距来源，禁止魔法数字）：
 
 | 令牌 | 值 | 令牌 | 值 |
-|------|-----|------|-----|
+| ------ | ----- | ------ | ----- |
 | `--spacing-xs` | `4px` | `--spacing-xl` | `20px` |
 | `--spacing-sm` | `8px` | `--spacing-2xl` | `24px` |
 | `--spacing-md` | `12px` | `--spacing-3xl` | `32px` |
@@ -90,7 +110,7 @@
 ### 3.4 几何外壳
 
 | 令牌 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--control-height` | `32px` | 表单控件 / 图标按钮统一高度 |
 | `--line-height-control` | `20px` | 控件 / 表格 / 徽标统一行高 |
 | `--content-max-width` | `1360px` | 首页内容最大宽 |
@@ -101,7 +121,7 @@
 圆角阶梯：
 
 | 令牌 | 值 | 对应 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--radius-xs` | `8px` | 小件（图标钮 hover 底、代码块） |
 | `--radius-sm` | `12px` | 控件（输入框、编辑器卡片、弹层菜单） |
 | `--radius-md` | `16px` | 行 / 菜单（弹层、消息） |
@@ -113,29 +133,39 @@
 ### 3.6 阴影
 
 | 令牌 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--shadow-sm` | `0 1px 2px rgba(0,0,0,.05)` | 浮岛卡片 / 面板 |
 | `--shadow-md` | `0 8px 22px rgba(0,0,0,.08)` | 菜单、FAB、消息 |
 | `--shadow-lg` | `0 16px 32px rgba(0,0,0,.12)` | 对话框、批量操作栏 |
 | `--shadow-focus` | `0 0 0 3px rgba(255,109,56,.2)` | 键盘焦点环 |
+| `--shadow-window-frame` | `0 12px 48px rgba(0,0,0,.28)` | 半透明窗口的外阴影（补偿丢失的系统投影） |
 
 ### 3.7 过渡
 
 | 令牌 | 值 | 用途 |
-|------|-----|------|
+| ------ | ----- | ------ |
 | `--transition-fast` | `0.15s cubic-bezier(.25,1,.5,1)` | 微交互（图标钮、页签、chip） |
 | `--transition-base` | `0.25s cubic-bezier(.33,1,.68,1)` | 卡片 hover、边框过渡 |
 
 ## 4. Element Plus 绑定
 
-`--el-*` 变量在 `main.scss` 的 `:root` 中绑定到设计令牌，使 Element Plus 组件（按钮、输入框、表格、弹层、消息等）自动继承主题：
+`--el-*` 变量在 `element-plus.scss` 的 `:root` 中绑定到设计令牌，使 Element Plus 组件（按钮、输入框、表格、弹层、消息等）自动继承主题：
 
 - `--el-color-primary` → `--color-primary`，及其 light/dark 阶梯派生色。
 - `--el-border-color` / `-light` / `-lighter` → 边框令牌。
-- `--el-bg-color` / `-overlay` / `--el-fill-color-blank` → `--color-surface-raised`；`--el-fill-color-light` → `--color-muted`。
+- `--el-bg-color` / `--el-fill-color-blank` → `--color-input`（EP 内部 tree / upload / calendar 等共用此入口）。
+- `--el-fill-color-light` / `-lighter` → `--color-fill`（灰调填充）。
+- `--el-bg-color-overlay` → `--color-overlay`（弹层）；下拉类浮层另行覆盖为 `--color-pop`。
+- 表格：`--el-table-tr-bg-color` → `--color-table`，表头 / 行 hover → `--color-fill`。
+- 输入框：`.el-input__wrapper` / `.el-textarea__inner` / `.el-select__wrapper` 的 `background` → `--color-field`
+  （`.el-input__inner` 本身是 `background: none`，底色只由 wrapper 提供）。
+- 按钮：`--el-button-bg-color` / `-hover-bg-color` → `--color-button`（primary/danger 实心钮单独覆盖为品牌色）。
 - `--el-text-color-primary/regular/secondary` → 文本令牌。
 - `--el-box-shadow` / `-light` → 阴影令牌。
 - `--el-mask-color` → `rgba(0,0,0,.25)`（弹层遮罩）。
+
+> **不要写死静态色**：`--color-*` 合成变量之外的实色（如 `#fff`）会在半透明窗口下变成「死白」，
+> 与周围半透明表面脱节。新增 EP 覆写时务必接到对应角色上。
 
 **覆写原则**：只在局部覆写几何差异（高度 / 圆角 / 边框宽度），颜色与状态一律交全局绑定；视觉不一致时优先改全局绑定，不要单点堆 `:deep`。
 
@@ -146,18 +176,18 @@
 ### 5.1 布局
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiPanel` | `title`、`variant`（`raised` 浮岛 / `outlined` 描边）、`padding`、`titleSize`（`sm`/`lg`）、`shadow`（`sm`/`md`）、`#title` / `#actions` 插槽 | 基础卡片 / 面板。`raised` = surface-raised + radius-lg + shadow；`outlined` = surface-raised + border-light + radius-lg |
 | `UiGroup` | `gap`（xs/sm/md/lg）、`align`、`justify`、`block`、`direction`（row/column）、`wrap` | 行内 / 纵向控件组，替代裸 `display:flex` 布局 |
 | `UiToolbar` | `bordered`、`surface`、`wrap`、`gap`、`padding`、`flush`、`#end` 插槽 | 工具条：默认插槽放左，`#end` 放右；`flush` 去除 EP 按钮原生左边距 |
 | `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
-| `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（带下分隔线 + 计数） |
+| `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
 
 ### 5.2 数据展示
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiKeyValue` | `label`、`labelWidth`（64px）、`mono`、`wrap`、`muted`、`#actions` 插槽 | 键值行（顶部分隔线式，label 左 / value 右） |
 | `UiDetailItem` | `label`、`mono`、`wrap`、`size`（sm/xs） | 详情卡片单项（label 上 / value 下，描边卡片） |
 | `UiCodeBlock` | `maxHeight`（200px）、`wrap` | 等宽代码块（app-bg 底 + radius-sm + 滚动） |
@@ -167,14 +197,14 @@
 ### 5.3 徽章 / 状态
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`mono` | 小胶囊徽章；`success` 为实底绿白字（未读徽章式） |
 | `UiStatusTag` | `tone`（neutral/success/warning/danger）、`pulsing` | 状态点（10px 圆点）；`pulsing` 呼吸光环 |
 
 ### 5.4 表单与输入
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiPathField` | `modelValue`、`placeholder`、`disabled`、`mono`、`#actions` 插槽 | 路径输入（等宽 + 右侧动作） |
 | `UiSwitchField` | `modelValue`、`disabled`、`align` | 开关 + 说明文字的组合 |
 | `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 圆角（42px 大搜索），`box` 方形（32px 面板内搜索） |
@@ -183,7 +213,7 @@
 ### 5.5 图标 / 按钮 / 头像
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiIcon` | `name`、`size`（16）、`strokeWidth` | 线性 stroke 图标（`icons.ts` 统一名表） |
 | `UiIconButton` | `icon`、`size`（32）、`active`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮 |
 | `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
@@ -193,14 +223,14 @@
 ### 5.6 反馈
 
 | 组件 | Props / 变体 | 说明 |
-|------|-------------|------|
+| ------ | ------------- | ------ |
 | `UiDialog` | `modelValue`、`title`、`width`（560px）、`destroyOnClose`、`closeOnClickModal`、`#footer` 插槽 | 模态框（radius-xl + shadow-lg）；footer 保留 EP 原生按钮间距 |
 | `UiListCard` | `active` | 可点列表卡片（hover / 选中 = 品牌浅底 + 品牌描边） |
 
 ### 5.7 通用状态约定
 
 | 状态 | 表现 |
-|------|------|
+| ------ | ------ |
 | hover | 卡片浮岛 hover 变浅底或抬描边；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
 | active / 选中 | 品牌橙描边 + `--color-primary-soft` 浅底（列表卡、行、分段钮）；固定/警示用 warning |
 | focus | `--shadow-focus` 橙色内环（输入框为橙边框 + 无外发光） |
@@ -209,7 +239,7 @@
 ## 6. 通用工具类
 
 | 类 | 用途 |
-|----|------|
+| ---- | ------ |
 | `.tool-page` | 工具页容器：填充主区域并在内部滚动 |
 | `.muted` | 弱化文本（`--color-text-secondary`） |
 | `.mono` | 等宽数字字体（`--font-mono` + tabular-nums） |
@@ -224,9 +254,63 @@
 
 - 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，primary-light 底 + primary 字）+ 工具页签（圆角高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
 - 标题栏整行 `-webkit-app-region: drag`，页签区 no-drag。
+- **标题栏默认无背景色**：不铺实色、不加分隔线，透出窗口画布；分层靠内容区上边界与原生窗口按钮。Windows 的 `titleBarOverlay` 底色同样设 `#00000000`，避免右上角露出一块实色矩形（见 `electron/main.ts` 的 `TITLEBAR_COLORS`）。
+- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: blur(16px)` 稳住原生按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
 - 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
 - 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
 - 主区 `flex:1; min-height:0`，滚动只发生在内容区。
+
+#### 7.1.1 半透明窗口
+
+窗口外观（半透明 / 系统材质）由用户在「应用设置 → 窗口外观」切换，主进程是唯一事实来源
+（`userData/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
+
+##### 透明度统一控制（`renderer/shared/styles/translucency.scss`）
+
+**颜色与透明度分离**：`tokens.scss` 定义各表面角色的不透明基准色（`--color-<role>-base`）与默认 alpha，
+`translucency.scss` 按窗口模式覆写 alpha（`--alpha-*`），并在 `:root` 用 `color-mix` 合成出
+`--color-<role>` 供组件引用。
+
+- 九个透明角色：`raised` / `input` / `field` / `table` / `button` / `fill` / `header` / `pop` / `overlay`，
+  各自的职责与调节入口见 §3.1.1。
+- **画布不参与 alpha**：`--color-canvas` 恒为 `transparent`——工具页与主页同一观感，透出窗口 / 桌面；
+  半透明窗口的「透」由画布承担，各模式只在其余角色上做区分。
+- **组件只引用合成变量**，永远不写死 `rgba`，也不关心当前是哪种模式。
+- **新增模式 = 加一条模式规则**覆写该模式的一组 alpha，组件零改动。
+- 默认（不透明）模式 alpha 全为 `1`，视觉与旧版完全一致。
+
+> `field` / `table` / `button` / `input` 四档当前初始值相同，但**刻意分开**：
+> 这样单独调某一类控件的透明度时不必牵动其它控件。
+
+各模式取值：
+
+| 模式 | raised | input | field | table | button | fill | header | pop | overlay |
+| ------ | -------- | ------- | ------- | ------- | -------- | ------ | -------- | ----- | --------- |
+| 默认（不透明） | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
+| acrylic | .78 | .88 | .88 | .88 | .88 | .80 | .60 | .94 | .92 |
+| mica | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
+| tabbed | .98 | .99 | .99 | .99 | .99 | .98 | .98 | 1 | 1 |
+| vibrancy（mac） | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
+| 纯 transparent（无材质） | .88 | .93 | .93 | .93 | .93 | .90 | .88 | .96 | .96 |
+
+取值原则：控件类（input / field / table / button）比卡片（raised）更实，避免边框与背后内容打架；
+`pop` 最实，因为下拉贴在输入框下方、底下压着密集表单内容；`header` 在 acrylic 下最透（材质效果最强）。
+
+其他约定：
+
+- **必须同时放行 alpha**：`html` / `body` 的默认底色会盖住原生透明通道，
+  `base.scss` 已把它们设为 `transparent`；漏掉这一步界面看起来毫无变化（最常见的坑）。
+- **弹层必须靠 `<html>` 拿变量**：EP 的弹层全部 teleport 到 body，不在 `.app-shell` 内。
+  模式类因此由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`，`translucency.scss` 的 `mode()` mixin
+  同时匹配两处；`--color-*` 合成变量也定义在 `:root` 而非 `.app-shell`。
+  只在 `.app-shell` 上定义会导致下拉 / 弹窗全部变成透明（曾踩过的坑）。
+- **系统投影补偿**：透明窗口没有原生阴影，用 `--shadow-window-frame` 补回浮起感。
+- **首页与工具页画布一律透明**，不再有「只铺工具页」的区别。
+- **平台能力**（见 `shared/appearance.ts`）：win32 走 `backgroundMaterial`
+  （mica / acrylic / tabbed，需 22H2+），darwin 走 `vibrancy`，二者与 `transparent` 互斥；
+  Linux 不声明支持（依赖合成器）。能力表同时驱动设置面板里选项的禁用态。
+- **生效时机**：`transparent` / `vibrancy` / `backgroundMaterial` 只在窗口构造时生效，
+  因此外观必须先于 `createWindow` 读盘；运行期切换只能改 CSS 与部分原生 setter。
 
 ### 7.2 首页工具网格
 
@@ -249,7 +333,7 @@
 
 ### 7.5 表格
 
-- 统一用 `el-table`（`size="small"`），表头 `--color-muted`、行 hover `--color-muted`、容器 `radius-lg` 由全局绑定。
+- 统一用 `el-table`（`size="small"`），表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg` 由全局绑定。
 - 数字列用 `.mono`，时间列用 `.muted`，状态列用 `el-tag` 或 `UiChip`。
 
 ## 8. 交互与动效

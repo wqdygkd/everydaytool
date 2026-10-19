@@ -21,8 +21,6 @@ defineProps<{
   align-items: center;
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--color-border-light);
 
   h2 {
     margin: 0;
