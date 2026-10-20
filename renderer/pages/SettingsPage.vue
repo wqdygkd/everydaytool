@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../../shared/app'
-import type { MacVibrancy, WindowMaterial } from '../../../shared/appearance'
-import { useAppearance } from '../composables/useAppearance'
-import { appIpcChannels, invokeAppIpc } from '../ipc/useAppIpc'
+import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../shared/app'
+import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
+import { useAppearance } from '../shared/composables/useAppearance'
+import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
 
-const props = defineProps({ modelValue: Boolean })
-const emit = defineEmits(['update:modelValue'])
-
-const visible = computed({
-  get: () => props.modelValue,
-  set: value => emit('update:modelValue', value),
-})
-
+// 应用设置页：作为应用页签打开（见 config/app-tabs.ts），不再是模态对话框——
+// 设置项里有数据目录、空间占用这类需要边看边操作的内容，占满一屏比弹窗更好用。
 const { appearance, capabilities, load: loadAppearance, update: updateAppearance } = useAppearance()
 
 const info = ref<AppDataDirectoryInfo | null>(null)
@@ -20,30 +14,48 @@ const usageLoading = ref(false)
 const changing = ref(false)
 const cleaning = ref(false)
 
-watch(visible, (open) => {
-  if (open) {
-    loadInfo()
-    loadUsage()
-    loadAppearance()
-  }
-})
-
 // ── 窗口外观 ──
 // 平台能力由主进程给出：不支持半透明的平台直接禁用整组，而不是给一个点了没反应的开关。
 const isTransparentEnabled = computed(() => capabilities.value?.supportsTransparent === true)
 const isMaterialEnabled = computed(() => capabilities.value?.supportsMaterial === true)
 const isVibrancyEnabled = computed(() => (capabilities.value?.vibrancies.length ?? 0) > 0)
-const materialOptions = computed<Array<{ value: WindowMaterial, label: string, description: string }>>(() => [
+
+// 开关状态：appearance 允许为 null（尚未加载完成），故收敛成 boolean 后由模板用
+// :model-value + @update 显式提交 IPC——不对 appearance 本身做 v-model 双向绑定。
+const transparentOn = computed(() => appearance.value?.enabled === true)
+const testWallpaperOn = computed(() => appearance.value?.testWallpaper === true)
+
+interface MaterialChoice {
+  /** 材质标识：Windows 落在 material 字段，macOS 落在 vibrancy 字段，值域互不重叠 */
+  value: WindowMaterial | MacVibrancy
+  label: string
+  description: string
+}
+
+// 两套平台的材质字段不同（Windows 走 DWM material，macOS 走 vibrancy），
+// 但交互完全一致——一张卡片单选。故统一成同一份选项结构，由平台能力挑一路渲染。
+const MATERIAL_CHOICES: MaterialChoice[] = [
   { value: 'mica', label: 'Mica', description: '壁纸取色的长驻窗口背景' },
   { value: 'acrylic', label: '亚克力', description: '更强的模糊与透光，偏向临时浮层' },
   { value: 'tabbed', label: 'Tabbed', description: '带页签标题栏的弱化材质' },
-])
-const vibrancyOptions = computed<Array<{ value: MacVibrancy, label: string, description: string }>>(() => [
+]
+const VIBRANCY_CHOICES: MaterialChoice[] = [
   { value: 'sidebar', label: '侧栏', description: '接近系统侧栏的浅色模糊' },
   { value: 'hud', label: 'HUD', description: '高对比深色浮动面板' },
   { value: 'under-window', label: '窗下', description: '窗口背后的柔和模糊' },
   { value: 'fullscreen-ui', label: '全屏 UI', description: '全屏界面用的轻模糊' },
-])
+]
+
+const materialChoices = computed<MaterialChoice[]>(() => {
+  if (isMaterialEnabled.value) return MATERIAL_CHOICES
+  if (isVibrancyEnabled.value) return VIBRANCY_CHOICES
+  return []
+})
+
+// 当前选中的材质：与 materialChoices 同源，两路字段互斥，取生效的那一路即当前值
+const selectedMaterial = computed(() =>
+  (isMaterialEnabled.value ? appearance.value?.material : appearance.value?.vibrancy) ?? 'none',
+)
 
 const appearanceHint = computed(() => {
   if (!capabilities.value) return ''
@@ -51,7 +63,7 @@ const appearanceHint = computed(() => {
     return '当前系统不支持半透明窗口（Linux 需合成器支持），该选项已禁用。'
   }
   if (appearance.value?.enabled) {
-    return '卡片、输入框与表格仍保持不透明以保证可读性；仅窗口画布与顶栏透出桌面。'
+    return '各表面按当前材质的 alpha + 玻璃档位透出桌面；可用下方「测试壁纸」比对磨砂程度。'
   }
   return '开启后窗口画布透出桌面壁纸，可再选择系统背景材质。'
 })
@@ -60,17 +72,18 @@ async function toggleTransparent(value: boolean) {
   await updateAppearance({ enabled: value })
 }
 
-async function selectMaterial(material: WindowMaterial) {
-  await updateAppearance({ material })
+async function chooseMaterial(value: WindowMaterial | MacVibrancy) {
+  // 选项值来自上面两路的并集，这里按当前生效的那一路收回各自字段
+  if (isMaterialEnabled.value) await updateAppearance({ material: value as WindowMaterial })
+  else await updateAppearance({ vibrancy: value as MacVibrancy })
 }
 
-async function selectVibrancy(vibrancy: MacVibrancy) {
-  await updateAppearance({ vibrancy })
+// 测试壁纸：纯 CSS 的调试辅助，与平台能力 / 半透明开关都无关，
+// 因此不受 isTransparentEnabled / isMaterialEnabled 约束——不透明窗口下也能开，
+// 用来检查卡片底色压在高对比背景上是否还够干净。
+async function toggleTestWallpaper(value: boolean) {
+  await updateAppearance({ testWallpaper: value })
 }
-
-// 开关用 :model-value + @change 直接走 IPC：appearance 允许为 null（未加载），
-// 不能对它做 v-model 双向绑定。
-const transparentOn = computed(() => appearance.value?.enabled === true)
 
 async function loadInfo() {
   try {
@@ -118,7 +131,7 @@ async function selectDirectory() {
     info.value = result
     if (result.changed) {
       ElMessage.success('数据目录已更新')
-      loadUsage()
+      void loadUsage()
     } else {
       ElMessage.info('目录未发生变化')
     }
@@ -166,12 +179,25 @@ function formatBytes(bytes: number): string {
   const text = exponent === 0 || Number.isInteger(value) ? String(value) : value.toFixed(1)
   return `${text} ${units[exponent]}`
 }
+
+// 页签常驻挂载（切走只是 v-show 隐藏），因此只在首次挂载时拉一次数据；
+// 之后由各操作自己触发刷新（改目录 / 清缓存后各刷一次）。
+onMounted(() => {
+  void loadInfo()
+  void loadUsage()
+  void loadAppearance()
+})
 </script>
 
 <template>
-  <UiDialog v-model="visible" title="应用设置" width="600px">
-    <section class="settings-section">
-      <h3>数据目录</h3>
+  <div class="settings-page tool-page">
+    <!-- 不再放「应用设置」大标题：页签本身已经叫「设置」，
+         标题会与页签重复一行。这里只留一句总说明，各面板自带小标题。 -->
+    <UiHint class="settings-lead">
+      数据目录、空间占用与窗口外观等应用级配置；这里的改动立即生效。
+    </UiHint>
+
+    <UiPanel title="数据目录">
       <div class="directory-row">
         <span class="directory-path mono">{{ info?.dataDirectory }}</span>
         <UiChip>{{ info?.isCustom ? '自定义' : '默认' }}</UiChip>
@@ -187,17 +213,14 @@ function formatBytes(bytes: number): string {
       <UiHint block>
         所有工具的数据库、配置与产出都存放在此目录；更改后立即生效，已有数据不会自动迁移到新目录。
       </UiHint>
-    </section>
+    </UiPanel>
 
-    <section class="settings-section">
-      <UiToolbar>
-        <h3>空间占用</h3>
-        <template #end>
-          <el-button link size="small" :disabled="usageLoading" @click="loadUsage">
-            刷新
-          </el-button>
-        </template>
-      </UiToolbar>
+    <UiPanel title="空间占用">
+      <template #actions>
+        <el-button link size="small" :disabled="usageLoading" @click="loadUsage">
+          刷新
+        </el-button>
+      </template>
       <p v-if="usage" class="usage-summary">
         总计 <span class="mono">{{ formatBytes(usage.totalBytes) }}</span>
         <span class="muted">·</span>
@@ -212,10 +235,9 @@ function formatBytes(bytes: number): string {
       <UiHint v-if="usageLoading" block>
         正在计算磁盘占用…
       </UiHint>
-    </section>
+    </UiPanel>
 
-    <section class="settings-section">
-      <h3>窗口外观</h3>
+    <UiPanel title="窗口外观">
       <UiSwitchField :model-value="transparentOn" :disabled="!isTransparentEnabled" align="start" @update:model-value="toggleTransparent">
         半透明窗口
         <template v-if="!isTransparentEnabled">
@@ -227,32 +249,16 @@ function formatBytes(bytes: number): string {
       </UiHint>
 
       <div v-if="isTransparentEnabled && appearance?.enabled" class="material-picker">
-        <template v-if="isMaterialEnabled">
+        <template v-if="materialChoices.length > 0">
           <span class="material-label">系统材质</span>
           <div class="material-options">
             <button
-              v-for="option in materialOptions"
+              v-for="option in materialChoices"
               :key="option.value"
               type="button"
               class="material-option"
-              :class="{ 'is-active': appearance.material === option.value }"
-              @click="selectMaterial(option.value)"
-            >
-              <span class="material-name">{{ option.label }}</span>
-              <span class="material-desc">{{ option.description }}</span>
-            </button>
-          </div>
-        </template>
-        <template v-else-if="isVibrancyEnabled">
-          <span class="material-label">系统材质</span>
-          <div class="material-options">
-            <button
-              v-for="option in vibrancyOptions"
-              :key="option.value"
-              type="button"
-              class="material-option"
-              :class="{ 'is-active': appearance.vibrancy === option.value }"
-              @click="selectVibrancy(option.value)"
+              :class="{ 'is-active': selectedMaterial === option.value }"
+              @click="chooseMaterial(option.value)"
             >
               <span class="material-name">{{ option.label }}</span>
               <span class="material-desc">{{ option.description }}</span>
@@ -263,39 +269,59 @@ function formatBytes(bytes: number): string {
           当前系统没有可用的系统背景材质，仅窗口画布会透出桌面。
         </UiHint>
       </div>
-    </section>
 
-    <section class="settings-section">
-      <h3>清理缓存</h3>
+      <div class="wallpaper-toggle">
+        <UiSwitchField :model-value="testWallpaperOn" align="start" @update:model-value="toggleTestWallpaper">
+          测试壁纸
+          <template v-if="!appearance?.enabled">
+            （半透明未开启，仅预览底色）
+          </template>
+        </UiSwitchField>
+        <UiHint block>
+          在窗口最底层铺一张高对比色块假壁纸，用于比对卡片 / 浮层 / 标题栏的磨砂与透视程度；
+          关闭后恢复透出真实桌面。
+        </UiHint>
+      </div>
+    </UiPanel>
+
+    <UiPanel title="清理缓存">
       <UiHint block>
         清除沙箱浏览器产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
       </UiHint>
       <el-button :loading="cleaning" @click="clearCache">
         清除缓存
       </el-button>
-    </section>
-  </UiDialog>
+    </UiPanel>
+  </div>
 </template>
 
 <style scoped lang="scss">
-.settings-section {
-  & + & {
-    margin-top: var(--spacing-lg);
-    padding-top: var(--spacing-lg);
-    border-top: 1px solid var(--color-border-light);
-  }
+/* 页面级宽度：设置项不需要铺满整个窗口，长行（路径 / 用量）反而更难读。
+   内边距与首页一致（2xl / 3xl），保证与其它页面同一留白节奏。 */
+.settings-page {
+  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
 
-  h3 {
-    margin: 0 0 var(--spacing-sm);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+  > :deep(*) {
+    max-width: 760px;
+    margin-right: auto;
+    margin-left: auto;
   }
 }
 
-/* UiToolbar 行内的 h3 不需要节标题的默认下边距 */
-.settings-section .ui-toolbar h3 {
-  margin-bottom: 0;
+@media (max-width: 640px) {
+  .settings-page {
+    padding: var(--spacing-2xl) var(--spacing-lg) var(--spacing-3xl);
+  }
+}
+
+/* 引导说明：不是块级（不需要 margin-top），只与首个面板拉开距离 */
+.settings-lead {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* 面板之间留出区块间距（UiPanel 自身不带外边距） */
+.settings-page > :deep(.ui-panel + .ui-panel) {
+  margin-top: var(--spacing-lg);
 }
 
 .directory-row {
@@ -324,6 +350,13 @@ function formatBytes(bytes: number): string {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
+}
+
+/* 测试壁纸开关：与上方的半透明 / 材质选项之间留出分隔，表明它是独立的调试项 */
+.wallpaper-toggle {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .material-options {

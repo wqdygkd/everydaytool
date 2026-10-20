@@ -41,6 +41,32 @@
   --alpha-pop: 1; /* 下拉类浮层 */
   --alpha-overlay: 1; /* 其它弹层 */
 
+  /* ── 玻璃质感（backdrop-filter）体系 ──
+     与 alpha 同一套「表面角色」，但决定的是「多糊」而不是「多透」：
+     alpha 小 = 看得见背后，--glass-* 大 = 背后被磨平，两者配合才成玻璃。
+     默认 none：不透明窗口背后没有内容可糊，且 backdrop-filter 会为每个元素
+     创建 backdrop root（有合成开销），不开就是零成本。
+     各窗口模式在 translucency.scss 按角色独立覆写；消费端一律写
+     backdrop-filter: var(--glass-<role>)，禁止在组件里写死 blur(Npx)。 */
+  --glass-saturate: 100%; /* 玻璃饱和度增益：模式级旋钮，各角色共享 */
+  --glass-raised: none; /* 卡片 / 面板 / 浮岛 */
+  --glass-input: none; /* 非弹出层控件（UiSearchInput 等浮在画布上的控件） */
+  --glass-header: none; /* 标题栏 */
+  --glass-pop: none; /* 下拉类浮层 */
+  --glass-overlay: none; /* 其它弹层：dialog / message */
+  --glass-veil: blur(2px); /* 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 */
+
+  /* ── 玻璃调试壁纸（仅在 --appearance.testWallpaper 开启时铺在整页最底层） ──
+     刻意用**高对比色块**而不是照片：色块边界最容易看出「模糊半径够不够、alpha 是否过高」，
+     真实壁纸往往一片柔和，磨砂开与不开几乎无从分辨。
+     这组值不是界面配色，不参与语义令牌（只服务于半透明/玻璃调参）。 */
+  --test-wallpaper-base: #1b1f3b; /* 底色：深色，白卡片的半透明一眼可辨 */
+  --test-wallpaper-image:
+    radial-gradient(circle at 12% 18%, #ff7a59 0 12%, transparent 26%),
+    radial-gradient(circle at 78% 12%, #4f7cff 0 10%, transparent 28%),
+    radial-gradient(circle at 62% 84%, #14c38e 0 12%, transparent 30%),
+    radial-gradient(circle at 24% 78%, #f9d423 0 10%, transparent 26%);
+
   /* ── lines ── */
   --color-border-light: #e4e4e5; /* 细分隔线 / 卡片描边 */
   --color-border: #dadce0; /* 输入边框 / 强分隔线 */
@@ -59,7 +85,7 @@
 
   /* ── shadows(柔和低对比 + 品牌色焦点环) ── */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05); /* 浮岛卡片 / 面板 */
-  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08); /* 菜单 / FAB / 消息 */
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08); /* 菜单 / 消息 */
   --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12); /* 对话框 / 批量操作栏 */
   --shadow-focus: 0 0 0 3px rgba(51, 144, 236, 0.18); /* 键盘焦点环 */
   --shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28); /* 半透明窗口的外阴影：补偿丢失的系统投影 */

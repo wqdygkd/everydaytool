@@ -15,6 +15,13 @@ export interface WindowAppearance {
   material: WindowMaterial
   /** macOS vibrancy（仅 darwin 生效） */
   vibrancy: MacVibrancy
+  /**
+   * 测试壁纸：在页面底层铺一张高对比色块「假壁纸」，用于在应用内直接预览
+   * 各表面（卡片 / 浮层 / 标题栏）的磨砂效果——真实桌面壁纸是随机的，
+   * 系统材质也可能把窗口背后统一成一片柔和背景，看不出模糊档位是否合适。
+   * 纯 CSS、与平台能力无关，任何平台 / 浏览器调试下都能开；关闭后回到「透出真实桌面」。
+   */
+  testWallpaper: boolean
 }
 
 /** 主进程可落盘的外观配置：与平台无关的字段在跨平台时会被裁剪 */
@@ -38,6 +45,7 @@ export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = {
   enabled: false,
   material: 'none',
   vibrancy: 'none',
+  testWallpaper: false,
 }
 
 /** Windows 11 22H2 及以上的 build 号（DwmSetWindowAttribute 系统背景材质的最低要求） */
@@ -88,19 +96,23 @@ export function resolveAppearanceCapabilities(
 /**
  * 把用户设置收敛成当前平台真正能生效的形态：
  * - 平台不支持材质时 material 归 none（避免留下永远无法呈现的选择）；
- * - 关闭半透明时一并清空材质 / vibrancy（保持「关闭 = 完全不透明」的语义）。
+ * - 关闭半透明时一并清空材质 / vibrancy（保持「关闭 = 完全不透明」的语义）；
+ * - 测试壁纸是纯 CSS 的表现层开关，与平台能力 / 半透明状态无关，原样保留
+ *   （不透明窗口下也能用它检查卡片底色在彩色背景上的观感）。
  */
 export function sanitizeWindowAppearance(
   appearance: WindowAppearance,
   capabilities: WindowAppearanceCapabilities,
 ): WindowAppearance {
+  const testWallpaper = appearance.testWallpaper === true
+
   if (!appearance.enabled || !capabilities.supportsTransparent) {
-    return { enabled: false, material: 'none', vibrancy: 'none' }
+    return { enabled: false, material: 'none', vibrancy: 'none', testWallpaper }
   }
 
   const material = capabilities.materials.includes(appearance.material) ? appearance.material : 'none'
   const vibrancy = capabilities.vibrancies.includes(appearance.vibrancy) ? appearance.vibrancy : 'none'
-  return { enabled: true, material, vibrancy }
+  return { enabled: true, material, vibrancy, testWallpaper }
 }
 
 /**

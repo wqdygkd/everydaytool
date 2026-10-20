@@ -41,7 +41,8 @@ withDefaults(defineProps<{
   min-height: 0;
   border-right: 1px solid var(--color-border-light);
   background: var(--color-raised);
-  backdrop-filter: blur(12px);
+  /* 玻璃：侧栏是常驻 raised 表面，内容从其右侧滚过时需要磨平 */
+  backdrop-filter: var(--glass-raised);
 }
 
 .ui-sidebar-header {

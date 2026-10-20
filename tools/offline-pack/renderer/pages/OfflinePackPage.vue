@@ -92,6 +92,8 @@ function switchTab(key: string): void {
   margin: 0 auto;
   padding: 24px;
   background: var(--color-raised);
+  /* 玻璃：卡片直接浮在透明画布上，背后就是壁纸 / 桌面，按 raised 角色取模糊 */
+  backdrop-filter: var(--glass-raised);
   border-radius: 20px;
 }
 

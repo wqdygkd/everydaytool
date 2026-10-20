@@ -69,6 +69,8 @@ withDefaults(defineProps<{
 
   &.is-surface {
     background: var(--color-raised);
+    /* 玻璃：surface 变体是浮在画布上的顶栏（工具页 toolbar），需要磨平背后内容 */
+    backdrop-filter: var(--glass-raised);
   }
 }
 

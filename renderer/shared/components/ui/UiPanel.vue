@@ -43,6 +43,9 @@ withDefaults(defineProps<{
 <style scoped lang="scss">
 .ui-panel {
   min-width: 0;
+  /* 玻璃：面板是最主要的 raised 表面，模糊统一按 raised 角色取
+     （不透明窗口下 --glass-raised 为 none，零开销） */
+  backdrop-filter: var(--glass-raised);
 
   &.is-raised {
     background: var(--color-raised);

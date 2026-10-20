@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '../../shared/storage-keys'
+import { findAppTab } from '../config/app-tabs'
 import { getToolRegistry } from '../config/tools'
 
 export interface ToolTab {
@@ -9,6 +10,14 @@ export interface ToolTab {
 }
 
 const STORAGE_KEY = STORAGE_KEYS.toolTabs
+
+/** 页签可能来自工具注册表，也可能是应用自带页面（设置等）：两者共用同一套打开 / 高亮逻辑 */
+function resolveTab(id: string): ToolTab | null {
+  const tool = getToolRegistry().find(t => t.id === id)
+  if (tool) return { id: tool.id, name: tool.name, routeName: `tool-${tool.id}` }
+  const appTab = findAppTab(id)
+  return appTab ? { id: appTab.id, name: appTab.name, routeName: appTab.routeName } : null
+}
 
 function readStored(): string[] {
   try {
@@ -31,12 +40,7 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
 
   const openTabs = computed<ToolTab[]>(() =>
     openIds.value
-      .map((id) => {
-        const tool = getToolRegistry().find(t => t.id === id)
-        return tool
-          ? { id: tool.id, name: tool.name, routeName: `tool-${tool.id}` }
-          : null
-      })
+      .map(resolveTab)
       .filter((tab): tab is ToolTab => tab !== null),
   )
 
@@ -68,7 +72,9 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     activeId.value = toolId
   }
 
-  const validIds = openIds.value.filter(id => getToolRegistry().some(t => t.id === id))
+  // 上次会话残留的 id（工具被移除 / 应用页改名）在此清理：页签必须能解析出名字与路由，
+  // 否则常驻挂载会去渲染一个不存在的组件。
+  const validIds = openIds.value.filter(id => resolveTab(id) !== null)
   if (validIds.length !== openIds.value.length) {
     openIds.value = validIds
     persist()

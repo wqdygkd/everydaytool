@@ -27,7 +27,6 @@ const filteredTools = computed<ToolDefinition[]>(() => {
 
 const filteredGroups = computed(() => groupToolsByCategory(filteredTools.value))
 const visibleToolCount = computed(() => filteredTools.value.length)
-const settingsVisible = ref(false)
 const favoriteTools = computed(() => favoriteIds.value
   .map(id => allTools.value.find(tool => tool.id === id))
   .filter((tool): tool is ToolDefinition => Boolean(tool)))
@@ -104,10 +103,6 @@ function readFavoriteIds(): string[] {
     <UiEmpty v-else variant="bordered" center padding="var(--spacing-3xl)">
       没有匹配的工具
     </UiEmpty>
-
-    <UiFab label="应用设置" @click="settingsVisible = true" />
-
-    <AppSettingsDialog v-model="settingsVisible" />
   </div>
 </template>
 

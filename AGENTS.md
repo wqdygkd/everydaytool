@@ -29,14 +29,16 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7
 
 ## 布局 / 交互要点
 
-- 主壳 `renderer/App.vue`：自定义标题栏（`electron/main.ts` 用 `titleBarStyle: 'hidden'` 隐藏系统标题栏 + `titleBarOverlay` 右上角窗口按钮）；标题栏整行 `-webkit-app-region: drag`，页签区 no-drag；页内菜单已移除，菜单动作仅由主进程系统菜单提供（清单见 `shared/menu.ts`）；底部状态栏已删除，主区直抵窗口底缘。
+- 主壳 `renderer/App.vue`：自定义标题栏（`electron/main.ts` 用 `titleBarStyle: 'hidden'` 隐藏系统标题栏 + `titleBarOverlay` 右上角窗口按钮）；标题栏整行 `-webkit-app-region: drag`，页签区与设置入口 no-drag；页内菜单已移除，菜单动作仅由主进程系统菜单提供（清单见 `shared/menu.ts`）；底部状态栏已删除，主区直抵窗口底缘。
+- **设置是页签，不是弹窗**：入口在标题栏右端（`.header-settings`，Windows 上即最小化按钮左侧），点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 用同一张表常驻挂载。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
+  命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
 - 首页 `renderer/pages/HomePage.vue`：工具网格按分类分组，支持搜索 / 收藏。
 - 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
 - 标题栏与页签外观、工具页布局、入场与过渡动效等视觉 / 交互规范见 [DESIGN.md](./DESIGN.md) §7、§8（动效尊重 `prefers-reduced-motion`）。
 
 ### UI 组件库（`renderer/shared/components/ui/`，新工具优先复用）
 
-平台级 UI 组件库（25 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
+平台级 UI 组件库（24 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
 
 - **新工具页优先使用组件，不要在业务里重复写通用样式**；组件确不满足时写局部样式并在注释说明原因。
 - `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，不得恢复。
@@ -59,20 +61,25 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7
   `sanitizeWindowAppearance`），禁止在主进程和渲染层各写一份 `process.platform ===` 判断。
 - `transparent` / `vibrancy` / `backgroundMaterial` 只在 `BrowserWindow` 构造时生效：
   改外观实现时要保证 `loadWindowAppearance()` 先于 `createWindow()` 执行。
-- **透明度统一控制**（见 [DESIGN.md](./DESIGN.md) §7.1.1）：颜色与 alpha 分离，
-  基准色在 `tokens.scss`（`--color-<role>-base`），按模式覆写的 alpha 在
-  `renderer/shared/styles/translucency.scss`（`--alpha-<role>`）。组件**只引用合成变量**
+- **透明度统一控制**（见 [DESIGN.md](./DESIGN.md) §7.1.1）：颜色、alpha 与玻璃三者分离，
+  基准色在 `tokens.scss`（`--color-<role>-base`），按模式覆写的 alpha（`--alpha-<role>`）
+  与玻璃（`--glass-<role>`）在 `renderer/shared/styles/translucency.scss`。组件**只引用合成变量**
   `--color-<role>`（`raised` / `input` / `field` / `table` / `button` / `fill` /
-  `header` / `pop` / `overlay`），**禁止在组件里写死 `rgba(...)` 或 `#fff` 背景**——
-  否则该组件在任何半透明模式下都不透，成为界面上唯一一块「死白」。
-  新增角色要同时改三处：tokens.scss 的 base + alpha、translucency.scss 的合成与各模式取值。
-  新增模式只加一条模式规则，组件零改动。
+  `header` / `pop` / `overlay`）与玻璃变量 `--glass-<role>`，**禁止在组件里写死 `rgba(...)`、
+  `#fff` 背景或 `blur(Npx)`**——否则该组件在任何半透明模式下都透不出、或与周围磨砂程度脱节。
+  新增角色要同时改四处：tokens.scss 的 base + alpha + glass、translucency.scss 的合成与各模式取值。
+  新增模式只加一条模式规则（alpha + glass 两组），组件零改动。
   画布 `--color-canvas` 恒透明（工具页与主页同一观感），不参与 alpha。
+  玻璃只给「背后是别的内容」的表面（卡片 / 浮层 / 标题栏 / 浮在画布上的控件），
+  嵌在卡片内部的 `field` / `table` / `button` / `fill` 不再叠加模糊（白付 backdrop root 开销）。
 - **弹层变量必须靠 `<html>`**：EP 的弹层全部 teleport 到 body，不在 `.app-shell` 内。
   模式类由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`，`--color-*` 合成变量定义在 `:root`；
   只在 `.app-shell` 上定义会让下拉 / 弹窗全部变透明（已踩过的坑）。
 - `html` / `body` 必须保持 `background: transparent`（`base.scss` 已设），
   否则页面自身底色会盖住原生透明通道。
+- **测试壁纸**是调 alpha / 玻璃的对照面（`--appearance.testWallpaper` → `<html>.has-test-wallpaper`），
+  样式只在 `translucency.scss` 一处、铺在 `body`（必须在 teleport 出去的弹层之下）；
+  它不进 `sanitizeWindowAppearance` 的平台裁剪，任何平台 / 不透明模式下都能开。
 
 ## 常用命令
 
@@ -134,9 +141,11 @@ export default defineTool({
 | 设计令牌 / 主题(浅色) | `renderer/shared/styles/tokens.scss` |
 | 全局样式入口（@use 顺序） | `renderer/shared/styles/main.scss` |
 | Element Plus `--el-*` 绑定与组件覆写 | `renderer/shared/styles/element-plus.scss` |
-| 半透明窗口 alpha 控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
-| **UI 组件库（面板/分组/键值/对话框等 25 组件）** | `renderer/shared/components/ui/` |
+| 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
+| **UI 组件库（面板/分组/键值/对话框等 24 组件）** | `renderer/shared/components/ui/` |
 | 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `renderer/App.vue` |
+| **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
+| 设置页（数据目录 / 空间占用 / 窗口外观） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |

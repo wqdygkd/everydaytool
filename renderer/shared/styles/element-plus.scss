@@ -34,8 +34,8 @@
 
   /* 默认按钮 = 玻璃钮（半透明底 + 细描边）。走 button 角色，
      与表格行 / 输入框分开，按钮透明度可单独调；primary 等实心按钮另行覆盖。 */
-  --el-button-bg-color: color-mix(in srgb, var(--color-button) 80%, transparent);
-  --el-button-border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
+  --el-button-bg-color: color-mix(in oklab, var(--color-button) 80%, transparent);
+  --el-button-border-color: color-mix(in oklab, var(--color-border) 65%, transparent);
   --el-button-text-color: var(--color-text-primary);
   --el-button-hover-bg-color: var(--color-button);
   --el-button-hover-border-color: var(--color-border);
@@ -106,7 +106,9 @@
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(16px);
+  /* 玻璃：dialog 压着整页内容，用 overlay 角色（模糊 + alpha 一起决定厚度；
+     不透明窗口下 --glass-overlay 为 none，等价于不模糊） */
+  backdrop-filter: var(--glass-overlay);
 
   .el-dialog__header {
     padding-bottom: 14px;
@@ -151,7 +153,10 @@
   --el-bg-color-overlay: var(--color-pop);
   background: var(--color-pop);
   border: 1px solid var(--color-border-light);
-  backdrop-filter: blur(12px);
+  /* 玻璃：下拉浮层离开卡片表面、自己承担模糊。模糊半径按角色取 --glass-pop
+     （比 overlay 略小：它贴在输入框下方，糊得太厚会让下方表单「消失」得不自然）。
+     圆角由下方统一的 .el-popper 规则提供。 */
+  backdrop-filter: var(--glass-pop);
 }
 
 /* 下拉容器内部还有一层列表底色（EP 的 select-dropdown / cascader-menu 自带 bg），
@@ -168,13 +173,25 @@
   background: var(--color-primary-soft);
 }
 
-/* 消息提示 */
-.el-message {
+/* 消息提示 / 通知：顶层浮层统一走 overlay 角色（颜色 + 玻璃） */
+.el-message,
+.el-notification {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
   box-shadow: var(--shadow-md);
   background: var(--color-overlay);
-  backdrop-filter: blur(12px);
+  backdrop-filter: var(--glass-overlay);
+}
+
+/* 确认框是模态：与 dialog 同级，用更大圆角与阴影。
+   默认底色取 --el-bg-color（input 角色），需显式改绑 overlay；
+   用两级选择器压过 EP 懒加载注入的单类规则（.el-message-box 单类会随注入顺序输掉）。 */
+.el-overlay-message-box .el-message-box {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-lg);
+  background: var(--color-overlay);
+  backdrop-filter: var(--glass-overlay);
 }
 
 /* 空状态与占位 */
@@ -199,10 +216,11 @@
   color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
 }
 
-/* 弹层载入 / 骨架屏动画更柔和 */
+/* 弹层载入 / 骨架屏动画更柔和：遮罩本身就是「玻璃」，恒带轻微磨砂
+   （--glass-veil，与窗口模式无关——它不是表面，不需要按 alpha 分档） */
 .el-loading-mask {
-  background: color-mix(in srgb, var(--color-canvas) 70%, transparent);
-  backdrop-filter: blur(2px);
+  background: color-mix(in oklab, var(--color-canvas) 70%, transparent);
+  backdrop-filter: var(--glass-veil);
 }
 
 /* 单选/复选/开关跟随品牌色 */

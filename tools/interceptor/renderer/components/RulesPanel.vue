@@ -1344,6 +1344,8 @@ async function remove(rule: InterceptorRule): Promise<void> {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-xs);
   background: var(--color-raised);
+  /* 玻璃：底部浮动胶囊压着整页规则列表，需磨平背后的内容 */
+  backdrop-filter: var(--glass-raised);
   box-shadow: var(--shadow-lg);
 }
 
@@ -1502,6 +1504,8 @@ async function remove(rule: InterceptorRule): Promise<void> {
 .editor-card {
   overflow: hidden;
   background: var(--color-raised);
+  /* 玻璃：卡片浮在透明画布上，按 raised 角色取模糊（不透明窗口下为 none） */
+  backdrop-filter: var(--glass-raised);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
@@ -1761,6 +1765,8 @@ async function remove(rule: InterceptorRule): Promise<void> {
   padding: 0;
   overflow: hidden;
   background: var(--color-raised);
+  /* 玻璃：popover 传送到 body，背后是整页内容，需自己承担模糊 */
+  backdrop-filter: var(--glass-pop);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);

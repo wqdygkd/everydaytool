@@ -29,6 +29,8 @@ const emit = defineEmits<{
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-raised);
+  /* 玻璃：列表卡片是 raised 表面（不透明窗口下为 none） */
+  backdrop-filter: var(--glass-raised);
   cursor: pointer;
   transition:
     border-color var(--transition-base),

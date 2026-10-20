@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
+import { APP_TABS, findAppTab } from './config/app-tabs'
 import { getToolRegistry } from './config/tools'
 import { useAppearance } from './shared/composables/useAppearance'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
@@ -62,9 +63,13 @@ watch(
 // 打开过的工具页常驻挂载，显隐只用 display 切换：
 // webview 只要还在文档里，guest 就不会销毁，切 tab / 去首页再回来都不重载。
 // 只有真正关闭 tab 时组件才卸载（顺带触发各页面的 onUnmounted 清理）。
-const toolComponents = computed<Record<string, Component>>(() =>
-  Object.fromEntries(getToolRegistry().map(t => [t.id, t.route.component as Component])),
-)
+// 应用自带页面（设置等）并入同一张表：它们同样是页签，常驻挂载可留住已加载的数据，
+// 切走再切回不必重新拉一遍磁盘用量 / 目录信息。
+// 注册表是静态的（构建期确定的工具清单 + APP_TABS），故用普通常量而非 computed。
+const tabComponents: Record<string, Component> = {
+  ...Object.fromEntries(getToolRegistry().map(t => [t.id, t.route.component as Component])),
+  ...Object.fromEntries(APP_TABS.map(t => [t.id, t.component])),
+}
 
 const shellEl = ref<HTMLElement | null>(null)
 let motion: MotionScope | undefined
@@ -72,25 +77,31 @@ let motion: MotionScope | undefined
 // mac 原生全屏不触发 DOM fullscreen API，主来源是主进程推送事件，DOM 监听只做兜底
 const isFullscreen = ref(false)
 // 外壳模式类：is-transparent 表示「已开启半透明」，is-<material> 表示当前材质
-// （translucency.scss 按后者覆写 alpha）。放在 isFullscreen 之后定义，避免前向引用。
-const shellModeClasses = computed(() => ({
-  'is-fullscreen': isFullscreen,
-  'is-transparent': isTransparent,
-  ...(materialClass.value ? { [materialClass.value]: true } : {}),
-}))
-// 同一组模式类也要挂到 <html>：EP 弹层（select / cascader / dropdown / date-picker /
+// （translucency.scss 按后者覆写 alpha），has-test-wallpaper 是玻璃调试用的假壁纸。
+// 放在 isFullscreen 之后定义，避免前向引用。
+const hasTestWallpaper = computed(() => appearance.value?.testWallpaper === true)
+const modeClasses = computed<string[]>(() => {
+  const classes: string[] = []
+  if (isFullscreen.value) classes.push('is-fullscreen')
+  if (isTransparent.value) classes.push('is-transparent')
+  if (hasTestWallpaper.value) classes.push('has-test-wallpaper')
+  if (materialClass.value) classes.push(materialClass.value)
+  return classes
+})
+// 同一份模式类也要挂到 <html>：EP 弹层（select / cascader / dropdown / date-picker /
 // autocomplete / dialog / message）全部 teleport 到 body，不在 .app-shell 内，
-// 只挂外壳的话这些浮层继承不到 --alpha-*，会退化成「无背景」的透明面板。
-const MODE_CLASSES = ['is-fullscreen', 'is-transparent', 'is-acrylic', 'is-mica', 'is-tabbed', 'is-vibrancy', 'is-transparent-only'] as const
+// 只挂外壳的话这些浮层继承不到 --alpha-* / --glass-*，会退化成「无背景」的透明面板。
+// 测试壁纸同样只能挂在 <html> / body 上：它必须画在所有内容之下（含 teleport 出去的浮层），
+// 挂在外壳内会随 .app-main 的滚动与层级被裁切。
+// 摘掉上一轮、挂上这一轮：新增模式类只改上面的列表，不必再同步维护第二份类名清单。
 watch(
-  shellModeClasses,
-  (classes) => {
+  modeClasses,
+  (classes, previous) => {
     const html = document.documentElement
-    for (const name of MODE_CLASSES) {
-      html.classList.toggle(name, name in classes)
-    }
+    html.classList.remove(...(previous ?? []))
+    html.classList.add(...classes)
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 let offFullscreenIpc: (() => void) | undefined
 function syncDomFullscreen() {
@@ -141,10 +152,20 @@ function handleTabRemove(toolId: string) {
   // 关闭正在查看的工具 → 回主页；关后台页签则原地不动
   if (wasActive) router.push({ name: 'home' })
 }
+
+// 设置页签：与工具页签同构（打开 / 高亮 / 关闭都复用 toolTabs），
+// 只是入口固定在标题栏右上角，而不是首页卡片。
+const settingsTab = findAppTab('settings')
+const isSettingsActive = computed(() => settingsTab !== undefined && tabsStore.activeId === settingsTab.id)
+
+function openSettings() {
+  // 已打开则只切过去（页签常驻挂载，状态不丢）；未打开时由路由同步逻辑补进页签列表
+  if (settingsTab) router.push({ name: settingsTab.routeName })
+}
 </script>
 
 <template>
-  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, shellModeClasses]">
+  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, modeClasses]">
     <header class="app-header">
       <span class="brand-mark" role="button" tabindex="0" @click="goHome" @keydown.enter="goHome">edt</span>
       <div v-if="tabsStore.openTabs.length" class="header-tabs">
@@ -163,6 +184,19 @@ function handleTabRemove(toolId: string) {
           />
         </el-tabs>
       </div>
+      <!-- 设置入口：固定在标题栏右上角、原生窗口按钮左侧（Windows 上即最小化按钮左边）。
+           图标按钮而非文字按钮：标题栏里已有品牌标 + 页签，再加文字会和页签抢视觉重量；
+           34px 见方与品牌标同高，右端与原生窗口按钮同一条基线。 -->
+      <button
+        type="button"
+        class="header-settings"
+        :class="{ 'is-active': isSettingsActive }"
+        aria-label="设置"
+        title="设置"
+        @click="openSettings"
+      >
+        <UiIcon name="gear" :size="17" />
+      </button>
     </header>
 
     <main class="app-main">
@@ -173,7 +207,7 @@ function handleTabRemove(toolId: string) {
       </router-view>
       <div v-show="!!currentTool" class="tools-host">
         <template v-for="tab in tabsStore.openTabs" :key="tab.id">
-          <component :is="toolComponents[tab.id]" v-show="tab.id === tabsStore.activeId" />
+          <component :is="tabComponents[tab.id]" v-show="tab.id === tabsStore.activeId" />
         </template>
       </div>
     </main>
@@ -245,6 +279,47 @@ function handleTabRemove(toolId: string) {
 .platform-win32 .app-header,
 .platform-linux .app-header {
   padding-right: 148px;
+}
+
+// 设置入口：钉在标题栏右端，Windows / Linux 上正好落在原生「最小化」按钮左侧。
+// 右侧已由上面的平台规则预留 148px 原生按钮区，这里只需与页签分开一个小间距——
+// app-header 的 gap 已经提供，不再额外加 margin。
+.header-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  // margin-left: auto 是「永远靠右」的真正保障：有页签时 .header-tabs（flex:1）已吃掉
+  // 剩余空间，此处 auto 为 0 不影响布局；**页签全部关闭时 .header-tabs 因 v-if 被移除**，
+  // 没有它兜底按钮就会紧挨品牌标跑到左边去。
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+
+  &:hover {
+    background: var(--color-fill);
+    color: var(--color-text-primary);
+  }
+
+  // 设置页签处于激活态时高亮：入口状态与「当前是否在看设置」保持一致
+  &.is-active {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+  }
+
+  // 标题栏元素不参与全局 el-button 焦点规则，键盘焦点环单独给
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
 }
 
 // macOS 红绿灯按钮在左上（hiddenInset，位置见 electron/main.ts 的 trafficLightPosition）：
@@ -367,13 +442,31 @@ function handleTabRemove(toolId: string) {
 }
 
 @media (max-width: 640px) {
+  /* 窄窗口标题栏折两行：首行 = 品牌标 + 设置钮（设置贴右），次行 = 页签（整行、横向可滚动）。
+     用 row + wrap 而不是 column：column 下设置钮会独占一整行，右侧再空出一大片，
+     既浪费高度又让它看起来像是「掉到左边去了」的反面版本。 */
   .app-header {
     height: auto;
     min-height: var(--titlebar-height);
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
     gap: var(--spacing-sm);
     padding: var(--spacing-md) var(--spacing-md);
+  }
+
+  /* 页签整行：flex-basis 100% 强制换行，order 保证它排在设置钮之后 */
+  .header-tabs {
+    flex: 1 0 100%;
+    order: 1;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  /* 首行右端：宽窗口里由 .header-tabs 的 flex:1 挤到右边，这里页签已换行，
+     必须靠 auto 外边距把按钮顶到行尾 */
+  .header-settings {
+    order: 0;
+    margin-left: auto;
   }
 
   // 窄窗口 / 页面放大时 mac 仍需红绿灯安全边距（特异性高于上方基座规则）

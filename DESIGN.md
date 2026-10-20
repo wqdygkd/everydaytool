@@ -7,7 +7,7 @@
 - **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为唯一强调色。
 - **固定浅色**：无主题切换，颜色一律走语义令牌，禁止硬编码。
 - **令牌优先**：所有组件通过 `var(--token)` 引用设计令牌，禁止硬编码颜色 / 圆角 / 阴影。
-- **圆角与浮岛**：按钮、页签为圆角矩形；头像、FAB、徽章保持圆形/胶囊；卡片与面板为浮岛，靠细边框与轻阴影分层。
+- **圆角与浮岛**：按钮、页签为圆角矩形；头像、徽章保持圆形/胶囊；卡片与面板为浮岛，靠细边框与轻阴影分层。
 - **组件减法**：能用 Element Plus（`el-*`）组件的不自造，覆写只写几何差异，颜色与状态交给全局令牌绑定。
 - **反过度设计**：间距、宽度、圆角严格取令牌阶梯，不为一两像素差异新增魔法数字。
 
@@ -56,19 +56,42 @@
 
 | 角色 | 用途 | 独立调节入口 |
 | ------ | ------ | ------------- |
-| `raised` | 卡片 / 面板 / 浮岛 | `--alpha-raised` |
-| `input` | 其余非弹出层 el 控件（树 / 上传 / 日历 / 搜索框 UiSearchInput） | `--alpha-input` |
+| `raised` | 卡片 / 面板 / 浮岛 | `--alpha-raised` · `--glass-raised` |
+| `input` | 其余非弹出层 el 控件（树 / 上传 / 日历 / 搜索框 UiSearchInput） | `--alpha-input` · `--glass-input` |
 | `field` | 通用表单输入框（el-input / textarea / select） | `--alpha-field` |
 | `table` | 表格行（el-table 的 tr） | `--alpha-table` |
 | `button` | 普通按钮（玻璃钮；primary/danger 实心钮不走此角色） | `--alpha-button` |
 | `fill` | 灰调填充（表头 / 行 hover / 灰底面版） | `--alpha-fill` |
-| `header` | 标题栏 | `--alpha-header` |
-| `pop` | 下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） | `--alpha-pop` |
-| `overlay` | 其它弹层（dialog / message / notification） | `--alpha-overlay` |
+| `header` | 标题栏 | `--alpha-header` · `--glass-header` |
+| `pop` | 下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） | `--alpha-pop` · `--glass-pop` |
+| `overlay` | 其它弹层（dialog / message / notification / message-box 确认框） | `--alpha-overlay` · `--glass-overlay` |
 | `canvas` | 画布 | 不参与 alpha，恒为 `transparent` |
 
-> 所有基准色除 `fill` 为 `#f4f4f5` 外均为 `#ffffff`；默认（不透明）模式下 alpha 全为 `1`。
-> 各模式的 alpha 取值见 §7.1.1。
+> 所有基准色除 `fill` 为 `#f4f4f5` 外均为 `#ffffff`；默认（不透明）模式下 alpha 全为 `1`、玻璃全为 `none`。
+> 各模式的 alpha / 玻璃取值见 §7.1.1。
+
+### 3.1.2 玻璃（backdrop-filter）体系
+
+**透明度与模糊是两件事**：alpha 决定「能看见多少背后内容」，`--glass-*` 决定「背后被磨平多少」。
+只调 alpha 会得到一块半透明塑料（文字与背后的表格线互相打架），只加模糊则变成不透明毛玻璃。
+两者按同一套表面角色分档，因此每种窗口模式、每类控件都能独立调，互不牵连。
+
+| 令牌 | 默认值 | 用途 |
+| ------ | -------- | ------ |
+| `--glass-saturate` | `100%` | 玻璃饱和度增益（模式级旋钮，被各角色 `saturate()` 共享） |
+| `--glass-raised` | `none` | 卡片 / 面板 / 浮岛 |
+| `--glass-input` | `none` | 浮在画布上的非弹出层控件（搜索框等） |
+| `--glass-header` | `none` | 标题栏 |
+| `--glass-pop` | `none` | 下拉类浮层 |
+| `--glass-overlay` | `none` | dialog / message / notification / message-box |
+| `--glass-veil` | `blur(2px)` | 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 |
+
+**只给「表面层」玻璃，不给嵌套控件**：卡片、浮层、标题栏的背后是别的内容或画布，需要磨平；
+`field` / `table` / `button` / `fill` 始终嵌在卡片内部，背后就是卡片表面本身，
+再糊一层既看不出效果、又为每个元素创建 backdrop root（合成开销）。它们的差异化仍然靠 alpha。
+
+> 组件一律写 `backdrop-filter: var(--glass-<role>)`，**禁止写死 `blur(Npx)`**；
+> 默认模式下玻璃为 `none`，即不透明窗口零额外开销（不加 backdrop root）。
 
 ### 3.2 字阶与字体
 
@@ -128,14 +151,14 @@
 | `--radius-lg` | `20px` | 浮岛（卡片、面板、表格容器） |
 | `--radius-xl` | `28px` | 模态（对话框） |
 
-> 按钮、页签为**圆角矩形**（14px / 12px）；头像、FAB、徽章保持圆形 / 胶囊（`999px`）。
+> 按钮、页签为**圆角矩形**（14px / 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
 
 ### 3.6 阴影
 
 | 令牌 | 值 | 用途 |
 | ------ | ----- | ------ |
 | `--shadow-sm` | `0 1px 2px rgba(0,0,0,.05)` | 浮岛卡片 / 面板 |
-| `--shadow-md` | `0 8px 22px rgba(0,0,0,.08)` | 菜单、FAB、消息 |
+| `--shadow-md` | `0 8px 22px rgba(0,0,0,.08)` | 菜单、消息 |
 | `--shadow-lg` | `0 16px 32px rgba(0,0,0,.12)` | 对话框、批量操作栏 |
 | `--shadow-focus` | `0 0 0 3px rgba(255,109,56,.2)` | 键盘焦点环 |
 | `--shadow-window-frame` | `0 12px 48px rgba(0,0,0,.28)` | 半透明窗口的外阴影（补偿丢失的系统投影） |
@@ -171,7 +194,7 @@
 
 ## 5. UI 组件库
 
-平台级组件库（25 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
+平台级组件库（24 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
 
 ### 5.1 布局
 
@@ -218,7 +241,6 @@
 | `UiIconButton` | `icon`、`size`（32）、`active`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮 |
 | `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
 | `UiAvatar` | `text`、`color`、`size`（42） | 字母头像（首字符 + 纵向渐变底） |
-| `UiFab` | `icon`、`label`、`size`（48） | 右下角悬浮按钮（fixed） |
 
 ### 5.6 反馈
 
@@ -253,36 +275,53 @@
 ### 7.1 应用外壳
 
 - 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，primary-light 底 + primary 字）+ 工具页签（圆角高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
-- 标题栏整行 `-webkit-app-region: drag`，页签区 no-drag。
+- **设置入口固定在标题栏右端**（`.header-settings`，34px 方形图标钮，齿轮图标）：Windows / Linux 上正好落在原生「最小化」按钮左侧（右侧 148px 原生按钮区之外），mac 上落在标题栏右端、红绿灯在另一侧。点击**打开一个「设置」页签**（不是弹窗），与工具页签同构：可关闭、可切换、常驻挂载；设置页签处于激活态时入口同步高亮（primary-light 底 + primary 字）。**首页不再有右下角悬浮设置按钮**。
+- 标题栏整行 `-webkit-app-region: drag`，页签区与设置入口 no-drag。
 - **标题栏默认无背景色**：不铺实色、不加分隔线，透出窗口画布；分层靠内容区上边界与原生窗口按钮。Windows 的 `titleBarOverlay` 底色同样设 `#00000000`，避免右上角露出一块实色矩形（见 `electron/main.ts` 的 `TITLEBAR_COLORS`）。
-- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: blur(16px)` 稳住原生按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
+- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: var(--glass-header)`（16px）稳住原生按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
 - 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
 - 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
 - 主区 `flex:1; min-height:0`，滚动只发生在内容区。
 
 #### 7.1.1 半透明窗口
 
-窗口外观（半透明 / 系统材质）由用户在「应用设置 → 窗口外观」切换，主进程是唯一事实来源
+窗口外观（半透明 / 系统材质）由用户在「设置页签 → 窗口外观」切换，主进程是唯一事实来源
 （`userData/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
 
-##### 透明度统一控制（`renderer/shared/styles/translucency.scss`）
+##### 透明度与玻璃统一控制（`renderer/shared/styles/translucency.scss`）
 
-**颜色与透明度分离**：`tokens.scss` 定义各表面角色的不透明基准色（`--color-<role>-base`）与默认 alpha，
-`translucency.scss` 按窗口模式覆写 alpha（`--alpha-*`），并在 `:root` 用 `color-mix` 合成出
-`--color-<role>` 供组件引用。
+**颜色 / 透明度 / 模糊三者分离**：`tokens.scss` 定义各表面角色的不透明基准色（`--color-<role>-base`）、
+默认 alpha 与默认玻璃（`--glass-* = none`）；`translucency.scss` 按窗口模式覆写 alpha（`--alpha-*`）
+与玻璃（`--glass-*`），并在 `:root` 用 `color-mix(in oklab, …)` 合成出 `--color-<role>` 供组件引用。
 
 - 九个透明角色：`raised` / `input` / `field` / `table` / `button` / `fill` / `header` / `pop` / `overlay`，
   各自的职责与调节入口见 §3.1.1。
+- 五个玻璃角色：`raised` / `input` / `header` / `pop` / `overlay`（另加恒定的 `veil`），
+  见 §3.1.2。**同一个角色名同时管透视与模糊**，因此「让卡片更透一点」和「让卡片更糊一点」是同一个入口下的两个旋钮。
 - **画布不参与 alpha**：`--color-canvas` 恒为 `transparent`——工具页与主页同一观感，透出窗口 / 桌面；
   半透明窗口的「透」由画布承担，各模式只在其余角色上做区分。
-- **组件只引用合成变量**，永远不写死 `rgba`，也不关心当前是哪种模式。
-- **新增模式 = 加一条模式规则**覆写该模式的一组 alpha，组件零改动。
-- 默认（不透明）模式 alpha 全为 `1`，视觉与旧版完全一致。
+- **组件只引用合成变量 / 玻璃变量**，永远不写死 `rgba` 或 `blur(Npx)`，也不关心当前是哪种模式。
+- **新增模式 = 加一条模式规则**覆写该模式的 alpha + glass 两组，组件零改动。
+- 默认（不透明）模式 alpha 全为 `1`、玻璃全为 `none`，视觉与旧版完全一致。
 
-> `field` / `table` / `button` / `input` 四档当前初始值相同，但**刻意分开**：
+##### 测试壁纸（调参辅助，`--appearance.testWallpaper`）
+
+调 alpha / 玻璃最大的困难是**没有可对照的背景**：真实桌面壁纸往往一片柔和，
+磨砂开与不开几乎看不出差别；系统材质还可能把窗口背后统一成一片渐变。
+
+- 开启后 `App.vue` 给 `<html>` 挂 `has-test-wallpaper`，`translucency.scss` 据此在 `body`
+  铺一面**高对比色块假壁纸**（令牌 `--test-wallpaper-base` / `--test-wallpaper-image`）：
+  色块硬边界最容易暴露「模糊半径够不够、alpha 是否过高」。
+- 铺在 `body` 而不是 `.app-shell`：EP 弹层 teleport 到 body 且盖满视口，壁纸必须在它们之下，
+  并随视口固定（`background-attachment: fixed`），不随 `.app-main` 滚动。
+- **与半透明开关、平台能力都无关**（`sanitizeWindowAppearance` 原样保留该字段）：
+  不透明窗口下也能开，用于检查卡片白底压在高对比背景上是否仍显得干净。
+- 关闭即摘类，`html` / `body` 回到 `base.scss` 的 `transparent`，透出真实桌面。
+
+> `field` / `table` / `button` / `input` 四档当前 alpha 初始值相同，但**刻意分开**：
 > 这样单独调某一类控件的透明度时不必牵动其它控件。
 
-各模式取值：
+各模式 alpha 取值：
 
 | 模式 | raised | input | field | table | button | fill | header | pop | overlay |
 | ------ | -------- | ------- | ------- | ------- | -------- | ------ | -------- | ----- | --------- |
@@ -293,8 +332,21 @@
 | vibrancy（mac） | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
 | 纯 transparent（无材质） | .88 | .93 | .93 | .93 | .93 | .90 | .88 | .96 | .96 |
 
+各模式玻璃取值（`saturate` 为共享增益，模糊半径单位 px）：
+
+| 模式 | saturate | raised | input | header | pop | overlay |
+| ------ | ---------- | -------- | ------- | -------- | ----- | --------- |
+| 默认（不透明） | 100% | none | none | none | none | none |
+| acrylic | 135% | 18 | 14 | 16 | 24 | 28 |
+| mica | 115% | 10 | 8 | none | 16 | 18 |
+| tabbed | 105% | 8 | 6 | none | none | none |
+| vibrancy（mac） | 120% | 12 | 10 | none | 18 | 20 |
+| 纯 transparent（无材质） | 110% | 20 | 16 | none | 24 | 28 |
+
 取值原则：控件类（input / field / table / button）比卡片（raised）更实，避免边框与背后内容打架；
 `pop` 最实，因为下拉贴在输入框下方、底下压着密集表单内容；`header` 在 acrylic 下最透（材质效果最强）。
+玻璃半径与 alpha 反相关：越透的表面越需要糊（纯 transparent 没有系统模糊兜底，半径最大）；
+`tabbed` 的浮层已不透明，模糊对它没有意义，故为 `none`——**只在真的能看出来时才付合成开销**。
 
 其他约定：
 
@@ -302,13 +354,16 @@
   `base.scss` 已把它们设为 `transparent`；漏掉这一步界面看起来毫无变化（最常见的坑）。
 - **弹层必须靠 `<html>` 拿变量**：EP 的弹层全部 teleport 到 body，不在 `.app-shell` 内。
   模式类因此由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`，`translucency.scss` 的 `mode()` mixin
-  同时匹配两处；`--color-*` 合成变量也定义在 `:root` 而非 `.app-shell`。
+  匹配这两处落点；`--color-*` 合成变量也定义在 `:root` 而非 `.app-shell`。
   只在 `.app-shell` 上定义会导致下拉 / 弹窗全部变成透明（曾踩过的坑）。
+  mixin 只写 `html.is-x` 与 `.app-shell.is-x` 两种形态：前者是弹层唯一能继承到的来源，
+  后者是 html 同步失效时的兜底；**`html.is-x .app-shell` 不写**——html 上已有类时它纯属重复。
+  玻璃变量同理：它们由模式类覆写，因此同样同时挂在 `<html>` 与 `.app-shell`。
 - **系统投影补偿**：透明窗口没有原生阴影，用 `--shadow-window-frame` 补回浮起感。
 - **首页与工具页画布一律透明**，不再有「只铺工具页」的区别。
 - **平台能力**（见 `shared/appearance.ts`）：win32 走 `backgroundMaterial`
   （mica / acrylic / tabbed，需 22H2+），darwin 走 `vibrancy`，二者与 `transparent` 互斥；
-  Linux 不声明支持（依赖合成器）。能力表同时驱动设置面板里选项的禁用态。
+  Linux 不声明支持（依赖合成器）。能力表同时驱动设置页里选项的禁用态。
 - **生效时机**：`transparent` / `vibrancy` / `backgroundMaterial` 只在窗口构造时生效，
   因此外观必须先于 `createWindow` 读盘；运行期切换只能改 CSS 与部分原生 setter。
 
@@ -340,7 +395,7 @@
 
 - **入场动画**：应用外壳顶栏下滑淡入；工具页侧栏左滑、状态面板右淡入（gsap）。
 - **路由过渡**：`.page-*` 类实现淡入淡出 + 轻微位移。
-- **卡片 hover 抬高**：列表卡 / 工具卡 hover 抬描边或浅底，FAB hover 上浮。
+- **卡片 hover 抬高**：列表卡 / 工具卡 hover 抬描边或浅底；标题栏设置入口 hover 铺 `--color-fill` 浅底。
 - **prefers-reduced-motion**：全局降级（动画时长压缩到 0.01ms），已在 `main.scss` 处理。
 
 ## 9. 无障碍

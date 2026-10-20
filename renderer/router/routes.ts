@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
 import type { ToolDefinition } from '../shared/types/tool'
+import { APP_TABS } from '../config/app-tabs'
 import { allToolRegistry } from '../config/tools'
 import HomePage from '../pages/HomePage.vue'
 
@@ -40,6 +41,14 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: 'everydaytool' },
   },
   ...allToolRegistry.flatMap(toolRoutes),
+  // 应用自带页面（设置等）：与工具页同样常驻挂载，因此统一带 meta.toolId，
+  // 页签系统（toolTabs）据此当作普通页签处理，路由不进 /tools 命名空间。
+  ...APP_TABS.map((tab): RouteRecordRaw => ({
+    path: tab.path,
+    name: tab.routeName,
+    component: tab.component,
+    meta: { toolId: tab.id, title: tab.name },
+  })),
   {
     path: '/:pathMatch(.*)*',
     redirect: '/',

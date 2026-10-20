@@ -1,23 +1,32 @@
-// 半透明窗口的 alpha 控制层：按「窗口模式」统一调节所有背景色的透明度。
+// 半透明窗口的「玻璃」控制层：按「窗口模式」统一调节所有表面色的透明度与背景模糊。
 //
-// 设计约定（与 tokens.scss 的 alpha 体系配套）：
-//   1. 颜色与透明度分离——tokens.scss 只定义各表面角色的**不透明基准色**（*-base），
-//      本文件按模式覆写 **alpha**（--alpha-*），两者在消费端用 color-mix 合成。
+// 设计约定（与 tokens.scss 的 alpha / glass 体系配套）：
+//   1. 三件事解耦——tokens.scss 定义各表面角色的**不透明基准色**（*-base）、默认 alpha
+//      与默认玻璃（--glass-* = none）；本文件按模式覆写 **alpha**（--alpha-*）与
+//      **玻璃**（--glass-*），消费端用 color-mix 合成颜色后直接引用玻璃变量。
 //   2. 消费端引用本文件导出的合成变量（--color-canvas / -raised / -input / -fill /
-//      -header / -pop / -overlay），**不要在组件里写死 rgba**。
-//   3. 新增模式 = 在本文件加一条模式规则覆写 alpha 组，组件零改动。
-//   4. 模式类同时由 App.vue 挂到 .app-shell 与 <html>（见下方 mode() 说明）。
-//
-// 为什么选择器要覆盖 html：EP 的弹层（select / cascader / dropdown / date-picker /
-// autocomplete / dialog / message）全部 teleport 到 body，DOM 上不在 .app-shell 内。
-// 只在 .app-shell 上覆写 alpha 的话，这些浮层继承不到，--color-overlay 会落空成透明。
+//      -header / -pop / -overlay）与玻璃变量（--glass-raised / -input / -header /
+//      -pop / -overlay / -veil），**不要在组件里写死 rgba 或 blur(12px)**。
+//   3. 新增模式 = 在本文件加一条模式规则覆写 alpha + glass 两组，组件零改动。
+//   4. 模式类同时由 App.vue 挂到 .app-shell 与 <html>（原因见下方 mode() 说明）。
 //
 // 为什么用 calc(var(--alpha-x) * 100%)：alpha 是 0~1 的小数，可读且便于统一缩放。
+//
+// 玻璃与透明度是两件事（都要，缺一不成玻璃）：
+//   alpha 小 = 能看见背后的内容；--glass-* 大 = 背后被磨平。只调 alpha 会得到一块
+//   「半透明的塑料」——文字与背后的表格线互相打架；只加模糊则会变成不透明的毛玻璃。
+//   两者都按「表面角色」分档，因此每种模式、每类控件都可以独立调，互不牵连。
 
-// 模式类可能落在 <html> 或 .app-shell 上，两处都要命中（弹层在 body，只能靠 html）。
+// 模式类的两个落点：
+//   html.is-x        —— 真正必需。EP 弹层（select / cascader / dropdown / date-picker /
+//                       autocomplete / dialog / message）全部 teleport 到 body，DOM 上
+//                       不在 .app-shell 内，只有挂在 <html> 才能让这些浮层继承到
+//                       --alpha-* / --glass-*。
+//   .app-shell.is-x  —— 兜底：万一 html 同步失效（App.vue 的 watch 被改坏 / 类没挂上），
+//                       外壳内的元素仍能拿到正确档位，界面不至于整体退回实色。
+// 不再写 `html.is-x .app-shell`：html 上已有类时它纯属重复（后代本来就会继承）。
 @mixin mode($name) {
   html.#{$name},
-  html.#{$name} .app-shell,
   .app-shell.#{$name} {
     @content;
   }
@@ -25,7 +34,9 @@
 
 /* ── acrylic：强模糊 + 透光的临时浮层材质 ──
    壁纸细节会直接透上来，故各表面都压到较低 alpha；
-   但控件（input）要比卡片更稳，否则边框会与背后内容打架。 */
+   但控件（input）要比卡片更稳，否则边框会与背后内容打架。
+   系统已做一次强模糊，CSS 只需抹平「应用内部」滚到卡片背后的内容，
+   模糊半径比纯 transparent 模式小；saturate 抬高，避免磨平后发灰。 */
 @include mode('is-acrylic') {
   --alpha-raised: 0.78; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.88; /* 其余非弹出层控件（树 / 上传 / 搜索框） */
@@ -36,11 +47,19 @@
   --alpha-header: 0.6; /* 标题栏 */
   --alpha-pop: 0.94; /* 下拉类浮层（贴输入框、底下压表单，需最稳） */
   --alpha-overlay: 0.92; /* 其它弹层（dialog / message） */
+
+  --glass-saturate: 135%; /* 强透光下补回被磨掉的色彩 */
+  --glass-raised: blur(18px) saturate(var(--glass-saturate));
+  --glass-input: blur(14px) saturate(var(--glass-saturate));
+  --glass-header: blur(16px) saturate(var(--glass-saturate));
+  --glass-pop: blur(24px) saturate(var(--glass-saturate)); /* 浮层离开卡片表面，自己承担模糊 */
+  --glass-overlay: blur(28px) saturate(var(--glass-saturate)); /* dialog 压着整页内容，需最厚 */
 }
 
 /* ── mica：壁纸取色的长驻窗口背景 ──
    系统已做取色 + 轻模糊，表面只需轻微透（接近实色），
-   否则卡片会与壁纸糊在一起、文字对比度下降。 */
+   否则卡片会与壁纸糊在一起、文字对比度下降。CSS 只做很轻的一层
+   （滚动内容仍会从卡片底下经过，完全不糊会看到文字在卡片里「游动」）。 */
 @include mode('is-mica') {
   --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.97; /* 非弹出层 el 控件 */
@@ -51,10 +70,16 @@
   --alpha-header: 0.96; /* 标题栏 */
   --alpha-pop: 0.98; /* 下拉类浮层 */
   --alpha-overlay: 0.98; /* 其它弹层 */
+
+  --glass-saturate: 115%;
+  --glass-raised: blur(10px) saturate(var(--glass-saturate));
+  --glass-input: blur(8px) saturate(var(--glass-saturate));
+  --glass-pop: blur(16px) saturate(var(--glass-saturate));
+  --glass-overlay: blur(18px) saturate(var(--glass-saturate));
 }
 
 /* ── tabbed：带页签标题栏的弱化材质 ──
-   与 mica 同源，取色更弱，故比 mica 再实一档。 */
+   与 mica 同源，取色更弱，故比 mica 再实一档、再轻一档模糊。 */
 @include mode('is-tabbed') {
   --alpha-raised: 0.98; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.99; /* 非弹出层 el 控件 */
@@ -65,10 +90,17 @@
   --alpha-header: 0.98; /* 标题栏 */
   --alpha-pop: 1; /* 下拉类浮层（此模式下不透明） */
   --alpha-overlay: 1; /* 其它弹层（此模式下不透明） */
+
+  --glass-saturate: 105%;
+  /* 浮层已不透明，模糊对它没有意义；只留卡片 / 控件的一层极轻模糊 */
+  --glass-raised: blur(8px) saturate(var(--glass-saturate));
+  --glass-input: blur(6px) saturate(var(--glass-saturate));
+  --glass-pop: none;
+  --glass-overlay: none;
 }
 
 /* ── vibrancy（macOS）：系统轻模糊材质 ──
-   与 mica 同级：透得少，保持接近实色的稳重感。 */
+   与 mica 同级：透得少，保持接近实色的稳重感；系统已模糊，CSS 略补一层。 */
 @include mode('is-vibrancy') {
   --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.97; /* 非弹出层 el 控件 */
@@ -79,10 +111,17 @@
   --alpha-header: 0.96; /* 标题栏 */
   --alpha-pop: 0.98; /* 下拉类浮层 */
   --alpha-overlay: 0.98; /* 其它弹层 */
+
+  --glass-saturate: 120%;
+  --glass-raised: blur(12px) saturate(var(--glass-saturate));
+  --glass-input: blur(10px) saturate(var(--glass-saturate));
+  --glass-pop: blur(18px) saturate(var(--glass-saturate));
+  --glass-overlay: blur(20px) saturate(var(--glass-saturate));
 }
 
 /* ── 无材质的纯透明（transparent: true，旧版 Windows / 调试用） ──
-   没有系统模糊兜底，全部由 CSS 自己压：表面尽量稳，只让画布透。 */
+   没有系统模糊兜底，全部由 CSS 自己压：表面尽量稳，只让画布透，
+   模糊半径给到最大——这里 CSS 是唯一的磨砂来源。 */
 @include mode('is-transparent-only') {
   --alpha-raised: 0.88; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.93; /* 非弹出层 el 控件 */
@@ -93,6 +132,12 @@
   --alpha-header: 0.88; /* 标题栏 */
   --alpha-pop: 0.96; /* 下拉类浮层 */
   --alpha-overlay: 0.96; /* 其它弹层 */
+
+  --glass-saturate: 110%;
+  --glass-raised: blur(20px) saturate(var(--glass-saturate));
+  --glass-input: blur(16px) saturate(var(--glass-saturate));
+  --glass-pop: blur(24px) saturate(var(--glass-saturate));
+  --glass-overlay: blur(28px) saturate(var(--glass-saturate));
 }
 
 /* ── 合成导出：供各组件与 EP 绑定层直接引用 ──
@@ -101,18 +146,24 @@
 
    必须挂在 :root 而不是 .app-shell：EP 的弹层全部 teleport 到 body，
    DOM 上不在 .app-shell 内，挂在 .app-shell 会让这些浮层取不到变量而变成透明。
-   模式 alpha 因此同时挂在 <html> 与 .app-shell 上（见上方 mode() mixin）。 */
+   模式 alpha 因此同时挂在 <html> 与 .app-shell 上（见上方 mode() mixin）。
+
+   玻璃变量（--glass-*）不在这里合成：模式未覆写时直接继承 tokens.scss 的 none，
+   已覆写时就是完整的 backdrop-filter 值，组件写 backdrop-filter: var(--glass-raised)。
+
+   颜色在 oklab 里混：基准色后续若从 #fff 换成带色偏的表面色，oklab 的感知均匀插值
+   不会像 srgb 那样在中低 alpha 处掉饱和度；纯白 / 冷灰这类无彩基准色两种空间结果一致。 */
 :root {
   --color-canvas: transparent; /* 画布：恒透明，工具页与主页同一观感（透出窗口 / 桌面） */
-  --color-raised: color-mix(in srgb, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent); /* 卡片 / 面板 / 浮岛 */
-  --color-input: color-mix(in srgb, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层 el 控件底 */
-  --color-field: color-mix(in srgb, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent); /* 通用表单输入框底 */
-  --color-table: color-mix(in srgb, var(--color-table-base) calc(var(--alpha-table) * 100%), transparent); /* 表格行底 */
-  --color-button: color-mix(in srgb, var(--color-button-base) calc(var(--alpha-button) * 100%), transparent); /* 普通按钮底 */
-  --color-fill: color-mix(in srgb, var(--color-fill-base) calc(var(--alpha-fill) * 100%), transparent); /* 灰调填充：表头 / 行 hover / 灰底面版 */
-  --color-header: color-mix(in srgb, var(--color-header-base) calc(var(--alpha-header) * 100%), transparent); /* 标题栏 */
-  --color-pop: color-mix(in srgb, var(--color-pop-base) calc(var(--alpha-pop) * 100%), transparent); /* 下拉类浮层 */
-  --color-overlay: color-mix(in srgb, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent); /* 其它弹层：dialog / message */
+  --color-raised: color-mix(in oklab, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent); /* 卡片 / 面板 / 浮岛 */
+  --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层 el 控件底 */
+  --color-field: color-mix(in oklab, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent); /* 通用表单输入框底 */
+  --color-table: color-mix(in oklab, var(--color-table-base) calc(var(--alpha-table) * 100%), transparent); /* 表格行底 */
+  --color-button: color-mix(in oklab, var(--color-button-base) calc(var(--alpha-button) * 100%), transparent); /* 普通按钮底 */
+  --color-fill: color-mix(in oklab, var(--color-fill-base) calc(var(--alpha-fill) * 100%), transparent); /* 灰调填充：表头 / 行 hover / 灰底面版 */
+  --color-header: color-mix(in oklab, var(--color-header-base) calc(var(--alpha-header) * 100%), transparent); /* 标题栏 */
+  --color-pop: color-mix(in oklab, var(--color-pop-base) calc(var(--alpha-pop) * 100%), transparent); /* 下拉类浮层 */
+  --color-overlay: color-mix(in oklab, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent); /* 其它弹层：dialog / message */
 }
 
 /* 半透明窗口补回系统投影的缺失（透明窗口没有原生阴影） */
@@ -120,8 +171,25 @@
   box-shadow: var(--shadow-window-frame); /* 窗口浮起感 */
 }
 
-/* 标题栏：仅 acrylic 铺半透明表面（其余模式不铺，见 DESIGN.md §7.1.1） */
+/* 标题栏：仅 acrylic 铺半透明表面 + 玻璃（其余模式不铺，见 DESIGN.md §7.1.1）——
+   acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，
+   需压一层 --color-header 稳住原生窗口按钮与页签文字的对比度，
+   再靠 --glass-header 把滚到标题栏底下的内容磨平。 */
 .app-shell.is-acrylic .app-header {
-  background: var(--color-header); /* 标题栏半透明表面：稳住原生按钮与页签文字对比度 */
-  backdrop-filter: blur(16px); /* 补偿 acrylic 强透光下的壁纸细节 */
+  background: var(--color-header); /* 标题栏半透明表面 */
+  backdrop-filter: var(--glass-header); /* 玻璃：补偿 acrylic 强透光下的壁纸细节 */
+}
+
+/* ── 玻璃调试壁纸（窗口外观 → 测试壁纸） ──
+   在 <html> 上挂 has-test-wallpaper 时，把这面高对比「假壁纸」铺在整页最底层：
+   卡片的 alpha 越低、--glass-* 越大，色块边界越模糊——磨砂档位是否合适一眼可辨。
+   挂在 body 而不是 .app-shell：EP 的弹层 teleport 到 body 且盖满视口，
+   壁纸必须在它们之下、且不随 .app-main 滚动（fixed + cover）。
+   关闭该开关时类被摘掉，html / body 回到 base.scss 的 transparent，透出真实桌面。 */
+html.has-test-wallpaper body {
+  background-color: var(--test-wallpaper-base);
+  background-image: var(--test-wallpaper-image);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: cover;
 }

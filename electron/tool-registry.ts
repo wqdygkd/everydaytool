@@ -14,7 +14,7 @@ export interface ToolBackend {
 
 export const toolBackends: ToolBackend[] = [interceptorBackend, chromeSandboxBackend, envBrowserBackend, treeaseEditorBackend, wxpEnhancerBackend, offlinePackBackend]
 
-/** 数据根目录变更后依次通知各工具域重载（backend/ipc 的应用设置处理器经 main.ts 注入调用） */
+/** 数据根目录变更后依次通知各工具域重载（backend/ipc 的设置页处理器经 main.ts 注入调用） */
 export async function notifyDataDirectoryChanged(): Promise<void> {
   for (const backend of toolBackends) {
     await backend.onDataDirectoryChanged?.()

@@ -69,6 +69,9 @@ function onEsc() {
     padding: 0 var(--spacing-lg);
     border-radius: 14px;
     background: var(--color-input);
+    /* 玻璃：搜索框直接浮在画布上（没有卡片兜底），背后就是壁纸，
+       故走 input 角色自己的玻璃档，不与卡片共用模糊半径 */
+    backdrop-filter: var(--glass-input);
     box-shadow: 0 0 0 2px var(--color-border-light) inset;
 
     &:hover {

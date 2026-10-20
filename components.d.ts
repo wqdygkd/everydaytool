@@ -12,7 +12,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ActionBar: typeof import('./tools/chrome-sandbox/renderer/components/ActionBar.vue')['default']
-    AppSettingsDialog: typeof import('./renderer/shared/components/AppSettingsDialog.vue')['default']
     ChromeDownloader: typeof import('./tools/offline-pack/renderer/components/ChromeDownloader.vue')['default']
     CreateDialog: typeof import('./tools/chrome-sandbox/renderer/components/CreateDialog.vue')['default']
     DataDirectoryField: typeof import('./tools/chrome-sandbox/renderer/components/DataDirectoryField.vue')['default']
@@ -83,7 +82,6 @@ declare module 'vue' {
     UiDetailItem: typeof import('./renderer/shared/components/ui/UiDetailItem.vue')['default']
     UiDialog: typeof import('./renderer/shared/components/ui/UiDialog.vue')['default']
     UiEmpty: typeof import('./renderer/shared/components/ui/UiEmpty.vue')['default']
-    UiFab: typeof import('./renderer/shared/components/ui/UiFab.vue')['default']
     UiGroup: typeof import('./renderer/shared/components/ui/UiGroup.vue')['default']
     UiHint: typeof import('./renderer/shared/components/ui/UiHint.vue')['default']
     UiIcon: typeof import('./renderer/shared/components/ui/UiIcon.vue')['default']

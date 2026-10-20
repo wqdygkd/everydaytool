@@ -59,7 +59,8 @@ defineEmits<{
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-raised);
-  backdrop-filter: blur(12px);
+  /* 玻璃：卡片是最常被内容滚过的一层，模糊按 raised 角色取（不透明窗口下为 none） */
+  backdrop-filter: var(--glass-raised);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
