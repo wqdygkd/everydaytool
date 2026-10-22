@@ -40,13 +40,17 @@
 @include mode('is-acrylic') {
   --alpha-raised: 0.78; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.88; /* 其余非弹出层控件（树 / 上传 / 搜索框） */
-  --alpha-field: 0.88; /* 通用表单输入框（el-input / textarea / select） */
+  --alpha-field: 0.3; /* 通用表单输入框（el-input / textarea / select） */
   --alpha-table: 0.88; /* 表格行 */
   --alpha-button: 0.88; /* 普通按钮 */
   --alpha-fill: 0.8; /* 灰调填充（表头 / 行 hover） */
   --alpha-header: 0.6; /* 标题栏 */
   --alpha-pop: 0.94; /* 下拉类浮层（贴输入框、底下压表单，需最稳） */
   --alpha-overlay: 0.92; /* 其它弹层（dialog / message） */
+  /* 玻璃细节：轨道半透出底色；滑块是前景件，必须近实——透明只给轨道，不给滑块 */
+  --alpha-highlight: 0.6; /* 镜面高光 / 内描边 */
+  --alpha-switch-track: 0.82; /* 开关轨道 */
+  --alpha-switch-knob: 0.94; /* 开关滑块 */
 
   --glass-saturate: 135%; /* 强透光下补回被磨掉的色彩 */
   --glass-raised: blur(18px) saturate(var(--glass-saturate));
@@ -70,6 +74,10 @@
   --alpha-header: 0.96; /* 标题栏 */
   --alpha-pop: 0.98; /* 下拉类浮层 */
   --alpha-overlay: 0.98; /* 其它弹层 */
+  /* 玻璃细节：mica 本身很实，只留很轻的高光与几乎实的轨道 / 滑块 */
+  --alpha-highlight: 0.35;
+  --alpha-switch-track: 0.95;
+  --alpha-switch-knob: 0.98;
 
   --glass-saturate: 115%;
   --glass-raised: blur(10px) saturate(var(--glass-saturate));
@@ -90,6 +98,10 @@
   --alpha-header: 0.98; /* 标题栏 */
   --alpha-pop: 1; /* 下拉类浮层（此模式下不透明） */
   --alpha-overlay: 1; /* 其它弹层（此模式下不透明） */
+  /* 玻璃细节：tabbed 最实，高光只做一点点，轨道 / 滑块接近实色 */
+  --alpha-highlight: 0.25;
+  --alpha-switch-track: 0.98;
+  --alpha-switch-knob: 1;
 
   --glass-saturate: 105%;
   /* 浮层已不透明，模糊对它没有意义；只留卡片 / 控件的一层极轻模糊 */
@@ -111,6 +123,10 @@
   --alpha-header: 0.96; /* 标题栏 */
   --alpha-pop: 0.98; /* 下拉类浮层 */
   --alpha-overlay: 0.98; /* 其它弹层 */
+  /* 玻璃细节：vibrancy 与 mica 同级，高光略强（系统材质自带柔光） */
+  --alpha-highlight: 0.4;
+  --alpha-switch-track: 0.95;
+  --alpha-switch-knob: 0.98;
 
   --glass-saturate: 120%;
   --glass-raised: blur(12px) saturate(var(--glass-saturate));
@@ -132,6 +148,10 @@
   --alpha-header: 0.88; /* 标题栏 */
   --alpha-pop: 0.96; /* 下拉类浮层 */
   --alpha-overlay: 0.96; /* 其它弹层 */
+  /* 玻璃细节：无系统模糊兜底，轨道与滑块都要更实，高光负责边界 */
+  --alpha-highlight: 0.6;
+  --alpha-switch-track: 0.88;
+  --alpha-switch-knob: 0.96;
 
   --glass-saturate: 110%;
   --glass-raised: blur(20px) saturate(var(--glass-saturate));
@@ -164,6 +184,13 @@
   --color-header: color-mix(in oklab, var(--color-header-base) calc(var(--alpha-header) * 100%), transparent); /* 标题栏 */
   --color-pop: color-mix(in oklab, var(--color-pop-base) calc(var(--alpha-pop) * 100%), transparent); /* 下拉类浮层 */
   --color-overlay: color-mix(in oklab, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent); /* 其它弹层：dialog / message */
+
+  /* 玻璃细节：不新增基准色，直接给现有色上 alpha。
+     轨道开态取品牌色、关态取灰线，滑块 / 高光取前景白——高光在低 alpha 下负责保住小元件形状。 */
+  --color-highlight: color-mix(in oklab, var(--color-on-solid) calc(var(--alpha-highlight) * 100%), transparent); /* 镜面高光 / 内描边 */
+  --color-switch-track: color-mix(in oklab, var(--color-primary) calc(var(--alpha-switch-track) * 100%), transparent); /* 开关轨道（开） */
+  --color-switch-track-off: color-mix(in oklab, var(--color-border) calc(var(--alpha-switch-track) * 100%), transparent); /* 开关轨道（关） */
+  --color-switch-knob: color-mix(in oklab, var(--color-on-solid) calc(var(--alpha-switch-knob) * 100%), transparent); /* 开关滑块 */
 }
 
 /* 半透明窗口补回系统投影的缺失（透明窗口没有原生阴影） */
@@ -192,4 +219,32 @@ html.has-test-wallpaper body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-size: cover;
+}
+
+/* ── 系统「降低透明度」偏好（Tahoe / Windows 都会提供这个开关） ──
+   开启后玻璃退回实色（alpha = 1、玻璃 = none）：用户要的是可读性，
+   此时再压着壁纸做半透明文字，等于把无障碍设置当耳旁风。
+   选择器用 :is(...) 取模式块同权（0,1,1）且位置更靠后，才能压过 html.is-acrylic 等模式覆写。 */
+@media (prefers-reduced-transparency: reduce) {
+  html:is(.is-acrylic, .is-mica, .is-tabbed, .is-vibrancy, .is-transparent-only),
+  .app-shell:is(.is-acrylic, .is-mica, .is-tabbed, .is-vibrancy, .is-transparent-only) {
+    --alpha-raised: 1;
+    --alpha-input: 1;
+    --alpha-field: 1;
+    --alpha-table: 1;
+    --alpha-button: 1;
+    --alpha-fill: 1;
+    --alpha-header: 1;
+    --alpha-pop: 1;
+    --alpha-overlay: 1;
+    --alpha-highlight: 0;
+    --alpha-switch-track: 1;
+    --alpha-switch-knob: 1;
+
+    --glass-raised: none;
+    --glass-input: none;
+    --glass-header: none;
+    --glass-pop: none;
+    --glass-overlay: none;
+  }
 }

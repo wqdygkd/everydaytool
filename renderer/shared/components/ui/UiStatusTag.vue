@@ -52,4 +52,11 @@ withDefaults(defineProps<{
     box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-success) 0%, transparent);
   }
 }
+
+/* 用户要求减少动态效果时，呼吸灯退化为静态色点（DESIGN §8） */
+@media (prefers-reduced-motion: reduce) {
+  .ui-status-dot.is-pulsing {
+    animation: none;
+  }
+}
 </style>

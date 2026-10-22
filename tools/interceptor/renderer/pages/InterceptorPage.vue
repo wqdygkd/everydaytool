@@ -10,10 +10,24 @@ const route = useRoute()
 const router = useRouter()
 const store = useInterceptorStore()
 
-// 页签状态由路由驱动（/tools/interceptor/:tab）：URL 可深链，前进后退可用
+// 视图状态仍由路由驱动（/tools/interceptor/:tab）：URL 可深链，前进后退可用
 const activeTab = computed(() => tabKeyFromPath(route.path))
 
-const trafficTabLabel = computed(() => (store.traffic.length ? `流量 (${store.traffic.length})` : '流量'))
+const PANELS = {
+  status: InterceptorStatusPanel,
+  targets: TargetsPanel,
+  rules: RulesPanel,
+  traffic: TrafficPanel,
+} as const
+
+const activePanel = computed(() => PANELS[activeTab.value])
+
+// 视图切换走 UiMenuHorizontal（复刻 Telegram Web K 的横向菜单）：流量条数用徽章显示
+const menuItems = computed(() => INTERCEPTOR_TABS.map(tab => ({
+  value: tab.key as string,
+  label: tab.label,
+  badge: tab.key === 'traffic' ? store.traffic.length : undefined,
+})))
 
 function switchTab(key: string): void {
   if (key === activeTab.value) return
@@ -40,20 +54,14 @@ onUnmounted(() => {
 
 <template>
   <div class="tool-page interceptor-page">
-    <el-tabs :model-value="activeTab" class="interceptor-tabs" @update:model-value="switchTab">
-      <el-tab-pane label="状态" name="status">
-        <InterceptorStatusPanel />
-      </el-tab-pane>
-      <el-tab-pane label="处理名单" name="targets">
-        <TargetsPanel />
-      </el-tab-pane>
-      <el-tab-pane label="规则" name="rules">
-        <RulesPanel />
-      </el-tab-pane>
-      <el-tab-pane :label="trafficTabLabel" name="traffic">
-        <TrafficPanel @create-rule="goToRules" />
-      </el-tab-pane>
-    </el-tabs>
+    <div class="view-switcher">
+      <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
+    </div>
+
+    <!-- 切换保留各视图状态（规则草稿 / 流量筛选不因切走而丢） -->
+    <KeepAlive>
+      <component :is="activePanel" @create-rule="goToRules" />
+    </KeepAlive>
   </div>
 </template>
 
@@ -62,7 +70,7 @@ onUnmounted(() => {
   padding: var(--spacing-lg);
 }
 
-.interceptor-tabs :deep(.el-tabs__header) {
+.view-switcher {
   margin-bottom: var(--spacing-md);
 }
 </style>

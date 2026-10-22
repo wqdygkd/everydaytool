@@ -1,4 +1,4 @@
-// edt 平台级（应用壳）IPC 通道：数据根目录管理、磁盘用量、缓存清理。
+// edt 平台级（应用壳）IPC 通道：数据根目录管理、磁盘用量、缓存清理、调试工具。
 // 与工具域通道（tools/*/backend/ipc/channels.ts）平行，经 preload 命名空间 edtApp 暴露。
 export const EDT_APP_IPC_CHANNELS = {
   DATA_DIRECTORY_GET: 'edt-app:data-directory:get',
@@ -7,6 +7,8 @@ export const EDT_APP_IPC_CHANNELS = {
   DATA_DIRECTORY_OPEN: 'edt-app:data-directory:open',
   DATA_USAGE_GET: 'edt-app:data-usage:get',
   CACHE_CLEAR: 'edt-app:cache:clear',
+  // 设置页的「打开调试控制台」：主进程为调用方窗口打开独立 DevTools 窗口
+  DEVTOOLS_OPEN: 'edt-app:devtools:open',
   // 主进程 → 渲染层推送：窗口进/出全屏（EVENT_ 开头，preload on() 白名单要求）
   EVENT_FULLSCREEN_CHANGED: 'edt-app:event:fullscreen-changed',
   // 窗口外观（半透明 / 系统材质）：跨进程生效，主进程推送最新值保持渲染层同步

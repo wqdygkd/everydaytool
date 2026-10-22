@@ -54,11 +54,11 @@ withDefaults(defineProps<{
   }
 
   &.is-raised.is-shadow-sm {
-    box-shadow: var(--shadow-sm);
+    box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
   }
 
   &.is-raised.is-shadow-md {
-    box-shadow: var(--shadow-md);
+    box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-md);
   }
 
   &.is-outlined {

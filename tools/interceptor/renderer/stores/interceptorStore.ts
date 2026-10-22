@@ -5,7 +5,8 @@ import type {
   InterceptorRule,
   InterceptorRuntimeStatus,
   InterceptorTarget,
-  TargetMatchType,
+  InterceptorTargetPatch,
+  ProxyPortUpdateResult,
   TrafficEntry,
 } from '../../../../shared/interceptor'
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
@@ -18,6 +19,14 @@ export interface CaActionResult {
   canceled?: boolean
   detail?: string
   status: CaStatus
+}
+
+export interface AddTargetResult {
+  targets: InterceptorTarget[]
+  /** 归一后的条目（nil = 输入无法解析） */
+  target: InterceptorTarget | null
+  /** true = 已有同「域 + 端口 + 匹配方式」的条目，本次只同步开关，没有新增行 */
+  existed: boolean
 }
 
 function api(): IpcInvokeApi {
@@ -100,14 +109,32 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     return (await api().invoke(channels.CA_EXPORT)) as string | null
   }
 
-  async function addTarget(host: string, port: number | undefined, matchType: TargetMatchType): Promise<void> {
+  /** 加入名单：入参是一个 origin（`https://www.a.com` / `http://127.0.0.1:8089`） */
+  async function addTarget(origin: string): Promise<AddTargetResult> {
     const channels = api().channels
-    targets.value = (await api().invoke(channels.TARGETS_ADD, host, port, matchType)) as InterceptorTarget[]
+    const result = (await api().invoke(channels.TARGETS_ADD, origin)) as AddTargetResult
+    targets.value = result.targets
+    return result
   }
 
   async function removeTarget(targetId: string): Promise<void> {
     const channels = api().channels
     targets.value = (await api().invoke(channels.TARGETS_REMOVE, targetId)) as InterceptorTarget[]
+  }
+
+  /**
+   * 更新条目开关，返回后端实际是否落到目标值。
+   * 返回 false 通常意味着后端是旧进程（不认识该字段，补丁被丢弃），调用方要明确提示重启而不是静默失败。
+   */
+  async function updateTarget(targetId: string, patch: InterceptorTargetPatch): Promise<boolean> {
+    const channels = api().channels
+    const next = (await api().invoke(channels.TARGETS_TOGGLE, targetId, patch)) as InterceptorTarget[]
+    targets.value = next
+    const updated = next.find(target => target.id === targetId)
+    if (!updated) return false
+    const enabledOk = patch.enabled === undefined || (updated.enabled !== false) === patch.enabled
+    const noCacheOk = patch.noCache === undefined || (updated.noCache !== false) === patch.noCache
+    return enabledOk && noCacheOk
   }
 
   async function upsertRule(rule: InterceptorRule): Promise<void> {
@@ -129,6 +156,13 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
   async function setProxyDesired(enabled: boolean): Promise<boolean> {
     const channels = api().channels
     return (await api().invoke(channels.PROXY_SET_DESIRED, enabled)) as boolean
+  }
+
+  async function setProxyPort(port: number): Promise<ProxyPortUpdateResult> {
+    const channels = api().channels
+    const result = (await api().invoke(channels.PROXY_PORT_SET, port)) as ProxyPortUpdateResult
+    if (result.status) status.value = result.status
+    return result
   }
 
   async function openExtensionDir(): Promise<boolean> {
@@ -168,10 +202,12 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     exportCa,
     addTarget,
     removeTarget,
+    updateTarget,
     upsertRule,
     deleteRule,
     clearTraffic,
     setProxyDesired,
+    setProxyPort,
     openExtensionDir,
     openRuleEditorFromTraffic,
   }

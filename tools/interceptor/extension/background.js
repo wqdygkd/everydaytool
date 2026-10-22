@@ -1,8 +1,9 @@
 // edt 拦截器扩展 service worker：
-// - WS 客户端：59763 起端口段扫描 → hello 配对（token）→ 心跳/自动重连（对 Requestly 短板的补齐）；
+// - WS 客户端：59763 起端口段扫描 → hello 握手（无需配对码，edt 侧只校验来源 Origin）→ 心跳/自动重连（对 Requestly 短板的补齐）；
 // - 代理控制：chrome.proxy fixed_servers（B 模式）+ 自有端口 bypass（避免 WS 被自身代理圈进）；
 //   fail-open：断线自动撤代理（Requestly 实践）；
 // - 名单/脚本：全部状态来自 edt（targets-sync / scripts-sync），扩展只回传动作与状态；
+// - 代理端口：由 edt 下发（hello-ok / proxy-port），扩展不硬编码；
 // - 脚本注入：chrome.userScripts 动态注册（支持任意代码正文，需开发者模式——unpacked 场景天然满足）。
 'use strict'
 
@@ -11,9 +12,11 @@ const WS_PORT_RANGE = 5
 const RECONNECT_ALARM = 'edt-interceptor-reconnect'
 const CONNECT_TIMEOUT_MS = 1200
 const HELLO_TIMEOUT_MS = 3000
+/** edt 心跳 20s 一次：超过这个时间一条消息都没有，就当连接僵死（SW 冻结/恢复后残留 socket） */
+const STALE_CONNECTION_MS = 60_000
 const PROXY_SCOPE = 'regular'
 
-/** @type {{socket: WebSocket|null, connected: boolean, connecting: Promise<void>|null, wsPort: number|null, proxyPort: number|null, targets: Array<object>, scripts: Array<object>, lastError: string|null, appId: string, clientId: string, version: string}} */
+/** @type {{socket: WebSocket|null, connected: boolean, connecting: Promise<void>|null, wsPort: number|null, proxyPort: number|null, targets: Array<object>, scripts: Array<object>, rules: Array<object>, lastError: string|null, appId: string, clientId: string, version: string, lastMessageAt: number}} */
 const state = {
   socket: null,
   connected: false,
@@ -22,10 +25,12 @@ const state = {
   proxyPort: null,
   targets: [],
   scripts: [],
+  rules: [],
   lastError: null,
   appId: detectAppId(),
   clientId: '',
   version: chrome.runtime.getManifest().version,
+  lastMessageAt: 0,
 }
 
 function detectAppId() {
@@ -37,7 +42,7 @@ function detectAppId() {
 }
 
 async function getSettings() {
-  const data = await chrome.storage.local.get({ token: '', proxyEnabled: false, lastWsPort: 0, clientId: '' })
+  const data = await chrome.storage.local.get({ proxyEnabled: false, lastWsPort: 0, clientId: '' })
   if (!data.clientId) {
     data.clientId = crypto.randomUUID()
     await chrome.storage.local.set({ clientId: data.clientId })
@@ -197,7 +202,7 @@ function tryConnectOnce(port) {
   })
 }
 
-function awaitHello(socket, token) {
+function awaitHello(socket) {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, HELLO_TIMEOUT_MS, { type: 'timeout' })
     const onMessage = (event) => {
@@ -216,7 +221,6 @@ function awaitHello(socket, token) {
     socket.addEventListener('message', onMessage)
     socket.send(JSON.stringify({
       type: 'hello',
-      token,
       appId: state.appId,
       clientId: state.clientId,
       version: state.version,
@@ -225,16 +229,13 @@ function awaitHello(socket, token) {
 }
 
 async function connect() {
-  if (state.connected) return
+  // 注意用 isSocketAlive：state.connected 可能是僵死连接的残留标记，不能据此跳过重连
+  if (isSocketAlive()) return
   if (state.connecting) return state.connecting
+  if (state.connected) markDisconnected()
 
   state.connecting = (async () => {
     const settings = await getSettings()
-    if (!settings.token) {
-      state.lastError = '未配置配对码：请从 edt 拦截器页面复制后填入'
-      await failOpenProxy()
-      return
-    }
 
     const start = settings.lastWsPort >= WS_PORT_BASE && settings.lastWsPort < WS_PORT_BASE + WS_PORT_RANGE
       ? settings.lastWsPort
@@ -245,9 +246,9 @@ async function connect() {
       const socket = await tryConnectOnce(port)
       if (!socket) continue
 
-      const hello = await awaitHello(socket, settings.token)
+      const hello = await awaitHello(socket)
       if (hello.type === 'hello-reject') {
-        state.lastError = hello.reason === 'bad-token' ? '配对码错误：请与 edt 页面显示的一致' : `连接被拒绝（${hello.reason}）`
+        state.lastError = hello.reason === 'bad-origin' ? '连接被拒绝：扩展来源校验未通过（版本不匹配？）' : `连接被拒绝（${hello.reason}）`
         try {
           socket.close()
         } catch {}
@@ -264,11 +265,13 @@ async function connect() {
       // 连接成功
       state.socket = socket
       state.connected = true
+      state.lastMessageAt = Date.now()
       state.lastError = null
       state.wsPort = hello.wsPort || port
       state.proxyPort = hello.proxyPort || null
       state.targets = hello.targets || []
       state.scripts = hello.scripts || []
+      state.rules = hello.rules || []
       await chrome.storage.local.set({ lastWsPort: port })
 
       socket.addEventListener('message', onSocketMessage)
@@ -307,6 +310,7 @@ async function failOpenProxy() {
 function onSocketClosed() {
   state.connected = false
   state.socket = null
+  state.lastMessageAt = 0
   setBadge(false)
   failOpenProxy().finally(() => {
     // SW 可能随时休眠，定时重连只作即时补偿；长期靠 alarm 兜底
@@ -326,7 +330,7 @@ async function disconnectManually() {
 }
 
 function sendToEdt(message) {
-  if (state.socket?.readyState === WebSocket.OPEN) {
+  if (isSocketAlive()) {
     try {
       state.socket.send(JSON.stringify(message))
       return true
@@ -337,7 +341,187 @@ function sendToEdt(message) {
   return false
 }
 
+/** 连接是否真的可用：SW 被冻结/恢复后 socket 可能已死，但 state.connected 还留着 true */
+function isSocketAlive() {
+  return state.connected && state.socket?.readyState === WebSocket.OPEN
+}
+
+function markDisconnected() {
+  state.connected = false
+  state.socket = null
+}
+
+/** SW 被回收后 state 会归零：popup 打开时先等一次重连，别让界面直接显示空名单 */
+async function ensureConnected(timeoutMs = 1500) {
+  if (isSocketAlive()) {
+    // 心跳 20s 一次：超过 60s 一条消息都没收到，判定僵死并强制重连
+    if (state.lastMessageAt && Date.now() - state.lastMessageAt > STALE_CONNECTION_MS) {
+      try {
+        state.socket?.close()
+      } catch {}
+      markDisconnected()
+    } else {
+      return true
+    }
+  } else if (state.connected) {
+    markDisconnected()
+  }
+
+  if (!state.connecting) connect().catch(() => {})
+  await Promise.race([
+    (state.connecting || Promise.resolve()).then(() => undefined).catch(() => undefined),
+    new Promise(resolve => setTimeout(resolve, timeoutMs)),
+  ])
+  return isSocketAlive()
+}
+
+/** 主动断开重连（拿到请求无响应时用：僵死连接 send 得出去但收不回来） */
+async function forceReconnect(timeoutMs = 1500) {
+  try {
+    state.socket?.close()
+  } catch {}
+  markDisconnected()
+  return ensureConnected(timeoutMs)
+}
+
+/** 等待 edt 回执的请求（requestId → resolve 回调） */
+const pendingPopupRequests = new Map()
+
+/**
+ * 向 edt 发一条需要回执的消息：
+ * - 解析成回执对象 = 成功；
+ * - null = 发出去了但超时没回执；
+ * - undefined = 连接不可用，根本没发出去。
+ */
+function requestFromEdt(buildMessage, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const requestId = crypto.randomUUID()
+    const timer = setTimeout(() => {
+      pendingPopupRequests.delete(requestId)
+      resolve(null)
+    }, timeoutMs)
+    pendingPopupRequests.set(requestId, (result) => {
+      clearTimeout(timer)
+      resolve(result)
+    })
+    if (!sendToEdt(buildMessage(requestId))) {
+      clearTimeout(timer)
+      pendingPopupRequests.delete(requestId)
+      resolve(undefined)
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// 站点视图本地兜底：edt 不回 site-info（旧版 edt / 链路异常）时，用已同步的
+// targets / rules 在扩展侧做同样的域级过滤，保证弹窗不空白。
+// ---------------------------------------------------------------------------
+
+const TWO_LEVEL_SUFFIXES = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac'])
+
+function registrableDomain(host) {
+  const parts = String(host || '').toLowerCase().split('.')
+  if (parts.length <= 2) return parts.join('.')
+  if (TWO_LEVEL_SUFFIXES.has(parts[parts.length - 2])) return parts.slice(-3).join('.')
+  return parts.slice(-2).join('.')
+}
+
+/** 从 URL 取 origin（默认端口省略，与 edt 的条目格式一致） */
+function originOfUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined
+    return `${url.protocol}//${url.hostname.toLowerCase()}${url.port ? `:${url.port}` : ''}`
+  } catch {
+    return undefined
+  }
+}
+
+/** 从 origin 取主机（`https://[::1]:8089` → `::1`） */
+function originHostOf(origin) {
+  try {
+    return new URL(origin).hostname.replace(/^\[|\]$/g, '').toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function localSourceHostPattern(rule) {
+  const source = rule.source
+  if (!source) return undefined
+  const raw = String(source.value ?? '').trim()
+  if (!raw) return undefined
+  if (source.key === 'host') return raw
+  if (source.key === 'url') {
+    if (source.operator === 'matches') return undefined
+    const byScheme = /^[a-z*]+:\/\/([^/?#]+)/i.exec(raw)
+    if (byScheme?.[1]) return byScheme[1]
+    if (!raw.includes('/') && /^[\w.*:-]+$/.test(raw) && raw.includes('.')) return raw
+  }
+  return undefined
+}
+
+function localHostMatchesPattern(pattern, host, operator) {
+  const value = pattern.replace(/:\d+$/, '').toLowerCase()
+  if (!value || value === '*') return true
+  if (operator === 'matches') {
+    try {
+      return new RegExp(value).test(host)
+    } catch {
+      return false
+    }
+  }
+  if (value.startsWith('*.')) {
+    const base = value.slice(2)
+    if (host === base || host.endsWith(`.${base}`)) return true
+  }
+  if (value.includes('*') || value.includes('?')) {
+    const escaped = value.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')
+    if (new RegExp(`^${escaped}$`).test(host)) return true
+  }
+  if (operator === 'contains' && host.includes(value)) return true
+  if (value === host) return true
+  if (host.endsWith(`.${value}`) || value.endsWith(`.${host}`)) return true
+  return registrableDomain(host) === registrableDomain(value)
+}
+
+function localRuleScope(rule, host) {
+  const pattern = localSourceHostPattern(rule)
+  if (pattern === undefined) return 'global'
+  if (/^[\s*?:]*$/.test(pattern)) return 'global'
+  return localHostMatchesPattern(pattern, host, rule.source?.operator) ? 'site' : null
+}
+
+function localSiteInfo(rawUrl) {
+  let url
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    return { targets: [], related: [], rules: [], total: state.targets.length }
+  }
+  const host = url.hostname.toLowerCase()
+  const pageOrigin = originOfUrl(rawUrl)
+
+  // 名单按 origin 精确匹配；同主机但协议 / 端口不同的条目放进 related（解释「为什么没生效」）
+  const targets = []
+  const related = []
+  for (const target of state.targets) {
+    if (target.origin === pageOrigin) targets.push(target)
+    else if (originHostOf(target.origin) === host) related.push(target)
+  }
+  // 规则摘要带 source 才能按域筛；老版 edt 不带 → 全部列出（标 global）
+  const rules = []
+  for (const rule of state.rules) {
+    const scope = rule.source ? localRuleScope(rule, host) : 'global'
+    if (!scope) continue
+    rules.push({ ...rule, scope })
+  }
+  rules.sort((a, b) => (a.scope === b.scope ? 0 : a.scope === 'site' ? -1 : 1))
+  return { targets, related, rules, total: state.targets.length }
+}
+
 function onSocketMessage(event) {
+  state.lastMessageAt = Date.now()
   let message
   try {
     message = JSON.parse(event.data)
@@ -354,10 +538,24 @@ function onSocketMessage(event) {
       state.targets = message.targets || []
       notifyPopupStateChanged()
       return
+    case 'rules-sync':
+      state.rules = message.rules || []
+      notifyPopupStateChanged()
+      return
     case 'scripts-sync':
       state.scripts = message.scripts || []
       syncUserScripts(state.scripts).catch(() => {})
       return
+    case 'proxy-port': {
+      // edt 侧改了代理端口：已挂载代理的浏览器必须立刻改指新端口
+      state.proxyPort = message.proxyPort || null
+      void (async () => {
+        const settings = await getSettings()
+        if (settings.proxyEnabled && state.proxyPort) await applyProxy(state.proxyPort)
+        notifyPopupStateChanged()
+      })()
+      return
+    }
     case 'set-proxy': {
       void (async () => {
         try {
@@ -377,6 +575,7 @@ function onSocketMessage(event) {
       return
     }
     case 'target-suggest-result':
+    case 'site-info-result':
       respondToPopup(message)
   }
 }
@@ -384,8 +583,6 @@ function onSocketMessage(event) {
 // ---------------------------------------------------------------------------
 // popup 通信
 // ---------------------------------------------------------------------------
-
-const pendingPopupRequests = new Map()
 
 function respondToPopup(message) {
   const pending = pendingPopupRequests.get(message.requestId)
@@ -399,28 +596,6 @@ function notifyPopupStateChanged() {
   chrome.runtime.sendMessage({ type: 'popup-state-changed' }).catch(() => {})
 }
 
-function targetMatchesUrl(target, url) {
-  let parsed
-  try {
-    parsed = new URL(url)
-  } catch {
-    return false
-  }
-  const host = parsed.hostname.toLowerCase()
-  const port = parsed.port ? Number(parsed.port) : undefined
-  if (target.port !== undefined && target.port !== port) return false
-  const targetHost = (target.host || '').toLowerCase()
-  if (target.matchType === 'suffix') return host === targetHost || host.endsWith(`.${targetHost}`)
-  if (target.matchType === 'regex') {
-    try {
-      return new RegExp(target.host).test(host)
-    } catch {
-      return false
-    }
-  }
-  return targetHost === host
-}
-
 async function buildPopupState() {
   const settings = await getSettings()
   return {
@@ -432,8 +607,8 @@ async function buildPopupState() {
     wsPort: state.wsPort,
     appId: state.appId,
     scriptSupported: scriptSupported(),
-    hasToken: Boolean(settings.token),
     targets: state.targets,
+    rules: state.rules,
   }
 }
 
@@ -451,14 +626,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true
   }
 
-  if (message.type === 'set-token') {
-    void chrome.storage.local.set({ token: String(message.token || '').trim(), lastWsPort: 0 }).then(() => {
-      disconnectManually().then(() => connect())
-      sendResponse({ ok: true })
-    })
-    return true
-  }
-
   if (message.type === 'reconnect') {
     disconnectManually().then(() => connect()).then(() => sendResponse({ ok: true }))
     return true
@@ -467,7 +634,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'set-proxy') {
     void (async () => {
       if (message.enabled) {
-        if (!state.connected || !state.proxyPort) {
+        if (!isSocketAlive() || !state.proxyPort) {
           sendResponse({ ok: false, error: '尚未连接 edt' })
           return
         }
@@ -484,32 +651,82 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'add-target') {
-    const ok = sendToEdt({ type: 'add-target', url: message.url, matchType: message.matchType || 'exact' })
+    const ok = sendToEdt({ type: 'add-target', url: message.url })
     sendResponse({ ok, error: ok ? undefined : '尚未连接 edt' })
     return false
   }
 
-  if (message.type === 'remove-target') {
-    const ok = sendToEdt({ type: 'remove-target', host: message.host, port: message.port })
+  // 站点视图：当前站点命中的名单条目 + 规则（匹配在 edt 侧算；edt 不回则本地兜底）
+  if (message.type === 'get-site-info') {
+    void (async () => {
+      const local = () => localSiteInfo(message.url)
+      const connected = await ensureConnected(1200)
+      if (!connected) {
+        sendResponse({ ok: false, local: true, error: '尚未连接 edt（请确认 everydaytool 正在运行），以下为扩展本地数据', ...local() })
+        return
+      }
+
+      let reply = await requestFromEdt(
+        requestId => ({ type: 'site-info', requestId, url: message.url }),
+        1500,
+      )
+      if (reply === undefined || reply === null) {
+        // 发不出去 / 没回执：多半是连接僵死，重连后重试一次
+        await forceReconnect(1500)
+        reply = await requestFromEdt(
+          requestId => ({ type: 'site-info', requestId, url: message.url }),
+          1500,
+        )
+      }
+      if (reply === undefined || reply === null) {
+        sendResponse({
+          ok: false,
+          local: true,
+          error: 'edt 未响应站点查询（edt 可能是旧版，请重启后重载扩展），以下为扩展本地数据',
+          ...local(),
+        })
+        return
+      }
+      sendResponse({
+        ok: true,
+        targets: reply.targets || [],
+        related: reply.related || [],
+        rules: reply.rules || [],
+        total: state.targets.length,
+      })
+    })()
+    return true
+  }
+
+  if (message.type === 'toggle-target' || message.type === 'toggle-rule') {
+    const ok = sendToEdt({
+      type: message.type,
+      id: message.id,
+      enabled: message.enabled === true,
+    })
+    sendResponse({ ok, error: ok ? undefined : '尚未连接 edt' })
+    return false
+  }
+
+  if (message.type === 'remove-target-id' || message.type === 'remove-rule') {
+    const ok = sendToEdt({ type: message.type, id: message.id })
     sendResponse({ ok, error: ok ? undefined : '尚未连接 edt' })
     return false
   }
 
   if (message.type === 'suggest-targets') {
-    if (!state.connected) {
-      sendResponse({ ok: false, error: '尚未连接 edt', hosts: [] })
-      return false
-    }
-    const requestId = crypto.randomUUID()
-    pendingPopupRequests.set(requestId, result => sendResponse({ ok: true, hosts: result.hosts || [] }))
-    sendToEdt({ type: 'target-suggest', requestId, url: message.url })
+    void (async () => {
+      if (!(await ensureConnected(1200))) {
+        sendResponse({ ok: false, error: '尚未连接 edt', hosts: [] })
+        return
+      }
+      const result = await requestFromEdt(
+        requestId => ({ type: 'target-suggest', requestId, url: message.url }),
+        1500,
+      )
+      sendResponse({ ok: Boolean(result), hosts: result?.hosts || [] })
+    })()
     return true
-  }
-
-  if (message.type === 'check-target') {
-    const matching = state.targets.filter(target => targetMatchesUrl(target, message.url))
-    sendResponse({ ok: true, targets: matching })
-    return false
   }
 
   return false
@@ -523,7 +740,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.alarms.create(RECONNECT_ALARM, { periodInMinutes: 1 })
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === RECONNECT_ALARM && !state.connected) {
+  if (alarm.name === RECONNECT_ALARM && !isSocketAlive()) {
     connect().catch(() => {})
   }
 })

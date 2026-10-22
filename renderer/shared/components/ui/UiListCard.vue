@@ -29,8 +29,9 @@ const emit = defineEmits<{
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-raised);
-  /* 玻璃：列表卡片是 raised 表面（不透明窗口下为 none） */
+  /* 玻璃：列表卡片是 raised 表面（不透明窗口下为 none）；顶部高光同卡片（不透明模式为透明） */
   backdrop-filter: var(--glass-raised);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
   cursor: pointer;
   transition:
     border-color var(--transition-base),
@@ -41,7 +42,7 @@ const emit = defineEmits<{
   &.is-active {
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
-    box-shadow: var(--shadow-sm);
+    box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
   }
 }
 </style>

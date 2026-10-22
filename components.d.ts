@@ -88,6 +88,7 @@ declare module 'vue' {
     UiIconButton: typeof import('./renderer/shared/components/ui/UiIconButton.vue')['default']
     UiKeyValue: typeof import('./renderer/shared/components/ui/UiKeyValue.vue')['default']
     UiListCard: typeof import('./renderer/shared/components/ui/UiListCard.vue')['default']
+    UiMenuHorizontal: typeof import('./renderer/shared/components/ui/UiMenuHorizontal.vue')['default']
     UiPanel: typeof import('./renderer/shared/components/ui/UiPanel.vue')['default']
     UiPathField: typeof import('./renderer/shared/components/ui/UiPathField.vue')['default']
     UiSearchInput: typeof import('./renderer/shared/components/ui/UiSearchInput.vue')['default']

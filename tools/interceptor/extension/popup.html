@@ -13,10 +13,6 @@
 
   <section id="error-box" class="error-box hidden">
     <p id="error-text"></p>
-    <div class="row">
-      <input id="token-input" class="input" type="text" placeholder="粘贴 edt 页面上的配对码" />
-      <button id="token-save" class="btn">保存</button>
-    </div>
     <button id="reconnect" class="btn btn-ghost">重新连接</button>
   </section>
 
@@ -45,11 +41,36 @@
   <section class="section">
     <div class="label">当前站点</div>
     <p id="current-host" class="host">—</p>
-    <div class="row">
-      <button id="add-exact" class="btn">加入名单</button>
-      <button id="add-suffix" class="btn btn-ghost">含子域</button>
-      <button id="remove-target" class="btn btn-danger hidden">移出名单</button>
+    <div class="row wrap">
+      <button id="add-origin" class="btn">加入名单（当前 origin）</button>
     </div>
+    <p class="hint">名单是<strong>白名单闸门</strong>，只按请求的 origin（协议 + 域名 + 端口）判定：命中才拆包、记流量并交给<strong>规则</strong>；没命中整条透传、规则不跑。路径 / URL 级条件请在 edt 的<strong>规则</strong>里配。</p>
+  </section>
+
+  <section class="section">
+    <div class="row row-between">
+      <span class="label">处理名单 <span id="target-count" class="muted"></span></span>
+      <button id="list-refresh" class="btn btn-ghost btn-sm">重连并刷新</button>
+    </div>
+    <p id="target-hint" class="hint hidden"></p>
+    <ul id="target-list" class="entry-list">
+      <li class="muted">—</li>
+    </ul>
+    <div id="related-wrap" class="hidden">
+      <div class="sub-label">同主机、不同 origin（当前站点未命中）</div>
+      <ul id="related-list" class="entry-list entry-list-dim">
+        <li class="muted">—</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="label">可用规则 <span id="rule-count" class="muted"></span></div>
+    <p id="rule-hint" class="hint hidden"></p>
+    <p class="hint">按当前页面的域筛选：本站规则在前，不绑定域的全局规则在后（都可禁用 / 移除）。</p>
+    <ul id="rule-list" class="entry-list">
+      <li class="muted">—</li>
+    </ul>
   </section>
 
   <section class="section" id="suggest-section">
@@ -60,7 +81,7 @@
   </section>
 
   <footer class="footer">
-    在 edt「浏览器桥」页面管理规则 / 脚本 / 流量日志。
+    在 edt「拦截器」页面管理完整规则 / 流量日志。
   </footer>
 
   <script src="popup.js"></script>

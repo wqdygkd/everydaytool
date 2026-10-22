@@ -4,19 +4,11 @@ import type { TrafficEntry } from '../../../../shared/interceptor.ts'
 import { TRAFFIC_RING_SIZE } from '../../../../shared/interceptor.ts'
 
 const entries: TrafficEntry[] = []
-const subscribers = new Set<(entry: TrafficEntry) => void>()
 
 export function addTrafficEntry(entry: TrafficEntry): void {
   entries.push(entry)
   if (entries.length > TRAFFIC_RING_SIZE) {
     entries.splice(0, entries.length - TRAFFIC_RING_SIZE)
-  }
-  for (const subscriber of subscribers) {
-    try {
-      subscriber(entry)
-    } catch {
-      // 单个订阅方异常不影响其余
-    }
   }
 }
 
@@ -26,11 +18,6 @@ export function listTrafficEntries(): TrafficEntry[] {
 
 export function clearTrafficEntries(): void {
   entries.length = 0
-}
-
-export function subscribeTraffic(subscriber: (entry: TrafficEntry) => void): () => void {
-  subscribers.add(subscriber)
-  return () => subscribers.delete(subscriber)
 }
 
 /**

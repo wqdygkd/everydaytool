@@ -41,6 +41,18 @@
   --alpha-pop: 1; /* 下拉类浮层 */
   --alpha-overlay: 1; /* 其它弹层 */
 
+  /* ── 玻璃细节旋钮（不参与表面角色，按模式单独覆写） ──
+     与上面九档「表面 alpha」分开，因为它们不是表面，而是玻璃的**高光与着色**：
+       highlight  镜面高光：卡片 / 滑块的 1px 内描边与顶部高光，0 = 不出现（不透明模式）
+       switch-track  开关轨道：品牌色 / 关态灰的着色强度（轨道本身可透）
+       switch-knob   开关滑块：小体积「透镜」，独立于 input / field 调档；
+                     但它是前景件，各模式都保持 ≥ .9——透明只给轨道，不给滑块
+     三档都以现有基准色取色（--color-primary / --color-border / --color-on-solid），
+     因此不新增 *-base，只在各模式块里覆写这三个 alpha。 */
+  --alpha-highlight: 0; /* 镜面高光 / 内描边 */
+  --alpha-switch-track: 1; /* 开关轨道（品牌色 / 关态灰） */
+  --alpha-switch-knob: 1; /* 开关滑块 */
+
   /* ── 玻璃质感（backdrop-filter）体系 ──
      与 alpha 同一套「表面角色」，但决定的是「多糊」而不是「多透」：
      alpha 小 = 看得见背后，--glass-* 大 = 背后被磨平，两者配合才成玻璃。

@@ -1,4 +1,5 @@
 import type { IpcInvokeApi } from './types'
+import { isElectronEnvironment } from '../environment'
 
 export function createIpcHelpers(namespace: string, label: string): {
   getApi: () => IpcInvokeApi
@@ -9,7 +10,11 @@ export function createIpcHelpers(namespace: string, label: string): {
   function getApi(): IpcInvokeApi {
     const api = (window as unknown as Record<string, IpcInvokeApi | undefined>)[namespace]
     if (!api) {
-      throw new Error(`未检测到 ${label} IPC，请通过 pnpm dev 或 pnpm start 启动 everydaytool`)
+      // 两种缺失原因分开报：网页预览（pnpm web / 直接用浏览器打开 dev server）本来就没有
+      // preload，属于预期；Electron 里缺 namespace 才是 preload 未注入的真故障。
+      throw new Error(isElectronEnvironment()
+        ? `未检测到 ${label} IPC：preload 未成功注入，请重新运行 pnpm dev（或 pnpm start）`
+        : `网页预览不支持 ${label} 相关功能，请在 everydaytool 桌面端中使用`)
     }
     return api
   }

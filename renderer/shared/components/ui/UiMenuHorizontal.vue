@@ -1,0 +1,182 @@
+<script setup lang="ts">
+// 横向菜单（分段按钮组）：复刻 Telegram Web K 的 `.menu-horizontal-div`
+// —— 药丸选中态（滑动指示条）、整条横向滚动、滚动条隐藏、徽章计数。
+const props = defineProps<{
+  modelValue: string
+  items: { value: string, label: string, badge?: number | string }[]
+}>()
+
+const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+
+const scroller = ref<HTMLElement | null>(null)
+const indicator = reactive({ left: 0, width: 0, ready: false })
+let observer: ResizeObserver | null = null
+
+function showBadge(badge?: number | string): badge is number | string {
+  return badge !== undefined && badge !== null && badge !== '' && badge !== 0
+}
+
+/** 把选中项的几何位置同步到指示条，并保证它在可视区内 */
+function measure(): void {
+  const el = scroller.value?.querySelector<HTMLElement>('.ui-menu-horizontal-item.is-active')
+  if (!el) {
+    indicator.width = 0
+    return
+  }
+  indicator.left = el.offsetLeft
+  indicator.width = el.offsetWidth
+
+  const view = scroller.value
+  if (!view) return
+  const left = el.offsetLeft
+  const right = left + el.offsetWidth
+  if (left < view.scrollLeft) view.scrollTo({ left: Math.max(left - 8, 0), behavior: 'smooth' })
+  else if (right > view.scrollLeft + view.clientWidth) view.scrollTo({ left: right - view.clientWidth + 8, behavior: 'smooth' })
+}
+
+async function refresh(): Promise<void> {
+  await nextTick()
+  measure()
+}
+
+watch(() => [props.modelValue, props.items], refresh, { deep: true })
+
+onMounted(async () => {
+  await refresh()
+  indicator.ready = true
+  if (scroller.value && typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(() => measure())
+    observer.observe(scroller.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  observer = null
+})
+</script>
+
+<template>
+  <div ref="scroller" class="ui-menu-horizontal" role="tablist">
+    <span
+      class="ui-menu-horizontal-indicator"
+      :class="{ 'is-ready': indicator.ready }"
+      :style="{ transform: `translateX(${indicator.left}px)`, width: `${indicator.width}px` }"
+      aria-hidden="true"
+    />
+    <button
+      v-for="item in items"
+      :key="item.value"
+      type="button"
+      role="tab"
+      class="ui-menu-horizontal-item"
+      :class="{ 'is-active': item.value === modelValue }"
+      :aria-selected="item.value === modelValue"
+      @click="emit('update:modelValue', item.value)"
+    >
+      <span class="ui-menu-horizontal-label">{{ item.label }}</span>
+      <span v-if="showBadge(item.badge)" class="ui-menu-horizontal-badge">{{ item.badge }}</span>
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.ui-menu-horizontal {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  width: 100%;
+  height: 48px;
+  padding: var(--spacing-xs) 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--color-raised);
+  border-radius: var(--radius-sm);
+  scrollbar-width: none;
+}
+
+.ui-menu-horizontal::-webkit-scrollbar {
+  display: none;
+}
+
+.ui-menu-horizontal-indicator {
+  position: absolute;
+  top: var(--spacing-xs);
+  left: 0;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ui-menu-horizontal-indicator.is-ready {
+  opacity: 1;
+  transition: transform var(--transition-base), width var(--transition-base), opacity var(--transition-fast);
+}
+
+.ui-menu-horizontal-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin: 0 var(--spacing-xs);
+  padding: 0 var(--spacing-lg);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-control);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.ui-menu-horizontal-item:hover {
+  background: var(--color-fill);
+}
+
+.ui-menu-horizontal-item.is-active {
+  color: var(--color-primary);
+}
+
+.ui-menu-horizontal-item.is-active:hover {
+  background: transparent;
+}
+
+.ui-menu-horizontal-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ui-menu-horizontal-label {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ui-menu-horizontal-badge {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-inline-start: var(--spacing-xs);
+  padding: 0 var(--spacing-xs);
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-on-solid);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  pointer-events: none;
+}
+</style>

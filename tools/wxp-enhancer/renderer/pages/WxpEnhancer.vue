@@ -22,8 +22,12 @@ const settingsForm = reactive({
   ...DEFAULT_WXP_SETTINGS,
 })
 const settingsDirty = ref(false)
+const loading = ref(true)
 const launching = ref(false)
 const stopping = ref(false)
+const reinjecting = ref(false)
+const saving = ref(false)
+const clearing = ref(false)
 
 let syncingForm = false
 
@@ -40,27 +44,36 @@ watch(settingsForm, () => {
 })
 
 const isRunning = computed(() => Boolean(store.running && ACTIVE_STATUSES.includes(store.running.status)))
+/** 已连上 CDP 并完成首轮注入：重新应用 / 采集数据只在这个状态下可用 */
+const isConnected = computed(() => store.running?.status === 'running')
 const statusLabel = computed(() => {
+  if (loading.value && !store.running) return '读取中…'
   if (!store.running) return '未运行'
   return STATUS_LABELS[store.running.status] ?? store.running.status
 })
-const statusTagType = computed(() => {
-  const status = store.running?.status
-  if (status === 'running') return 'success'
-  if (status === 'error') return 'danger'
-  if (status) return 'warning'
-  return 'info'
+/** 状态点色板：运行绿 / 过渡态黄 / 失败红 / 未运行与已停止灰（UiStatusTag 没有 info 档，用 neutral） */
+const statusTone = computed<'success' | 'warning' | 'danger' | 'neutral'>(() => {
+  switch (store.running?.status) {
+    case 'running': return 'success'
+    case 'error': return 'danger'
+    case 'launching':
+    case 'waiting':
+    case 'connecting': return 'warning'
+    default: return 'neutral'
+  }
 })
-/** 状态点色板：UiStatusTag 无 info 档，「未运行」落 neutral（ tertiary 灰点） */
-const statusDotTone = computed(() => (statusTagType.value === 'info' ? 'neutral' : statusTagType.value))
 
 async function handleLaunch(): Promise<void> {
+  if (!settingsForm.executablePath.trim()) {
+    ElMessage.warning('请先选择 WXP 可执行文件')
+    return
+  }
   launching.value = true
   try {
     await store.saveSettings({ ...settingsForm })
     settingsDirty.value = false
     await store.launch()
-    ElMessage.success('启动成功，脚本注入已生效')
+    ElMessage.success('WXP 已启动，增强脚本已注入')
   } catch (error) {
     ElMessage.error((error as Error).message || '启动失败')
   } finally {
@@ -80,16 +93,20 @@ async function handleStop(): Promise<void> {
 }
 
 async function handleReinject(): Promise<void> {
+  reinjecting.value = true
   try {
     const count = await store.reinject()
     ElMessage.success(`已重新注入（${count} 个页面）`)
   } catch (error) {
     ElMessage.error((error as Error).message || '重新应用失败')
+  } finally {
+    reinjecting.value = false
   }
 }
 
 async function handleClearLoginCache(): Promise<void> {
-  const runningNow = isRunning.value
+  // 只有「已连上 CDP」才会真正清页面；其余状态后端只登记待清除标记
+  const runningNow = isConnected.value
   const confirmText = runningNow
     ? '将清除缓存的登录会话（快照/镜像）并刷新页面回到登录状态，需要重新登录。确定继续？'
     : 'WXP 未在运行：将登记清除标记，下次启动 WXP 时自动清除登录缓存并回到登录页。确定继续？'
@@ -102,6 +119,7 @@ async function handleClearLoginCache(): Promise<void> {
   } catch {
     return
   }
+  clearing.value = true
   try {
     const result = await store.clearLoginCache()
     if (result.pending) {
@@ -111,12 +129,21 @@ async function handleClearLoginCache(): Promise<void> {
     }
   } catch (error) {
     ElMessage.error((error as Error).message || '清除登录缓存失败')
+  } finally {
+    clearing.value = false
   }
 }
 
 // —— 数据缓存（来自 WXP） ——
 const collecting = ref(false)
 const dataLogin = computed(() => store.dataCache?.login ?? null)
+// 用户信息 JSON 的折叠面板不吃 el 控件底：EP 的折叠头 / 内容包裹层默认取
+// --el-fill-color-blank（本仓库绑到 --color-input），在玻璃面板上会显成一条白带。
+// 直接覆写 EP 自己的两个变量，比 :deep 改内部类更稳；--color-canvas 恒为 transparent。
+const collapseTransparentStyle = {
+  '--el-collapse-header-bg-color': 'var(--color-canvas)',
+  '--el-collapse-content-bg-color': 'var(--color-canvas)',
+}
 const userCode = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.code ?? '—'))
 const userName = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.name ?? '—'))
 const UNKNOWN_HOSPITAL = '未知医院'
@@ -185,40 +212,57 @@ async function handleCollect(): Promise<void> {
 }
 
 async function pickExecutable(): Promise<void> {
-  const path = await store.selectExecutable()
-  if (path) {
-    settingsForm.executablePath = path
-    settingsDirty.value = true
+  try {
+    const path = await store.selectExecutable()
+    if (path) settingsForm.executablePath = path
+  } catch (error) {
+    ElMessage.error((error as Error).message || '选择可执行文件失败')
   }
 }
 
 async function detectExecutable(): Promise<void> {
-  const path = await store.detectExecutable()
-  if (path) {
-    settingsForm.executablePath = path
-    settingsDirty.value = true
-    ElMessage.success(`已检测到：${path}`)
-  } else {
-    ElMessage.info('未在常见安装位置找到 WXP，请手动选择')
+  try {
+    const path = await store.detectExecutable()
+    if (path) {
+      settingsForm.executablePath = path
+      ElMessage.success(`已检测到：${path}`)
+    } else {
+      ElMessage.info('未在常见安装位置找到 WXP，请手动选择')
+    }
+  } catch (error) {
+    ElMessage.error((error as Error).message || '自动检测失败')
   }
 }
 
 async function saveSettings(): Promise<void> {
+  if (!settingsForm.executablePath.trim()) {
+    ElMessage.warning('请先选择 WXP 可执行文件')
+    return
+  }
+  saving.value = true
   try {
     await store.saveSettings({ ...settingsForm })
     settingsDirty.value = false
     ElMessage.success('设置已保存')
   } catch (error) {
     ElMessage.error((error as Error).message || '保存失败')
+  } finally {
+    saving.value = false
   }
 }
 
 let unsubscribeStatus: (() => void) | null = null
 
 onMounted(async () => {
-  unsubscribeStatus = store.bindStatusEvents()
-  await store.load()
-  syncSettingsForm()
+  try {
+    unsubscribeStatus = store.bindStatusEvents()
+    await store.load()
+  } catch (error) {
+    ElMessage.error((error as Error).message || '读取 WXP 增强设置失败')
+  } finally {
+    syncSettingsForm()
+    loading.value = false
+  }
 })
 
 onUnmounted(() => {
@@ -231,14 +275,14 @@ onUnmounted(() => {
     <!-- 运行状态 -->
     <UiPanel class="status-card">
       <div class="status-info">
-        <div class="status-line">
-          <UiStatusTag :tone="statusDotTone" :pulsing="statusTagType === 'success'" />
+        <div class="status-line" role="status" aria-live="polite">
+          <UiStatusTag :tone="statusTone" :pulsing="statusTone === 'success'" />
           <span class="status-name">{{ statusLabel }}</span>
-          <el-tag v-if="store.running" :type="statusTagType" size="small">
-            {{ store.running.message || '—' }}
-          </el-tag>
         </div>
-        <UiGroup v-if="isRunning" gap="xs" class="status-meta">
+        <p v-if="store.running?.message" class="status-message">
+          {{ store.running.message }}
+        </p>
+        <UiGroup v-if="isRunning" gap="xs" wrap class="status-meta">
           <UiChip mono>
             PID {{ store.running?.pid ?? '-' }}
           </UiChip>
@@ -249,23 +293,20 @@ onUnmounted(() => {
             页面 {{ store.running?.targetCount ?? 0 }}
           </UiChip>
         </UiGroup>
-        <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" class="status-meta">
-          <UiChip>
+        <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" wrap class="status-meta">
+          <UiChip tone="warning">
             登录缓存待清除：下次启动时自动执行
           </UiChip>
         </UiGroup>
       </div>
-      <UiGroup gap="sm" class="status-actions">
-        <el-button @click="handleClearLoginCache">
-          清除登录缓存
-        </el-button>
-        <el-button v-if="isRunning" @click="handleReinject">
+      <UiGroup gap="sm" wrap class="status-actions">
+        <el-button v-if="isConnected" :loading="reinjecting" @click="handleReinject">
           重新应用
         </el-button>
         <el-button
           type="primary"
           :loading="launching"
-          :disabled="isRunning"
+          :disabled="isRunning || loading"
           @click="handleLaunch"
         >
           启动
@@ -289,7 +330,8 @@ onUnmounted(() => {
           size="small"
           type="primary"
           plain
-          :disabled="!settingsDirty"
+          :loading="saving"
+          :disabled="!settingsDirty || saving"
           @click="saveSettings"
         >
           保存设置
@@ -299,7 +341,8 @@ onUnmounted(() => {
         <el-form-item label="WXP 路径" required>
           <UiPathField
             v-model="settingsForm.executablePath"
-            placeholder="例如 C:\Users\你\AppData\Local\Programs\Wxp Client\WxP Client.exe"
+            placeholder="选择 WxP Client 可执行文件（如 WxP Client.exe）"
+            :disabled="isRunning"
             class="path-row"
             mono
           >
@@ -326,13 +369,13 @@ onUnmounted(() => {
           />
         </el-form-item>
         <el-form-item label="状态角标">
-          <UiSwitchField v-model="settingsForm.showStatusBadge">
+          <UiSwitchField v-model="settingsForm.showStatusBadge" align="start">
             在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效
           </UiSwitchField>
         </el-form-item>
         <el-form-item label="缓存登录状态">
-          <UiSwitchField v-model="settingsForm.cacheLogin">
-            登录一次后整体缓存会话，启动时还原并自动进入主页、补跑登录后的数据初始化（链接中心租户列表、代理 NameNode、中心页 SSO）；快照超期（14 天）则不自动进入，需重新登录
+          <UiSwitchField v-model="settingsForm.cacheLogin" align="start">
+            登录一次后整体缓存会话（14 天有效），启动时自动还原并补跑登录后初始化（租户列表 / NameNode / iframe SSO）；超期需重新登录
           </UiSwitchField>
         </el-form-item>
         <el-form-item label="额外启动参数">
@@ -345,19 +388,32 @@ onUnmounted(() => {
           />
         </el-form-item>
       </el-form>
+      <UiHint block>
+        路径 / 端口 / 额外参数在下次启动时生效；角标与缓存开关保存后立即生效（运行中会用新脚本重新注入）。
+        调试端口会作为 <span class="mono">--remote-debugging-port</span> 附加，被其他程序占用时启动会失败并提示更换。
+      </UiHint>
     </UiPanel>
 
     <!-- 数据缓存（来自 WXP） -->
     <UiPanel title="数据缓存（来自 WXP）">
       <template #actions>
-        <UiGroup gap="sm">
+        <UiGroup gap="sm" wrap>
           <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            :loading="clearing"
+            @click="handleClearLoginCache"
+          >
+            清除登录缓存
+          </el-button>
           <el-button
             size="small"
             type="primary"
             plain
             :loading="collecting"
-            :disabled="!isRunning"
+            :disabled="!isConnected"
             @click="handleCollect"
           >
             从 WXP 读取
@@ -365,9 +421,13 @@ onUnmounted(() => {
         </UiGroup>
       </template>
       <UiHint class="section-hint">
-        WXP 登录后自动把登录信息与收藏数据缓存到工具数据目录（data-cache.json），此处查看；收藏变化或每 5 分钟自动刷新，也可手动刷新。WXP 未运行时仍可查看上次采集结果。
+        WXP 登录后自动把登录信息与收藏缓存到 <span class="mono">data-cache.json</span>（收藏变化或每 5 分钟刷新）；
+        WXP 未运行时仍显示上次结果。收藏备份会在 WXP 重装 / 清缓存后自动补回。
       </UiHint>
-      <template v-if="dataLogin">
+      <UiHint v-if="loading" block>
+        正在读取本地缓存…
+      </UiHint>
+      <template v-else-if="dataLogin">
         <div class="kv-list">
           <UiKeyValue label="登录账号" label-width="88px">
             {{ dataLogin.username || '—' }}
@@ -376,9 +436,9 @@ onUnmounted(() => {
             <span class="muted">应用 RSA 加密存储，工具不读取</span>
           </UiKeyValue>
           <UiKeyValue label="访问令牌" label-width="88px" mono>
-            {{ dataLogin.accessToken || '—' }}
+            {{ maskToken(dataLogin.accessToken) }}
             <template #actions>
-              <el-button link size="small" @click="useCopy(dataLogin.accessToken, '令牌')">
+              <el-button link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
                 复制
               </el-button>
             </template>
@@ -389,7 +449,7 @@ onUnmounted(() => {
           <UiKeyValue label="刷新令牌" label-width="88px" mono>
             {{ maskToken(dataLogin.refreshToken) }}
             <template #actions>
-              <el-button link size="small" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
+              <el-button link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
                 复制
               </el-button>
             </template>
@@ -406,14 +466,11 @@ onUnmounted(() => {
           <UiKeyValue label="NameNode" label-width="88px" mono>
             {{ dataLogin.nameNodeAddrs || '—' }}
           </UiKeyValue>
-          <UiKeyValue label="状态源" label-width="88px" mono>
-            {{ dataLogin.statusQueryServers || '—' }}
-          </UiKeyValue>
           <UiKeyValue label="会话快照" label-width="88px">
             {{ dataLogin.snapshotExists ? '存在' : '无' }}
           </UiKeyValue>
         </div>
-        <el-collapse v-if="dataLogin.user" class="user-json">
+        <el-collapse v-if="dataLogin.user" class="user-json" :style="collapseTransparentStyle">
           <el-collapse-item name="user" title="用户信息 JSON">
             <UiCodeBlock max-height="240px">
               {{ JSON.stringify(dataLogin.user, null, 2) }}
@@ -421,10 +478,14 @@ onUnmounted(() => {
           </el-collapse-item>
         </el-collapse>
         <template v-if="favCount">
-          <h4 class="fav-title">
-            收藏的转发（{{ favCount }}）
-            <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted">工具侧备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}，WXP 重装/清缓存后自动恢复</span>
-          </h4>
+          <div class="fav-head">
+            <h4 class="fav-title">
+              收藏的转发（{{ favCount }}）
+            </h4>
+            <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted fav-backup">
+              工具侧备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
+            </span>
+          </div>
           <el-table
             class="fav-table"
             :data="favTree"
@@ -460,17 +521,24 @@ onUnmounted(() => {
   padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl);
 }
 
-/* 状态卡：UiPanel 根上的左右分栏 */
+/* 状态卡：UiPanel 根上的左右分栏；窄窗口由媒体查询改成上下 */
 .status-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
 }
 
+.status-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .status-line {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
 }
 
@@ -479,15 +547,34 @@ onUnmounted(() => {
   font-weight: var(--font-weight-semibold);
 }
 
+/* 状态详情走正文而不是 tag：错误信息可能很长，tag 会把标题行撑破 */
+.status-message {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .status-meta {
   margin-top: var(--spacing-sm);
+}
+
+.status-actions {
+  flex-shrink: 0;
 }
 
 .section-hint {
   margin: 0 0 var(--spacing-md);
 }
 
+/* 登录信息分两栏：按行配对（账号|密码、令牌|有效期…），窄窗口回退单栏。
+   UiKeyValue 自带 top 分隔线 + padding，行间不再加 gap，保持原列表节奏；
+   列间距取页面级 24px，让两栏之间有明确的呼吸感。 */
 .kv-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--spacing-3xl);
   margin-bottom: var(--spacing-md);
 }
 
@@ -500,14 +587,39 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-md);
 }
 
-.fav-title {
+.fav-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--spacing-sm);
   margin: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+.fav-title {
+  margin: 0;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
 }
 
+.fav-backup {
+  font-size: var(--font-size-sm);
+}
+
 .fav-table :deep(.fav-hospital-row) {
   font-weight: var(--font-weight-semibold);
+}
+
+/* 收藏表嵌在玻璃面板里：EP 表格默认把行底铺成 --el-fill-color-blank（本仓库 = --color-input，
+   白色 .88），在 raised 面板上就是一块比面板还亮的大白块。这里让表格自身不铺底
+   （行直接透出面板），表头也不压灰底、只留一条 hairline；hover 用品牌浅底而不是灰调填充，
+   避免整行变“实心灰条”。 */
+.fav-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-expanded-cell-bg-color: transparent;
+  --el-table-header-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--color-primary-soft);
+  --el-table-border-color: var(--color-border-light);
 }
 
 @media (max-width: 760px) {
@@ -523,6 +635,10 @@ onUnmounted(() => {
   .path-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .kv-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

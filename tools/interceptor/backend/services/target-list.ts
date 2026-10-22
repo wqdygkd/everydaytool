@@ -1,6 +1,8 @@
-// 处理名单匹配（edt 处理层过滤器：命中才拆包/改包/记日志，否则透传）。
-// 条目语义见 docs/interceptor.md §3：exact（可带端口）/ suffix（命中本体与子域）/ regex（对 host）。
+// 处理名单匹配：名单是**白名单闸门**，只按请求 origin（scheme + host + port）判定。
+// 命中 → 进处理层（拆包 / 记流量）并交给规则；没命中 → 整条透传，规则一条都不跑。
+// 细粒度的"这个地址怎么处理"全在规则里（见 docs/interceptor.md §3）。
 import type { InterceptorTarget } from '../../../../shared/interceptor.ts'
+import { targetMatchesOrigin } from '../../../../shared/interceptor.ts'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1'])
 
@@ -9,58 +11,24 @@ export function isLoopbackHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(normalized) || normalized.startsWith('127.')
 }
 
+/** 主机名归一（小写、去方括号）：上游连接 / 证书校验 / 规则域判定共用 */
 export function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/^\[|\]$/g, '')
 }
 
-const REGEX_CACHE_MAX = 500
-const regexCache = new Map<string, RegExp | null>()
-
-function compileRegex(pattern: string): RegExp | null {
-  const cached = regexCache.get(pattern)
-  if (cached !== undefined) return cached
-  let compiled: RegExp | null = null
-  try {
-    compiled = new RegExp(pattern)
-  } catch {
-    compiled = null
-  }
-  // 用户输入驱动，封顶防无限增长：淘汰最早插入的一项（本地工具场景 FIFO 足够）
-  if (regexCache.size >= REGEX_CACHE_MAX) {
-    const oldest = regexCache.keys().next().value
-    if (oldest !== undefined) regexCache.delete(oldest)
-  }
-  regexCache.set(pattern, compiled)
-  return compiled
+/** 条目是否生效（历史数据无 enabled 字段 = 启用） */
+export function isTargetEnabled(target: InterceptorTarget): boolean {
+  return target.enabled !== false
 }
 
-export function matchTarget(targets: InterceptorTarget[], host: string, port?: number): InterceptorTarget | null {
-  const normalizedHost = normalizeHost(host)
+export interface TargetMatch {
+  target: InterceptorTarget
+}
 
+/** 名单匹配：条目之间是并集，第一个命中即处理（origin 字符串相等） */
+export function matchTarget(targets: InterceptorTarget[], origin: string): TargetMatch | null {
   for (const target of targets) {
-    if (target.port !== undefined && target.port !== port) continue
-
-    switch (target.matchType) {
-      case 'exact':
-        if (normalizeHost(target.host) === normalizedHost) return target
-        break
-      case 'suffix': {
-        const suffix = normalizeHost(target.host)
-        if (normalizedHost === suffix || normalizedHost.endsWith(`.${suffix}`)) return target
-        break
-      }
-      case 'regex': {
-        const regex = compileRegex(target.host)
-        if (regex?.test(normalizedHost)) return target
-        break
-      }
-    }
+    if (targetMatchesOrigin(target, origin)) return { target }
   }
-
   return null
-}
-
-/** 展示用：`host:port` / `host` */
-export function formatTargetHost(host: string, port?: number): string {
-  return port === undefined ? host : `${host}:${port}`
 }

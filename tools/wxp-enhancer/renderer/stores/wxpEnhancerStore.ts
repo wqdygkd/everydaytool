@@ -42,6 +42,14 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
 
   async function launch(): Promise<void> {
     running.value = await invokeWxpIpc<WxpRunningState>(channels.LAUNCH)
+    // 首轮注入会消费「待清除登录缓存」标记，回读一次避免页面继续显示待清除
+    await refreshClearPending().catch(() => {})
+  }
+
+  /** 重新读取待清除标记（启动成功后调用；失败不影响启动结果） */
+  async function refreshClearPending(): Promise<void> {
+    const data = await invokeWxpIpc<WxpGetAllResult>(channels.GET_ALL)
+    loginCacheClearPending.value = data.clearLoginCachePending === true
   }
 
   async function stop(): Promise<void> {

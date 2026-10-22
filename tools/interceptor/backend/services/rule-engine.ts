@@ -9,6 +9,7 @@ import type {
   RuleSource,
 } from '../../../../shared/interceptor.ts'
 import { Buffer } from 'node:buffer'
+import { compileSourceRegex, matchSource, wildcardToRegex as sharedWildcardToRegex } from '../../../../shared/interceptor.ts'
 import { normalizeHost } from './target-list.ts'
 
 export interface RuleMatchContext {
@@ -47,59 +48,20 @@ export interface RequestExecutionPlan {
   bodyScript: string | undefined
 }
 
-const REGEX_CACHE_MAX = 500
-const regexCache = new Map<string, RegExp | null>()
+export function wildcardToRegex(pattern: string, withCaptures = false): RegExp {
+  return sharedWildcardToRegex(pattern, withCaptures)
+}
 
 function compileRegex(pattern: string): RegExp | null {
-  const cached = regexCache.get(pattern)
-  if (cached !== undefined) return cached
-  let compiled: RegExp | null = null
-  try {
-    compiled = new RegExp(pattern)
-  } catch {
-    compiled = null
-  }
-  // 用户输入驱动，封顶防无限增长：淘汰最早插入的一项（本地工具场景 FIFO 足够）
-  if (regexCache.size >= REGEX_CACHE_MAX) {
-    const oldest = regexCache.keys().next().value
-    if (oldest !== undefined) regexCache.delete(oldest)
-  }
-  regexCache.set(pattern, compiled)
-  return compiled
+  return compileSourceRegex(pattern)
 }
 
-export function wildcardToRegex(pattern: string, withCaptures = false): RegExp {
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-  const star = withCaptures ? '(.*)' : '.*'
-  return new RegExp(`^${escaped.replace(/\*/g, star).replace(/\?/g, '.')}$`)
-}
-
-function sourceCandidate(source: RuleSource, ctx: { url: string, host: string, path: string }): string {
-  switch (source.key) {
-    case 'url':
-      return ctx.url
-    case 'host':
-      return normalizeHost(ctx.host)
-    case 'path':
-      return ctx.path
-  }
-}
-
+/**
+ * 规则的请求匹配：与处理名单共用 shared/interceptor.ts 的 matchSource
+ * （key 选中比什么、operator 决定怎么比），两处语义必须一致。
+ */
 function matchesSource(source: RuleSource, ctx: RuleMatchContext): boolean {
-  const isHostKey = source.key === 'host'
-  const value = isHostKey ? source.value.toLowerCase() : source.value
-  const target = sourceCandidate(source, ctx)
-
-  switch (source.operator) {
-    case 'equals':
-      return target === value
-    case 'contains':
-      return target.includes(value)
-    case 'matches':
-      return compileRegex(value)?.test(target) ?? false
-    case 'wildcard':
-      return wildcardToRegex(value).test(target)
-  }
+  return matchSource(source, { url: ctx.url, host: ctx.host, path: ctx.path })
 }
 
 function stringifyValue(value: unknown): string {
@@ -164,9 +126,94 @@ function matchesFilters(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
   return true
 }
 
+/** 单条规则的匹配（不看 enabled；弹窗要连禁用的规则一起列出） */
+export function ruleMatches(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
+  return matchesSource(rule.source, ctx) && matchesFilters(rule, ctx)
+}
+
+// ---------------------------------------------------------------------------
+// 域级适用性（弹窗按「当前页面的域」筛出可用规则，而不是拿单条流量去匹配）
+// ---------------------------------------------------------------------------
+
+/** 近似可注册域（不做完整 PSL：只覆盖常见的两段后缀） */
+const TWO_LEVEL_SUFFIXES = new Set(['co', 'com', 'net', 'org', 'gov', 'edu', 'ac'])
+
+export function registrableDomain(host: string): string {
+  const parts = normalizeHost(host).split('.')
+  if (parts.length <= 2) return parts.join('.')
+  const second = parts[parts.length - 2] ?? ''
+  if (TWO_LEVEL_SUFFIXES.has(second)) return parts.slice(-3).join('.')
+  return parts.slice(-2).join('.')
+}
+
+/**
+ * 规则里的「域」约束：
+ * - host 键 → 值本身；
+ * - url 键 → URL 模式的主机段（`*://www.a.com/x` → `www.a.com`；纯主机片段 `appmiu.com` 也算主机）；
+ * - 其余（path 键 / 只有路径 / 值为空 / 无法解析）→ undefined，表示与域无关（对任何站点都可能生效）
+ */
+function sourceHostPattern(rule: InterceptorRule): string | undefined {
+  const raw = (rule.source.value ?? '').trim()
+  if (!raw) return undefined
+  if (rule.source.key === 'host') return raw
+  if (rule.source.key === 'url') {
+    if (rule.source.operator === 'matches') return undefined
+    const match = /^[a-z*]+:\/\/([^/?#]+)/i.exec(raw)
+    if (match?.[1]) return match[1]
+    // 没有协议头但看着像主机名（含点、无路径）
+    if (!raw.includes('/') && /^[\w.*:-]+$/.test(raw) && raw.includes('.')) return raw
+    return undefined
+  }
+  return undefined
+}
+
+/** 模式与站点是否算「同一域」：自身 / 子域 / 父域 / 同一个可注册域（含通配与包含语义） */
+function hostMatchesPattern(pattern: string, host: string, operator: RuleSource['operator']): boolean {
+  const value = pattern.replace(/:\d+$/, '').toLowerCase()
+  if (!value || value === '*') return true
+  if (operator === 'matches') return compileRegex(value)?.test(host) ?? false
+  if (value.startsWith('*.')) {
+    const base = value.slice(2)
+    if (host === base || host.endsWith(`.${base}`)) return true
+  }
+  if (value.includes('*') || value.includes('?')) {
+    if (wildcardToRegex(value).test(host)) return true
+  }
+  if (operator === 'contains') {
+    // 「包含」是子串语义：值出现在 host 里即算同域（appmiu 也能吃 www.appmiu.com）
+    if (host.includes(value)) return true
+  }
+  if (value === host) return true
+  if (host.endsWith(`.${value}`) || value.endsWith(`.${host}`)) return true
+  return registrableDomain(host) === registrableDomain(value)
+}
+
+/**
+ * 该站点能否用上这条规则：
+ * - `global`：规则不绑定具体域（path / 无主机段 / 值为空），任何站点都可能命中；
+ * - `site`：规则的域约束与当前站点同域；
+ * - `null`：用不上。
+ * 注意这是「域级」判断，不看具体路径 / 方法 / 资源类型——那些属于流量级匹配。
+ */
+export function ruleAppliesToHost(rule: InterceptorRule, host: string): 'global' | 'site' | null {
+  const normalized = normalizeHost(host)
+
+  const pageFilter = (rule.filters?.pageUrl ?? '').trim().toLowerCase()
+  if (pageFilter) {
+    const domain = registrableDomain(normalized)
+    if (!pageFilter.includes(normalized) && !pageFilter.includes(domain)) return null
+  }
+
+  const pattern = sourceHostPattern(rule)
+  if (pattern === undefined) return 'global'
+  // 纯通配（`*` / `*:*` / `*.` 这类通配独占）等于不约束域
+  if (/^[\s*?:]*$/.test(pattern)) return 'global'
+  return hostMatchesPattern(pattern, normalized, rule.source.operator) ? 'site' : null
+}
+
 /** 命中规则集合（请求/响应/mock 共用一次匹配，避免重复求值） */
 export function findMatchingRules(rules: InterceptorRule[], ctx: RuleMatchContext): InterceptorRule[] {
-  return rules.filter(rule => rule.enabled && matchesSource(rule.source, ctx) && matchesFilters(rule, ctx))
+  return rules.filter(rule => rule.enabled && ruleMatches(rule, ctx))
 }
 
 /** mock 短路：首个「不调服务器」的命中规则（type=response 且 mock） */
@@ -204,7 +251,7 @@ function computeRedirectLocation(rule: InterceptorRule, ctx: { url: string, host
 
   let location = config.destination
   if (/\$[1-9]/.test(location)) {
-    const candidate = sourceCandidate(rule.source, ctx)
+    const candidate = ctx[rule.source.key]
     let regex: RegExp | null = null
     if (rule.source.operator === 'matches') regex = compileRegex(rule.source.value)
     else if (rule.source.operator === 'wildcard') regex = wildcardToRegex(rule.source.value, true)

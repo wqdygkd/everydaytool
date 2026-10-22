@@ -1,5 +1,5 @@
 // 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、磁盘用量、缓存清理、
-// 窗口外观（半透明 / 系统材质）的读取与切换。
+// 窗口外观（半透明 / 系统材质）的读取与切换、打开调试控制台。
 // 由 electron/main.ts 注册；数据目录变更后的各工具域内重载通过
 // options.notifyDataDirectoryChanged 注入（避免 backend 反向依赖 electron/tool-registry）。
 import type {
@@ -25,7 +25,7 @@ import { logger } from '../utils/logger.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
 const require = createRequire(import.meta.url)
-const { dialog, ipcMain, session, shell } = require('electron') as typeof import('electron')
+const { BrowserWindow, dialog, ipcMain, session, shell } = require('electron') as typeof import('electron')
 
 export interface AppIpcOptions {
   notifyDataDirectoryChanged: () => Promise<void>
@@ -111,5 +111,15 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
       logger.warn('Failed to clear session cache', { error: (error as Error).message })
     }
     return result
+  })
+
+  // 设置页的「打开调试控制台」：给调用方窗口开一个独立 DevTools 窗口。
+  // undocked 而非 detach：仍可停靠回窗口；独立窗口不会挤压应用自身的内容区。
+  // 已打开时 openDevTools 只负责把控制台拉到前台，不会反向关掉它。
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DEVTOOLS_OPEN, (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) throw new Error('找不到调用方窗口')
+    win.webContents.openDevTools({ mode: 'undocked', activate: true })
+    return true
   })
 }

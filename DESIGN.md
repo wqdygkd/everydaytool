@@ -93,6 +93,24 @@
 > 组件一律写 `backdrop-filter: var(--glass-<role>)`，**禁止写死 `blur(Npx)`**；
 > 默认模式下玻璃为 `none`，即不透明窗口零额外开销（不加 backdrop root）。
 
+### 3.1.3 玻璃细节旋钮（高光 / 开关轨道 / 滑块）
+
+这三档不是「表面角色」——它们不新增基准色，而是在现有基准色上做着色与高光，
+但同样按窗口模式独立覆写，保证每类玻璃元素都能单独调：
+
+| 令牌 | 默认值 | 取色基准 | 用途 |
+| ------ | -------- | -------- | ------ |
+| `--alpha-highlight` → `--color-highlight` | `0` | `--color-on-solid` | 卡片 / 开关的 1px 内高光（镜面边）。0 = 不出现，不透明模式下视觉与旧版一致 |
+| `--alpha-switch-track` → `--color-switch-track` / `--color-switch-track-off` | `1` | `--color-primary` / `--color-border` | 开关轨道着色（开 / 关），轨道本身可半透明 |
+| `--alpha-switch-knob` → `--color-switch-knob` | `1` | `--color-on-solid` | 开关滑块（小体积「透镜」） |
+
+- **高光是低 alpha 元件的「形状保险」**：填充越透，越要靠 1px 内描边读出边界；
+  它同时用在开关轨道（顶部）、滑块（整圈）与卡片顶边（`UiPanel` / `ToolCard` / `UiListCard` 的 box-shadow 第一段）。
+- **开关不借用 `input` / `field`**：轨道是品牌色表面、滑块是前景件，两者对透明的容忍度完全不同——
+  **轨道可以透（.82~.98），滑块必须近实（≥ .9）**。滑块调到 .3 时，关态会和浅灰轨道糊在一起、
+  开态只剩一块被轨道染色的圆点；各模式取值见 §7.1.1。
+- 高光与轨道都**不加 `backdrop-filter`**：滑块背后是轨道、轨道背后是卡片，没有「背后的内容」可磨。
+
 ### 3.2 字阶与字体
 
 | 令牌 | 值 | 用途 |
@@ -194,7 +212,7 @@
 
 ## 5. UI 组件库
 
-平台级组件库（24 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
+平台级组件库（25 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
 
 ### 5.1 布局
 
@@ -206,6 +224,7 @@
 | `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
+| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge? }[]`）、`update:modelValue` | 横向分段菜单：药丸选中态 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px |
 
 ### 5.2 数据展示
 
@@ -318,19 +337,31 @@
   不透明窗口下也能开，用于检查卡片白底压在高对比背景上是否仍显得干净。
 - 关闭即摘类，`html` / `body` 回到 `base.scss` 的 `transparent`，透出真实桌面。
 
-> `field` / `table` / `button` / `input` 四档当前 alpha 初始值相同，但**刻意分开**：
-> 这样单独调某一类控件的透明度时不必牵动其它控件。
+> `field` / `table` / `button` / `input` 四档**刻意分开**：单独调某一类控件时不必牵动其它控件。
+> 其中 `field` 已被单独调低（acrylic 下 .30）：它只服务「卡片内的表单输入」，
+> 与卡片叠加后的有效白 ≈ `.30 + .70×.78 ≈ .85`；贴画布（没有卡片托底）的控件走 `input`（.88）。
 
 各模式 alpha 取值：
 
 | 模式 | raised | input | field | table | button | fill | header | pop | overlay |
 | ------ | -------- | ------- | ------- | ------- | -------- | ------ | -------- | ----- | --------- |
 | 默认（不透明） | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| acrylic | .78 | .88 | .88 | .88 | .88 | .80 | .60 | .94 | .92 |
+| acrylic | .78 | .88 | .30 | .88 | .88 | .80 | .60 | .94 | .92 |
 | mica | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
 | tabbed | .98 | .99 | .99 | .99 | .99 | .98 | .98 | 1 | 1 |
 | vibrancy（mac） | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
 | 纯 transparent（无材质） | .88 | .93 | .93 | .93 | .93 | .90 | .88 | .96 | .96 |
+
+各模式玻璃细节旋钮（`--alpha-highlight` / `--alpha-switch-track` / `--alpha-switch-knob`，见 §3.1.3）：
+
+| 模式 | highlight | switch-track | switch-knob |
+| ------ | ----------- | ------------ | ----------- |
+| 默认（不透明） | 0 | 1 | 1 |
+| acrylic | .60 | .82 | .94 |
+| mica | .35 | .95 | .98 |
+| tabbed | .25 | .98 | 1 |
+| vibrancy（mac） | .40 | .95 | .98 |
+| 纯 transparent（无材质） | .60 | .88 | .96 |
 
 各模式玻璃取值（`saturate` 为共享增益，模糊半径单位 px）：
 
@@ -347,6 +378,29 @@
 `pop` 最实，因为下拉贴在输入框下方、底下压着密集表单内容；`header` 在 acrylic 下最透（材质效果最强）。
 玻璃半径与 alpha 反相关：越透的表面越需要糊（纯 transparent 没有系统模糊兜底，半径最大）；
 `tabbed` 的浮层已不透明，模糊对它没有意义，故为 `none`——**只在真的能看出来时才付合成开销**。
+
+##### 嵌套表面与玻璃层级（Tahoe / Liquid Glass）
+
+玻璃只负责「表面 ↔ 背景」这一层，**不要给相邻的每一层都做玻璃**：
+
+1. **分层**：壁纸 → 画布（`transparent`）→ 表面（唯一一层 blur）→ 控件（无 blur）→ 浮层（可再有一层）。
+   一个视觉表面只做一次 `backdrop-filter`；`field` / `table` / `button` / `fill` 永远没有玻璃。
+2. **合成不是叠加**：控件看到的是父表面合成后的颜色，不是壁纸。
+   `控件实际 = α控·白 + (1−α控)·卡片`，`壁纸残留 = (1−α卡)(1−α控)`。
+   文字处的壁纸残留 ≤ 15%（≈ 4.5:1 对比度的经验值），控件边界 ≥ 3:1。
+3. **alpha 阶梯**：有内容的卡片 .82–.88 → 卡片内控件的**表面** .3–.6（叠加后有效 ~85%）→
+   贴画布的控件 ≥ .8 → 浮层 .92–.96；文字 / 图标 / 状态指示件恒为 1（内容永远不透明）。
+4. **前景件保持近实，靠高光读边界**：开关滑块、图标钮这类小体积元素，填充始终 ≥ .9，
+   1px 高光只负责在透明轨道上把边界提亮；**真正参与透明的是轨道 / 卡片，不是滑块**
+   （滑块调透会直接消失——不要把「透」用在承载状态指示的元件上）。
+5. **禁用态用颜色降对比**，不要给容器写 `opacity`——那会把文字、图标、可点区域一起弄淡。
+6. **避免 glass-on-glass**：确需叠加（弹层压卡片）时抬 alpha 到 .92+、降模糊半径，或合并成一层。
+7. **圆角同心**：内层圆角 = 外层圆角 − 内边距（例如卡片 16 / 控件 10），一眼像一块材料。
+8. **跟随系统「降低透明度」**：`@media (prefers-reduced-transparency: reduce)` 已把全部 alpha 退回 1、
+   玻璃退回 `none`（见 `translucency.scss` 末尾）。
+9. **每种窗口模式独立控制**：acrylic / mica / tabbed / vibrancy / transparent-only 各自有一份 alpha 与
+   三档细节旋钮（highlight / switch-track / switch-knob）。调整顺序固定：
+   先 alpha 定透视 → 再 `--glass-*` 定模糊 → 最后用 highlight 补边界。
 
 其他约定：
 

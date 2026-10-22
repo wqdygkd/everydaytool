@@ -12,7 +12,7 @@
 | 拦截器 | 浏览器工具 | 本地 MITM 代理：改包 / mock / 流量日志，配合浏览器扩展接管流量与脚本注入 |
 | 离线包下载 | 开发工具 | 下载 VSCode 插件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包 |
 | Treease 编辑器 | 开发工具 | 在线树形结构编辑器（treease.com/editor） |
-| WXP 增强 | 自动化工具 | 通过 CDP 启动 WXP，缓存登录状态并注入 CSS/JS 自定义界面 |
+| WXP 增强 | 自动化工具 | 通过 CDP 启动 WXP：缓存登录会话、备份与恢复转发收藏，并注入增强角标 |
 | 身份证号生成器 | 生成器 | 随机生成中国大陆 18 位身份证号 |
 
 ## 开发指南
@@ -29,6 +29,7 @@ pnpm install        # 安装依赖
 
 pnpm dev            # 开发模式（Vite HMR + Electron）
 EDT_DEVTOOLS=1 pnpm dev   # 同上，启动时自动打开 DevTools
+pnpm web            # 纯浏览器预览（无 preload / IPC，只出现 supportedTargets 含 web 的工具，设置页不可用）
 
 pnpm vite build     # 仅构建前端
 pnpm typecheck      # TS 类型检查（前端 + 后端两套 tsconfig）

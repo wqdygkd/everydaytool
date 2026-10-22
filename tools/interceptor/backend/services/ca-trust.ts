@@ -1,7 +1,7 @@
 // 根 CA 的信任安装 / 卸载 / 状态检测（Windows 用户根证书库 / macOS 登录钥匙串）。
-// 方案定稿见 docs/interceptor.md §11 + §12.8 校准：
+// 方案见 docs/interceptor.md §6：
 // - Windows：certutil -user（免提权，用户库即 Chrome 生效范围），查/删走 SHA1 指纹；
-// - macOS：登录钥匙串 + osascript 确认框（Requestly 量产验证，不用 System.keychain / 无需管理员）。
+// - macOS：登录钥匙串 + osascript 确认框（不用 System.keychain / 无需管理员）。
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'

@@ -1,8 +1,15 @@
 // 控制通道（WS 服务端）：扩展 MV3 service worker 连入，承载
-// 握手鉴权（Origin + 配对 token）、心跳保活、目标/脚本下发、名单与代理状态回传。
-// 方案见 docs/interceptor.md §5；对 Requestly 的差异：两端均有鉴权（他们没有）、自动重连（他们只做 popup 探测）。
+// 握手（Origin 校验，无配对码）、心跳保活、名单 / 规则 / 脚本下发、代理端口下发、代理状态回传。
+// 协议与端口策略见 docs/interceptor.md §7。
 import type { IncomingMessage } from 'node:http'
-import type { EdtToExtensionMessage, ExtensionConnectionInfo, ExtensionToEdtMessage, InjectedScript, InterceptorTarget } from '../../../../shared/interceptor.ts'
+import type {
+  EdtToExtensionMessage,
+  ExtensionConnectionInfo,
+  ExtensionToEdtMessage,
+  InjectedScript,
+  InterceptorRuleSummary,
+  InterceptorTarget,
+} from '../../../../shared/interceptor.ts'
 import { WebSocket, WebSocketServer } from 'ws'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { INTERCEPTOR_EXTENSION_ID } from '../../../../shared/interceptor.ts'
@@ -15,14 +22,19 @@ const HEARTBEAT_INTERVAL_MS = 20_000
 const CONNECTION_STALE_MS = 65_000
 
 export interface WsBridgeDeps {
-  getToken: () => string
   getTargets: () => InterceptorTarget[]
   getScripts: () => InjectedScript[]
+  /** 规则摘要（弹窗展示 + 开关，匹配逻辑留 edt） */
+  getRuleSummaries: () => InterceptorRuleSummary[]
   /** 代理实际监听端口（经 hello-ok 下发给扩展，扩展不硬编码端口） */
   getProxyPort: () => number | null
   suggestHosts: (url: string) => string[]
-  onAddTarget: (url: string, matchType: 'exact' | 'suffix' | 'regex') => void
-  onRemoveTarget: (host: string, port?: number) => void
+  onAddTarget: (url: string) => void
+  onToggleTarget: (id: string, enabled: boolean) => void
+  onRemoveTargetById: (id: string) => void
+  onToggleRule: (id: string, enabled: boolean) => void
+  onRemoveRule: (id: string) => void
+  getSiteInfo: (url: string) => { targets: InterceptorTarget[], related: InterceptorTarget[], rules: InterceptorRuleSummary[], total: number }
   onConnectionsChanged: () => void
   onProxyStateReported: (clientId: string, enabled: boolean, error: string | undefined) => void
   onScriptLog: (clientId: string, scriptId: string, level: string, message: string) => void
@@ -83,11 +95,7 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
     switch (message.type) {
       case 'hello': {
         if (connection.authed) return
-        if (message.token !== deps.getToken()) {
-          send(connection.socket, { type: 'hello-reject', reason: 'bad-token' })
-          connection.socket.close(4003, 'bad-token')
-          return
-        }
+        // 无配对码：来源已在 verifyClient 校验（浏览器无法伪造 Origin），握手即建立会话
         if (connection.helloTimeout) {
           clearTimeout(connection.helloTimeout)
           connection.helloTimeout = null
@@ -109,6 +117,7 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
           proxyPort: deps.getProxyPort() ?? 0,
           targets: deps.getTargets(),
           scripts: deps.getScripts(),
+          rules: deps.getRuleSummaries(),
           proxyDesired: null,
         })
         deps.onConnectionsChanged()
@@ -124,11 +133,25 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
         return
       }
       case 'add-target':
-        deps.onAddTarget(message.url, message.matchType)
+        deps.onAddTarget(message.url)
         return
-      case 'remove-target':
-        deps.onRemoveTarget(message.host, message.port)
+      case 'target-toggle':
+        deps.onToggleTarget(message.id, message.enabled)
         return
+      case 'target-remove-id':
+        deps.onRemoveTargetById(message.id)
+        return
+      case 'rule-toggle':
+        deps.onToggleRule(message.id, message.enabled)
+        return
+      case 'rule-remove':
+        deps.onRemoveRule(message.id)
+        return
+      case 'site-info': {
+        const info = deps.getSiteInfo(message.url)
+        send(connection.socket, { type: 'site-info-result', requestId: message.requestId, ...info })
+        return
+      }
       case 'target-suggest': {
         const hosts = deps.suggestHosts(message.url)
         send(connection.socket, { type: 'target-suggest-result', requestId: message.requestId, hosts })
@@ -193,10 +216,13 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
         const server = new WebSocketServer({
           host: '127.0.0.1',
           port: candidate,
-          // 只接受本扩展来源（浏览器无法伪造 Origin；本地进程伪造由 token 拦截）
+          // 只接受本扩展来源（浏览器无法伪造 Origin；服务只绑回环，不对外网暴露）
           verifyClient: (info: { origin: string, secure: boolean, req: IncomingMessage }) => {
             const origin = info.origin || info.req.headers.origin
-            return origin === ALLOWED_ORIGIN
+            if (origin === ALLOWED_ORIGIN) return true
+            // 非本扩展来源：常见于把「控制端口」误当「代理端口」填进第三方插件
+            logger.warn('WS bridge rejected non-extension origin', { origin: origin ?? '(none)' })
+            return false
           },
         })
 

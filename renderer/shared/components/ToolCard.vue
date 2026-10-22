@@ -59,15 +59,16 @@ defineEmits<{
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   background: var(--color-raised);
-  /* 玻璃：卡片是最常被内容滚过的一层，模糊按 raised 角色取（不透明窗口下为 none） */
+  /* 玻璃：卡片是最常被内容滚过的一层，模糊按 raised 角色取（不透明窗口下为 none）。
+     顶部 1px 高光来自 --color-highlight：不透明模式下为透明，玻璃模式才出现（Tahoe 的镜面边）。 */
   backdrop-filter: var(--glass-raised);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
   cursor: pointer;
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
 
   &:hover {
     border-color: var(--color-border);
-    box-shadow: var(--shadow-md);
+    box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-md);
     transform: translateY(-1px);
   }
 

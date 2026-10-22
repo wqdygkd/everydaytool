@@ -1,5 +1,5 @@
 // 根 CA 与叶证书的生成 / 管理（node-forge，纯 JS，不依赖系统 OpenSSL）。
-// 方案定稿见 docs/interceptor.md §11：RSA 2048、SHA-256、根 CA 10 年、
+// 方案见 docs/interceptor.md §6：RSA 2048、SHA-256、根 CA 10 年、
 // 叶证书按域名现场签发（内存缓存，SAN 含 DNS 与 IP），查/删统一走 SHA1 指纹。
 import type forgeTypes from 'node-forge'
 import { Buffer } from 'node:buffer'

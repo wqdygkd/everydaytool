@@ -100,6 +100,18 @@
   box-shadow: 0 0 0 1px var(--color-primary) inset;
 }
 
+/* el-input-number 的加减控制区：EP 默认给它铺 --el-fill-color-light（灰调填充），
+   在输入框的 field 底上形成左右两条灰带，与 el-input 不是同一张底。
+   这里改透明，直接透出下方 .el-input__wrapper 的 --color-field——加减钮与输入框同底
+   （半透明模式下也一起透，不会出现「中间透、两头实」）；hover 图标变色、聚焦内圈
+   与 disabled 配色仍由 EP 默认规则提供。
+   选择器带 .el-input-number 前缀：EP 的主题 CSS 由组件按需注入、晚于本文件，
+   单类同权下会被它盖回去。 */
+.el-input-number .el-input-number__decrease,
+.el-input-number .el-input-number__increase {
+  background: transparent;
+}
+
 .el-dialog {
   --el-dialog-border-radius: var(--radius-xl);
   --el-dialog-bg-color: var(--color-overlay);
@@ -233,9 +245,23 @@
   color: var(--color-text-primary);
 }
 
-.el-switch.is-checked .el-switch__core {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
+/* el-switch：轨道按模式做半透明 tint（开 = 品牌色 / 关 = 灰线），滑块单独调档、做成「透镜」。
+   变量挂在 `html .el-switch` 上而不是单类：EP 组件 CSS 按需注入、晚于本文件，
+   同权会被它盖回去。 */
+html .el-switch {
+  --el-switch-on-color: var(--color-switch-track);
+  --el-switch-off-color: var(--color-switch-track-off);
+}
+
+/* 轨道顶部 1px 高光：Tahoe 的镜面边只落在受光面，不做整圈描边，避免和 EP 自己的 border 叠成双线 */
+.el-switch .el-switch__core {
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+}
+
+/* 滑块：独立 alpha + 同款高光；不加 backdrop-filter（底下是轨道，不存在「背后的内容」） */
+.el-switch .el-switch__core .el-switch__action {
+  background-color: var(--color-switch-knob);
+  box-shadow: inset 0 0 0 1px var(--color-highlight);
 }
 
 /* 分段钮(el-radio-button)：品牌浅底选中态，全应用统一（原 interceptor 规则面板局部覆写收敛至此） */

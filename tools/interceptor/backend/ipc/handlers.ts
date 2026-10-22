@@ -1,12 +1,15 @@
 // interceptor IPC 处理器：渲染层管理页与后端服务的唯一通道。
-import type { InterceptorRule, InterceptorTarget, TargetMatchType } from '../../../../shared/interceptor.ts'
+import type { InterceptorRule, InterceptorTarget, ProxyPortUpdateResult } from '../../../../shared/interceptor.ts'
+import type { TargetPatch } from '../services/interceptor-service.ts'
 import { createRequire } from 'node:module'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import {
   addTarget,
+  changeProxyPort,
   exportCaCert,
   getCaStatus,
+  getTargets,
   installCa,
   interceptorService,
   removeRule,
@@ -14,8 +17,9 @@ import {
   saveRule,
   setProxyDesired,
   uninstallCa,
+  updateTarget,
 } from '../services/interceptor-service.ts'
-import { getConfigSnapshot, loadConfig } from '../store/config-store.ts'
+import { loadConfig } from '../store/config-store.ts'
 import { getRulesSnapshot, loadRules } from '../store/rules-store.ts'
 import { CA_EXPORT_FILE_NAME } from '../utils/paths.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from './channels.ts'
@@ -42,15 +46,22 @@ export function registerInterceptorHandlers(): void {
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TARGETS_GET, async (): Promise<InterceptorTarget[]> => {
     await loadConfig()
-    return getConfigSnapshot().targets
+    return getTargets()
   })
-  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TARGETS_ADD, async (_event, host: string, port: number | undefined, matchType: TargetMatchType): Promise<InterceptorTarget[]> => {
-    await addTarget(host, port, matchType)
-    return getConfigSnapshot().targets
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TARGETS_ADD, async (
+    _event,
+    origin: string,
+  ): Promise<{ targets: InterceptorTarget[], target: InterceptorTarget | null, existed: boolean }> => {
+    const result = await addTarget(origin)
+    return { targets: getTargets(), target: result.target, existed: result.existed }
   })
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TARGETS_REMOVE, async (_event, targetId: string): Promise<InterceptorTarget[]> => {
     await removeTargetById(targetId)
-    return getConfigSnapshot().targets
+    return getTargets()
+  })
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TARGETS_TOGGLE, async (_event, targetId: string, patch: TargetPatch): Promise<InterceptorTarget[]> => {
+    await updateTarget(targetId, patch)
+    return getTargets()
   })
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.RULES_GET, async (): Promise<InterceptorRule[]> => {
@@ -73,6 +84,11 @@ export function registerInterceptorHandlers(): void {
   })
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.PROXY_SET_DESIRED, (_event, enabled: boolean) => setProxyDesired(enabled))
+
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.PROXY_PORT_SET, async (_event, port: number): Promise<ProxyPortUpdateResult> => {
+    const result = await changeProxyPort(port)
+    return { ...result, status: interceptorService.getRuntimeStatus() }
+  })
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.EXTENSION_OPEN_DIR, async () => {
     const { extensionDir } = interceptorService.getRuntimeStatus()

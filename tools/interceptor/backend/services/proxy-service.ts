@@ -9,7 +9,7 @@ import type { Duplex } from 'node:stream'
 import type { InterceptorRule, InterceptorTarget, ResourceType, TrafficEntry } from '../../../../shared/interceptor.ts'
 import type { RuleMatchContext } from './rule-engine.ts'
 import { Buffer } from 'node:buffer'
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { createServer, request as httpRequest, STATUS_CODES } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { connect as netConnect } from 'node:net'
@@ -17,7 +17,7 @@ import { createSecureContext, connect as tlsConnect, TLSSocket } from 'node:tls'
 import { promisify } from 'node:util'
 import * as zlib from 'node:zlib'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { INTERCEPTOR_PROXY_PORT_BASE, INTERCEPTOR_PROXY_PORT_RANGE, TRAFFIC_BODY_MAX_CHARS } from '../../../../shared/interceptor.ts'
+import { INTERCEPTOR_PROXY_PORT_RANDOM_MAX, INTERCEPTOR_PROXY_PORT_RANDOM_MIN, originOf, TRAFFIC_BODY_MAX_CHARS } from '../../../../shared/interceptor.ts'
 import { runRequestBodyScript } from './body-script.ts'
 import { getLeafCertificate } from './cert-service.ts'
 import { applyHeaderOperations, applyResponseMutations, findHeaderKey, findMatchingRules, findMockRule, planRequest, setHeaderValue } from './rule-engine.ts'
@@ -61,10 +61,28 @@ export interface ProxyServiceDeps {
 }
 
 export interface ProxyService {
-  start: () => Promise<number>
+  /** 在指定端口启动（指定端口不可用直接报错）；port 为 null 时随机取一个空闲端口 */
+  start: (desiredPort: number | null) => Promise<number>
   stop: () => Promise<void>
   getPort: () => number | null
   isRunning: () => boolean
+  /** 断开所有透传隧道（名单变更后调用，让新条目对已建立的连接也立即生效） */
+  closeTransparentTunnels: () => number
+}
+
+/** 随机端口最多尝试次数（占用重抽；避免极端情况下死循环） */
+const RANDOM_PORT_ATTEMPTS = 20
+
+/** 直接访问代理端口时的探活页（浏览器地址栏 / 插件探活都常见） */
+function buildReachablePage(currentPort: number | null): string {
+  return [
+    'edt 拦截器代理端口正在运行（HTTP 代理）。',
+    '',
+    `请把浏览器或代理插件的「HTTP 代理」指向 127.0.0.1:${currentPort ?? '?'}，`,
+    '不要直接把该地址当网址打开；能用代理访问网站即表示链路正常。',
+    '',
+    '注意：本代理只接受 HTTP 代理协议（不支持 SOCKS4/5，也不支持 TLS 直连代理端口）。',
+  ].join('\n')
 }
 
 function parseAuthority(authority: string): { host: string, port: number } | null {
@@ -166,10 +184,17 @@ function stripHopByHop(headers: Record<string, string>): Record<string, string> 
   return out
 }
 
-/** writeHead：有自定义状态文案时用三参形式，否则标准形式 */
-function writeHeadWithStatus(res: ServerResponse, statusCode: number, statusText: string | undefined, headers: Record<string, string>): void {
-  if (statusText) res.writeHead(statusCode, statusText, toWriteHeaders(headers))
-  else res.writeHead(statusCode, toWriteHeaders(headers))
+/** writeHead：有自定义状态文案时用三参形式，否则标准形式；noCache = 命中名单且开启了强制回源 */
+function writeHeadWithStatus(
+  res: ServerResponse,
+  statusCode: number,
+  statusText: string | undefined,
+  headers: Record<string, string>,
+  noCache = false,
+): void {
+  const finalHeaders = noCache ? withoutCacheHeaders(headers) : headers
+  if (statusText) res.writeHead(statusCode, statusText, toWriteHeaders(finalHeaders))
+  else res.writeHead(statusCode, toWriteHeaders(finalHeaders))
 }
 
 async function decodeBody(buffer: Buffer, encoding: string | undefined): Promise<Buffer | null> {
@@ -213,10 +238,28 @@ function truncateForLog(body: Buffer | null, truncated: boolean, contentType: st
   return { text: text.slice(0, TRAFFIC_BODY_MAX_CHARS), truncated: true }
 }
 
+/** 命中名单的响应要"每次都能看到"：去掉所有缓存控制 / 校验器，浏览器就不敢用缓存 */
+function withoutCacheHeaders(headers: Record<string, string>): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    const name = key.toLowerCase()
+    if (name === 'cache-control' || name === 'expires' || name === 'etag' || name === 'last-modified' || name === 'age' || name === 'pragma') continue
+    next[key] = value
+  }
+  next['cache-control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+  next.pragma = 'no-cache'
+  return next
+}
+
 export function createProxyService(deps: ProxyServiceDeps): ProxyService {
   let server: Server | null = null
+  /** IPv6 回环监听（可选；localhost 解析到 ::1 的客户端靠它才连得进来） */
+  let ipv6Server: Server | null = null
   let port: number | null = null
   const clientSockets = new Set<Socket>()
+
+  /** 当前活着的透明隧道（未命中名单的 CONNECT）；名单变更时整批断开，让新条目立刻生效 */
+  const transparentTunnels = new Set<Socket>()
 
   function trackSocket(socket: Socket): void {
     clientSockets.add(socket)
@@ -225,6 +268,11 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
 
   function isOwnConnection(host: string, portToCheck: number): boolean {
     return isLoopbackHost(host) && deps.isOwnPort(portToCheck)
+  }
+
+  /** 真正发给浏览器的响应头（该条目开了强制回源就去掉缓存控制）——记录与写出用同一份，避免详情里看到的上游头与实际不符 */
+  function outgoingHeaders(headers: Record<string, string>, noCache: boolean): Record<string, string> {
+    return noCache ? withoutCacheHeaders(headers) : headers
   }
 
   function emitTraffic(entry: TrafficEntry): void {
@@ -266,7 +314,9 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       try {
         parsed = new URL(req.url ?? '')
       } catch {
-        sendPlainError(res, 400, 'Bad Request (edt interceptor)')
+        // 直接把代理端口当网址访问（浏览器地址栏 / 插件探活）：回一页人话，顺便证明端口可达
+        res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
+        res.end(buildReachablePage(port))
         return
       }
       scheme = parsed.protocol === 'https:' ? 'https' : 'http'
@@ -281,12 +331,16 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       return
     }
 
-    const matchedTarget = matchTarget(deps.getTargets(), host, targetPort)
-    if (!matchedTarget) {
-      // 非名单：透明转发（不改包、不记日志）
+    // 名单是白名单闸门：只按请求 origin 判定；命中才进处理层并跑规则，否则整条透传
+    const origin = originOf(scheme, host, targetPort)
+    const match = matchTarget(deps.getTargets(), origin)
+    if (!match) {
+      // 非名单：透明转发（不改包、不记日志、不跑规则）
       forwardTransparent(req, res, scheme, host, targetPort, pathAndQuery)
       return
     }
+    // 强制回源是条目级开关（缺省开）
+    const noCache = match.target.noCache !== false
 
     const path = pathAndQuery.split('?')[0] ?? '/'
     const requestContentType = headerValue(req.headers['content-type'])
@@ -360,6 +414,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
           'location': plan.redirectedTo,
           'content-type': 'text/plain; charset=utf-8',
           'content-length': '0',
+          ...(noCache ? { 'cache-control': 'no-store, no-cache, must-revalidate, max-age=0' } : {}),
         })
         res.end()
         emitTraffic(buildEntry({
@@ -387,6 +442,12 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       const rewrittenTo = plan.rewritten ? plan.url.toString() : undefined
 
       const headersForUpstream = stripHopByHop(flattenHeaders(req.headers))
+      // 强制回源：去掉条件请求头，避免上游只回 304 让浏览器继续用本地缓存
+      if (noCache) {
+        delete headersForUpstream['if-none-match']
+        delete headersForUpstream['if-modified-since']
+        delete headersForUpstream['if-range']
+      }
       applyHeaderOperations(headersForUpstream, plan.requestHeaders)
       if (plan.userAgent) setHeaderValue(headersForUpstream, 'user-agent', plan.userAgent)
       // 主机被改写：同步 Host 头（含端口时用改写后的 authority）
@@ -412,7 +473,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
 
       const mockRule = findMockRule(matchedRules)
       if (mockRule) {
-        respondWithMock(res, matchedRules, mockRule, ctx, matchedRuleIds, matchedRuleNames, headersForUpstream, outgoingBody, startedAt, plan.delayMs)
+        respondWithMock(res, matchedRules, mockRule, ctx, matchedRuleIds, matchedRuleNames, headersForUpstream, outgoingBody, startedAt, plan.delayMs, noCache)
         return
       }
 
@@ -432,6 +493,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
         startedAt,
         delayedByMs: plan.delayMs || undefined,
         rewrittenTo,
+        noCache,
       })
     } catch (error) {
       logger.warn('Proxy request failed', { url: fullUrl, error: (error as Error).message })
@@ -468,6 +530,8 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     startedAt: number
     delayedByMs?: number
     rewrittenTo?: string
+    /** 该条目是否强制回源（去掉响应缓存控制） */
+    noCache: boolean
   }
 
   function forwardTransparent(
@@ -486,7 +550,9 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     })
     req.pipe(upstreamReq)
     upstreamReq.on('response', (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode ?? 502, toWriteHeaders(flattenHeaders(upstreamRes.headers)))
+      // 逐跳头不能跨代理转发：原样回传 connection/keep-alive 会让我们的连接行为跟着上游走
+      // （客户端发 Connection: close 时反而被上游的 keep-alive 覆盖，连接不关，部分客户端会一直等）
+      res.writeHead(upstreamRes.statusCode ?? 502, toWriteHeaders(stripHopByHop(flattenHeaders(upstreamRes.headers))))
       upstreamRes.pipe(res)
     })
   }
@@ -529,6 +595,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       startedAt,
       delayedByMs,
       rewrittenTo,
+      noCache,
     } = options
 
     const upstreamReq = createUpstreamRequest(scheme, host, targetPort, ctx.method, pathAndQuery, headers)
@@ -566,7 +633,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     const responseContentType = upstreamRes.headers['content-type']
     const responseContentEncoding = upstreamRes.headers['content-encoding']
     const statusCode = upstreamRes.statusCode ?? 502
-    const flatResponseHeaders = flattenHeaders(upstreamRes.headers)
+    const flatResponseHeaders = stripHopByHop(flattenHeaders(upstreamRes.headers))
     const wantsBodyReplace = matchedRules.some(rule => rule.type === 'response' && rule.response?.bodyReplace !== undefined)
 
     let loggedBody: Buffer | null = null
@@ -580,19 +647,19 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
         if (decoded) {
           const mutated = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, decoded)
           const finalStatus = mutated.statusCode
-          writeHeadWithStatus(res, finalStatus, mutated.statusText, mutated.headers)
+          writeHeadWithStatus(res, finalStatus, mutated.statusText, mutated.headers, noCache)
           res.end(mutated.body ?? undefined)
           loggedBody = mutated.body
-          finishEntry(finalStatus, mutated.statusText)
+          finishEntry(finalStatus, mutated.statusText, mutated.headers)
           return
         }
         // 解码失败（异常编码）：按原始内容回写，不改体；状态码 / 响应头变更照常应用
         const passthrough = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, null)
-        writeHeadWithStatus(res, passthrough.statusCode, passthrough.statusText, passthrough.headers)
+        writeHeadWithStatus(res, passthrough.statusCode, passthrough.statusText, passthrough.headers, noCache)
         res.end(collected.buffer)
         loggedBody = collected.buffer
         loggedTruncated = true
-        finishEntry(passthrough.statusCode, passthrough.statusText)
+        finishEntry(passthrough.statusCode, passthrough.statusText, passthrough.headers)
         return
       }
       // 超出缓冲上限：放弃改体，直通（已读部分顺序写出）
@@ -601,17 +668,17 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
           ? { ...rule, response: { ...rule.response, bodyReplace: undefined } }
           : rule)
       const mutatedHeaders = applyResponseMutations(withoutBodyReplace, statusCode, flatResponseHeaders, null)
-      writeHeadWithStatus(res, mutatedHeaders.statusCode, mutatedHeaders.statusText, mutatedHeaders.headers)
+      writeHeadWithStatus(res, mutatedHeaders.statusCode, mutatedHeaders.statusText, mutatedHeaders.headers, noCache)
       res.write(collected.buffer)
       upstreamRes.pipe(res)
       loggedTruncated = true
-      upstreamRes.on('end', () => finishEntry(mutatedHeaders.statusCode, mutatedHeaders.statusText))
+      upstreamRes.on('end', () => finishEntry(mutatedHeaders.statusCode, mutatedHeaders.statusText, mutatedHeaders.headers))
       return
     }
 
     // 流式转发 + 采样日志
     const mutated = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, null)
-    writeHeadWithStatus(res, mutated.statusCode, mutated.statusText, mutated.headers)
+    writeHeadWithStatus(res, mutated.statusCode, mutated.statusText, mutated.headers, noCache)
 
     const chunks: Buffer[] = []
     let size = 0
@@ -636,9 +703,9 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     } else {
       loggedTruncated = true
     }
-    finishEntry(mutated.statusCode, mutated.statusText)
+    finishEntry(mutated.statusCode, mutated.statusText, mutated.headers)
 
-    function finishEntry(finalStatus: number, customStatusText?: string): void {
+    function finishEntry(finalStatus: number, customStatusText: string | undefined, responseHeaders: Record<string, string>): void {
       const requestLog = truncateForLog(requestBodyForLog, requestBodyTruncated, requestContentType)
       const responseLog = truncateForLog(loggedBody, loggedTruncated, responseContentType)
       emitTraffic(buildEntry({
@@ -653,7 +720,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
         durationMs: Date.now() - startedAt,
         requestHeaders: headers,
         requestBody: requestLog.text,
-        responseHeaders: mutated.headers,
+        responseHeaders: outgoingHeaders(responseHeaders, noCache),
         responseBody: responseLog.text,
         bodyTruncated: responseLog.truncated,
         mocked,
@@ -676,6 +743,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     requestBody: Buffer | null,
     startedAt: number,
     delayMs: number,
+    noCache: boolean,
   ): void {
     const config = mockRule.response ?? {}
     const statusCode = config.statusCode ?? 200
@@ -685,7 +753,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       'content-length': String(body?.byteLength ?? 0),
     }
     const mutated = applyResponseMutations(matchedRules, statusCode, headers, body)
-    writeHeadWithStatus(res, mutated.statusCode, mutated.statusText, mutated.headers)
+    writeHeadWithStatus(res, mutated.statusCode, mutated.statusText, mutated.headers, noCache)
     res.end(mutated.body ?? undefined)
 
     const requestLog = truncateForLog(requestBody, false, requestHeaders['content-type'])
@@ -701,7 +769,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       durationMs: Date.now() - startedAt,
       requestHeaders,
       requestBody: requestLog.text,
-      responseHeaders: mutated.headers,
+      responseHeaders: outgoingHeaders(mutated.headers, noCache),
       responseBody: mutated.body?.toString('utf8'),
       mocked: true,
       delayedByMs: delayMs || undefined,
@@ -780,12 +848,16 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       return
     }
 
-    const matched = matchTarget(deps.getTargets(), host, targetPort)
+    // CONNECT 一定是 https：这里就是请求的 origin（`https://host:port`）
+    const origin = originOf('https', host, targetPort)
+    const matched = matchTarget(deps.getTargets(), origin)
     if (!matched) {
+      // 不在名单：原始隧道直通（不解密、不记录、不跑规则）
       rawTunnel(clientSocket, head, host, targetPort)
       return
     }
 
+    // 命中名单：进入 MITM（若浏览器不信任根 CA，TLS 握手会失败，这里之后不会再有 HTTP 请求）
     void startMitm(clientSocket, host, targetPort)
   }
 
@@ -814,6 +886,9 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
   }
 
   function rawTunnel(clientSocket: Socket, head: Buffer, host: string, targetPort: number): void {
+    // 记下透传隧道：名单变更时主动断开，否则浏览器会一直复用这条不拆包的旧连接，
+    // 新加的条目对已建立的连接完全不生效（表现为"加了名单却看不到流量"）。
+    transparentTunnels.add(clientSocket)
     const upstream = netConnect({ host, port: targetPort }, () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\nProxy-Agent: edt-interceptor\r\n\r\n')
       if (head?.length) upstream.write(head)
@@ -826,7 +901,21 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     }
     upstream.on('error', destroyBoth)
     clientSocket.on('error', destroyBoth)
-    clientSocket.on('close', () => upstream.destroy())
+    clientSocket.on('close', () => {
+      transparentTunnels.delete(clientSocket)
+      upstream.destroy()
+    })
+  }
+
+  /** 断开所有透传隧道（名单变了 → 让下一次请求重新 CONNECT，按新名单决定拆不拆包） */
+  function closeTransparentTunnels(): number {
+    let closed = 0
+    for (const socket of transparentTunnels) {
+      closed += 1
+      socket.destroy()
+    }
+    transparentTunnels.clear()
+    return closed
   }
 
   // -------------------------------------------------------------------------
@@ -869,7 +958,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       return
     }
 
-    const matched = matchTarget(deps.getTargets(), host, targetPort)
+    const matched = matchTarget(deps.getTargets(), originOf(scheme, host, targetPort))
 
     const isIp = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':')
     const upstream = scheme === 'https'
@@ -933,57 +1022,98 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
   // 生命周期
   // -------------------------------------------------------------------------
 
-  function listenOnFreePort(basePort: number, range: number): Promise<number> {
+  /** 一个监听实例（IPv4 / IPv6 各一个，共用同一套请求处理器与 socket 池） */
+  function createProxyServer(): Server {
+    const srv = createServer((req, res) => {
+      void handleRequest(req, res)
+    })
+    srv.on('connect', handleConnect)
+    srv.on('upgrade', (req, socket, head) => handleUpgrade(req, socket as Duplex, head))
+    srv.on('connection', (socket) => {
+      trackSocket(socket)
+    })
+    srv.on('clientError', (_error, socket) => {
+      // 代理端口只接 HTTP：解析失败直接断开（多为插件把协议选成了 SOCKS / TLS）
+      socket.destroy()
+    })
+    return srv
+  }
+
+  function listenAddress(srv: Server, host: string, targetPort: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      let attempt = 0
-
-      const tryListen = (candidate: number): void => {
-        const srv = createServer((req, res) => {
-          void handleRequest(req, res)
-        })
-        srv.on('connect', handleConnect)
-        srv.on('upgrade', (req, socket, head) => handleUpgrade(req, socket as Duplex, head))
-        srv.on('connection', socket => trackSocket(socket))
-        srv.on('clientError', (_error, socket) => socket.destroy())
-        srv.on('error', (error: NodeJS.ErrnoException) => {
-          if (error.code === 'EADDRINUSE' && attempt < range - 1) {
-            attempt++
-            tryListen(candidate + 1)
-            return
-          }
-          reject(error)
-        })
-        srv.listen(candidate, '127.0.0.1', () => {
-          server = srv
-          port = candidate
-          logger.info('Proxy listening', { port: candidate })
-          resolve(candidate)
-        })
-      }
-
-      tryListen(basePort)
+      let settled = false
+      srv.on('error', (error: NodeJS.ErrnoException) => {
+        if (settled) {
+          // 监听成功后的运行时错误（如 fd 耗尽）：只记录，不改变已有状态
+          logger.warn('Proxy server error', { host, port: targetPort, error: error.message })
+          return
+        }
+        settled = true
+        srv.close()
+        reject(error)
+      })
+      srv.listen(targetPort, host, () => {
+        settled = true
+        resolve()
+      })
     })
   }
 
+  /** 在 targetPort 上监听；失败（EADDRINUSE 等）由调用方决定是否换端口 */
+  async function listenOn(targetPort: number): Promise<number> {
+    const primary = createProxyServer()
+    await listenAddress(primary, '127.0.0.1', targetPort)
+    server = primary
+    port = targetPort
+
+    // 双栈：第三方插件常手填 localhost，解析到 ::1 时也要能连（失败不影响 IPv4）
+    const secondary = createProxyServer()
+    try {
+      await listenAddress(secondary, '::1', targetPort)
+      ipv6Server = secondary
+    } catch (error) {
+      logger.debug('IPv6 loopback listener unavailable (IPv6 disabled?)', { port: targetPort, error: (error as Error).message })
+    }
+
+    logger.info('Proxy listening', { port: targetPort, ipv6Loopback: ipv6Server !== null })
+    return targetPort
+  }
+
   return {
-    async start(): Promise<number> {
+    async start(desiredPort: number | null): Promise<number> {
       if (server && port) return port
-      // 端口段与 WS 桥（59763+）不重叠；实际使用端口经 WS 下发给扩展
-      return listenOnFreePort(INTERCEPTOR_PROXY_PORT_BASE, INTERCEPTOR_PROXY_PORT_RANGE)
+
+      // 指定端口：不做漂移，占用就如实报错（用户手动改端口时需要明确失败）
+      if (desiredPort !== null) return listenOn(desiredPort)
+
+      // 随机端口：每次重抽一个，避免端口段顺序探测被长期占用时一路撞车
+      let lastError: unknown = new Error('no free proxy port')
+      for (let attempt = 0; attempt < RANDOM_PORT_ATTEMPTS; attempt += 1) {
+        const candidate = randomInt(INTERCEPTOR_PROXY_PORT_RANDOM_MIN, INTERCEPTOR_PROXY_PORT_RANDOM_MAX + 1)
+        try {
+          return await listenOn(candidate)
+        } catch (error) {
+          lastError = error
+          logger.debug('Random proxy port unavailable', { port: candidate, error: (error as Error).message })
+        }
+      }
+      throw lastError
     },
 
     async stop(): Promise<void> {
-      const srv = server
+      const servers = [server, ipv6Server].filter((item): item is Server => item !== null)
       server = null
+      ipv6Server = null
       port = null
       for (const socket of clientSockets) socket.destroy()
       clientSockets.clear()
-      if (srv) {
-        await new Promise<void>(resolve => srv.close(() => resolve()))
-      }
+      closeTransparentTunnels()
+      await Promise.all(servers.map(item => new Promise<void>(resolve => item.close(() => resolve()))))
     },
 
     getPort: () => port,
     isRunning: () => server !== null,
+    /** 名单变更后调用：断开透传隧道，强制下一次请求按新名单重新分流 */
+    closeTransparentTunnels,
   }
 }

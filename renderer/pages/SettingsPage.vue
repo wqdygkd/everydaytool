@@ -171,6 +171,16 @@ async function clearCache() {
   }
 }
 
+// 调试控制台：主进程为当前窗口开一个独立 DevTools 窗口（undocked，可再停靠回去）。
+// 重复点击只会把它拉到前台，不会关掉——按钮语义是「打开」而不是「切换」。
+async function openDevTools() {
+  try {
+    await invokeAppIpc(appIpcChannels().DEVTOOLS_OPEN)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '打开调试控制台失败')
+  }
+}
+
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -290,6 +300,15 @@ onMounted(() => {
       </UiHint>
       <el-button :loading="cleaning" @click="clearCache">
         清除缓存
+      </el-button>
+    </UiPanel>
+
+    <UiPanel title="调试">
+      <UiHint block>
+        在独立窗口中打开 DevTools，用于查看渲染层日志、网络请求与内存快照；关闭该窗口即可收起。
+      </UiHint>
+      <el-button @click="openDevTools">
+        打开调试控制台
       </el-button>
     </UiPanel>
   </div>

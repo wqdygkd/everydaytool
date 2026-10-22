@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
-import { APP_TABS, findAppTab } from './config/app-tabs'
+import { findAppTab, getAppTabs } from './config/app-tabs'
 import { getToolRegistry } from './config/tools'
 import { useAppearance } from './shared/composables/useAppearance'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
@@ -65,10 +65,11 @@ watch(
 // 只有真正关闭 tab 时组件才卸载（顺带触发各页面的 onUnmounted 清理）。
 // 应用自带页面（设置等）并入同一张表：它们同样是页签，常驻挂载可留住已加载的数据，
 // 切走再切回不必重新拉一遍磁盘用量 / 目录信息。
-// 注册表是静态的（构建期确定的工具清单 + APP_TABS），故用普通常量而非 computed。
+// 注册表是静态的（构建期确定的工具清单 + 当前平台可用的应用页面），故用普通常量而非 computed。
+// 应用页面按目标平台裁剪：设置是桌面端专属（electronOnly），网页预览下不进这张表。
 const tabComponents: Record<string, Component> = {
   ...Object.fromEntries(getToolRegistry().map(t => [t.id, t.route.component as Component])),
-  ...Object.fromEntries(APP_TABS.map(t => [t.id, t.component])),
+  ...Object.fromEntries(getAppTabs().map(t => [t.id, t.component])),
 }
 
 const shellEl = ref<HTMLElement | null>(null)
@@ -186,8 +187,10 @@ function openSettings() {
       </div>
       <!-- 设置入口：固定在标题栏右上角、原生窗口按钮左侧（Windows 上即最小化按钮左边）。
            图标按钮而非文字按钮：标题栏里已有品牌标 + 页签，再加文字会和页签抢视觉重量；
-           34px 见方与品牌标同高，右端与原生窗口按钮同一条基线。 -->
+           34px 见方与品牌标同高，右端与原生窗口按钮同一条基线。
+           网页预览下 settingsTab 为 undefined（设置页是桌面端专属），入口整钮不渲染。 -->
       <button
+        v-if="settingsTab"
         type="button"
         class="header-settings"
         :class="{ 'is-active': isSettingsActive }"

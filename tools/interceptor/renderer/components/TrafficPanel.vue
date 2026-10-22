@@ -78,13 +78,16 @@ function headersText(headers?: Record<string, string>): string {
     </template>
     <UiHint>
       只记录处理名单命中的请求（含规则改写 / Mock 短路）；内存保留最近 1000 条，body 超 64KB 截断。
+      「强制回源」是<strong>处理名单里每条自己的开关</strong>（默认开）：开了的 origin 响应会去掉缓存头，重复访问也会真的发请求；关掉则回到正常缓存。
+      条数仍可能比浏览器控制台少：<span class="mono">data:</span> / <span class="mono">blob:</span> /
+      <span class="mono">chrome-extension:</span> 不走代理，其它 origin 不在名单里也不记录。
     </UiHint>
 
     <el-table
       :data="filteredTraffic"
       size="small"
       height="460"
-      empty-text="暂无流量（先在扩展弹窗把目标站点加入名单，再让页面发请求）"
+      empty-text="暂无流量：只有命中处理名单的请求才会记录（未命中按透传处理）。先确认目标 origin 已在名单里、且浏览器已挂上代理"
       @row-click="openDetail"
     >
       <el-table-column label="时间" width="110">

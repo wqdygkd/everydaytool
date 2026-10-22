@@ -9,9 +9,14 @@ export const INTERCEPTOR_EXTENSION_ID = 'hlinfcmdeamelkpdemppomgncenalong'
 export const INTERCEPTOR_WS_PORT_BASE = 59763
 export const INTERCEPTOR_WS_PORT_RANGE = 5
 
-/** 代理端口：默认 8080，被占用时顺序探测 */
-export const INTERCEPTOR_PROXY_PORT_BASE = 8080
-export const INTERCEPTOR_PROXY_PORT_RANGE = 10
+/**
+ * 代理端口：首次启动在该段内随机取一个空闲端口并落盘（之后固定），
+ * 避免 8080 这类常被其它工具占用的「公共端口」。手动修改范围见 MIN/MAX。
+ */
+export const INTERCEPTOR_PROXY_PORT_RANDOM_MIN = 20000
+export const INTERCEPTOR_PROXY_PORT_RANDOM_MAX = 59000
+export const INTERCEPTOR_PROXY_PORT_MIN = 1024
+export const INTERCEPTOR_PROXY_PORT_MAX = 65535
 
 /** 流量条目请求/响应体落内存与下发的截断上限（字符） */
 export const TRAFFIC_BODY_MAX_CHARS = 64 * 1024
@@ -22,16 +27,228 @@ export const TRAFFIC_RING_SIZE = 1000
 // 处理名单（edt 处理层过滤器：谁被拆包/改包/记日志）
 // ---------------------------------------------------------------------------
 
-export type TargetMatchType = 'exact' | 'suffix' | 'regex'
+export const SOURCE_KEY_LABELS: Record<RuleSourceKey, string> = {
+  url: 'URL',
+  host: '主机',
+  path: '路径',
+}
 
+export const SOURCE_OPERATOR_LABELS: Record<RuleOperator, string> = {
+  equals: '等于',
+  contains: '包含',
+  matches: '正则',
+  wildcard: '通配',
+}
+
+// ---------------------------------------------------------------------------
+// 规则匹配源求值（处理名单不用这套：名单只按 origin 相等判定，见 targetMatchesOrigin）
+// ---------------------------------------------------------------------------
+
+const SOURCE_REGEX_CACHE = new Map<string, RegExp | null>()
+const SOURCE_REGEX_CACHE_MAX = 200
+
+/** 用户输入驱动的正则编译（非法即 null，带 FIFO 上限防无限增长） */
+export function compileSourceRegex(pattern: string): RegExp | null {
+  const cached = SOURCE_REGEX_CACHE.get(pattern)
+  if (cached !== undefined) return cached
+  let compiled: RegExp | null = null
+  try {
+    compiled = new RegExp(pattern)
+  } catch {
+    compiled = null
+  }
+  if (SOURCE_REGEX_CACHE.size >= SOURCE_REGEX_CACHE_MAX) {
+    const oldest = SOURCE_REGEX_CACHE.keys().next().value
+    if (oldest !== undefined) SOURCE_REGEX_CACHE.delete(oldest)
+  }
+  SOURCE_REGEX_CACHE.set(pattern, compiled)
+  return compiled
+}
+
+/** 通配模式 → 正则：`*` 任意串、`?` 单字符 */
+export function wildcardToRegex(pattern: string, withCaptures = false): RegExp {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+  const star = withCaptures ? '(.*)' : '.*'
+  return new RegExp(`^${escaped.replace(/\*/g, star).replace(/\?/g, '.')}$`)
+}
+
+export interface SourceMatchContext {
+  /** 完整 URL（含协议与查询串，不含 hash） */
+  url: string
+  host: string
+  /** 路径 + 查询串，如 `/a/b?x=1` */
+  path: string
+}
+
+/**
+ * 匹配源求值（规则专用的单点实现）：
+ * - `key` 选中被比较的字符串（url / host / path），
+ * - `operator` 决定比较方式（等于 / 包含 / 正则 / 通配）。
+ * host 键按小写比较（域名不分大小写），其余键原样比较。
+ */
+export function matchSource(source: RuleSource, ctx: SourceMatchContext): boolean {
+  const isHostKey = source.key === 'host'
+  const value = isHostKey ? (source.value ?? '').toLowerCase() : (source.value ?? '')
+  const candidate = source.key === 'url' ? ctx.url : source.key === 'host' ? ctx.host.toLowerCase() : ctx.path
+
+  switch (source.operator) {
+    case 'equals':
+      return candidate === value
+    case 'contains':
+      return candidate.includes(value)
+    case 'matches':
+      return compileSourceRegex(value)?.test(candidate) ?? false
+    case 'wildcard':
+      return wildcardToRegex(value).test(candidate)
+  }
+}
+
+/** 主机名合法字符（含通配 `*` 与 IPv6 的 `:`；已去掉方括号） */
+const HOST_CHARS = /^[\w.*:-]+$/
+
+/**
+ * 把用户输入归一成「域名 + 端口」（纯函数，后端存盘与前端分组/展示共用）：
+ * - `https://www.a.com/35110.html` → `{ host: 'www.a.com' }`（粘 URL 是常见手输，不该变成匹配不上的条目）
+ * - `www.a.com:8089` → `{ host: 'www.a.com', port: 8089 }`
+ * - `[::1]:8089` / `::1` / `127.0.0.1` 保留 IPv6 / IPv4 主机
+ * 解析不出主机（空格、中文、空串）时返回 null，由调用方明确报错。
+ */
+export function normalizeTargetHostInput(raw: string): { host: string, port?: number } | null {
+  const value = (raw ?? '').trim()
+  if (!value) return null
+  const parsed = parseTargetHostInput(value)
+  if (!parsed) return null
+  return HOST_CHARS.test(parsed.host) ? parsed : null
+}
+
+function parseTargetHostInput(value: string): { host: string, port?: number } | null {
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value)
+  if (hasScheme || value.includes('/') || value.includes('?')) {
+    try {
+      const url = new URL(hasScheme ? value : `http://${value}`)
+      if (!url.hostname) return null
+      return { host: url.hostname.toLowerCase(), port: url.port ? Number(url.port) : undefined }
+    } catch {
+      return null
+    }
+  }
+
+  // 带方括号的 IPv6（可带端口）：`[::1]` / `[::1]:8089`
+  const bracketed = /^\[([^\]]+)\](?::(\d{1,5}))?$/.exec(value)
+  if (bracketed?.[1]) return { host: bracketed[1].toLowerCase(), port: bracketed[2] ? Number(bracketed[2]) : undefined }
+
+  // host:port（裸 IPv6 不含方括号，落到下面当纯主机）
+  const withPort = /^([^:]+):(\d{1,5})$/.exec(value)
+  if (withPort?.[1] && withPort[2]) return { host: withPort[1].toLowerCase(), port: Number(withPort[2]) }
+
+  return { host: value.toLowerCase().replace(/^\[|\]$/g, '') }
+}
+
+/**
+ * 处理名单条目 = 一个 **origin**（`scheme://host[:port]`）。
+ *
+ * 名单是**白名单闸门**：只有请求 origin 命中条目，请求才进处理层（拆包 / 记流量）并交给规则；
+ * 没命中就整条透传——不动包、不记录、规则一条都不跑。
+ * 「这个地址要怎么处理」（改请求 / 改响应 / 重定向 / Mock…）全在规则里，两层不重叠。
+ */
 export interface InterceptorTarget {
   id: string
-  /** exact: `api.foo.com` / `127.0.0.1`；suffix: `foo.com`（命中本体与任意子域）；regex: 对 host 匹配 */
-  host: string
-  /** 回环等显式端口目标必须带端口，避免圈进本机所有服务 */
-  port?: number
-  matchType: TargetMatchType
+  /** 归一后的 origin：`https://www.a.com` / `http://127.0.0.1:8089`（默认端口省略） */
+  origin: string
+  /** 是否生效（缺省视为启用；禁用 = 该 origin 不进处理层） */
+  enabled?: boolean
+  /**
+   * 强制回源（默认开）：该 origin 的响应去掉缓存控制，浏览器每次都真的发请求，
+   * 流量页才看得到重复访问的资源。关掉 = 允许浏览器缓存（重复请求可能不再出现）。
+   */
+  noCache?: boolean
   createdAt: string
+}
+
+const DEFAULT_PORTS: Record<'http' | 'https', number> = { http: 80, https: 443 }
+
+/** 主机名归一：小写；IPv6 补方括号（否则 origin 没法回解析） */
+export function normalizeOriginHost(host: string): string {
+  const raw = String(host ?? '').trim().toLowerCase()
+  if (!raw) return ''
+  const bare = raw.replace(/^\[|\]$/g, '')
+  return bare.includes(':') ? `[${bare}]` : bare
+}
+
+/** 按 origin 语义拼串：默认端口不写（`https://a.com` 与 `https://a.com:443` 是同一个 origin） */
+export function originOf(scheme: 'http' | 'https', host: string, port?: number): string {
+  const normalizedHost = normalizeOriginHost(host)
+  const effective = port ?? DEFAULT_PORTS[scheme]
+  return effective === DEFAULT_PORTS[scheme]
+    ? `${scheme}://${normalizedHost}`
+    : `${scheme}://${normalizedHost}:${effective}`
+}
+
+function isLoopbackHostText(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '')
+  return bare === 'localhost' || bare === '::1' || /^127\./.test(bare)
+}
+
+function isValidOriginHost(host: string): boolean {
+  const bare = host.replace(/^\[|\]$/g, '')
+  if (!bare) return false
+  // IPv6 字面量
+  if (bare.includes(':')) return /^[0-9a-f:.]+$/.test(bare)
+  return /^[a-z0-9.-]+$/.test(bare) && !bare.startsWith('.') && !bare.endsWith('.')
+}
+
+/**
+ * 用户输入 → origin（纯函数，落盘 / 展示 / 弹窗都用这一份）：
+ * - `https://www.a.com/35110.html?x=1` → `https://www.a.com`（粘 URL 只取 origin）
+ * - `www.a.com` → `https://www.a.com`（无协议默认 https）
+ * - `127.0.0.1:8089` / `localhost:3000` → `http://127.0.0.1:8089`（回环默认 http）
+ * - `http://a.com:80` → `http://a.com`（默认端口归一掉）
+ * 非 http(s) 协议、含通配符、解析不出主机 → null。
+ */
+export function parseTargetOrigin(raw: string): string | null {
+  const value = (raw ?? '').trim()
+  if (!value) return null
+  const explicitScheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value)?.[1]?.toLowerCase()
+  if (explicitScheme && explicitScheme !== 'http' && explicitScheme !== 'https') return null
+  if (!explicitScheme && value.includes('*')) return null
+
+  let url: URL
+  try {
+    url = new URL(explicitScheme ? value : `http://${value}`)
+  } catch {
+    return null
+  }
+  const host = url.hostname.toLowerCase()
+  if (!host || !isValidOriginHost(host)) return null
+  const scheme = (explicitScheme ?? (isLoopbackHostText(host) ? 'http' : 'https')) as 'http' | 'https'
+  return originOf(scheme, host, url.port ? Number(url.port) : undefined)
+}
+
+/** 条目是否命中该 origin（唯一判定：字符串相等 + 条目启用） */
+export function targetMatchesOrigin(target: Pick<InterceptorTarget, 'origin' | 'enabled'>, origin: string): boolean {
+  return target.enabled !== false && target.origin === origin
+}
+
+/** 条目开关的可改字段（渲染层与 IPC 共用一份） */
+export interface InterceptorTargetPatch {
+  enabled?: boolean
+  noCache?: boolean
+}
+
+/** 规则摘要：下发给扩展弹窗（弹窗只做展示与开关，不跑匹配逻辑） */
+export interface InterceptorRuleSummary {
+  id: string
+  name: string
+  type: RuleType
+  typeLabel: string
+  enabled: boolean
+  /** 匹配条件的人话摘要，如「URL 包含 /api」 */
+  condition: string
+  /** 规则的匹配源（扩展本地兜底过滤用；不下发时为纯展示） */
+  source?: RuleSource
+  /** 域级适用性：global = 规则不绑定具体域（任何站点都可能命中）；site = 与当前站点同域 */
+  scope?: 'global' | 'site'
+  updatedAt: string
 }
 
 // ---------------------------------------------------------------------------
@@ -317,23 +534,34 @@ export interface ExtensionConnectionInfo {
 }
 
 export interface InterceptorRuntimeStatus {
+  /** 控制通道端口（扩展自动探测，无需用户填写） */
   wsPort: number | null
+  /** 代理端口（浏览器 / 其它工具接入用；首次随机后固定，可手动修改） */
   proxyPort: number | null
   proxyRunning: boolean
+  /** 代理端口降级说明（配置端口被占用、已改用随机端口等） */
+  proxyPortNote?: string
   connections: ExtensionConnectionInfo[]
   /** 扩展目录（首次安装引导用） */
   extensionDir: string | null
-  /** 配对 token（展示给用户填入扩展） */
-  token: string
+}
+
+/** 修改代理端口的结果（IPC 返回；status 为改动后的最新运行状态） */
+export interface ProxyPortUpdateResult {
+  ok: boolean
+  error?: string
+  status: InterceptorRuntimeStatus
 }
 
 // ---------------------------------------------------------------------------
 // WS 协议（扩展 ↔ edt）
 // ---------------------------------------------------------------------------
+// 无配对码：连接只做来源校验（Origin 必须是本扩展），握手即建立会话。
+// 端口分工：控制通道端口由扩展在本机端口段内探测；代理端口由 edt 经 hello-ok /
+// proxy-port 下发，扩展不硬编码。
 
 export interface WsHelloMessage {
   type: 'hello'
-  token: string
   appId: string
   clientId: string
   version: string
@@ -345,13 +573,15 @@ export interface WsHelloOkMessage {
   proxyPort: number
   targets: InterceptorTarget[]
   scripts: InjectedScript[]
+  /** 规则摘要（弹窗按当前站点筛选展示，勾选/移除即回传 edt） */
+  rules: InterceptorRuleSummary[]
   /** edt 期望的代理挂载状态（null = 不干预，沿用扩展本地设置） */
   proxyDesired: boolean | null
 }
 
 export interface WsHelloRejectMessage {
   type: 'hello-reject'
-  reason: 'bad-token' | 'bad-origin' | 'busy'
+  reason: 'bad-origin' | 'busy'
 }
 
 export interface WsHeartbeatMessage {
@@ -380,21 +610,70 @@ export interface WsScriptsSyncMessage {
   scripts: InjectedScript[]
 }
 
+export interface WsRulesSyncMessage {
+  type: 'rules-sync'
+  rules: InterceptorRuleSummary[]
+}
+
+/** 代理端口变更（用户在 edt 改端口后下发；扩展需按新端口重新挂载） */
+export interface WsProxyPortMessage {
+  type: 'proxy-port'
+  proxyPort: number
+}
+
 export interface WsSetProxyMessage {
   type: 'set-proxy'
   enabled: boolean
 }
 
+/** 弹窗把当前标签的 URL 交给 edt：edt 取 origin 后决定加不加进名单 */
 export interface WsAddTargetMessage {
   type: 'add-target'
   url: string
-  matchType: TargetMatchType
 }
 
-export interface WsRemoveTargetMessage {
-  type: 'remove-target'
-  host: string
-  port?: number
+/** 弹窗里禁用/启用某条名单条目 */
+export interface WsTargetToggleMessage {
+  type: 'target-toggle'
+  id: string
+  enabled: boolean
+}
+
+/** 弹窗里移除名单条目（按 id 精确删除：同名不同端口 / 含子域变体互不影响） */
+export interface WsTargetRemoveByIdMessage {
+  type: 'target-remove-id'
+  id: string
+}
+
+/** 弹窗里禁用/启用某条规则 */
+export interface WsRuleToggleMessage {
+  type: 'rule-toggle'
+  id: string
+  enabled: boolean
+}
+
+/** 弹窗里删除某条规则 */
+export interface WsRuleRemoveMessage {
+  type: 'rule-remove'
+  id: string
+}
+
+/** 弹窗问「当前站点命中了哪些名单条目 / 规则」（匹配逻辑留在 edt，扩展不重复实现） */
+export interface WsSiteInfoMessage {
+  type: 'site-info'
+  requestId: string
+  url: string
+}
+
+export interface WsSiteInfoResultMessage {
+  type: 'site-info-result'
+  requestId: string
+  /** 命中当前站点的名单条目 */
+  targets: InterceptorTarget[]
+  /** 与当前站点同域但没命中的条目（弹窗折叠展示：用户能看到自己配的条目为什么没生效） */
+  related?: InterceptorTarget[]
+  /** 该站点可用的规则（按域筛，site 在前） */
+  rules: InterceptorRuleSummary[]
 }
 
 export interface WsTargetSuggestMessage {
@@ -421,7 +700,11 @@ export type ExtensionToEdtMessage
     | WsPingMessage
     | WsProxyStateMessage
     | WsAddTargetMessage
-    | WsRemoveTargetMessage
+    | WsTargetToggleMessage
+    | WsTargetRemoveByIdMessage
+    | WsRuleToggleMessage
+    | WsRuleRemoveMessage
+    | WsSiteInfoMessage
     | WsTargetSuggestMessage
     | WsScriptLogMessage
 
@@ -431,5 +714,8 @@ export type EdtToExtensionMessage
     | WsHeartbeatMessage
     | WsTargetsSyncMessage
     | WsScriptsSyncMessage
+    | WsRulesSyncMessage
+    | WsProxyPortMessage
     | WsSetProxyMessage
+    | WsSiteInfoResultMessage
     | WsTargetSuggestResultMessage

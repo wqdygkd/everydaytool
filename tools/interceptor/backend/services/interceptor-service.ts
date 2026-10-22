@@ -1,6 +1,15 @@
 // 拦截器总调度：装配 WS 桥 / MITM 代理 / 证书 / 名单 / 规则（动态脚本由规则派生下发）/ 流量，
 // 并向渲染层广播状态事件（chrome-sandbox 的广播模式同款）。
-import type { CaStatus, InjectedScript, InterceptorRule, InterceptorRuntimeStatus, InterceptorTarget, TargetMatchType, TrafficEntry } from '../../../../shared/interceptor.ts'
+import type {
+  CaStatus,
+  InjectedScript,
+  InterceptorRule,
+  InterceptorRuleSummary,
+  InterceptorRuntimeStatus,
+  InterceptorTarget,
+  InterceptorTargetPatch,
+  TrafficEntry,
+} from '../../../../shared/interceptor.ts'
 import { randomUUID } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -9,16 +18,25 @@ import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { isDev } from '../../../../backend/utils/data-root.ts'
 import { copyPath, pathExists, readJson, readJsonFile, writeJson } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE } from '../../../../shared/interceptor.ts'
+import {
+  INTERCEPTOR_PROXY_PORT_MAX,
+  INTERCEPTOR_PROXY_PORT_MIN,
+  INTERCEPTOR_WS_PORT_BASE,
+  INTERCEPTOR_WS_PORT_RANGE,
+  originOf,
+  parseTargetOrigin,
+  RULE_TYPE_LABELS,
+} from '../../../../shared/interceptor.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../ipc/channels.ts'
-import { getConfigSnapshot, loadConfig, resetConfigStore, saveConfig, setTargets } from '../store/config-store.ts'
+import { getConfigSnapshot, loadConfig, resetConfigStore, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
 import { deleteRule, getRulesSnapshot, loadRules, resetRulesStore, upsertRule } from '../store/rules-store.ts'
 import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getRuntimeExtensionPath } from '../utils/paths.ts'
 import { getCaTrustState, installCaTrust, uninstallCaTrust } from './ca-trust.ts'
 import { ensureRootCa, isRootCaGenerated, readRootCa, resetCertCaches } from './cert-service.ts'
 import { createProxyService } from './proxy-service.ts'
+import { ruleAppliesToHost } from './rule-engine.ts'
 import { compileScriptRules } from './script-compile.ts'
-import { formatTargetHost, isLoopbackHost, normalizeHost } from './target-list.ts'
+import { normalizeHost } from './target-list.ts'
 import { addTrafficEntry, clearTrafficEntries, listTrafficEntries, suggestHostsForUrl } from './traffic-store.ts'
 import { createWsBridge } from './ws-bridge.ts'
 
@@ -33,6 +51,8 @@ function emit(channel: string, payload: unknown): void {
 let initialized = false
 let extensionDir: string | null = null
 let caStatusCache: { at: number, status: CaStatus } | null = null
+/** 代理端口降级说明（配置端口不可用时改用随机端口的原因，供 UI 如实展示） */
+let proxyPortNote: string | null = null
 
 let wsBridge: ReturnType<typeof createWsBridge>
 
@@ -51,17 +71,27 @@ const proxyService = createProxyService({
 })
 
 wsBridge = createWsBridge({
-  getToken: () => getConfigSnapshot().token,
   getTargets: () => getConfigSnapshot().targets,
   getScripts: () => getExtensionScripts(),
+  getRuleSummaries: () => getRuleSummaries(),
   getProxyPort: () => proxyService.getPort(),
   suggestHosts: url => suggestHostsForUrl(url),
-  onAddTarget: (url, matchType) => {
-    void addTargetFromUrl(url, matchType)
+  onAddTarget: (url) => {
+    void addTargetFromUrl(url)
   },
-  onRemoveTarget: (host, port) => {
-    void removeTargetMatching(host, port)
+  onToggleTarget: (id, enabled) => {
+    void setTargetEnabled(id, enabled)
   },
+  onRemoveTargetById: (id) => {
+    void removeTargetById(id)
+  },
+  onToggleRule: (id, enabled) => {
+    void setRuleEnabled(id, enabled)
+  },
+  onRemoveRule: (id) => {
+    void removeRule(id)
+  },
+  getSiteInfo: url => getSiteInfo(url),
   onConnectionsChanged: () => {
     emitRuntimeStatus()
   },
@@ -78,7 +108,7 @@ function emitRuntimeStatus(): void {
 }
 
 function emitTargetsChanged(): void {
-  emit(INTERCEPTOR_IPC_CHANNELS.EVENT_TARGETS, getConfigSnapshot().targets)
+  emit(INTERCEPTOR_IPC_CHANNELS.EVENT_TARGETS, getTargets())
 }
 
 function buildRuntimeStatus(): InterceptorRuntimeStatus {
@@ -86,9 +116,9 @@ function buildRuntimeStatus(): InterceptorRuntimeStatus {
     wsPort: wsBridge.getPort(),
     proxyPort: proxyService.getPort(),
     proxyRunning: proxyService.isRunning(),
+    proxyPortNote: proxyPortNote ?? undefined,
     connections: wsBridge.getConnections(),
     extensionDir,
-    token: getConfigSnapshot().token,
   }
 }
 
@@ -115,66 +145,101 @@ async function prepareExtensionDirectory(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// 处理名单
+// 处理名单（白名单闸门：一个条目 = 一个 origin；命中才进处理层并跑规则）
 // ---------------------------------------------------------------------------
 
-function targetKey(host: string, port?: number, matchType?: TargetMatchType): string {
-  return `${normalizeHost(host)}|${port ?? ''}|${matchType ?? ''}`
+export interface AddTargetResult {
+  /** 归一后的条目（失败为 null） */
+  target: InterceptorTarget | null
+  /** true = 名单里已有同一 origin，本次没有新增 */
+  existed: boolean
 }
 
-export async function addTargetFromUrl(url: string, matchType: TargetMatchType = 'exact'): Promise<InterceptorTarget | null> {
+/** 弹窗「加入名单」：只取当前页面的 origin（`https://www.a.com`，端口按 origin 语义保留） */
+export async function addTargetFromUrl(url: string): Promise<InterceptorTarget | null> {
   let parsed: URL
   try {
     parsed = new URL(url)
   } catch {
     return null
   }
-  const host = parsed.hostname
-  // 回环目标必须带端口，避免圈进本机所有服务
-  const port = isLoopbackHost(host) && parsed.port ? Number(parsed.port) : undefined
-  return addTarget(host, port, matchType)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  return (await addTarget(originOf(parsed.protocol === 'https:' ? 'https' : 'http', parsed.hostname, parsed.port ? Number(parsed.port) : undefined))).target
 }
 
-export async function addTarget(host: string, port: number | undefined, matchType: TargetMatchType): Promise<InterceptorTarget | null> {
+/** 新增名单条目（origin 级）：已存在则视为幂等，返回 existed */
+export async function addTarget(rawOrigin: string): Promise<AddTargetResult> {
   await loadConfig()
   const targets = getConfigSnapshot().targets
-  const normalizedHost = normalizeHost(host)
-  if (!normalizedHost) return null
+  const origin = parseTargetOrigin(rawOrigin)
+  if (!origin) return { target: null, existed: false }
 
-  const existing = targets.find(target =>
-    targetKey(target.host, target.port, target.matchType) === targetKey(normalizedHost, port, matchType),
-  )
-  if (existing) return existing
+  const existing = targets.find(target => target.origin === origin)
+  if (existing) {
+    logger.info('Target already exists', { target: origin })
+    return { target: existing, existed: true }
+  }
 
   const target: InterceptorTarget = {
     id: randomUUID(),
-    host: normalizedHost,
-    port: matchType === 'exact' ? port : undefined,
-    matchType,
+    origin,
+    enabled: true,
+    // 默认强制回源：不开的话浏览器命中缓存就没有请求，流量页会莫名空白
+    noCache: true,
     createdAt: new Date().toISOString(),
   }
   setTargets([...targets, target])
   await saveConfig()
-  wsBridge.broadcast({ type: 'targets-sync', targets: getConfigSnapshot().targets })
-  emitTargetsChanged()
-  logger.info('Target added', { target: formatTargetHost(normalizedHost, port), matchType })
-  return target
+  broadcastTargets()
+  logger.info('Target added', { target: origin })
+  return { target, existed: false }
 }
 
-export async function removeTargetMatching(host: string, port?: number): Promise<boolean> {
+/** 名单变更统一出口：扩展（targets-sync）+ 渲染层（EVENT_TARGETS），并让旧隧道失效 */
+function broadcastTargets(): void {
+  const targets = getConfigSnapshot().targets
+  // 浏览器会长期复用已建立的 CONNECT 隧道：名单变了必须断开旧的透传隧道，
+  // 否则新加的 origin 对"已经连着的"连接不生效（表现就是"加了名单却看不到这条请求"）。
+  const closed = proxyService.closeTransparentTunnels()
+  if (closed > 0) logger.info('Closed transparent tunnels after target change', { closed })
+  wsBridge.broadcast({ type: 'targets-sync', targets })
+  emitTargetsChanged()
+}
+
+/** 下发用名单（扩展 / 渲染层同一份） */
+export function getTargets(): InterceptorTarget[] {
+  return getConfigSnapshot().targets
+}
+
+export async function setTargetEnabled(targetId: string, enabled: boolean): Promise<boolean> {
+  return updateTarget(targetId, { enabled })
+}
+
+/** 条目开关补丁（字段定义在 shared，IPC 与渲染层共用一份） */
+export type TargetPatch = InterceptorTargetPatch
+
+/** 条目开关更新（启用 / 强制回源），返回是否真的改了东西 */
+export async function updateTarget(targetId: string, patch: TargetPatch): Promise<boolean> {
   await loadConfig()
   const targets = getConfigSnapshot().targets
-  const normalizedHost = normalizeHost(host)
-  const next = targets.filter((target) => {
-    if (normalizeHost(target.host) !== normalizedHost) return true
-    if (port !== undefined && target.port !== undefined && target.port !== port) return true
-    return false
+  let changed = false
+  const next = targets.map((target) => {
+    if (target.id !== targetId) return target
+    const merged: InterceptorTarget = { ...target }
+    if (patch.enabled !== undefined && patch.enabled !== (target.enabled !== false)) merged.enabled = patch.enabled
+    if (patch.noCache !== undefined && patch.noCache !== (target.noCache !== false)) merged.noCache = patch.noCache
+    if (merged.enabled === target.enabled && merged.noCache === target.noCache) return target
+    changed = true
+    return merged
   })
-  if (next.length === targets.length) return false
+  if (!changed) {
+    logger.info('Target update ignored (no change)', { targetId, patch })
+    return false
+  }
   setTargets(next)
   await saveConfig()
-  wsBridge.broadcast({ type: 'targets-sync', targets: next })
-  emitTargetsChanged()
+  broadcastTargets()
+  logger.info('Target updated', { targetId, patch })
   return true
 }
 
@@ -185,8 +250,7 @@ export async function removeTargetById(targetId: string): Promise<boolean> {
   if (next.length === targets.length) return false
   setTargets(next)
   await saveConfig()
-  wsBridge.broadcast({ type: 'targets-sync', targets: next })
-  emitTargetsChanged()
+  broadcastTargets()
   return true
 }
 
@@ -199,20 +263,120 @@ function getExtensionScripts(): InjectedScript[] {
   return compileScriptRules(getRulesSnapshot())
 }
 
+const SOURCE_KEY_LABELS: Record<InterceptorRule['source']['key'], string> = { url: 'URL', host: '主机', path: '路径' }
+const SOURCE_OPERATOR_LABELS: Record<InterceptorRule['source']['operator'], string> = {
+  equals: '等于',
+  contains: '包含',
+  matches: '匹配',
+  wildcard: '通配',
+}
+
+function summarizeRule(rule: InterceptorRule, scope?: 'global' | 'site'): InterceptorRuleSummary {
+  return {
+    id: rule.id,
+    name: rule.name,
+    type: rule.type,
+    typeLabel: RULE_TYPE_LABELS[rule.type],
+    enabled: rule.enabled,
+    condition: `${SOURCE_KEY_LABELS[rule.source.key]}${SOURCE_OPERATOR_LABELS[rule.source.operator]}${rule.source.value}`,
+    source: rule.source,
+    ...(scope ? { scope } : {}),
+    updatedAt: rule.updatedAt,
+  }
+}
+
+function getRuleSummaries(): InterceptorRuleSummary[] {
+  return getRulesSnapshot().map(rule => summarizeRule(rule))
+}
+
+export interface SiteInfo {
+  targets: InterceptorTarget[]
+  /** 同主机但 origin 不同的条目（弹窗折叠展示：「你配的是 http，这个页面是 https」这类原因） */
+  related: InterceptorTarget[]
+  rules: InterceptorRuleSummary[]
+  /** 名单总条数（弹窗显示「本站 X / 共 Y」） */
+  total: number
+}
+
+/**
+ * 当前站点的弹窗数据：
+ * - targets：origin 命中该页面的条目（不看 enabled，弹窗要能显示并切换禁用项）；
+ * - related：同主机但 origin 不同（协议 / 端口不一致）的条目，避免「明明配了却看不到」；
+ * - rules：**按域**筛出该站点可用得上的规则（域约束同站 / 不绑定域），不是拿单条流量去匹配路径；
+ *   同站规则排在前面，全局规则在后。
+ */
+export function getSiteInfo(url: string): SiteInfo {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    const all = getConfigSnapshot().targets
+    return { targets: [], related: [], rules: [], total: all.length }
+  }
+  const host = normalizeHost(parsed.hostname)
+  const origin = originOf(parsed.protocol === 'https:' ? 'https' : 'http', parsed.hostname, parsed.port ? Number(parsed.port) : undefined)
+
+  const all = getConfigSnapshot().targets
+  const targets: InterceptorTarget[] = []
+  const related: InterceptorTarget[] = []
+  for (const target of all) {
+    if (target.origin === origin) {
+      targets.push(target)
+      continue
+    }
+    // 同主机但协议 / 端口不同：名单按 origin 精确匹配，这类条目不会生效，但要让人看到
+    if (targetOriginHost(target.origin) === host) related.push(target)
+  }
+
+  const rules: InterceptorRuleSummary[] = []
+  for (const rule of getRulesSnapshot()) {
+    const scope = ruleAppliesToHost(rule, host)
+    if (!scope) continue
+    rules.push(summarizeRule(rule, scope))
+  }
+  rules.sort((a, b) => (a.scope === b.scope ? 0 : a.scope === 'site' ? -1 : 1))
+  return { targets, related, rules, total: all.length }
+}
+
+/** 从 origin 里取主机（`https://[::1]:8089` → `::1`） */
+function targetOriginHost(origin: string): string {
+  try {
+    return normalizeHost(new URL(origin).hostname)
+  } catch {
+    return ''
+  }
+}
+
 function syncScriptsToExtension(): void {
   wsBridge.broadcast({ type: 'scripts-sync', scripts: getExtensionScripts() })
+}
+
+function syncRulesToExtension(): void {
+  wsBridge.broadcast({ type: 'rules-sync', rules: getRuleSummaries() })
 }
 
 export async function saveRule(rule: InterceptorRule): Promise<void> {
   await loadRules()
   await upsertRule({ ...rule, updatedAt: new Date().toISOString() })
   syncScriptsToExtension()
+  syncRulesToExtension()
+}
+
+export async function setRuleEnabled(ruleId: string, enabled: boolean): Promise<boolean> {
+  await loadRules()
+  const rule = getRulesSnapshot().find(item => item.id === ruleId)
+  if (!rule) return false
+  await upsertRule({ ...rule, enabled, updatedAt: new Date().toISOString() })
+  syncScriptsToExtension()
+  syncRulesToExtension()
+  return true
 }
 
 export async function removeRule(ruleId: string): Promise<void> {
   await loadRules()
   await deleteRule(ruleId)
   syncScriptsToExtension()
+  syncRulesToExtension()
 }
 
 /** 旧版独立脚本（scripts.json）一次性迁移为 script 规则；迁移后旧文件清空（幂等） */
@@ -248,6 +412,68 @@ async function migrateLegacyScripts(): Promise<void> {
   } catch (error) {
     logger.warn('Legacy scripts migration skipped', { error: (error as Error).message })
   }
+}
+
+// ---------------------------------------------------------------------------
+// 代理端口（首次随机分配并落盘后固定；用户可手动修改）
+// ---------------------------------------------------------------------------
+
+/** 按配置启动代理：配置端口可用则沿用（固定不变），不可用则重新随机一个并落盘 */
+async function startProxyOnConfiguredPort(): Promise<void> {
+  const configured = getConfigSnapshot().proxyPort
+  if (configured !== null) {
+    try {
+      await proxyService.start(configured)
+      proxyPortNote = null
+      logger.info('Proxy started on configured port', { port: configured })
+      return
+    } catch (error) {
+      proxyPortNote = `端口 ${configured} 不可用，已改用随机端口`
+      logger.warn('Configured proxy port unavailable, using a random port', { port: configured, error: (error as Error).message })
+    }
+  }
+
+  const assigned = await proxyService.start(null)
+  setConfigProxyPort(assigned)
+  await saveConfig()
+  logger.info('Proxy port assigned', { port: assigned })
+}
+
+export interface ProxyPortChangeResult {
+  ok: boolean
+  error?: string
+}
+
+/** 手动改代理端口：新端口可用才落盘，失败回滚原端口（不让用户把代理弄停） */
+export async function changeProxyPort(nextPort: number): Promise<ProxyPortChangeResult> {
+  if (!Number.isInteger(nextPort) || nextPort < INTERCEPTOR_PROXY_PORT_MIN || nextPort > INTERCEPTOR_PROXY_PORT_MAX) {
+    return { ok: false, error: `端口需在 ${INTERCEPTOR_PROXY_PORT_MIN}–${INTERCEPTOR_PROXY_PORT_MAX} 之间` }
+  }
+
+  const previous = proxyService.getPort()
+  if (previous === nextPort) return { ok: true }
+
+  await proxyService.stop()
+  try {
+    await proxyService.start(nextPort)
+  } catch (error) {
+    if (previous !== null) {
+      await proxyService.start(previous).catch((rollbackError: Error) => {
+        logger.error('Proxy port rollback failed', { port: previous, error: rollbackError.message })
+      })
+    }
+    emitRuntimeStatus()
+    return { ok: false, error: `端口 ${nextPort} 不可用：${(error as Error).message}` }
+  }
+
+  setConfigProxyPort(nextPort)
+  await saveConfig()
+  proxyPortNote = null
+  // 已连接的扩展要按新端口重新挂载，否则浏览器仍会把流量发往旧端口
+  wsBridge.broadcast({ type: 'proxy-port', proxyPort: nextPort })
+  emitRuntimeStatus()
+  logger.info('Proxy port changed', { from: previous, to: nextPort })
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +576,7 @@ export const interceptorService = {
       logger.warn('Root CA init failed (will retry on demand)', { error: (error as Error).message })
     }
     extensionDir = await prepareExtensionDirectory()
-    await proxyService.start()
+    await startProxyOnConfiguredPort()
     await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE)
     logger.info('Browser bridge started', { proxyPort: proxyService.getPort(), wsPort: wsBridge.getPort() })
   },
@@ -367,6 +593,14 @@ export const interceptorService = {
     void (async () => {
       await loadConfig()
       extensionDir = await prepareExtensionDirectory()
+      // 端口配置也随目录换了：按新配置重启代理，避免「配置显示 A / 实际监听 B」
+      try {
+        await proxyService.stop()
+        await startProxyOnConfiguredPort()
+      } catch (error) {
+        proxyPortNote = '代理重启失败，请在状态页检查端口'
+        logger.error('Proxy restart after data directory change failed', { error: (error as Error).message })
+      }
       emitRuntimeStatus()
     })()
   },

@@ -160,7 +160,8 @@ async function duplicateRule(rule: InterceptorRule): Promise<void> {
 }
 
 function handleRuleAction(command: string, rule: InterceptorRule): void {
-  if (command === 'duplicate') void duplicateRule(rule)
+  if (command === 'edit') openEditor(rule)
+  else if (command === 'duplicate') void duplicateRule(rule)
   else if (command === 'delete') void remove(rule)
 }
 
@@ -729,6 +730,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
         class="rules-table"
         :data="visibleRules"
         :row-class-name="rowClassName"
+        @row-dblclick="openEditor"
         @sort-change="onSortChange"
       >
         <el-table-column width="46" align="center">
@@ -788,6 +790,10 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="edit">
+                      <UiIcon name="pencil" class="menu-icon" />
+                      <span>编辑</span>
+                    </el-dropdown-item>
                     <el-dropdown-item command="duplicate">
                       <UiIcon name="copy" class="menu-icon" />
                       <span>复制</span>
