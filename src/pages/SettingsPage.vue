@@ -115,6 +115,8 @@ const USAGE_ENTRY_DESCRIPTIONS: Record<string, string> = {
   'interceptor': '拦截器的规则、处理名单与 CA 证书',
   'offline-pack': '离线包下载的文件与下载历史',
   'wxp-enhancer': 'WXP 配置与采集的数据缓存',
+  'window-appearance.json': '窗口外观设置（半透明 / 系统材质）',
+  'window-geometry.json': '上次关闭时的窗口大小、位置与最大化状态',
   '其它': '未识别目录与零散文件的汇总',
 }
 
@@ -239,7 +241,8 @@ onMounted(() => {
         </el-button>
       </UiGroup>
       <UiHint block>
-        所有工具的数据库、配置与产出都存放在此目录；更改后立即生效，已有数据不会自动迁移到新目录。
+        所有工具的数据库、配置与产出，以及窗口外观、窗口大小与位置都存放在此目录；更改后立即生效，
+        工具数据不会自动迁移（窗口外观与窗口大小位置会带过去）。
       </UiHint>
     </UiPanel>
 

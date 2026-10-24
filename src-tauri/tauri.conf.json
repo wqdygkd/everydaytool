@@ -19,6 +19,8 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "wqdygkd",
+    "copyright": "© 2026 wqdygkd",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -30,6 +32,11 @@
       "../tools/chrome-sandbox/extension/": "extension/",
       "../tools/chrome-sandbox/chrome-process-query.ps1": "chrome-sandbox/",
       "../tools/interceptor/extension/": "extension-interceptor/"
+    },
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      }
     }
   }
 }

@@ -1,13 +1,15 @@
 // 窗口外观（半透明 / 系统材质）：持久化 + 平台能力判定 + 应用到真实窗口。
 // 数据契约：
-//   - 配置文件：<userData>/window-appearance.json（userData = %APPDATA%/everydaytool 等）
+//   - 配置文件：<数据目录>/window-appearance.json（数据目录 = resolve_data_dir()，设置页可改）
 //   - 字段：enabled / material / vibrancy / testWallpaper
 //   - 平台裁剪规则：sanitizeWindowAppearance（shared/appearance.ts 的 Rust 等价实现）
+//   - 引导文件（data-root.json / setup-state.json）仍固定在 userData：它们决定数据目录在哪。
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 use tauri::utils::config::WindowEffectsConfig;
 use tauri::utils::WindowEffect;
@@ -145,8 +147,8 @@ fn is_writable_dir(dir: &Path) -> bool {
     }
 }
 
-/// userData 在受限环境（沙箱 / 历史 ACL）下可能只读。此时回退到可写目录，
-/// 保证外观设置既能生效也能持久化；load / save 始终解析到同一个路径。
+/// 最终回退目录：数据目录与 userData 都不可写时（受限环境 / 历史 ACL）用它兜底，
+/// 保证外观设置既能生效也能持久化。
 fn fallback_config_dir(app: &AppHandle) -> PathBuf {
     if cfg!(dev) {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -160,55 +162,149 @@ fn fallback_config_dir(app: &AppHandle) -> PathBuf {
         .unwrap_or_else(|_| std::env::temp_dir())
 }
 
-fn primary_config_path(app: &AppHandle) -> PathBuf {
-    resolve_user_data_dir(app).join("window-appearance.json")
-}
-
-fn fallback_config_path(app: &AppHandle) -> PathBuf {
-    fallback_config_dir(app).join("window-appearance.json")
-}
-
 fn modified_at(path: &Path) -> Option<SystemTime> {
     fs::metadata(path).and_then(|meta| meta.modified()).ok()
 }
 
-/// 读取时同时考虑 userData 与回退目录，取较新的那份：
-/// - 正常环境：只有 userData 一份，行为不变；
-/// - userData 只读：首次仍能读到旧配置，之后优先读回退目录里的新值。
-fn load_path(app: &AppHandle) -> PathBuf {
-    let primary = primary_config_path(app);
-    let fallback = fallback_config_path(app);
-    match (modified_at(&primary), modified_at(&fallback)) {
-        (Some(primary_time), Some(fallback_time)) => {
-            if fallback_time > primary_time {
-                fallback
-            } else {
-                primary
+/// 应用级配置（窗口外观 / 窗口几何）所在目录：数据根目录。
+/// 跟着「数据目录」走——设置页里那一处就是用户眼中的应用配置区；
+/// 而 data-root.json / setup-state.json 这类决定数据目录在哪的引导文件必须留在 userData。
+pub(crate) fn config_dir() -> PathBuf {
+    resolve_data_dir()
+}
+
+/// 旧版把这两份配置放在 userData 根目录（userData 只读时还写进过回退目录），
+/// 保留为读取来源并做一次性迁移；换数据目录时也按这份清单搬运。
+/// 几何文件名与 `window_geometry.rs::FILE_NAME` 保持一致。
+const CONFIG_FILES: [&str; 2] = ["window-appearance.json", "window-geometry.json"];
+
+fn legacy_config_dirs(app: &AppHandle) -> [PathBuf; 2] {
+    [resolve_user_data_dir(app), fallback_config_dir(app)]
+}
+
+/// 读取顺序：数据目录优先；旧位置按修改时间从新到旧兜底
+/// （userData 只读的旧版环境曾把新值写到回退目录）。
+pub(crate) fn config_read_paths(app: &AppHandle, file: &str) -> Vec<PathBuf> {
+    let primary = config_dir().join(file);
+    let mut legacy: Vec<PathBuf> = legacy_config_dirs(app)
+        .into_iter()
+        .map(|dir| dir.join(file))
+        .filter(|path| *path != primary)
+        .collect();
+    legacy.sort_by_key(|path| std::cmp::Reverse(modified_at(path)));
+    let mut paths = Vec::with_capacity(legacy.len() + 1);
+    paths.push(primary);
+    paths.extend(legacy);
+    paths
+}
+
+fn write_path_cache() -> &'static Mutex<HashMap<String, PathBuf>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 写入路径：数据目录 → userData → 回退目录，取第一个可写的。
+/// 首次决定后按文件名缓存，避免每次写盘都做一次可写探测。
+pub(crate) fn config_write_path(app: &AppHandle, file: &str) -> PathBuf {
+    let mut paths = write_path_cache()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if let Some(path) = paths.get(file) {
+        return path.clone();
+    }
+    let dirs = [
+        config_dir(),
+        resolve_user_data_dir(app),
+        fallback_config_dir(app),
+    ];
+    let preferred = dirs[0].join(file);
+    let path = dirs
+        .into_iter()
+        .find(|dir| is_writable_dir(dir))
+        .map(|dir| dir.join(file))
+        .unwrap_or_else(|| preferred.clone());
+    if path != preferred {
+        eprintln!("[config] 数据目录不可写，{file} 改存：{}", path.display());
+    }
+    paths.insert(file.to_string(), path.clone());
+    path
+}
+
+/// 换数据目录后清掉写路径缓存，否则还会继续往旧目录写。
+pub fn invalidate_config_paths() {
+    write_path_cache()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .clear();
+}
+
+/// 一次性迁移：旧版把配置放在 userData 根目录，现在统一进数据目录。
+/// 目标已存在就不覆盖（新版已经写过）；复制成功后删掉旧副本，避免下次启动又被迁回来
+/// ——否则用户删掉数据目录里的配置想恢复默认，重启后旧值会自己回来。
+pub fn migrate_legacy_config(app: &AppHandle) {
+    let target_dir = config_dir();
+    if fs::create_dir_all(&target_dir).is_err() {
+        return;
+    }
+    for file in CONFIG_FILES {
+        let target = target_dir.join(file);
+        if target.exists() {
+            continue;
+        }
+        for dir in legacy_config_dirs(app) {
+            let source = dir.join(file);
+            if source == target || !source.is_file() {
+                continue;
+            }
+            match fs::copy(&source, &target) {
+                Ok(_) => {
+                    let _ = fs::remove_file(&source);
+                    eprintln!(
+                        "[config] 已把 {file} 迁入数据目录：{} -> {}",
+                        source.display(),
+                        target.display()
+                    );
+                    break;
+                }
+                Err(error) => eprintln!("[config] 迁移 {file} 失败：{error}"),
             }
         }
-        (Some(_), None) => primary,
-        (None, Some(_)) => fallback,
-        _ => primary,
     }
 }
 
-fn save_path(app: &AppHandle) -> PathBuf {
-    static SAVE_PATH: OnceLock<PathBuf> = OnceLock::new();
-    SAVE_PATH
-        .get_or_init(|| {
-            let primary_dir = resolve_user_data_dir(app);
-            if is_writable_dir(&primary_dir) {
-                return primary_dir.join("window-appearance.json");
-            }
-            let fallback = fallback_config_dir(app);
-            let _ = fs::create_dir_all(&fallback);
-            eprintln!(
-                "[appearance] userData 不可写，外观配置改存：{}",
-                fallback.display()
-            );
-            fallback.join("window-appearance.json")
-        })
-        .clone()
+/// 数据目录变更后把应用级配置带到新目录：
+/// 否则换目录等于静默重置窗口外观与窗口大小 / 位置。
+/// 这里以「当前生效的配置」为准覆盖目标，而不是「目标有就不动」——切换后这次会话仍在用
+/// 当前配置，留着新目录里的旧副本会让下次启动莫名其妙回退。
+pub fn carry_config(from_dir: &Path, to_dir: &Path) {
+    if from_dir == to_dir || fs::create_dir_all(to_dir).is_err() {
+        return;
+    }
+    for file in CONFIG_FILES {
+        let source = from_dir.join(file);
+        if !source.is_file() {
+            continue;
+        }
+        let _ = fs::copy(&source, to_dir.join(file));
+    }
+}
+
+/// 原子写 JSON：先写临时文件再替换，避免进程中断留下半截文件。
+/// Windows 不允许 rename 覆盖已存在文件，此时退回 remove + rename。
+pub(crate) fn write_json_atomic(path: &Path, body: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    if fs::rename(&tmp, path).is_err() {
+        let _ = fs::remove_file(path);
+        if let Err(error) = fs::rename(&tmp, path) {
+            let _ = fs::remove_file(&tmp);
+            return Err(error.to_string());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -298,12 +394,10 @@ fn normalize_stored(value: serde_json::Value) -> WindowAppearance {
     }
 }
 
+const APPEARANCE_FILE: &str = "window-appearance.json";
+
 pub fn load(app: &AppHandle) -> WindowAppearance {
-    let first = load_path(app);
-    let primary = primary_config_path(app);
-    let fallback = fallback_config_path(app);
-    let second = if first == primary { fallback } else { primary };
-    for path in [first, second] {
+    for path in config_read_paths(app, APPEARANCE_FILE) {
         let Ok(raw) = fs::read_to_string(&path) else {
             continue;
         };
@@ -316,23 +410,11 @@ pub fn load(app: &AppHandle) -> WindowAppearance {
 }
 
 pub fn save(app: &AppHandle, appearance: &WindowAppearance) -> Result<(), String> {
-    let path = save_path(app);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let body = serde_json::to_string_pretty(appearance).map_err(|e| e.to_string())?;
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, format!("{body}\n")).map_err(|e| e.to_string())?;
-    // 先写临时文件再替换，避免进程中断留下半截 JSON。
-    // Windows 不允许 rename 覆盖已存在文件，此时退回 remove + rename。
-    if fs::rename(&tmp, &path).is_err() {
-        let _ = fs::remove_file(&path);
-        if let Err(error) = fs::rename(&tmp, &path) {
-            let _ = fs::remove_file(&tmp);
-            return Err(error.to_string());
-        }
-    }
-    Ok(())
+    write_json_atomic(
+        &config_write_path(app, APPEARANCE_FILE),
+        &format!("{body}\n"),
+    )
 }
 
 pub fn sanitize(
@@ -482,5 +564,28 @@ mod tests {
         assert_eq!(normalized.material, "none");
         assert_eq!(normalized.vibrancy, "hud");
         assert!(normalized.test_wallpaper);
+    }
+
+    #[test]
+    fn carry_config_brings_current_config_to_new_dir() {
+        let root = std::env::temp_dir().join(format!("edt-carry-config-{}", std::process::id()));
+        let from = root.join("old");
+        let to = root.join("new");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&from).unwrap();
+        std::fs::create_dir_all(&to).unwrap();
+        std::fs::write(from.join("window-appearance.json"), "{\"enabled\":true}").unwrap();
+        std::fs::write(from.join("window-geometry.json"), "{\"width\":1000.0}").unwrap();
+        // 新目录里已有的旧副本应按当前配置覆盖
+        std::fs::write(to.join("window-geometry.json"), "{\"width\":1200.0}").unwrap();
+
+        carry_config(&from, &to);
+
+        assert!(to.join("window-appearance.json").is_file());
+        assert_eq!(
+            std::fs::read_to_string(to.join("window-geometry.json")).unwrap(),
+            "{\"width\":1000.0}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

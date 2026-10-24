@@ -2,7 +2,7 @@
 name = "everydaytool"
 version = "1.1.0"
 description = "everydaytool (edt) 多功能工具平台 - Tauri 2 桌面壳"
-authors = ["everydaytool"]
+authors = ["wqdygkd"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.80"

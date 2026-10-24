@@ -198,6 +198,15 @@
   box-shadow: var(--shadow-window-frame); /* 窗口浮起感 */
 }
 
+/* ── 不透明态（未开启半透明 / 尚未取到外观状态） ──
+   Windows 主窗口**始终**按透明窗口创建（透明通道只能在建窗时决定），
+   因此「关闭半透明」不能靠窗口属性，必须由这里把画布铺成实色，
+   否则整页会直接透出桌面（关闭开关后背景全透明的根因）。
+   测试壁纸的规则（html.has-test-wallpaper body）权重更高，开着壁纸时不会被这里盖掉。 */
+html.is-opaque body {
+  background-color: var(--color-app-bg);
+}
+
 /* 标题栏：仅 acrylic 铺半透明表面 + 玻璃（其余模式不铺，见 DESIGN.md §7.1.1）——
    acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，
    需压一层 --color-header 稳住原生窗口按钮与页签文字的对比度，
@@ -246,5 +255,11 @@ html.has-test-wallpaper body {
     --glass-header: none;
     --glass-pop: none;
     --glass-overlay: none;
+  }
+
+  /* 表面都退回实色了，画布也必须实色，否则只剩一圈桌面从页面空白处透出来。
+     测试壁纸规则权重更高（0,2,1），开着壁纸时仍然优先显示壁纸。 */
+  html:is(.is-transparent) body {
+    background-color: var(--color-app-bg);
   }
 }

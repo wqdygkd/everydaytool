@@ -108,6 +108,9 @@ const modeClasses = computed<string[]>(() => {
   const classes: string[] = []
   if (isFullscreen.value) classes.push('is-fullscreen')
   if (isTransparent.value) classes.push('is-transparent')
+  // 不透明态（默认 / 尚未取到外观状态）：Windows 主窗口始终按透明窗口创建，
+  // 必须由 CSS 把画布铺成实色，否则关闭半透明后会直接透出桌面。
+  else classes.push('is-opaque')
   if (hasTestWallpaper.value) classes.push('has-test-wallpaper')
   if (materialClass.value) classes.push(materialClass.value)
   return classes

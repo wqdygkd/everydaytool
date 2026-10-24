@@ -1,13 +1,18 @@
-// Tauri CLI 通用透传入口（`pnpm tauri <args>` 用）。
-// Windows：先在同一 cmd 进程链里初始化 MSVC 环境（scripts/windows/_env.bat），再执行 CLI，
-//          这样 cargo → cl.exe 继承到 INCLUDE/LIB；macOS / Linux：直接执行（系统工具链自带）。
+// 唯一的 Tauri CLI 入口：`pnpm dev` / `pnpm build` / `pnpm tauri <args>` 都走这里。
+//
+// 平台差异只有一处：Windows 普通终端没有 MSVC 环境（INCLUDE / LIB / cl.exe），
+// 必须先 call scripts/windows/_env.bat（vswhere → VsDevCmd）再执行 CLI；
+// macOS / Linux 的系统工具链本来就在 PATH 里，直接调用即可。
+//
+// 平台相关的打包配置（如 Windows 只出 MSI）交给 Tauri 的配置合并：
+// src-tauri/tauri.<platform>.conf.json，不要写进脚本。
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const cliEntry = path.join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
 const args = process.argv.slice(2)
 
@@ -39,8 +44,7 @@ if (process.platform === 'win32') {
     console.error(`[tauri] 缺少 Windows 环境脚本：${envBat}`)
     process.exit(1)
   }
-  const cliArgs = args.map(quoteForCmd).join(' ')
-  const commandLine = `call "${envBat}" && node "${cliEntry}" ${cliArgs}`.trim()
+  const commandLine = `call "${envBat}" && node "${cliEntry}" ${args.map(quoteForCmd).join(' ')}`.trim()
   run('cmd.exe', ['/d', '/c', commandLine], { windowsVerbatimArguments: true })
 } else {
   run(process.execPath, [cliEntry, ...args])

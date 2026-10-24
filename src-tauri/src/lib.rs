@@ -13,6 +13,7 @@ mod offline_pack;
 mod platform;
 mod treease;
 mod webviews;
+mod window_geometry;
 mod wxp;
 
 pub use interceptor::origin;
@@ -35,10 +36,7 @@ pub struct AppState {
     pub appearance: Mutex<WindowAppearance>,
 }
 
-fn create_main_window(
-    app: &tauri::AppHandle,
-    appearance: &WindowAppearance,
-) -> tauri::Result<WebviewWindow> {
+fn create_main_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
     #[cfg(dev)]
     let url = WebviewUrl::External(
         "http://localhost:5173"
@@ -49,21 +47,36 @@ fn create_main_window(
     let url = WebviewUrl::App("index.html".into());
 
     let capabilities = appearance::resolve_capabilities();
-    // 透明 / 系统材质只在窗口创建时生效；运行时切换只更新 CSS 与 effects。
-    // Windows 透明窗口必须 frameless；macOS 走 vibrancy（不能叠加 transparent）。
-    let transparent = cfg!(windows) && appearance.enabled && capabilities.supports_transparent;
+    // 透明通道只能在建窗时决定（运行时无法切换窗口的透明属性），所以 Windows 上**始终**用
+    // 透明窗口创建：真正的「是否透明」由渲染层的 is-opaque 画布类决定，切换半透明 / 材质
+    // 因此立即生效、不需要重启。Windows 透明窗口必须 frameless；macOS 走 vibrancy
+    // （不能叠加 transparent，故 macOS 保持不透明建窗）。
+    let transparent = cfg!(windows) && capabilities.supports_transparent;
     // macOS 保留原生红绿灯（titleBarStyle Overlay + hidden_title，decorations=true）；
     // Windows/Linux 必须 decorations=false，彻底移除原生 caption（标题 + 关闭/最小化/最大化）。
     let decorations = cfg!(target_os = "macos");
 
+    // 上次关闭时的窗口几何（大小 / 位置 / 最大化）。resolve 已按当前显示器校验：
+    // 拔掉副屏或改分辨率不会把窗口开到屏幕外，尺寸也不会超过整个桌面范围。
+    let geometry = window_geometry::resolve(app, window_geometry::load(app));
+
+    // 窗口标题跟项目定义走（tauri.conf.json 的 productName），不在代码里再写死一份。
+    let title = app.package_info().name.clone();
+
     let builder = WebviewWindowBuilder::new(app, "main", url)
-        .title("everydaytool")
-        .inner_size(1200.0, 900.0)
-        .min_inner_size(800.0, 500.0)
+        .title(title)
+        .inner_size(geometry.width, geometry.height)
+        .min_inner_size(window_geometry::MIN_WIDTH, window_geometry::MIN_HEIGHT)
         .resizable(true)
-        .center()
         .decorations(decorations)
-        .transparent(transparent);
+        .transparent(transparent)
+        .maximized(geometry.maximized);
+
+    // 首次运行（还没有存档位置）居中；之后还原到上次的位置。
+    let builder = match geometry.position() {
+        Some((x, y)) => builder.position(x, y),
+        None => builder.center(),
+    };
 
     #[cfg(target_os = "macos")]
     let builder = builder
@@ -87,6 +100,13 @@ fn hook_window_events(app: &tauri::AppHandle, window: &WebviewWindow) {
     let last = Arc::new(Mutex::new((false, false)));
     let win = window.clone();
     window.on_window_event(move |event| {
+        // 关窗前落盘窗口几何（此刻窗口还在，能报告真实的正常态尺寸 / 位置）。
+        if matches!(event, WindowEvent::CloseRequested { .. }) {
+            if let Some(window) = handle.get_window("main") {
+                window_geometry::save_current(&handle, &window);
+            }
+            return;
+        }
         if !matches!(event, WindowEvent::Resized(_)) {
             return;
         }
@@ -136,6 +156,8 @@ pub fn run() {
             webviews::edt_webview,
         ])
         .setup(|app| {
+            // 旧版把窗口外观 / 几何放在 userData 根目录：先迁进数据目录，再读外观建窗
+            appearance::migrate_legacy_config(app.handle());
             let current = appearance::load(app.handle());
             app.manage(AppState {
                 appearance: Mutex::new(current.clone()),
@@ -145,7 +167,7 @@ pub fn run() {
             });
             app.manage(Arc::new(treease::TreeaseState::default()));
 
-            let window = create_main_window(app.handle(), &current).map_err(
+            let window = create_main_window(app.handle()).map_err(
                 |error| -> Box<dyn std::error::Error> {
                     std::io::Error::other(format!("create_main_window: {error}")).into()
                 },
@@ -176,6 +198,10 @@ pub fn run() {
                     api.prevent_exit();
                 }
                 return;
+            }
+            // 首次退出请求：兜底落盘窗口几何（系统关机 / 外部关闭等不走 CloseRequested 的路径）
+            if let Some(window) = handle.get_window("main") {
+                window_geometry::save_current(handle, &window);
             }
             api.prevent_exit();
             let handle = handle.clone();

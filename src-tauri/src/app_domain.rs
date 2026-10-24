@@ -406,13 +406,16 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
                 &std::fs::canonicalize(next).unwrap_or_else(|_| PathBuf::from(next)),
             );
             let _ = std::fs::create_dir_all(&normalized);
-            let changed = normalize_for_compare(&normalized)
-                != normalize_for_compare(&appearance::resolve_data_dir());
+            let previous = appearance::resolve_data_dir();
+            let changed = normalize_for_compare(&normalized) != normalize_for_compare(&previous);
             if changed {
                 let is_default = normalize_for_compare(&normalized)
                     == normalize_for_compare(&default_data_directory());
                 save_data_directory_override(if is_default { None } else { Some(&normalized) })?;
                 mark_data_directory_configured()?;
+                // 应用级配置（窗口外观 / 几何）跟着数据目录走，换目录不能等于静默重置
+                appearance::carry_config(&previous, &normalized);
+                appearance::invalidate_config_paths();
                 invalidate_scan_cache();
                 // 工具域重载（拦截器代理按新配置重启）
                 crate::interceptor::on_data_directory_changed(app);

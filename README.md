@@ -110,7 +110,7 @@ pnpm doctor
 ## 本地开发
 
 ```bash
-pnpm dev        # 按平台分派：Windows → scripts/windows/dev.bat；macOS/Linux → scripts/<os>/dev.sh
+pnpm dev        # Tauri dev（Windows 自动注入 MSVC 环境；beforeDevCommand 起 Vite）
 pnpm web        # 纯浏览器预览（无桌面桥接：只出现 supportedTargets 含 web 的工具，设置页不可用）
 ```
 
@@ -119,14 +119,14 @@ pnpm web        # 纯浏览器预览（无桌面桥接：只出现 supportedTarg
 底层等价命令：
 
 ```bash
-pnpm tauri:dev:raw      # 直接走 Tauri CLI（仍会做平台环境初始化）
+pnpm tauri dev          # 与 pnpm dev 同一入口（scripts/tauri.mjs）
 pnpm tauri <args>       # 透传任意 Tauri CLI 子命令，如 pnpm tauri icon
 ```
 
 ## 本地构建
 
 ```bash
-pnpm build              # 按平台分派到原生构建脚本
+pnpm build              # Tauri build（Windows 只出中文 MSI）
 pnpm build:web          # 只构建前端
 pnpm dist:installer     # 同 pnpm build
 ```
@@ -135,9 +135,9 @@ pnpm dist:installer     # 同 pnpm build
 
 | 平台 | 路径 |
 | ------ | ------ |
-| Windows | `target\release\bundle\nsis\everydaytool_<version>_x64-setup.exe` |
+| Windows | `target\release\bundle\msi\everydaytool_<version>_x64_zh-CN.msi` |
 | macOS | `target/release/bundle/dmg/*.dmg`（以及 `bundle/macos/*.app`） |
-| Linux | `target/release/bundle/deb/*.deb`（如需 AppImage：`pnpm build -- --bundles appimage`） |
+| Linux | `target/release/bundle/deb/*.deb`（以及 rpm / appimage） |
 
 > 构建目录由 `.cargo/config.toml` 的 `target-dir = target` 指定（仓库根）。需要换位置时自行设置 `CARGO_TARGET_DIR`。
 > 从旧版本升级的仓库可能残留 `src-tauri/target`，可以删除。

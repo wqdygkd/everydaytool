@@ -33,6 +33,16 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
   `app.get_webview("main")`（webview 级：devtools / clear_all_browsing_data），
   或在命令里注入 `tauri::Window` 拿调用方窗口。
 - 新增窗口相关能力时按上面三种方式取句柄，不要再写 `get_webview_window`。
+- 主窗口几何（大小 / 位置 / 最大化）由 `src-tauri/src/window_geometry.rs` 记忆，存 `<数据目录>/window-geometry.json`：
+  启动时先按当前显示器校验再还原（拔副屏 / 改分辨率不会把窗口开到屏幕外），关窗与 `ExitRequested` 时落盘；
+  最大化 / 全屏 / 最小化时只更新 `maximized` 标记，不覆盖正常态尺寸与位置。尺寸与坐标一律逻辑像素。
+- **应用级配置（窗口外观 / 窗口几何）放在数据目录**（`appearance::config_dir()` = `resolve_data_dir()`），
+  与工具数据同处；`data-root.json` / `setup-state.json` 这类「数据目录在哪」的引导文件必须留在 `userData`
+  （放进去会形成循环依赖）。换数据目录时由 `appearance::carry_config` 把两份配置带过去，
+  旧版留在 userData 根目录的副本由 `migrate_legacy_config` 一次性迁入（迁入后删旧副本）。
+- 配置读写统一走 `appearance.rs` 的 `config_read_paths` / `config_write_path` / `write_json_atomic`
+  （数据目录优先，不可写时依次回退 userData、app_local_data_dir；临时文件 + rename 原子替换），
+  改数据目录后要调 `invalidate_config_paths()` 清掉写路径缓存，不要各自拼路径或直接 `fs::write`。
 
 ## 编码规范
 
@@ -71,13 +81,16 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 
 ### 窗口外观（半透明 / 系统材质）
 
-- 唯一事实来源是 Rust 桌面壳（`src-tauri/src/appearance.rs` 持久化到 `userData/window-appearance.json`），
+- 唯一事实来源是 Rust 桌面壳（`src-tauri/src/appearance.rs` 持久化到 `<数据目录>/window-appearance.json`），
   渲染层用 `src/shared/composables/useAppearance.ts` 只做拉取 + 订阅 + 提交，
   **不得在 localStorage 留第二份状态**。
 - 平台能力判定必须走 `shared/appearance.ts` 的纯函数（`resolveAppearanceCapabilities` /
   `sanitizeWindowAppearance`），禁止在桌面壳和渲染层各写一份 `process.platform ===` 判断。
-- `transparent` / `vibrancy` / `backgroundMaterial` 只在窗口构造时生效：
-  改外观实现时要保证 Rust 侧先读 `window-appearance.json`、再创建窗口（`src-tauri/src/lib.rs`）。
+- Windows 主窗口**始终**以透明窗口创建（`transparent` 只能在建窗时决定，运行时切不了）：
+  「是否透明」交给渲染层模式类 —— 开启时挂 `is-transparent`（画布透出桌面），
+  关闭时挂 `is-opaque`（由 `html.is-opaque body` 铺 `--color-app-bg`）。
+  因此切换半透明 / 材质立即生效、不需要重启。macOS 走 `vibrancy`（不叠加 transparent），
+  改外观实现时仍要保证 Rust 侧先读 `window-appearance.json`、再创建窗口（`src-tauri/src/lib.rs`）。
 - **透明度统一控制**（见 [DESIGN.md](./DESIGN.md) §7.1.1）：颜色、alpha 与玻璃三者分离，
   基准色在 `tokens.scss`（`--color-<role>-base`），按模式覆写的 alpha（`--alpha-<role>`）
   与玻璃（`--glass-<role>`）在 `src/shared/styles/translucency.scss`。组件**只引用合成变量**
@@ -86,7 +99,8 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
   `#fff` 背景或 `blur(Npx)`**——否则该组件在任何半透明模式下都透不出、或与周围磨砂程度脱节。
   新增角色要同时改四处：tokens.scss 的 base + alpha + glass、translucency.scss 的合成与各模式取值。
   新增模式只加一条模式规则（alpha + glass 两组），组件零改动。
-  画布 `--color-canvas` 恒透明（工具页与主页同一观感），不参与 alpha。
+  画布 `--color-canvas` 恒透明（工具页与主页同一观感），不参与 alpha；不透明态（`is-opaque`）
+  必须由 `html.is-opaque body` 铺 `--color-app-bg`——窗口始终是透明窗口，不铺就会直接透出桌面。
   玻璃只给「背后是别的内容」的表面（卡片 / 浮层 / 标题栏 / 浮在画布上的控件），
   嵌在卡片内部的 `field` / `table` / `button` / `fill` 不再叠加模糊（白付 backdrop root 开销）。
 - **弹层变量必须靠 `<html>`**：EP 的弹层全部 teleport 到 body，不在 `.app-shell` 内。
@@ -103,16 +117,15 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 ```bash
 pnpm install      # 安装依赖（Node 22+ / pnpm 10+，勿用 npm）
 pnpm doctor       # 环境检查（只读）：Node / Rust / Tauri CLI + 各平台工具链（Windows 会实跑一次 VsDevCmd）
-pnpm dev          # 按平台分派：Windows → scripts/windows/dev.bat，macOS/Linux → scripts/<os>/dev.sh
+pnpm dev          # Tauri dev（Windows 自动注入 MSVC 环境；beforeDevCommand 起 Vite）
 pnpm web          # 纯浏览器预览（无桌面桥接：只列 supportedTargets 含 web 的工具，桌面端专属页面不注册）
 pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm build:web    # 仅构建前端
 pnpm typecheck    # TS 类型检查（渲染层）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
-pnpm build        # 按平台分派构建（Windows 自动注入 MSVC 环境；产物在仓库 target/）
+pnpm build        # Tauri build（Windows 只出中文 MSI；产物在仓库 target/）
 pnpm dist:installer # 同 pnpm build
-pnpm tauri:dev:raw / pnpm tauri:build:raw   # 直接走 Tauri CLI（仍做平台环境初始化）
 pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
 ```
 
@@ -124,11 +137,14 @@ pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
 - `.cargo/config.toml` **只放跨平台配置**（crates 镜像 + 默认 `target-dir = target`）。
   **禁止**把 MSVC 工具集版本、Windows SDK 版本、Visual Studio 安装目录或 `INCLUDE`/`LIB` 写进仓库配置。
 - Windows：`scripts/windows/_env.bat` 用 `vswhere` 发现 VS、`VsDevCmd.bat` 在构建进程链里初始化环境；
-  `dev.bat` / `build.bat` 复用它。**不做构建目录搬迁**：D8050 由
-  `src-tauri/Cargo.toml` 的 `[profile.dev.package.ring] debug = false` 在根上解决（只影响该 C 依赖）。
-- macOS / Linux：`scripts/macos|linux/{env.sh,dev.sh,build.sh}`，只做能力检查，不做环境注入。
-- 统一入口：`scripts/dev.mjs` / `scripts/build.mjs` 按 `process.platform` 分派；`scripts/doctor.mjs` 只读检查。
-- 新增平台相关脚本时按此结构放置，不要在 Node 脚本里拼接平台专属 shell 语法。
+  **这是唯一需要按平台包一层的理由**，不要再为每个平台写独立的 dev / build 脚本。
+- macOS / Linux：系统工具链（Xcode CLT / gcc）本来就在 PATH 里，`scripts/tauri.mjs` 直接调用 Tauri CLI。
+- 平台相关的打包配置走 Tauri 的配置合并：`src-tauri/tauri.windows.conf.json` / `tauri.macos.conf.json` /
+  `tauri.linux.conf.json`（例如 Windows 的 `bundle.targets = ["msi"]`，即不再打 NSIS），**不要写进脚本**。
+- 统一入口：`scripts/tauri.mjs`（`pnpm dev` / `pnpm build` / `pnpm tauri <args>` 都是它）；
+  `scripts/doctor.mjs` 只读检查（含实跑一次 `_env.bat` 验证 MSVC 环境）。
+- **不做构建目录搬迁**：D8050 由 `src-tauri/Cargo.toml` 的 `[profile.dev.package.ring] debug = false`
+  在根上解决（只影响该 C 依赖）。
 
 ## 新增工具
 
@@ -190,6 +206,7 @@ export default defineTool({
 | 应用数据根目录解析 | `src-tauri/src/appearance.rs`（`resolve_data_dir`） |
 | 桌面壳（窗口 / Tauri commands / 平台能力） | `src-tauri/src/` |
 | 窗口外观设置（半透明 / 材质）持久化与生效 | `src-tauri/src/appearance.rs` |
+| 主窗口几何记忆（大小 / 位置 / 最大化） | `src-tauri/src/window_geometry.rs` |
 | 渲染层桌面适配层（Tauri API + 命令分组） | `src/desktop/` |
 | 子 Webview 桥（env-browser / treease） | `src-tauri/src/webviews.rs`、`src/desktop/webviews.ts` |
 | 平台能力判定（透明 / 材质 / vibrancy） | `shared/appearance.ts` |

@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "packageManager": "pnpm@10.6.3",
   "description": "everydaytool (edt) 多功能工具平台 - Tauri 2 + Vue 3，内置 7 个工具模块（Chrome 沙箱 / 拦截器等）",
-  "author": "",
+  "author": "wqdygkd",
   "license": "MIT",
   "keywords": [
     "tauri",
@@ -26,13 +26,11 @@
     "web": "vite",
     "dev:web": "vite",
     "doctor": "node scripts/doctor.mjs",
-    "dev": "node scripts/dev.mjs",
-    "build": "node scripts/build.mjs",
+    "dev": "node scripts/tauri.mjs dev",
+    "build": "node scripts/tauri.mjs build",
     "build:web": "vite build",
-    "dist:installer": "node scripts/build.mjs",
-    "tauri": "node scripts/lib/tauri-cli.mjs",
-    "tauri:dev:raw": "node scripts/lib/tauri-cli.mjs dev",
-    "tauri:build:raw": "node scripts/lib/tauri-cli.mjs build"
+    "dist:installer": "node scripts/tauri.mjs build",
+    "tauri": "node scripts/tauri.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

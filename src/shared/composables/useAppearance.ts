@@ -3,7 +3,7 @@ import { appCommands, invokeAppCommand, onAppCommand } from '../commands/useAppC
 
 /**
  * 窗口外观（半透明 / 系统材质）的渲染层状态。
- * 单一数据源是主进程（持久化在 userData/window-appearance.json）：本 composable 只做
+ * 单一数据源是主进程（持久化在数据目录下的 window-appearance.json）：本 composable 只做
  * 拉取 + 订阅 + 提交，不在 localStorage 留副本，避免两处状态漂移。
  */
 export interface AppearanceState {
