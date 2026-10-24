@@ -1,5 +1,5 @@
-import { defineTool } from '../../renderer/shared/tool/defineTool'
-import { OFFLINE_PACK_TABS } from './renderer/tabs'
+import { defineTool } from '../../src/shared/tool/defineTool'
+import { OFFLINE_PACK_TABS } from './tabs'
 
 const tool = defineTool({
   id: 'offline-pack',
@@ -15,7 +15,7 @@ const tool = defineTool({
   route: {
     path: 'offline-pack',
     name: 'tool-offline-pack',
-    component: () => import('./renderer/pages/OfflinePackPage.vue'),
+    component: () => import('./pages/OfflinePackPage.vue'),
     meta: { toolId: 'offline-pack', title: '离线包下载' },
   },
   // 每个下载器一个页签路由（深链 / 前进后退）；主路由经 routes.ts 重定向到第一个子路由（vscode）

@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@renderer/*": ["./renderer/*"],
+      "@/*": ["./src/*"],
       "@tools/*": ["./tools/*"],
       "@shared/*": ["./shared/*"]
     },
@@ -20,5 +20,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["auto-imports.d.ts", "components.d.ts", "renderer", "tools/*/index.ts", "tools/**/renderer", "shared", "vite.config.ts"]
+  "include": ["auto-imports.d.ts", "components.d.ts", "src", "tools/*/index.ts", "tools/**/pages", "tools/**/components", "tools/**/stores", "tools/**/composables", "tools/**/shared", "tools/**/tabs.ts", "tools/**/api.ts", "shared", "vite.config.ts"]
 }

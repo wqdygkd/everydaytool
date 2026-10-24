@@ -1,5 +1,5 @@
 // interceptor（拦截器）共享类型：规则模型 / 处理名单 / 扩展 WS 协议 / 流量条目。
-// 纯类型与常量（前端、Electron 主进程共用）；扩展为纯 JS，按同一 JSON 协议通信。
+// 纯类型与常量（前端与 Node 后端共用）；扩展为纯 JS，按同一 JSON 协议通信。
 // 设计定稿见 docs/interceptor.md。
 
 /** 捆绑扩展的固定 ID：由 manifest.key（公钥）推导，两侧硬编码用于 Origin 校验 */
@@ -229,7 +229,7 @@ export function targetMatchesOrigin(target: Pick<InterceptorTarget, 'origin' | '
   return target.enabled !== false && target.origin === origin
 }
 
-/** 条目开关的可改字段（渲染层与 IPC 共用一份） */
+/** 条目开关的可改字段（渲染层与 command 共用一份） */
 export interface InterceptorTargetPatch {
   enabled?: boolean
   noCache?: boolean
@@ -463,7 +463,7 @@ export interface InjectedScript {
 }
 
 // ---------------------------------------------------------------------------
-// 流量条目（内存环形缓冲，经 IPC 推给渲染层）
+// 流量条目（内存环形缓冲，经 Tauri command 推给渲染层）
 // ---------------------------------------------------------------------------
 
 export interface TrafficEntry {
@@ -546,7 +546,7 @@ export interface InterceptorRuntimeStatus {
   extensionDir: string | null
 }
 
-/** 修改代理端口的结果（IPC 返回；status 为改动后的最新运行状态） */
+/** 修改代理端口的结果（command 返回；status 为改动后的最新运行状态） */
 export interface ProxyPortUpdateResult {
   ok: boolean
   error?: string

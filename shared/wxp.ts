@@ -1,4 +1,4 @@
-// WXP 增强域共享类型与默认设置（renderer ↔ 主进程 backend）。
+// WXP 增强域共享类型与默认设置（UI ↔ Node server）。
 
 export type WxpRunningStatus = 'launching' | 'waiting' | 'connecting' | 'running' | 'error' | 'stopped'
 

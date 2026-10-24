@@ -12,13 +12,17 @@ export default antfu(
     ignores: [
       'node_modules',
       'dist',
-      'dist-electron',
+      'dist-sidecar',
       'release',
       'data',
       'docs',
       '*.md',
       'auto-imports.d.ts',
       'components.d.ts',
+      // Rust 侧由 cargo fmt / clippy 负责；assets 下的注入脚本刻意保持 ES5 风格
+      'src-tauri/**',
+      'pnpm-workspace.yaml',
+      'pnpm-lock.yaml',
     ],
   },
   {
@@ -37,8 +41,8 @@ export default antfu(
   },
   {
     files: [
-      'renderer/**/*.{ts,vue}',
-      'tools/*/renderer/**/*.{ts,vue}',
+      'src/**/*.{ts,vue}',
+      'tools/*/{pages,components,stores,composables,shared}/**/*.{ts,vue}',
       'tools/*/index.ts',
     ],
     rules: {
@@ -49,8 +53,8 @@ export default antfu(
             message: '前端源码使用无后缀 TS 模块导入，Vue SFC 保留 .vue。',
           },
           {
-            group: ['**/backend/**', '@tools/*/backend/**'],
-            message: '前端不得直接导入后端模块，请通过 preload 暴露的 IPC API 调用。',
+            group: ['**/server/**', '@tools/*/server/**'],
+            message: '前端不得直接导入后端模块，请通过桌面适配层暴露的 Tauri command API 调用。',
           },
         ],
       }],
@@ -58,9 +62,9 @@ export default antfu(
   },
   {
     files: [
-      'electron/**/*.ts',
-      'tools/*/backend/**/*.ts',
-      'backend/**/*.ts',
+      'tools/*/server/**/*.ts',
+      'server/**/*.ts',
+      'sidecar/**/*.ts',
       'shared/**/*.ts',
     ],
     rules: {
@@ -68,7 +72,7 @@ export default antfu(
         patterns: [
           {
             group: ['**/*.js', '**/*.jsx', '**/*.cjs', '**/*.mjs'],
-            message: 'Node/Electron 侧源码统一使用 .ts 后缀导入（构建期由 esbuild rewriteExtensions 还原为 .js）；.js 后缀会让编辑器无法跳转到 .ts 源且拿不到类型。',
+            message: 'Node/后端侧源码统一使用 .ts 后缀导入（构建期由 esbuild rewriteExtensions 还原为 .js）；.js 后缀会让编辑器无法跳转到 .ts 源且拿不到类型。',
           },
         ],
       }],

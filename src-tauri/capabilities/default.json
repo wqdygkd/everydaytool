@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "edt 主窗口的最小权限集：本应用命令 + 核心事件/窗口能力 + 自绘标题栏拖动",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

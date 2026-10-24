@@ -1,5 +1,5 @@
-// offline-pack 离线包下载域共享类型与纯函数（renderer ↔ 主进程 backend）。
-// 仅放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、数据库。
+// offline-pack 离线包下载域共享类型与纯函数（UI ↔ Node server）。
+// 仅放纯类型 / 常量 / 纯函数，不依赖 Node、数据库。
 
 export const OFFLINE_PACK_USER_AGENT = 'Mozilla/5.0 (compatible; offline-pack/1.0)'
 

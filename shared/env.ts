@@ -1,4 +1,4 @@
-// 环境浏览器域共享类型（renderer ↔ 主进程 backend）。
+// 环境浏览器域共享类型（UI ↔ Node server）。
 
 export interface EnvConfig {
   id: string

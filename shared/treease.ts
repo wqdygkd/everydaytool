@@ -1,4 +1,4 @@
-// Treease 编辑器接口拦截域共享类型（renderer ↔ 主进程 backend）。
+// Treease 编辑器接口拦截域共享类型（UI ↔ Node server）。
 
 export interface TreeaseInterceptPatch {
   path: string
@@ -15,13 +15,13 @@ export interface TreeaseInterceptRule {
 }
 
 export interface TreeaseInterceptStatus {
-  webContentsId: number
+  webviewId: number
   attached: boolean
   ruleCount: number
   hits: number
 }
 
 export interface TreeaseInterceptLog {
-  webContentsId: number
+  webviewId: number
   hits: number
 }

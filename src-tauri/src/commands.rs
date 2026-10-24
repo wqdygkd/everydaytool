@@ -1,0 +1,287 @@
+// Tauri commands：按业务域分组，前端直接 invoke，不再有通用 Tauri commands / 通道白名单。
+use crate::appearance::{self, WindowAppearance};
+use crate::treease::TreeaseState;
+use crate::{AppState, WebviewState};
+use serde_json::{json, Value};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager, State};
+
+fn merge_appearance(current: &WindowAppearance, patch: &Value) -> WindowAppearance {
+    let mut next = current.clone();
+    if let Some(value) = patch.get("enabled").and_then(|v| v.as_bool()) {
+        next.enabled = value;
+    }
+    if let Some(value) = patch.get("material").and_then(|v| v.as_str()) {
+        next.material = value.to_string();
+    }
+    if let Some(value) = patch.get("vibrancy").and_then(|v| v.as_str()) {
+        next.vibrancy = value.to_string();
+    }
+    if let Some(value) = patch.get("testWallpaper").and_then(|v| v.as_bool()) {
+        next.test_wallpaper = value;
+    }
+    next
+}
+
+fn appearance_get(state: &AppState) -> Value {
+    let current = state
+        .appearance
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default();
+    json!({
+        "appearance": current,
+        "capabilities": appearance::resolve_capabilities(),
+    })
+}
+
+fn appearance_set(app: &AppHandle, state: &AppState, patch: &Value) -> Result<Value, String> {
+    let capabilities = appearance::resolve_capabilities();
+    let next = {
+        let current = state
+            .appearance
+            .lock()
+            .map_err(|_| "窗口外观状态锁定失败")?
+            .clone();
+        appearance::sanitize(&merge_appearance(&current, patch), &capabilities)
+    };
+    // 持久化失败不应阻断本次切换：先应用 + 广播，再尽力写盘（受限环境下会走可写回退目录）。
+    if let Err(error) = appearance::save(app, &next) {
+        eprintln!("[appearance] 保存失败（仅当前会话生效）：{error}");
+    }
+    if let Ok(mut guard) = state.appearance.lock() {
+        *guard = next.clone();
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        appearance::apply_effects(&window, &next);
+    }
+    let _ = app.emit(
+        "edt:event",
+        json!({
+            "channel": "edt-app:event:appearance-changed",
+            "payload": next,
+        }),
+    );
+    serde_json::to_value(next).map_err(|error| error.to_string())
+}
+
+async fn run_command(
+    app: AppHandle,
+    state: &AppState,
+    webviews: &WebviewState,
+    treease: Arc<TreeaseState>,
+    domain: &'static str,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    if domain == "edtApp" {
+        match command.as_str() {
+            "edt-app:appearance:get" => return Ok(appearance_get(state)),
+            "edt-app:appearance:set" => {
+                let patch = args.first().cloned().unwrap_or_else(|| json!({}));
+                return appearance_set(&app, state, &patch);
+            }
+            _ => {}
+        }
+    }
+
+    if domain == "treeaseEditor" {
+        let handle = app.clone();
+        let map = webviews.map.clone();
+        let args_clone = args.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::treease::handle(handle, map, treease, &command, &args_clone)
+        })
+        .await
+        .map_err(|error| format!("treease 调度失败：{error}"))?;
+    }
+
+    let host = state.host.clone();
+    tauri::async_runtime::spawn_blocking(move || host.invoke(domain, &command, args))
+        .await
+        .map_err(|error| format!("命令调度失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn app_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "edtApp",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn interceptor_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "interceptor",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn chrome_sandbox_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "chromeSandbox",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn env_browser_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "envBrowser",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn treease_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "treeaseEditor",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn wxp_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "wxpEnhancer",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn offline_pack_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "offlinePack",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub fn edt_window_state(app: AppHandle) -> Result<Value, String> {
+    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
+    let maximized = window.is_maximized().map_err(|e| e.to_string())?;
+    let fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
+    Ok(json!({ "maximized": maximized, "fullscreen": fullscreen }))
+}
+
+#[tauri::command]
+pub fn edt_window_action(app: AppHandle, action: String) -> Result<Value, String> {
+    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
+    match action.as_str() {
+        "minimize" => window.minimize().map_err(|e| e.to_string())?,
+        "toggle-maximize" => {
+            if window.is_maximized().map_err(|e| e.to_string())? {
+                window.unmaximize().map_err(|e| e.to_string())?;
+            } else {
+                window.maximize().map_err(|e| e.to_string())?;
+            }
+        }
+        "close" => {
+            window.close().map_err(|e| e.to_string())?;
+        }
+        "toggle-fullscreen" => {
+            let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
+            window.set_fullscreen(next).map_err(|e| e.to_string())?;
+        }
+        other => return Err(format!("未知窗口动作：{other}")),
+    }
+    edt_window_state(app)
+}
+
+#[tauri::command]
+pub fn edt_open_external(app: AppHandle, url: String) -> Result<(), String> {
+    crate::platform::open_external(&app, &url)
+}

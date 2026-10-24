@@ -1,6 +1,6 @@
 # everydaytool UI 设计文档
 
-> 本文档描述 everydaytool（edt）的视觉语言、设计令牌与 UI 组件规范，是界面开发与评审的单一权威参考。实现细节（令牌定义、全局样式）位于 [`renderer/shared/styles/`](renderer/shared/styles/)（入口 `main.scss`，令牌 `tokens.scss`，半透明层 `translucency.scss`），组件源码位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)。
+> 本文档描述 everydaytool（edt）的视觉语言、设计令牌与 UI 组件规范，是界面开发与评审的单一权威参考。实现细节（令牌定义、全局样式）位于 [`src/shared/styles/`](src/shared/styles/)（入口 `main.scss`，令牌 `tokens.scss`，半透明层 `translucency.scss`），组件源码位于 [`src/shared/components/ui/`](src/shared/components/ui/)。
 
 ## 1. 设计原则与视觉语言
 
@@ -27,7 +27,7 @@
 
 ## 3. 设计令牌
 
-令牌定义在 `renderer/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → element-plus → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
+令牌定义在 `src/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → element-plus → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
 
 ### 3.1 颜色
 
@@ -155,7 +155,7 @@
 | `--control-height` | `32px` | 表单控件 / 图标按钮统一高度 |
 | `--line-height-control` | `20px` | 控件 / 表格 / 徽标统一行高 |
 | `--content-max-width` | `1360px` | 首页内容最大宽 |
-| `--titlebar-height` | `44px` | 自定义标题栏行高 |
+| `--titlebar-height` | `40px` | 自定义标题栏行高 |
 
 ### 3.5 圆角
 
@@ -293,13 +293,13 @@
 
 ### 7.1 应用外壳
 
-- 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，primary-light 底 + primary 字）+ 工具页签（圆角高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
-- **设置入口固定在标题栏右端**（`.header-settings`，34px 方形图标钮，齿轮图标）：Windows / Linux 上正好落在原生「最小化」按钮左侧（右侧 148px 原生按钮区之外），mac 上落在标题栏右端、红绿灯在另一侧。点击**打开一个「设置」页签**（不是弹窗），与工具页签同构：可关闭、可切换、常驻挂载；设置页签处于激活态时入口同步高亮（primary-light 底 + primary 字）。**首页不再有右下角悬浮设置按钮**。
+- 自定义标题栏（Tauri `decorations(false)`，标题栏与窗口按钮全部自绘）：左侧品牌标 `edt`（Nunito 圆角，primary-light 底 + primary 字）+ 工具页签（圆角高亮，primary-light 底 + primary 字）；无打开页签时仅显示品牌标。
+- **设置入口固定在标题栏右端**（`.header-settings`，34px 方形图标钮，齿轮图标）：Windows / Linux 上落在自绘窗口按钮组左侧（右侧预留 138px），macOS 上落在标题栏右端、原生红绿灯在另一侧。点击**打开一个「设置」页签**（不是弹窗），与工具页签同构：可关闭、可切换、常驻挂载；设置页签处于激活态时入口同步高亮（primary-light 底 + primary 字）。**首页不再有右下角悬浮设置按钮**。
 - 标题栏整行 `-webkit-app-region: drag`，页签区与设置入口 no-drag。
-- **标题栏默认无背景色**：不铺实色、不加分隔线，透出窗口画布；分层靠内容区上边界与原生窗口按钮。Windows 的 `titleBarOverlay` 底色同样设 `#00000000`，避免右上角露出一块实色矩形（见 `electron/main.ts` 的 `TITLEBAR_COLORS`）。
-- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: var(--glass-header)`（16px）稳住原生按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
-- 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
-- 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
+- **标题栏默认无背景色**：不铺实色、不加分隔线，透出窗口画布；分层靠内容区上边界与自绘窗口按钮。窗口按钮使用透明底 + 圆角 hover，关闭键悬停为标准红。
+- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: var(--glass-header)`（16px）稳住窗口按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
+- 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 138px（自绘窗口按钮）。
+- 页内菜单已移除，不保留应用级菜单动作；底部状态栏已删除，主区直抵窗口底缘。
 - 主区 `flex:1; min-height:0`，滚动只发生在内容区。
 
 #### 7.1.1 半透明窗口
@@ -307,7 +307,7 @@
 窗口外观（半透明 / 系统材质）由用户在「设置页签 → 窗口外观」切换，主进程是唯一事实来源
 （`userData/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
 
-##### 透明度与玻璃统一控制（`renderer/shared/styles/translucency.scss`）
+##### 透明度与玻璃统一控制（`src/shared/styles/translucency.scss`）
 
 **颜色 / 透明度 / 模糊三者分离**：`tokens.scss` 定义各表面角色的不透明基准色（`--color-<role>-base`）、
 默认 alpha 与默认玻璃（`--glass-* = none`）；`translucency.scss` 按窗口模式覆写 alpha（`--alpha-*`）

@@ -1,6 +1,6 @@
 // 窗口外观（半透明 / 系统材质）域共享类型与纯逻辑：
 // 平台能力判定放在这里（shared 只依赖纯 TS），主进程据此决定是否落盘无效选择，
-// 渲染层据此决定设置面板里哪些选项可点。经 preload 命名空间 edtApp 暴露。
+// 渲染层据此决定设置面板里哪些选项可点。经 edtApp 命令命名空间暴露。
 
 /** 系统背景材质（Windows 11 22H2+ 的 mica / acrylic，macOS 的 vibrancy 归到 translucency 上） */
 export type WindowMaterial = 'none' | 'mica' | 'acrylic' | 'tabbed'

@@ -1,4 +1,4 @@
-// Chrome 沙箱域共享类型（renderer ↔ 主进程 backend）：沙箱 / 指纹 / 应用配置。
+// Chrome 沙箱域共享类型（UI ↔ Node server）：沙箱 / 指纹 / 应用配置。
 // 仅类型，无运行时逻辑。前端 tsconfig.json 与后端 tsconfig.node.json 均引用。
 
 export type SandboxStatus = 'running' | 'stopped'

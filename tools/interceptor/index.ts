@@ -1,7 +1,7 @@
 import type { RuleType } from '../../shared/interceptor'
-import { defineTool } from '../../renderer/shared/tool/defineTool'
 import { RULE_TYPE_LABELS } from '../../shared/interceptor'
-import { INTERCEPTOR_TABS, ruleTypeRouteName } from './renderer/tabs'
+import { defineTool } from '../../src/shared/tool/defineTool'
+import { INTERCEPTOR_TABS, ruleTypeRouteName } from './tabs'
 
 const TOOL_ID = 'interceptor'
 
@@ -25,7 +25,7 @@ const tool = defineTool({
   route: {
     path: TOOL_ID,
     name: `tool-${TOOL_ID}`,
-    component: () => import('./renderer/pages/InterceptorPage.vue'),
+    component: () => import('./pages/InterceptorPage.vue'),
     meta: { toolId: TOOL_ID, title: '拦截器' },
   },
   // 每个页签、每个规则类型各一条路由（深链 / 前进后退）；

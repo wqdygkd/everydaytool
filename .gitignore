@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-electron/
 release/
 data/
 *.db
@@ -11,3 +10,7 @@ Thumbs.db
 .pnpm-store
 .agents
 .workbuddy
+src-tauri/target/
+src-tauri/binaries/
+dist-sidecar/
+debug.log

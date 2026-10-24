@@ -1,4 +1,4 @@
-import { defineTool } from '../../renderer/shared/tool/defineTool'
+import { defineTool } from '../../src/shared/tool/defineTool'
 
 const tool = defineTool({
   id: 'wxp-enhancer',
@@ -14,7 +14,7 @@ const tool = defineTool({
   route: {
     path: 'wxp-enhancer',
     name: 'tool-wxp-enhancer',
-    component: () => import('./renderer/pages/WxpEnhancer.vue'),
+    component: () => import('./pages/WxpEnhancer.vue'),
     meta: { toolId: 'wxp-enhancer', title: 'WXP 增强' },
   },
 })

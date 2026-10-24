@@ -1,4 +1,4 @@
-// 应用壳设置域共享类型（数据目录 / 磁盘用量 / 缓存清理，经 preload 命名空间 edtApp）。
+// 应用壳设置域共享类型（数据目录 / 磁盘用量 / 缓存清理，经 edtApp 命令命名空间）。
 
 export interface AppDataDirectoryInfo {
   dataDirectory: string

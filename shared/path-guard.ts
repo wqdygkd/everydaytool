@@ -1,5 +1,6 @@
 // 路径边界守卫（主进程侧）：把递归删除、数据根目录切换等写操作限制在业务目录内，
 // 避免数据库被篡改或接口字段扩大后误删/误写任意目录。
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -28,13 +29,27 @@ function normalizeForCompare(target: string): string {
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
+/** 解析 symlink / junction；目标尚不存在时解析父目录，避免词法校验被链接绕过 */
+function resolveForGuard(target: string): string {
+  const resolved = path.resolve(target)
+  try {
+    return realpathSync.native(resolved)
+  } catch {
+    try {
+      return path.join(realpathSync.native(path.dirname(resolved)), path.basename(resolved))
+    } catch {
+      return resolved
+    }
+  }
+}
+
 /** 数据根目录校验：绝对路径、非盘符根、不在已知系统目录内 */
 export function isSafeDataDirectory(candidate: string): PathGuardResult {
   if (!candidate || !candidate.trim()) return { ok: false, reason: '数据目录不能为空' }
   if (!path.isAbsolute(candidate)) return { ok: false, reason: '数据目录必须是绝对路径' }
   if (candidate.length > 4096) return { ok: false, reason: '数据目录路径过长' }
 
-  const resolved = path.resolve(candidate)
+  const resolved = resolveForGuard(candidate)
   if (path.dirname(resolved) === resolved) {
     return { ok: false, reason: '数据目录不能是磁盘根目录' }
   }
@@ -54,7 +69,8 @@ export function isSafeDataDirectory(candidate: string): PathGuardResult {
 
   const normalized = normalizeForCompare(resolved)
   for (const forbidden of forbiddenRoots) {
-    if (isPathWithin(forbidden, resolved).ok || normalized === normalizeForCompare(forbidden)) {
+    const forbiddenResolved = resolveForGuard(forbidden)
+    if (isPathWithin(forbiddenResolved, resolved).ok || normalized === normalizeForCompare(forbiddenResolved)) {
       return { ok: false, reason: '数据目录不能位于系统目录' }
     }
   }

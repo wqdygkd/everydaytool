@@ -3,11 +3,11 @@
   "type": "module",
   "version": "1.1.0",
   "packageManager": "pnpm@10.6.3",
-  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
+  "description": "everydaytool (edt) 多功能工具平台 - Tauri 2 + Vue 3，内置 7 个工具模块（Chrome 沙箱 / 拦截器等）",
   "author": "",
   "license": "MIT",
   "keywords": [
-    "electron",
+    "tauri",
     "edt",
     "everydaytool",
     "chrome",
@@ -15,7 +15,6 @@
     "fingerprint",
     "multi-tool"
   ],
-  "main": "dist-electron/electron/main.js",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -24,16 +23,18 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "create:tool": "node scripts/create-tool.mjs",
-    "build:electron": "node scripts/build-electron.mjs",
     "web": "vite",
-    "dev": "concurrently -k \"vite\" \"node scripts/dev-electron.mjs\"",
-    "build": "pnpm run build:electron && vite build",
-    "start": "electron . --remote-debugging-port=0",
-    "postinstall": "electron-builder install-app-deps",
-    "pack": "pnpm run build && electron-builder --dir",
-    "dist": "pnpm run build && electron-builder"
+    "dev:web": "vite",
+    "dev": "tauri dev",
+    "build:sidecar": "node scripts/build-sidecar.mjs",
+    "prepare:sidecar": "node scripts/prepare-sidecar.mjs",
+    "build:web": "vite build",
+    "build": "tauri build",
+    "dist:installer": "tauri build",
+    "tauri": "tauri"
   },
   "dependencies": {
+    "@tauri-apps/api": "2.12.4",
     "better-sqlite3": "^13.0.3",
     "element-plus": "^2.14.7",
     "gsap": "^3.15.0",
@@ -46,14 +47,12 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^9.5.1",
+    "@tauri-apps/cli": "2.12.4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.5",
     "@types/node-forge": "^1.3.14",
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-vue": "^6.0.10",
-    "concurrently": "^10.0.6",
-    "electron": "^44.6.0",
-    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
     "typescript": "^6.0.3",

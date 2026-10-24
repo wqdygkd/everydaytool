@@ -15,12 +15,12 @@ const pageName = `${toolId
   .map(part => part[0].toUpperCase() + part.slice(1))
   .join('')}Page`
 
-await mkdir(path.join(toolDir, 'renderer/pages'), { recursive: true })
+await mkdir(path.join(toolDir, 'pages'), { recursive: true })
 
 await writeFile(
   path.join(toolDir, 'index.ts'),
-  `import { defineTool } from '../../renderer/shared/tool/defineTool';
-import ${pageName} from './renderer/pages/${pageName}.vue';
+  `import { defineTool } from '../../src/shared/tool/defineTool';
+import ${pageName} from './pages/${pageName}.vue';
 
 const tool = defineTool({
   id: '${toolId}',
@@ -46,7 +46,7 @@ export default tool;
 )
 
 await writeFile(
-  path.join(toolDir, 'renderer/pages', `${pageName}.vue`),
+  path.join(toolDir, 'pages', `${pageName}.vue`),
   `<template>
   <div class="tool-page">
     ${toolId}
@@ -66,4 +66,4 @@ await writeFile(
 )
 
 console.log(`Created tools/${toolId}`)
-console.log(`Register it in renderer/config/tools.ts when ready.`)
+console.log(`Register it in src/config/tools.ts when ready.`)
