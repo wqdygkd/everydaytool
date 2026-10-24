@@ -4,7 +4,7 @@ use crate::treease::TreeaseState;
 use crate::{AppState, WebviewState};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 fn merge_appearance(current: &WindowAppearance, patch: &Value) -> WindowAppearance {
     let mut next = current.clone();
@@ -52,7 +52,7 @@ fn appearance_set(app: &AppHandle, state: &AppState, patch: &Value) -> Result<Va
     if let Ok(mut guard) = state.appearance.lock() {
         *guard = next.clone();
     }
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         appearance::apply_effects(&window, &next);
     }
     let _ = app.emit(
@@ -81,8 +81,66 @@ async fn run_command(
                 let patch = args.first().cloned().unwrap_or_else(|| json!({}));
                 return appearance_set(&app, state, &patch);
             }
-            _ => {}
+            // 其余应用壳命令（数据目录 / 用量 / 缓存 / DevTools）由 Rust 原生实现
+            _ => {
+                let handle = app.clone();
+                let command_clone = command.clone();
+                let args_clone = args.clone();
+                return tauri::async_runtime::spawn_blocking(move || {
+                    crate::app_domain::handle(&handle, &command_clone, &args_clone)
+                })
+                .await
+                .map_err(|error| format!("应用壳调度失败：{error}"))?;
+            }
         }
+    }
+
+    if domain == "envBrowser" {
+        return crate::env_browser::handle(&command, &args);
+    }
+
+    if domain == "chromeSandbox" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::chrome_sandbox::handle(&handle, &command_clone, &args_clone)
+        })
+        .await
+        .map_err(|error| format!("沙箱调度失败：{error}"))?;
+    }
+
+    if domain == "offlinePack" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::offline_pack::handle(&handle, &command_clone, &args_clone)
+        })
+        .await
+        .map_err(|error| format!("离线包调度失败：{error}"))?;
+    }
+
+    if domain == "wxpEnhancer" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::wxp::handle(&handle, &command_clone, &args_clone)
+        })
+        .await
+        .map_err(|error| format!("WXP 调度失败：{error}"))?;
+    }
+
+    if domain == "interceptor" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            crate::interceptor::handle(&handle, &command_clone, &args_clone)
+        })
+        .await
+        .map_err(|error| format!("拦截器调度失败：{error}"))?;
     }
 
     if domain == "treeaseEditor" {
@@ -96,10 +154,8 @@ async fn run_command(
         .map_err(|error| format!("treease 调度失败：{error}"))?;
     }
 
-    let host = state.host.clone();
-    tauri::async_runtime::spawn_blocking(move || host.invoke(domain, &command, args))
-        .await
-        .map_err(|error| format!("命令调度失败：{error}"))?
+    let _ = state;
+    Err(format!("未知命令域：{domain}/{command}"))
 }
 
 #[tauri::command]
@@ -249,17 +305,22 @@ pub async fn offline_pack_command(
     .await
 }
 
-#[tauri::command]
-pub fn edt_window_state(app: AppHandle) -> Result<Value, String> {
-    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
+fn window_state(window: &Window) -> Result<Value, String> {
     let maximized = window.is_maximized().map_err(|e| e.to_string())?;
     let fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
     Ok(json!({ "maximized": maximized, "fullscreen": fullscreen }))
 }
 
+// 窗口命令注入调用方 Window：Tauri 2 的 WebviewWindowBuilder::build() 不把窗口登记进
+// webview_windows 表，因此 get_webview_window("main") 与 WebviewWindow 注入都会失败；
+// windows 表是正常的，用 Window 即可（窗口级能力都在这层）。
 #[tauri::command]
-pub fn edt_window_action(app: AppHandle, action: String) -> Result<Value, String> {
-    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
+pub fn edt_window_state(window: Window) -> Result<Value, String> {
+    window_state(&window)
+}
+
+#[tauri::command]
+pub fn edt_window_action(window: Window, action: String) -> Result<Value, String> {
     match action.as_str() {
         "minimize" => window.minimize().map_err(|e| e.to_string())?,
         "toggle-maximize" => {
@@ -269,16 +330,19 @@ pub fn edt_window_action(app: AppHandle, action: String) -> Result<Value, String
                 window.maximize().map_err(|e| e.to_string())?;
             }
         }
-        "close" => {
-            window.close().map_err(|e| e.to_string())?;
-        }
         "toggle-fullscreen" => {
             let next = !window.is_fullscreen().map_err(|e| e.to_string())?;
             window.set_fullscreen(next).map_err(|e| e.to_string())?;
         }
+        "close" => {
+            // 先取状态再关窗（关掉之后无法再查询）
+            let state = window_state(&window)?;
+            window.close().map_err(|e| e.to_string())?;
+            return Ok(state);
+        }
         other => return Err(format!("未知窗口动作：{other}")),
     }
-    edt_window_state(app)
+    window_state(&window)
 }
 
 #[tauri::command]

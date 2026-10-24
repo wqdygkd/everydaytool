@@ -1,16 +1,17 @@
 node_modules/
 dist/
-release/
 data/
-*.db
-package-lock.json
-yarn.lock
-.DS_Store
-Thumbs.db
 .pnpm-store
 .agents
 .workbuddy
-src-tauri/target/
-src-tauri/binaries/
-dist-sidecar/
+
+# Cargo 构建产物（.cargo/config.toml 的 target-dir = target，位于仓库根）
+/target/
+
+# 非 pnpm 的锁文件：本仓库只用 pnpm-lock.yaml，避免误提交
+package-lock.json
+yarn.lock
+
+.DS_Store
+Thumbs.db
 debug.log

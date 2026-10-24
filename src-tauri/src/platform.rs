@@ -161,8 +161,8 @@ pub fn open_external(app: &AppHandle, raw_url: &str) -> Result<(), String> {
 }
 
 fn clear_cache(app: &AppHandle) -> Result<Value, String> {
-    let window = app.get_webview_window("main").ok_or("主窗口不存在")?;
-    window
+    let webview = app.get_webview("main").ok_or("主窗口不存在")?;
+    webview
         .clear_all_browsing_data()
         .map_err(|error| error.to_string())?;
     Ok(Value::Null)
@@ -170,7 +170,7 @@ fn clear_cache(app: &AppHandle) -> Result<Value, String> {
 
 fn open_devtools(app: &AppHandle) {
     // 已打开时再次调用只会把它拉到前台
-    if let Some(window) = app.get_webview_window("main") {
-        window.open_devtools();
+    if let Some(webview) = app.get_webview("main") {
+        webview.open_devtools();
     }
 }

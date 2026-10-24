@@ -1,0 +1,15 @@
+# crates.io 直连超时，本项目使用 rsproxy（字节）稀疏镜像。
+#
+# 这里只放「跨平台通用」配置。平台相关的构建环境（MSVC INCLUDE/LIB）一律不写进仓库：
+#   - Windows：scripts/windows/_env.bat 用 vswhere + VsDevCmd.bat 在构建进程链里现场初始化
+#     （不硬编码 VS / SDK 版本与安装目录）。
+#   - macOS / Linux：系统工具链（clang / gcc）自带，无需任何注入。
+[source.crates-io]
+replace-with = 'rsproxy-sparse'
+
+[source.rsproxy-sparse]
+registry = 'sparse+https://rsproxy.cn/index/'
+
+# 跨平台默认构建目录（仓库根 target/）。需要换位置时设置 CARGO_TARGET_DIR。
+[build]
+target-dir = 'target'

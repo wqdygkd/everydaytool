@@ -5,7 +5,7 @@ description = "everydaytool (edt) 多功能工具平台 - Tauri 2 桌面壳"
 authors = ["everydaytool"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.80"
 
 [lib]
 name = "everydaytool_lib"
@@ -21,13 +21,37 @@ tauri-plugin-opener = "2.7.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.9"
+tungstenite = "0.28"
+http = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls", "charset", "json"] }
+flate2 = "1"
+sha2 = "0.10"
+sha1 = "0.10"
+base64 = "0.22"
+regex = "1"
+rcgen = { version = "0.13", features = ["x509-parser"] }
+time = { version = "0.3", features = ["parsing", "formatting"] }
+native-tls = "0.2"
+# MITM 服务端：schannel 只接受 RSA 私钥，ECDSA 叶证书用 rustls（ring provider）
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+httparse = "1"
+brotli = "7"
 
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1"
+winreg = "0.55"
 
 [features]
 # 生产构建启用：把前端资源内嵌进可执行文件（等价于 tauri CLI 的 --release 行为）
 custom-protocol = ["tauri/custom-protocol"]
+
+# ring 的 C 源码在 /Z7 + /Brepro 下会把命令行写进调试记录，路径过长会触发 MSVC D8050。
+# 只对 ring 这一个 C 依赖关闭 C 侧调试信息（Rust 代码调试信息保持不变），
+# 构建目录因此可以留在仓库内，不需要把 target 放到磁盘根目录。
+[profile.dev.package.ring]
+debug = false
 
 [profile.release]
 codegen-units = 1

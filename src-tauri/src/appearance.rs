@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 use std::time::SystemTime;
 use tauri::utils::config::WindowEffectsConfig;
 use tauri::utils::WindowEffect;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -393,7 +393,7 @@ fn effect_for(appearance: &WindowAppearance) -> Option<WindowEffect> {
     }
 }
 
-pub fn apply_effects(window: &WebviewWindow, appearance: &WindowAppearance) {
+pub fn apply_effects(window: &tauri::Window, appearance: &WindowAppearance) {
     match effect_for(appearance) {
         Some(effect) => {
             let config = WindowEffectsConfig {

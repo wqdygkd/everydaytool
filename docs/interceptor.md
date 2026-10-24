@@ -59,7 +59,7 @@
   | Mock | 第一条生效并短路（不请求上游） | 窄的放前 |
 
 - 引擎管线：取消 → 重定向 → URL 改写 → 延迟 → 请求头 / UA / 请求体 → Mock 或上游 → 响应头 / 响应体 / 状态码；流量条目标记 `canceled / redirectedTo / delayedByMs / rewrittenTo / matchedRule*`。
-- 脚本规则编译：`script-compile.ts` 把 script 规则编译成窄 match pattern + `location` 运行时守卫，随规则变更经 WS 下发，扩展用 `chrome.userScripts.register` 注册；改动对已打开页面下次导航生效（不采用"往 HTML 里塞 script"，受 CSP 限制且时机晚）。
+- 脚本规则编译：`script_compile.rs` 把 script 规则编译成窄 match pattern + `location` 运行时守卫，随规则变更经 WS 下发，扩展用 `chrome.userScripts.register` 注册；改动对已打开页面下次导航生效（不采用"往 HTML 里塞 script"，受 CSP 限制且时机晚）。
 
 ## 5. 流量
 
@@ -76,7 +76,7 @@
 
 ## 6. 证书
 
-- 生成：node-forge 纯 JS；根 CA（`edt Interceptor CA`）有效期 10 年，落盘 `data/interceptor/certs/`（`ca.key` / `ca.crt`）；叶证书按 host 现场签发（SAN 含域名与 IP），仅内存缓存，进程重启按需重签。
+- 生成：Rust `rcgen`（ECDSA P-256）；根 CA（`edt Interceptor CA`）有效期 10 年，落盘 `data/interceptor/certs/`（`ca.key` / `ca.crt`）；叶证书按 host 现场签发（SAN 含域名与 IP，397 天），内存缓存 6 小时。MITM 服务端用 `rustls`（schannel 只接受 RSA 私钥，无法用 ECDSA 叶证书）；上游连接用 `native-tls`（Windows 走 schannel），回环目标跳过校验。
 - Windows：`certutil -user -addstore Root ca.crt`（当前用户根库、免 UAC，Chrome 读系统库）；检测 / 删除都走 SHA1 指纹。
 - macOS：**登录钥匙串** `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`，经 `osascript … with administrator privileges` 弹原生授权（不用 System.keychain）；检测 `security find-certificate -Z -c 'edt Interceptor CA' <keychain>`，删除按指纹。
 - UI：证书页显示状态（未生成 / 已生成 / 未信任）、一键安装 / 卸载 / 导出 `.crt`；信任是**每个浏览器 / profile 各一次**——Chrome 走系统库，Firefox 等自带证书库的浏览器需手动导入导出的证书。
@@ -115,7 +115,7 @@
 | `/tools/interceptor/rules` | 规则列表（全部类型） |
 | `/tools/interceptor/rules/<type>` | 按类型过滤（10 种类型各一条） |
 
-实现：`index.ts` 的 `subRoutes` 由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；菜单驱动 `router.push`，视图经 `<KeepAlive>` 缓存（切走再回来草稿 / 筛选不丢）；映射集中在 `renderer/tabs.ts`。规则编辑器是组件内视图、不进路由。
+实现：`tools/interceptor/index.ts` 的 `subRoutes` 由 `src/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；菜单驱动 `router.push`，视图经 `<KeepAlive>` 缓存（切走再回来草稿 / 筛选不丢）；映射集中在 `tools/interceptor/tabs.ts`。规则编辑器是组件内视图、不进路由。
 
 ## 10. 未做 / 二期
 
@@ -128,11 +128,11 @@
 
 | 关注点 | 位置 |
 |---|---|
-| 代理内核（CONNECT 分流、MITM、透明转发、Upgrade 桥接） | `backend/services/proxy-service.ts` |
-| 名单判定（origin 相等） | `backend/services/target-list.ts` |
-| 规则匹配与执行 | `backend/services/rule-engine.ts`、`script-compile.ts`、`body-script.ts` |
-| 证书（生成 / 信任 / 导出） | `backend/services/cert-service.ts`、`ca-trust.ts` |
-| 总调度 / IPC / 存储 | `backend/services/interceptor-service.ts`、`backend/ipc/`、`backend/store/` |
-| WS 桥（协议与扩展握手） | `backend/services/ws-bridge.ts` |
-| 管理页视图 | `renderer/pages/InterceptorPage.vue`、`renderer/components/*.vue`、`renderer/stores/interceptorStore.ts` |
-| 扩展 | `extension/`（`manifest.json` / `background.js` / `popup.*`） |
+| 代理内核（CONNECT 分流、MITM、透明转发、分帧处理） | `src-tauri/src/interceptor/proxy.rs` |
+| 名单判定（origin 相等）/ 主机归一 | `src-tauri/src/interceptor/origin.rs`、`store.rs` |
+| 规则匹配与执行（含脚本规则编译） | `src-tauri/src/interceptor/rule_engine.rs`、`script_compile.rs` |
+| 证书（生成 / 信任 / 导出） | `src-tauri/src/interceptor/certs.rs`、`ca_trust.rs` |
+| 总调度 / 命令 / 存储 / 流量 | `src-tauri/src/interceptor/service.rs`、`store.rs`、`traffic.rs` |
+| WS 桥（协议与扩展握手） | `src-tauri/src/interceptor/ws_bridge.rs` |
+| 管理页视图 | `tools/interceptor/pages/*.vue`、`tools/interceptor/components/*.vue`、`tools/interceptor/stores/*.ts` |
+| 扩展 | `tools/interceptor/extension/`（`manifest.json` / `background.js` / `popup.*`） |

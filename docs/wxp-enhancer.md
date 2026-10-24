@@ -71,14 +71,14 @@ cdp-client.ts              CDP 基础：连接/求值/注入；evaluateInPageTar
 ## 数据与 IPC
 
 - 工具配置：`data/wxp-enhancer/config.json`（settings / enhancements / clearLoginCachePending）。读取时滤除旧版 cdp-injector 遗留死字段（autoLogin/homeUrl）。
-- 数据缓存：`data/wxp-enhancer/data-cache.json`（WxpDataCache：登录令牌/账号密码/用户对象/NameNode 参数/收藏列表）。会话建立后自动采集：`auto-collect-service` 每 15s 轻量探针（Vuex 用户存在即已登录），登录成功即采集落盘并广播 `wxp:data-cache-updated` 前端自动刷新；收藏时间戳变化或超 5 分钟兜底重采。工具页「数据缓存（来自 WXP）」区块查看（令牌掩码+复制、收藏表格、用户 JSON 折叠），手动「从 WXP 读取」仍可立即刷新。
+- 数据缓存：`data/wxp-enhancer/data-cache.json`（WxpDataCache：登录令牌/账号密码/用户对象/NameNode 参数/收藏列表）。会话建立后自动采集：`src-tauri/src/wxp/service.rs` 每 15s 轻量探针（Vuex 用户存在即已登录），登录成功即采集落盘并广播 `wxp:data-cache-updated` 前端自动刷新；收藏时间戳变化或超 5 分钟兜底重采。工具页「数据缓存（来自 WXP）」区块查看（令牌掩码+复制、收藏表格、用户 JSON 折叠），手动「从 WXP 读取」仍可立即刷新。
 - 清除登录缓存：运行中经 `evaluateInPageTargets` 删工具写入的四键（不动应用 token）+ reload；未运行登记 `clearLoginCachePending`，下次启动首轮注入的脚本带清除块（**必须随后换回常规脚本 scanAndInject(true)**，否则会清掉用户重登后的快照）。
-- 采集/求值脚本与注入脚本一样受"模板字符串禁反斜杠"约束；验证用文本抽取 + `new Function`（esbuild 打包 data-collector 会拖进 electron 依赖，纯 Node 不能 require）。
+- 采集/求值脚本与注入脚本一样受"模板字符串禁反斜杠"约束：采集表达式是 `wxp/service.rs` 里的 Rust 原始字符串常量，注入脚本本体以 `src-tauri/assets/wxp-injection-main.js` 资产嵌入（`include_str!`）。
 
 ## 运行时坑位备忘
 
-- **pnpm dev 运行中锁 dist-electron（EBUSY）**——重编译前先关 dev。
+- **pnpm dev 运行中锁 `target/`（EBUSY / 拒绝访问）**——重新编译前先关掉正在运行的 everydaytool。
 - fnm 环境：Bash `cd` 进项目先 `eval "$(fnm env)"`。
-- WXP 是用户桌面上的活应用：CDP 测试窗口期不稳定，测试要快、一次会话闭环；Node fetch 连 9553 会间歇 ECONNREFUSED（curl 同时正常），加重试。
+- WXP 是用户桌面上的活应用：CDP 测试窗口期不稳定，测试要快、一次会话闭环；CDP 端口 9553 偶发连接被拒（curl 同时正常），实现侧已带重试。
 - 附加模式（WXP 已在运行）无子进程，用 4s 间隔存活看门狗（连续 2 次检测不到 exe 判定退出）；拉起模式走 onExit 回调。
 - 用户并行编辑文件/暂存区：Edit 前重读文件，汇报区分非自己做的改动。

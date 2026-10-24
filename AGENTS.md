@@ -6,7 +6,8 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的开发约
 
 Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator）。
 
-桌面壳在 `src-tauri/`（窗口 / 菜单 / 系统能力 / Tauri commands / 子 Webview）；工具业务后端保留 Node 运行时（`sidecar/`，由 Rust 以 sidecar 启动，stdio JSON-RPC），
+桌面壳在 `src-tauri/`（窗口 / 菜单 / 系统能力 / Tauri commands / 子 Webview）；**全部业务后端均为 Rust 原生实现**（无 Node 运行时），
+按业务域分模块：`app_domain`（数据目录 / 用量 / 缓存）、`env_browser`、`chrome_sandbox`、`offline_pack`、`treease`、`wxp`、`interceptor`。
 渲染层通过 `src/desktop/` 直接使用 Tauri API（`@tauri-apps/api`）与按命名空间分组的 typed helper。
 **业务组件不得直接调用 Tauri API**，一律经 `createCommandHelpers` / `src/desktop/*`。
 
@@ -22,16 +23,24 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 - 数字 / 等宽一律用 `.mono`（`var(--font-mono)`），禁止硬编码 `Consolas` / `ui-monospace` 等字体栈。
 - 字母头像（工具卡片头像、品牌标）用自托管 Nunito ExtraBold 800。
 
+## 窗口与命令（Tauri 2 陷阱）
+
+- 主窗口是**代码创建**的（`lib.rs::create_main_window`，`tauri.conf.json` 的 `app.windows` 为空）。
+  Tauri 2.12 的 `WebviewWindowBuilder::build()` **不会**把窗口登记进 `webview_windows` 表，因此：
+  - `app.get_webview_window("main")` 恒为 `None`；
+  - 命令参数注入 `WebviewWindow` 会报 `current webview is not a WebviewWindow`。
+- 正确取窗口的方式：`app.get_window("main")`（窗口级：minimize / maximize / close / fullscreen / effects）、
+  `app.get_webview("main")`（webview 级：devtools / clear_all_browsing_data），
+  或在命令里注入 `tauri::Window` 拿调用方窗口。
+- 新增窗口相关能力时按上面三种方式取句柄，不要再写 `get_webview_window`。
+
 ## 编码规范
 
 - 前端（`src/**`、`tools/*/{pages,components,stores,composables}/**`、`tools/*/index.ts`）：TS 相对导入无后缀，Vue SFC 保留 `.vue`。
-- Node 运行时/后端（`sidecar/**`、`server/**`、`tools/*/server/**`）：Node ESM，源码相对 TS 导入写 `.ts` 后缀
-  （`scripts/build-sidecar.mjs` 用 esbuild 打包为单文件 `main.mjs`）。
-- Rust 桌面壳（`src-tauri/**`）：命令 / 状态 / 平台能力分层，按业务域注册 Tauri commands，命令分组必须与 `shared/command-groups/` 同步。
-- 前端禁止直接 `import server/**` 或 `import tools/*/server/**`，必须经桌面适配层暴露的 Tauri command API 调用
+- 业务后端（`src-tauri/src/**`）：命令 / 状态 / 平台能力分层，按业务域注册 Tauri commands，命令分组必须与 `shared/command-groups/` 同步。
+- 前端禁止直接调用 Tauri API，必须经桌面适配层暴露的 command API 调用
   （`src/shared/commands/createCommandHelpers` 工厂，或各工具的 `ipc.ts`）。
-- `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Node 运行时（`shared/command-groups/` 例外：纯常量，前后端与 Rust 共享）。
-- `server/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/server/`，禁止工具间互相 import 对方的 server。
+- `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖任何运行时（`shared/command-groups/` 例外：纯常量，渲染层与 Rust 共享）。
 - 高度链必须完整：`flex` 容器 + `flex:1` 子项需配 `min-height:0`，避免内容溢出。
 
 ## 布局 / 交互要点
@@ -39,7 +48,7 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 - 主壳 `src/App.vue`：自定义标题栏（Rust 侧 `decorations(false)` 隐藏系统标题栏，Windows/Linux 由 `App.vue` 自绘窗口按钮；macOS 保留原生红绿灯）；标题栏 `data-tauri-drag-region` + `-webkit-app-region: drag`，页签区、设置入口与窗口按钮 no-drag；原生菜单已移除（不显示文件/编辑/视图/窗口菜单栏），也不保留应用级快捷键（无 `shortcuts.ts`）；底部状态栏已删除，主区直抵窗口底缘。
 - **设置是页签，不是弹窗**：入口在标题栏右端（`.header-settings`，Windows 上即最小化按钮左侧），点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `src/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 用同一张表常驻挂载。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
   桌面端专属页面（如设置：数据目录 / 空间占用 / 缓存清理 / 窗口外观都依赖桌面宿主）必须标 `desktopOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
-  命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——server 里已有 `shell` 平台能力（`openPath` / `openExternal`），两套 `shell` 并存会让阅读反复停顿。
+  命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——桌面壳里已有 `platform` 平台能力（`openPath` / `openExternal`），两套 `shell` 并存会让阅读反复停顿。
 - 首页 `src/pages/HomePage.vue`：工具网格按分类分组，支持搜索 / 收藏。
 - 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `src/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/tabs.ts`。
 - 标题栏与页签外观、工具页布局、入场与过渡动效等视觉 / 交互规范见 [DESIGN.md](./DESIGN.md) §7、§8（动效尊重 `prefers-reduced-motion`）。
@@ -93,21 +102,33 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 
 ```bash
 pnpm install      # 安装依赖（Node 22+ / pnpm 10+，勿用 npm）
-pnpm dev          # Tauri CLI 启动（beforeDevCommand 构建 sidecar 与 Vite）
+pnpm doctor       # 环境检查（只读）：Node / Rust / Tauri CLI + 各平台工具链（Windows 会实跑一次 VsDevCmd）
+pnpm dev          # 按平台分派：Windows → scripts/windows/dev.bat，macOS/Linux → scripts/<os>/dev.sh
 pnpm web          # 纯浏览器预览（无桌面桥接：只列 supportedTargets 含 web 的工具，桌面端专属页面不注册）
 pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm build:web    # 仅构建前端
-pnpm build:sidecar   # 仅构建 Node 业务运行时 bundle
-pnpm typecheck    # TS 类型检查（前端 + 后端两套 tsconfig）
+pnpm typecheck    # TS 类型检查（渲染层）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
-pnpm build        # Tauri CLI 构建并生成 NSIS 安装包
+pnpm build        # 按平台分派构建（Windows 自动注入 MSVC 环境；产物在仓库 target/）
 pnpm dist:installer # 同 pnpm build
-pnpm tauri dev    # 官方 CLI 启动（本地 @tauri-apps/cli）
+pnpm tauri:dev:raw / pnpm tauri:build:raw   # 直接走 Tauri CLI（仍做平台环境初始化）
+pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
 ```
 
 > 仓库根即工程根：`pnpm-workspace.yaml` / `pnpm-lock.yaml` 都在根目录；
 > `pnpm tauri` 使用本地安装的 `@tauri-apps/cli@2.12.4`。
+
+### 构建环境（跨平台）
+
+- `.cargo/config.toml` **只放跨平台配置**（crates 镜像 + 默认 `target-dir = target`）。
+  **禁止**把 MSVC 工具集版本、Windows SDK 版本、Visual Studio 安装目录或 `INCLUDE`/`LIB` 写进仓库配置。
+- Windows：`scripts/windows/_env.bat` 用 `vswhere` 发现 VS、`VsDevCmd.bat` 在构建进程链里初始化环境；
+  `dev.bat` / `build.bat` 复用它。**不做构建目录搬迁**：D8050 由
+  `src-tauri/Cargo.toml` 的 `[profile.dev.package.ring] debug = false` 在根上解决（只影响该 C 依赖）。
+- macOS / Linux：`scripts/macos|linux/{env.sh,dev.sh,build.sh}`，只做能力检查，不做环境注入。
+- 统一入口：`scripts/dev.mjs` / `scripts/build.mjs` 按 `process.platform` 分派；`scripts/doctor.mjs` 只读检查。
+- 新增平台相关脚本时按此结构放置，不要在 Node 脚本里拼接平台专属 shell 语法。
 
 ## 新增工具
 
@@ -163,15 +184,12 @@ export default defineTool({
 | 工具注册 | `src/config/tools.ts` |
 | 路由配置 | `src/router/routes.ts` |
 | 命令分组（单一事实来源） | `shared/command-groups/` |
-| 命令通道（后端再导出） | `tools/chrome-sandbox/server/commands/channels.ts` |
-| 命令处理 | `tools/chrome-sandbox/server/commands/handlers.ts` |
-| 沙箱数据（JSON 存储） | `tools/chrome-sandbox/server/store/*.ts` |
-| 平台后端基建（logger / file-ops / 数据根目录） | `server/utils/` |
-| 应用数据根目录 | `server/utils/data-root.ts` |
-| JSON 存储（原子写 / 按域分文件） | `server/utils/json-store.ts` |
-| 桌面壳（窗口 / 菜单 / Tauri commands / 平台能力） | `src-tauri/src/` |
+| 沙箱 / 环境浏览器 | `src-tauri/src/chrome_sandbox/`、`src-tauri/src/env_browser.rs` |
+| 应用壳域（数据目录 / 用量扫描 / 缓存清理 / DevTools） | `src-tauri/src/app_domain.rs` |
+| 离线包 / WXP 增强 / 拦截器 | `src-tauri/src/offline_pack/`、`src-tauri/src/wxp/`、`src-tauri/src/interceptor/` |
+| 应用数据根目录解析 | `src-tauri/src/appearance.rs`（`resolve_data_dir`） |
+| 桌面壳（窗口 / Tauri commands / 平台能力） | `src-tauri/src/` |
 | 窗口外观设置（半透明 / 材质）持久化与生效 | `src-tauri/src/appearance.rs` |
-| Node 业务运行时入口 / 协议 | `sidecar/main.ts`、`sidecar/transport.ts` |
 | 渲染层桌面适配层（Tauri API + 命令分组） | `src/desktop/` |
 | 子 Webview 桥（env-browser / treease） | `src-tauri/src/webviews.rs`、`src/desktop/webviews.ts` |
 | 平台能力判定（透明 / 材质 / vibrancy） | `shared/appearance.ts` |

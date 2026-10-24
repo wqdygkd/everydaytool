@@ -53,8 +53,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: {
-      // data/ 内含 WebView2 的 Chromium profile（运行时独占锁定，监视会报 EBUSY）
-      ignored: ['**/src-tauri/**', '**/data/**', '**/dist/**', '**/dist-sidecar/**'],
+      // 以下目录在构建/运行时会被独占锁定，监视会刷 EBUSY：
+      // - target/：Cargo 构建产物（.cargo/config.toml 的 target-dir，位于仓库根）
+      // - data/：WebView2 的 Chromium profile
+      // - src-tauri/：Rust 源码与旧构建目录
+      ignored: ['**/target/**', '**/src-tauri/**', '**/data/**', '**/dist/**'],
     },
   },
 })

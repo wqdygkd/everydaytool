@@ -1,15 +1,24 @@
 // everydaytool Tauri 桌面壳入口。
-// 窗口 + Tauri commands + Node 业务运行时（sidecar）。
+// 窗口 + Tauri commands + 各业务域（全部 Rust 原生实现，无 Node 运行时）。
+mod app_domain;
 mod appearance;
+mod chrome_sandbox;
 mod commands;
+mod env_browser;
+// 阶段 5 移植中：WS 桥 / MITM 代理接入前尚未接线（接线后移除 allow）
+#[allow(dead_code)]
+mod interceptor;
+mod iso_time;
+mod offline_pack;
 mod platform;
-mod sidecar;
 mod treease;
 mod webviews;
+mod wxp;
+
+pub use interceptor::origin;
 
 use appearance::WindowAppearance;
 use serde_json::json;
-use sidecar::SidecarHost;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -23,7 +32,6 @@ pub struct WebviewState {
 }
 
 pub struct AppState {
-    pub host: Arc<SidecarHost>,
     pub appearance: Mutex<WindowAppearance>,
 }
 
@@ -77,13 +85,11 @@ fn create_main_window(
 fn hook_window_events(app: &tauri::AppHandle, window: &WebviewWindow) {
     let handle = app.clone();
     let last = Arc::new(Mutex::new((false, false)));
+    let win = window.clone();
     window.on_window_event(move |event| {
         if !matches!(event, WindowEvent::Resized(_)) {
             return;
         }
-        let Some(win) = handle.get_webview_window("main") else {
-            return;
-        };
         let fullscreen = win.is_fullscreen().unwrap_or(false);
         let maximized = win.is_maximized().unwrap_or(false);
         if let Ok(mut state) = last.lock() {
@@ -131,11 +137,7 @@ pub fn run() {
         ])
         .setup(|app| {
             let current = appearance::load(app.handle());
-            let host = SidecarHost::start(app.handle().clone())
-                .map_err(|error| -> Box<dyn std::error::Error> { error.into() })?;
-
             app.manage(AppState {
-                host: Arc::new(host),
                 appearance: Mutex::new(current.clone()),
             });
             app.manage(WebviewState {
@@ -148,9 +150,15 @@ pub fn run() {
                     std::io::Error::other(format!("create_main_window: {error}")).into()
                 },
             )?;
-            appearance::apply_effects(&window, &current);
+            if let Some(main_window) = app.handle().get_window("main") {
+                appearance::apply_effects(&main_window, &current);
+            }
             hook_window_events(app.handle(), &window);
             let _ = window.set_focus();
+            // 应用壳：注册工具域的缓存跳过路径（运行中沙箱 profile 不参与清理）
+            app_domain::register_tool_skip_providers();
+            // 拦截器：代理 / WS 桥 / 证书在后台线程初始化（不阻塞首帧）
+            interceptor::setup(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -173,9 +181,8 @@ pub fn run() {
             let handle = handle.clone();
             let finished = finished.clone();
             std::thread::spawn(move || {
-                if let Some(state) = handle.try_state::<AppState>() {
-                    state.host.shutdown();
-                }
+                // 拦截器代理 / WS 桥收尾
+                interceptor::dispose();
                 finished.store(true, Ordering::SeqCst);
                 handle.exit(code.unwrap_or(0));
             });

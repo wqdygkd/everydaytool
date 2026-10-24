@@ -12,9 +12,11 @@ export default antfu(
     ignores: [
       'node_modules',
       'dist',
-      'dist-sidecar',
       'release',
       'data',
+      // Cargo 构建产物（.cargo/config.toml 的 target-dir 在仓库根）
+      'target',
+      '.target',
       'docs',
       '*.md',
       'auto-imports.d.ts',
@@ -62,9 +64,6 @@ export default antfu(
   },
   {
     files: [
-      'tools/*/server/**/*.ts',
-      'server/**/*.ts',
-      'sidecar/**/*.ts',
       'shared/**/*.ts',
     ],
     rules: {

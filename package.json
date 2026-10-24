@@ -21,17 +21,18 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "typecheck": "tsc --noEmit",
     "create:tool": "node scripts/create-tool.mjs",
     "web": "vite",
     "dev:web": "vite",
-    "dev": "tauri dev",
-    "build:sidecar": "node scripts/build-sidecar.mjs",
-    "prepare:sidecar": "node scripts/prepare-sidecar.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
     "build:web": "vite build",
-    "build": "tauri build",
-    "dist:installer": "tauri build",
-    "tauri": "tauri"
+    "dist:installer": "node scripts/build.mjs",
+    "tauri": "node scripts/lib/tauri-cli.mjs",
+    "tauri:dev:raw": "node scripts/lib/tauri-cli.mjs dev",
+    "tauri:build:raw": "node scripts/lib/tauri-cli.mjs build"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
