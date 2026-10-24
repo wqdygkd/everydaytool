@@ -137,7 +137,3 @@ async function saveDataDirectoryOverride(dataDirectory: string | null): Promise<
   await writeJson(bootstrapPath, { dataDirectory })
   await updateCustomDataPathFile(dataDirectory)
 }
-
-export function getDatabasePath(): string {
-  return path.join(getDataDirectory(), 'config.db')
-}

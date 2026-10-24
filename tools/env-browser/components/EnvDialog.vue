@@ -33,7 +33,7 @@ function resetForm(val?: EnvConfig | null) {
   form.username = val?.username || ''
   form.password = val?.password || ''
   form.remark = val?.remark || ''
-  form.autoLogin = val ? val.autoLogin !== 0 : true
+  form.autoLogin = val ? val.autoLogin !== false : true
 }
 
 watch(

@@ -5,5 +5,4 @@ packages:
   - '!dist/**'
 onlyBuiltDependencies:
   - '@parcel/watcher'
-  - better-sqlite3
   - esbuild

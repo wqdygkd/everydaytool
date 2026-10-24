@@ -5,21 +5,19 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getDataDirectory } from '../../../../server/utils/data-root.ts'
-import { readJsonFile, removeIfExists, writeJson } from '../../../../server/utils/file-ops.ts'
+import { removeIfExists } from '../../../../server/utils/file-ops.ts'
+import { JsonFileStore } from '../../../../server/utils/json-store.ts'
 
 const MAX_HISTORY = 200
 
-function historyFile(): string {
-  return path.join(getDataDirectory(), 'offline-pack', 'history.json')
-}
+const store = new JsonFileStore<OfflinePackHistoryItem[]>(
+  () => path.join(getDataDirectory(), 'offline-pack', 'history.json'),
+  [],
+)
 
-async function readHistory(): Promise<OfflinePackHistoryItem[]> {
-  const items = await readJsonFile<OfflinePackHistoryItem[]>(historyFile(), [])
-  return Array.isArray(items) ? items : []
-}
-
-async function writeHistory(items: OfflinePackHistoryItem[]): Promise<void> {
-  await writeJson(historyFile(), items)
+/** 数据根目录变更后丢弃内存缓存，下次访问按新目录重读 */
+export function resetHistoryStore(): void {
+  store.reset()
 }
 
 export async function addHistory(entry: { kind: OfflinePackDownloadKind, filename: string, savedPath: string }): Promise<OfflinePackHistoryItem[]> {
@@ -37,33 +35,36 @@ export async function addHistory(entry: { kind: OfflinePackDownloadKind, filenam
     size,
     createdAt: new Date().toISOString(),
   }
-  const items = await readHistory()
-  const next = [item, ...items].slice(0, MAX_HISTORY)
-  await writeHistory(next)
-  return next
+  store.update((items) => {
+    items.unshift(item)
+    if (items.length > MAX_HISTORY) items.length = MAX_HISTORY
+  })
+  return store.get()
 }
 
 export async function listHistory(): Promise<OfflinePackHistoryItem[]> {
-  return readHistory()
+  return store.get()
 }
 
 export async function deleteHistory(id: string, deleteFile: boolean): Promise<OfflinePackHistoryItem[]> {
-  const items = await readHistory()
-  const target = items.find(item => item.id === id)
+  const target = store.get().find(item => item.id === id)
   if (target && deleteFile) {
     await removeIfExists(target.savedPath)
   }
-  const next = items.filter(item => item.id !== id)
-  await writeHistory(next)
-  return next
+  store.update((items) => {
+    const index = items.findIndex(item => item.id === id)
+    if (index >= 0) items.splice(index, 1)
+  })
+  return store.get()
 }
 
 export async function clearHistory(deleteFiles: boolean): Promise<void> {
   if (deleteFiles) {
-    const items = await readHistory()
-    for (const item of items) {
+    for (const item of store.get()) {
       await removeIfExists(item.savedPath)
     }
   }
-  await writeHistory([])
+  store.update((items) => {
+    items.length = 0
+  })
 }

@@ -165,9 +165,10 @@ export default defineTool({
 | 命令分组（单一事实来源） | `shared/command-groups/` |
 | 命令通道（后端再导出） | `tools/chrome-sandbox/server/commands/channels.ts` |
 | 命令处理 | `tools/chrome-sandbox/server/commands/handlers.ts` |
-| 沙箱数据库 | `tools/chrome-sandbox/server/store/database.ts` |
+| 沙箱数据（JSON 存储） | `tools/chrome-sandbox/server/store/*.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录） | `server/utils/` |
-| 应用数据根目录 / 共享数据库路径 | `server/utils/data-root.ts` |
+| 应用数据根目录 | `server/utils/data-root.ts` |
+| JSON 存储（原子写 / 按域分文件） | `server/utils/json-store.ts` |
 | 桌面壳（窗口 / 菜单 / Tauri commands / 平台能力） | `src-tauri/src/` |
 | 窗口外观设置（半透明 / 材质）持久化与生效 | `src-tauri/src/appearance.rs` |
 | Node 业务运行时入口 / 协议 | `sidecar/main.ts`、`sidecar/transport.ts` |

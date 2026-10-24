@@ -113,6 +113,43 @@ try {
   console.log(`✓ 域校验拦截 → ${error.message}`)
 }
 
+// JSON 存储写路径往返：创建 → 更新 → 删除（覆盖 JsonCollection 全链路）
+const createdEnv = await invoke('envBrowser', 'env-browser:create', [{
+  name: '__smoke__',
+  url: 'https://example.com',
+  username: 'u',
+  password: 'p',
+}])
+if (createdEnv?.id && createdEnv.name === '__smoke__') {
+  console.log(`✓ env 创建落盘 → ${createdEnv.id}`)
+} else {
+  failed += 1
+  console.error('✗ env 创建失败')
+}
+const updatedEnv = await invoke('envBrowser', 'env-browser:update', [createdEnv.id, { name: '__smoke2__' }])
+if (updatedEnv?.name === '__smoke2__' && updatedEnv.autoLogin === true) {
+  console.log('✓ env 更新落盘')
+} else {
+  failed += 1
+  console.error('✗ env 更新失败')
+}
+const deletedEnv = await invoke('envBrowser', 'env-browser:delete', [createdEnv.id])
+if (deletedEnv === true) {
+  console.log('✓ env 删除落盘')
+} else {
+  failed += 1
+  console.error('✗ env 删除失败')
+}
+
+// chrome-sandbox 配置写路径（写回相同值，不改变用户状态）
+const configRoundtrip = await invoke('chromeSandbox', 'config:update', [{ chromePath: '' }])
+if (typeof configRoundtrip?.dataDirectory === 'string') {
+  console.log('✓ config 更新落盘')
+} else {
+  failed += 1
+  console.error('✗ config 更新失败')
+}
+
 child.stdin.write(`${JSON.stringify({ kind: 'shutdown' })}\n`)
 await new Promise(resolve => child.once('exit', resolve))
 

@@ -110,5 +110,8 @@ export async function readJson<T = unknown>(filePath: string): Promise<T> {
 
 export async function writeJson(filePath: string, data: unknown): Promise<void> {
   await ensureDir(path.dirname(filePath))
-  await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+  // 原子写：先写临时文件再 rename，写一半崩溃不会损坏原文件
+  const tmp = `${filePath}.tmp`
+  await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+  await rename(tmp, filePath)
 }

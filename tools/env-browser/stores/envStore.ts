@@ -77,7 +77,7 @@ export const useEnvBrowserStore = defineStore('env-browser/env', () => {
       username: payload.username.trim(),
       password: payload.password,
       remark: payload.remark?.trim() || null,
-      autoLogin: payload.autoLogin === false ? 0 : 1,
+      autoLogin: payload.autoLogin !== false,
       createdAt: now,
       updatedAt: now,
     }
@@ -107,7 +107,7 @@ export const useEnvBrowserStore = defineStore('env-browser/env', () => {
       username: payload.username?.trim() ?? cur.username,
       password: payload.password ?? cur.password,
       remark: payload.remark !== undefined ? (payload.remark?.trim() || null) : cur.remark,
-      autoLogin: payload.autoLogin !== undefined ? (payload.autoLogin ? 1 : 0) : cur.autoLogin,
+      autoLogin: payload.autoLogin !== undefined ? payload.autoLogin : cur.autoLogin,
       updatedAt: now,
     }
     list[idx] = updated

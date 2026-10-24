@@ -4,18 +4,12 @@ import type { InterceptorTarget } from '../../../../shared/interceptor.ts'
 import type { InterceptorConfigData } from '../types.ts'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { readJsonFile, writeJson } from '../../../../server/utils/file-ops.ts'
+import { JsonFileStore } from '../../../../server/utils/json-store.ts'
 import { logger } from '../../../../server/utils/logger.ts'
 import { INTERCEPTOR_PROXY_PORT_MAX, INTERCEPTOR_PROXY_PORT_MIN, normalizeTargetHostInput, originOf, parseTargetOrigin } from '../../../../shared/interceptor.ts'
 import { getInterceptorDataDirectory } from '../utils/paths.ts'
 
 const EMPTY_CONFIG: InterceptorConfigData = { proxyPort: null, targets: [] }
-
-let cache: InterceptorConfigData | null = null
-
-function getConfigPath(): string {
-  return path.join(getInterceptorDataDirectory(), 'config.json')
-}
 
 function parsePort(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= INTERCEPTOR_PROXY_PORT_MIN && value <= INTERCEPTOR_PROXY_PORT_MAX
@@ -129,44 +123,52 @@ function legacyTargetOf(candidate: Record<string, unknown>): { host: string, por
   return { host: parsedHost.host, port }
 }
 
+/** 上次读取是否发生了结构迁移（需要回写磁盘） */
+let lastLoadMigrated = false
+
+const store = new JsonFileStore<InterceptorConfigData>(
+  () => path.join(getInterceptorDataDirectory(), 'config.json'),
+  structuredClone(EMPTY_CONFIG),
+  (raw) => {
+    const file = (raw ?? {}) as Partial<InterceptorConfigData> & { token?: string }
+    const parsed = parseTargets(file.targets)
+    // 需要重写：缺字段 / 名单结构迁移 / 旧版 token 残留（已取消配对码）
+    lastLoadMigrated = !('proxyPort' in file) || parsed.migrated || 'token' in file
+    return { proxyPort: parsePort(file.proxyPort), targets: parsed.targets }
+  },
+)
+
 /** 读取配置；首次访问把迁移后的结构落盘（旧版 token 字段丢弃、名单结构归一化） */
 export async function loadConfig(): Promise<InterceptorConfigData> {
-  if (cache) return cache
-
-  const raw = await readJsonFile<Partial<InterceptorConfigData> & { token?: string }>(getConfigPath(), {})
-  const parsed = parseTargets(raw.targets)
-  const config: InterceptorConfigData = {
-    proxyPort: parsePort(raw.proxyPort),
-    targets: parsed.targets,
-  }
-  cache = config
-  // 需要重写：缺字段 / 名单结构迁移 / 旧版 token 残留（已取消配对码）
-  if (!('proxyPort' in raw) || parsed.migrated || 'token' in raw) {
-    await writeJson(getConfigPath(), config)
+  const config = store.get()
+  if (lastLoadMigrated) {
+    store.flush()
+    lastLoadMigrated = false
   }
   return config
 }
 
 export async function saveConfig(): Promise<void> {
-  if (!cache) return
-  await writeJson(getConfigPath(), cache)
+  if (!store.peek()) return
+  store.flush()
 }
 
 export function getConfigSnapshot(): InterceptorConfigData {
-  return cache ?? EMPTY_CONFIG
+  return store.peek() ?? EMPTY_CONFIG
 }
 
 export function setTargets(targets: InterceptorConfigData['targets']): void {
-  if (!cache) return
-  cache.targets = targets
+  const config = store.peek()
+  if (config) config.targets = targets
 }
 
 export function setProxyPort(port: number | null): void {
-  if (!cache) return
-  cache.proxyPort = port
+  const config = store.peek()
+  if (config) config.proxyPort = port
 }
 
 /** 数据目录切换后丢弃缓存，下次访问按新目录加载 */
 export function resetConfigStore(): void {
-  cache = null
+  store.reset()
+  lastLoadMigrated = false
 }

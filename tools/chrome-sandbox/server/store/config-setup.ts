@@ -1,7 +1,7 @@
 import type { AppConfig, SetupState } from '../../../../shared/sandbox.ts'
 import { isDataDirectoryConfigured, markDataDirectoryConfigured } from '../../../../server/utils/data-root.ts'
 import { logger } from '../../../../server/utils/logger.ts'
-import { getDatabase } from './database.ts'
+import { sandboxStore } from './sandbox-store.ts'
 
 async function resolveDataDirectoryConfigured(): Promise<boolean> {
   if (await isDataDirectoryConfigured()) {
@@ -9,8 +9,7 @@ async function resolveDataDirectoryConfigured(): Promise<boolean> {
   }
 
   try {
-    const hasSandbox = getDatabase().prepare('SELECT 1 FROM sandboxes LIMIT 1').get()
-    if (hasSandbox) {
+    if (sandboxStore.getAll().length > 0) {
       await markDataDirectoryConfigured()
       return true
     }

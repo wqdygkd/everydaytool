@@ -1,7 +1,7 @@
 import type { WxpSettings } from '../../../../shared/wxp.ts'
 import path from 'node:path'
 import { getDataDirectory } from '../../../../server/utils/data-root.ts'
-import { ensureDir, pathExists, readJson, writeJson } from '../../../../server/utils/file-ops.ts'
+import { JsonFileStore } from '../../../../server/utils/json-store.ts'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp.ts'
 
 interface WxpConfigFile {
@@ -15,59 +15,56 @@ const DEFAULT_CONFIG: WxpConfigFile = {
   clearLoginCachePending: false,
 }
 
-function getConfigPath(): string {
-  return path.join(getDataDirectory(), 'wxp-enhancer', 'config.json')
-}
-
-async function readConfig(): Promise<WxpConfigFile> {
-  const configPath = getConfigPath()
-  await ensureDir(path.dirname(configPath))
-  if (!(await pathExists(configPath))) {
-    await writeJson(configPath, DEFAULT_CONFIG)
-    return structuredClone(DEFAULT_CONFIG)
-  }
-  const data = await readJson<Partial<WxpConfigFile>>(configPath)
-  const raw = { ...DEFAULT_WXP_SETTINGS, ...data.settings }
+/** 读取后归一化：只保留已知字段，旧版 cdp-injector 遗留的 autoLogin / homeUrl 等就地滤除 */
+function parseConfig(raw: unknown): WxpConfigFile {
+  const data = (raw ?? {}) as Partial<WxpConfigFile>
+  const merged = { ...DEFAULT_WXP_SETTINGS, ...data.settings }
   return {
-    // 只保留已知字段：旧版 cdp-injector 遗留的 autoLogin / homeUrl 等就地滤除，不再回写
     settings: {
-      executablePath: String(raw.executablePath ?? ''),
-      debugPort: Number.isFinite(Number(raw.debugPort)) ? Number(raw.debugPort) : DEFAULT_WXP_SETTINGS.debugPort,
-      cacheLogin: raw.cacheLogin !== false,
-      showStatusBadge: raw.showStatusBadge !== false,
-      extraArgs: String(raw.extraArgs ?? ''),
+      executablePath: String(merged.executablePath ?? ''),
+      debugPort: Number.isFinite(Number(merged.debugPort)) ? Number(merged.debugPort) : DEFAULT_WXP_SETTINGS.debugPort,
+      cacheLogin: merged.cacheLogin !== false,
+      showStatusBadge: merged.showStatusBadge !== false,
+      extraArgs: String(merged.extraArgs ?? ''),
     },
     clearLoginCachePending: data.clearLoginCachePending === true,
   }
 }
 
-async function writeConfig(config: WxpConfigFile): Promise<void> {
-  await writeJson(getConfigPath(), config)
+const store = new JsonFileStore<WxpConfigFile>(
+  () => path.join(getDataDirectory(), 'wxp-enhancer', 'config.json'),
+  structuredClone(DEFAULT_CONFIG),
+  parseConfig,
+)
+
+/** 数据根目录变更后丢弃内存缓存，下次访问按新目录重读 */
+export function resetWxpConfigStore(): void {
+  store.reset()
 }
 
 export const wxpConfigStore = {
   async getAll(): Promise<WxpConfigFile> {
-    return readConfig()
+    return store.get()
   },
 
   async getSettings(): Promise<WxpSettings> {
-    return (await readConfig()).settings
+    return store.get().settings
   },
 
   async getLoginCacheClearPending(): Promise<boolean> {
-    return (await readConfig()).clearLoginCachePending === true
+    return store.get().clearLoginCachePending === true
   },
 
   async setLoginCacheClearPending(pending: boolean): Promise<void> {
-    const config = await readConfig()
-    config.clearLoginCachePending = pending
-    await writeConfig(config)
+    store.update((config) => {
+      config.clearLoginCachePending = pending
+    })
   },
 
   async saveSettings(patch: Partial<WxpSettings>): Promise<WxpSettings> {
-    const config = await readConfig()
-    config.settings = { ...config.settings, ...patch }
-    await writeConfig(config)
-    return config.settings
+    store.update((config) => {
+      Object.assign(config.settings, patch)
+    })
+    return store.get().settings
   },
 }

@@ -1,5 +1,5 @@
 // 把 Node sidecar（业务运行时）打成单文件 ESM bundle（dist-sidecar/main.mjs）。
-// better-sqlite3 是原生模块，保持 external：运行时由 resources/sidecar/node_modules 提供。
+// 无原生模块依赖：全部业务代码打进单文件即可。
 // 该 bundle 与 chrome-process-query.ps1 同目录，业务代码里的 __dirname 资源引用因此成立。
 import { copyFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -22,7 +22,6 @@ export async function buildSidecar(options = {}) {
     platform: 'node',
     target: 'node22',
     bundle: true,
-    external: ['better-sqlite3'],
     sourcemap: false,
     legalComments: 'none',
     // 打包进 bundle 的 CJS 依赖（node-forge）内部有 dynamic require('crypto')；

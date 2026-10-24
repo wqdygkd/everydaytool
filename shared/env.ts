@@ -7,7 +7,7 @@ export interface EnvConfig {
   username: string
   password: string
   remark?: string | null
-  autoLogin: number
+  autoLogin: boolean
   createdAt: string | null
   updatedAt: string | null
 }

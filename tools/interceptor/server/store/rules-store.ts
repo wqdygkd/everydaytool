@@ -1,48 +1,44 @@
 // interceptor 规则存储（data/interceptor/rules.json）。
 import type { InterceptorRule } from '../../../../shared/interceptor.ts'
 import path from 'node:path'
-import { readJsonFile, writeJson } from '../../../../server/utils/file-ops.ts'
+import { JsonFileStore } from '../../../../server/utils/json-store.ts'
 import { getInterceptorDataDirectory } from '../utils/paths.ts'
 
 interface RulesFile {
   rules: InterceptorRule[]
 }
 
-let cache: InterceptorRule[] | null = null
-
-function getRulesPath(): string {
-  return path.join(getInterceptorDataDirectory(), 'rules.json')
-}
+const store = new JsonFileStore<RulesFile>(
+  () => path.join(getInterceptorDataDirectory(), 'rules.json'),
+  { rules: [] },
+  raw => ({ rules: Array.isArray((raw as Partial<RulesFile>)?.rules) ? (raw as RulesFile).rules : [] }),
+)
 
 export async function loadRules(): Promise<InterceptorRule[]> {
-  if (cache) return cache
-  const raw = await readJsonFile<Partial<RulesFile>>(getRulesPath(), {})
-  cache = Array.isArray(raw.rules) ? raw.rules : []
-  return cache
+  return store.get().rules
 }
 
 export function getRulesSnapshot(): InterceptorRule[] {
-  return cache ?? []
+  return store.peek()?.rules ?? []
 }
 
 export async function upsertRule(rule: InterceptorRule): Promise<InterceptorRule[]> {
-  await loadRules()
-  const rules = cache ?? []
-  const index = rules.findIndex(item => item.id === rule.id)
-  if (index >= 0) rules[index] = rule
-  else rules.push(rule)
-  await writeJson(getRulesPath(), { rules } satisfies RulesFile)
-  return rules
+  store.update((file) => {
+    const index = file.rules.findIndex(item => item.id === rule.id)
+    if (index >= 0) file.rules[index] = rule
+    else file.rules.push(rule)
+  })
+  return store.get().rules
 }
 
 export async function deleteRule(ruleId: string): Promise<InterceptorRule[]> {
-  await loadRules()
-  const rules = (cache ?? []).filter(rule => rule.id !== ruleId)
-  cache = rules
-  await writeJson(getRulesPath(), { rules } satisfies RulesFile)
-  return rules
+  store.update((file) => {
+    const index = file.rules.findIndex(rule => rule.id === ruleId)
+    if (index >= 0) file.rules.splice(index, 1)
+  })
+  return store.get().rules
 }
 
 export function resetRulesStore(): void {
-  cache = null
+  store.reset()
 }
