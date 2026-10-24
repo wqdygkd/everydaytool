@@ -110,10 +110,8 @@ fn hook_window_events(app: &tauri::AppHandle, window: &WebviewWindow) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 创建主窗口的 WebView2 数据目录：dev 用项目内 data/webview2，打包用 <userData>/webview2。
-    // 真正的目录绑定在 create_main_window 里通过 data_directory 显式传入。
-    let webview_profile = appearance::webview_data_dir();
-    let _ = std::fs::create_dir_all(&webview_profile);
+    // WebView2 数据目录跟随数据根目录（设置页可改），目录绑定在 create_main_window 的 data_directory。
+    let _ = std::fs::create_dir_all(appearance::webview_data_dir());
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

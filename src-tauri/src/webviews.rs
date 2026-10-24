@@ -37,8 +37,8 @@ fn sanitize_id(id: &str) -> Result<String, String> {
 
 fn profile_dir(profile: &str) -> Result<PathBuf, String> {
     let safe = sanitize_id(profile)?;
-    // 与主 WebView2 数据目录同根：dev 落在项目 data/（可写），
-    // 打包态落在 <userData>/webview2 的父目录，避免受限环境 userData 只读时直接失败。
+    // 子 Webview profile 与主 WebView2 数据目录同根（即数据根目录下）：
+    // <数据根目录>/webview-profiles/<profile>，跟随设置页的数据目录。
     let webview_dir = crate::appearance::webview_data_dir();
     let root = webview_dir.parent().unwrap_or(&webview_dir);
     let dir = root.join("webview-profiles").join(safe);

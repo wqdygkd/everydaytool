@@ -53,7 +53,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: {
-      ignored: ['**/src-tauri/**'],
+      // data/ 内含 WebView2 的 Chromium profile（运行时独占锁定，监视会报 EBUSY）
+      ignored: ['**/src-tauri/**', '**/data/**', '**/dist/**', '**/dist-sidecar/**'],
     },
   },
 })

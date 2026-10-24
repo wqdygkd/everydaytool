@@ -4,6 +4,7 @@
 //   - 字段：enabled / material / vibrancy / testWallpaper
 //   - 平台裁剪规则：sanitizeWindowAppearance（shared/appearance.ts 的 Rust 等价实现）
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -80,22 +81,44 @@ pub fn default_user_data_dir() -> PathBuf {
     }
 }
 
-/// 主窗口 WebView2 数据目录：
-/// - `EDT_WEBVIEW_DATA_DIR` 显式覆盖（测试 / 多实例隔离）
-/// - dev：项目内 `data/webview2`（避免沙箱 / 受限环境下 userData 不可写）
-/// - 打包：`<userData>/webview2`
-pub fn webview_data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("EDT_WEBVIEW_DATA_DIR") {
-        return PathBuf::from(dir);
+/// 数据根目录的用户覆盖（<userData>/data-root.json，设置页写入）。
+/// 与 Node 侧 server/utils/data-root.ts 读同一份文件；解析失败按无覆盖处理。
+fn data_root_override() -> Option<PathBuf> {
+    let file = default_user_data_dir().join("data-root.json");
+    let raw = fs::read_to_string(file).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    let dir = value.get("dataDirectory")?.as_str()?.trim();
+    if dir.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(dir))
+    }
+}
+
+/// 数据根目录：与 Node 侧 getDataDirectory() 保持同一解析顺序——
+/// 覆盖优先；dev 用项目 data/，打包用 <userData>/data。
+pub fn resolve_data_dir() -> PathBuf {
+    if let Some(dir) = data_root_override() {
+        return dir;
     }
     if cfg!(dev) {
         let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        return project_root.join("data").join("webview2");
+        return project_root.join("data");
     }
-    default_user_data_dir().join("webview2")
+    default_user_data_dir().join("data")
+}
+
+/// 主窗口 WebView2 数据目录：跟随数据根目录（设置页改目录后，下次启动生效）。
+/// - `EDT_WEBVIEW_DATA_DIR` 显式覆盖（测试 / 多实例隔离）
+/// - 默认 `<数据根目录>/webview2`
+pub fn webview_data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("EDT_WEBVIEW_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
+    resolve_data_dir().join("webview2")
 }
 
 /// 测试 / 便携模式可通过 EDT_USER_DATA 覆盖；默认与桌面 userData 一致。

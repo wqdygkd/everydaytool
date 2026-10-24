@@ -104,6 +104,24 @@ async function loadUsage() {
   }
 }
 
+/** 数据根目录下各顶层条目的含义（按目录名匹配；未收录的条目不显示说明） */
+const USAGE_ENTRY_DESCRIPTIONS: Record<string, string> = {
+  'webview2': '主窗口界面的浏览器数据（页面 / GPU 着色器缓存、界面存储），删除后自动重建',
+  'webview-profiles': '环境浏览器与 Treease 内嵌窗口的独立浏览数据、登录态',
+  'sandboxes': 'Chrome 沙箱的完整浏览器 profile（每个沙箱一份）',
+  'chrome-sandbox': '沙箱列表、指纹与工具配置',
+  'shared': '跨沙箱共享的指纹扩展',
+  'env-browser': '环境浏览器的环境配置',
+  'interceptor': '拦截器的规则、处理名单与 CA 证书',
+  'offline-pack': '离线包下载的文件与下载历史',
+  'wxp-enhancer': 'WXP 配置与采集的数据缓存',
+  '其它': '未识别目录与零散文件的汇总',
+}
+
+function entryDescription(name: string): string | undefined {
+  return USAGE_ENTRY_DESCRIPTIONS[name]
+}
+
 async function openDirectory() {
   try {
     await invokeAppCommand(appCommands().DATA_DIRECTORY_OPEN)
@@ -238,7 +256,10 @@ onMounted(() => {
       </p>
       <ul v-if="usage && usage.entries.length > 0" class="usage-list">
         <li v-for="entry in usage.entries" :key="entry.name" class="usage-row">
-          <span class="usage-name">{{ entry.name }}</span>
+          <div class="usage-info">
+            <span class="usage-name">{{ entry.name }}</span>
+            <span v-if="entryDescription(entry.name)" class="usage-desc">{{ entryDescription(entry.name) }}</span>
+          </div>
           <span class="mono usage-bytes">{{ formatBytes(entry.bytes) }}</span>
         </li>
       </ul>
@@ -296,7 +317,7 @@ onMounted(() => {
 
     <UiPanel title="清理缓存">
       <UiHint block>
-        清除沙箱浏览器产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
+        清除沙箱浏览器与应用内嵌网页窗口产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
       </UiHint>
       <el-button :loading="cleaning" @click="clearCache">
         清除缓存
@@ -443,12 +464,19 @@ onMounted(() => {
 
 .usage-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-md);
   padding: var(--spacing-sm) 0;
   border-top: 1px solid var(--color-border-light);
   font-size: var(--font-size-sm);
+}
+
+.usage-info {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .usage-name {
@@ -457,6 +485,12 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text-secondary);
+}
+
+.usage-desc {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
 }
 
 .usage-bytes {
