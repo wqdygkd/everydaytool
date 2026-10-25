@@ -56,7 +56,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 8
 
 ### 窗口外观（半透明 / 系统材质）
 
-- 唯一事实来源是主进程（`backend/utils/appearance-store.ts` 持久化到 `userData/window-appearance.json`），
+- 唯一事实来源是主进程（`backend/utils/appearance-store.ts` 持久化到 `<data>/app/window-appearance.json`），
   渲染层用 `renderer/shared/composables/useAppearance.ts` 只做拉取 + 订阅 + 提交，
   **不得在 localStorage 留第二份状态**。
 - 平台能力判定必须走 `shared/appearance.ts` 的纯函数（`resolveAppearanceCapabilities` /
@@ -158,7 +158,9 @@ export default defineTool({
 | 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
 | 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| **数据目录 / 缓存位置总览与切换迁移** | `docs/data-directory.md` |
 | **Chromium 会话目录（sessionData）重定向** | `backend/utils/session-data.ts` |
+| 数据目录整体迁移（切换时复制→校验→删除） | `backend/utils/data-migration.ts` |
 | JSON 文档存储（同步缓存 + 原子写入） | `backend/utils/json-store.ts` |
 | 应用数据根目录 / 数据目录切换 | `backend/utils/data-root.ts` |
 | 窗口外观设置（半透明 / 材质）持久化 | `backend/utils/appearance-store.ts` |

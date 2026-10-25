@@ -305,7 +305,7 @@
 #### 7.1.1 半透明窗口
 
 窗口外观（半透明 / 系统材质）由用户在「设置页签 → 窗口外观」切换，主进程是唯一事实来源
-（`userData/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
+（`<data>/app/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
 
 ##### 透明度与玻璃统一控制（`renderer/shared/styles/translucency.scss`）
 

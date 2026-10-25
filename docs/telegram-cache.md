@@ -360,13 +360,13 @@ node --experimental-strip-types --input-type=module -e "import('./tools/telegram
 **会话目录物理落盘**：`electron/main.ts` 在 `ready` **之前**读取数据目录覆盖并调用
 `app.setPath('sessionData', <data-root>/session)`（`backend/utils/session-data.ts`）。
 Chromium 的所有会话数据（Cookies / LocalStorage / IndexedDB / Cache / `Partitions/*`）都直接写在该目录，
-**不使用 junction / 软链，也不做首次迁移**；切换数据目录后旧数据留在原处，新目录由 Chromium 重新生成
-（Telegram 可能需要重新登录）。应用自身的收藏 / 页签也存在 localStorage，会随 sessionData 一起从空开始。
+**不使用 junction / 软链**。首次采用 sessionData 时不迁移 userData 中的旧 Chromium 缓存；
+用户主动切换数据目录时走整体迁移。应用自身的收藏 / 页签也存在 localStorage，会随 sessionData 一起迁移。
 
-切换数据目录后：平台先 `notifyDataDirectoryChanged` 再 `invalidateJsonDocuments()`；
-本工具的 `onDataDirectoryChanged` 用 `setTimeout(0)` 在那之后同步并发上限、本地响应开关、配额并推快照。
-**sessionData 只在启动时设置**：运行期切换数据目录不会立刻改变 Chromium 会话目录，重启后生效；
-MTProto 密文文件不常驻打开，会立即搬到新数据目录。
+切换数据目录后：设置页只写 `data-root.pending.json` 并提示重启；本工具在重启时读取新目录。
+**sessionData 只在启动时设置**：运行期不会立刻改变 Chromium 会话目录；下次启动在 ready 之前
+把旧目录整体复制到新目录（含 `session`），成功后才切换，因此缓存与登录态保持有效；
+迁移失败则继续使用旧目录并保留 pending，下次重试。
 
 ## 12. 手工验收清单
 
@@ -404,7 +404,7 @@ MTProto 密文文件不常驻打开，会立即搬到新数据目录。
     「清除加密会话」后回退到 `.env`（若仍存在）或显示缺失。
 18. **登录缓存位置**：诊断页「Web 登录缓存」应显示 `<数据目录>/session/Partitions/telegram-cache` 并标记「数据目录」；
     该目录是**真实目录**（不是 junction / 软链），内容为 Chromium 的 Cookies / LocalStorage / IndexedDB / Cache。
-    切换数据目录后应提示重启；重启后在新目录重新生成（**不迁移旧数据，可能需要重新登录**）。
+    切换数据目录后应提示重启；重启会先把旧目录整体迁移到新目录再切换（**缓存与登录态保持有效**）。
 19. **MTProto 下载**：公开链接与私密链接各试一条 → 进度条推进 → 完成显示 SHA-256 与归档相对路径；
     归档目录里出现 `resource.<ext>`、`meta.json`、`message.json`（正文截断 20k）。
 20. **断点续传**：下载中取消 → `telegram-cache/mtproto/partial/` 出现断点；再次下载同一消息，

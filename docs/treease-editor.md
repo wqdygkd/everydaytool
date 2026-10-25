@@ -7,14 +7,15 @@
   `app.setPath('sessionData', <data-root>/session)`；Chromium 的所有会话数据
   （Cookies / LocalStorage / IndexedDB / HTTP Cache / `Partitions`）物理写在该目录下。
   treease 分区实际路径：`<data-root>/session/Partitions/treease-editor`。
-- **不使用 junction / 软件链接**，也不做首次迁移：切换目录后旧数据留在原处，
-  新目录由 Chromium 重新生成（登录态与缓存会重新建立）。
+- **不使用 junction / 软件链接**。首次采用 sessionData 时不迁移 userData 中的旧 Chromium 缓存，
+  新目录由 Chromium 重新生成；用户主动切换数据目录时则走下面的整体迁移。
 - **初始化顺序**：`electron/main.ts` 在 `ready` 之前完成
   `loadDataDirectoryOverrideSync()` → `configureSessionDataDirectory()`；
   工具 `initialize` 只 `registerTreeaseHandlers()` → `installCacheHandlers()`。
   不要在 main 之前或 ready 之后再设置 `sessionData`（不生效）。
-- 运行期切换数据目录：`sessionData` 只在下次启动重新计算；本次仍用旧目录，重启后生效。
-  **应用自身的 localStorage（收藏 / 页签）也在同一个 sessionData 下**，切换后同样从空开始。
+- 切换数据目录：设置页只写 `data-root.pending.json` 并提示重启；下次启动在 ready 之前
+  把旧目录整体复制到新目录（含 `session`），成功后才切换。失败保留旧目录并继续使用，
+  因此登录态与缓存不会失效。**应用自身的 localStorage（收藏 / 页签）在同一 sessionData 下，也一并迁移。**
 
 ## 拦截与缓存
 
