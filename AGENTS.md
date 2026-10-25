@@ -4,7 +4,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的开发约
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator）。
+Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 8 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache）。
 
 ## 设计系统（重要）
 
@@ -158,9 +158,12 @@ export default defineTool({
 | 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
 | 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| **Chromium 会话目录（sessionData）重定向** | `backend/utils/session-data.ts` |
 | JSON 文档存储（同步缓存 + 原子写入） | `backend/utils/json-store.ts` |
 | 应用数据根目录 / 数据目录切换 | `backend/utils/data-root.ts` |
 | 窗口外观设置（半透明 / 材质）持久化 | `backend/utils/appearance-store.ts` |
 | 平台能力判定（透明 / 材质 / vibrancy） | `shared/appearance.ts` |
 | 渲染层外观状态 composable | `renderer/shared/composables/useAppearance.ts` |
 | **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
+| **telegram-cache 模块记忆（观测口径 / 单飞去重 / HTTP 缓存与本地响应 / 页面捕获与 MTProto 边界）** | `docs/telegram-cache.md` |
+| **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |

@@ -257,7 +257,7 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiIcon` | `name`、`size`（16）、`strokeWidth` | 线性 stroke 图标（`icons.ts` 统一名表） |
-| `UiIconButton` | `icon`、`size`（32）、`active`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮 |
+| `UiIconButton` | `icon`、`size`（32）、`active`、`disabled`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮，`disabled` 走 EP 原生禁用色 |
 | `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
 | `UiAvatar` | `text`、`color`、`size`（42） | 字母头像（首字符 + 纵向渐变底） |
 
