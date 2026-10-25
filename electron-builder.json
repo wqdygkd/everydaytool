@@ -3,8 +3,7 @@
   "productName": "everydaytool",
   "asar": true,
   "asarUnpack": [
-    "**/*.node",
-    "**/better-sqlite3/**"
+    "**/*.node"
   ],
   "electronFuses": {
     "enableEmbeddedAsarIntegrityValidation": true,

@@ -1,104 +1,81 @@
+// 环境账号存储（data/env-browser/envs.json）：一个 JSON 数组，结构即 shared/env.ts 的 EnvConfig。
+// 整份文档读写 + 进程内缓存，不再需要数据库连接与建表/关闭流程。
 import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env.ts'
 import { randomUUID } from 'node:crypto'
-import { closeSharedDatabase, getSharedDatabase, registerSchema } from '../../../../backend/utils/database.ts'
+import path from 'node:path'
+import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
+import { getEnvBrowserDataDirectory } from './paths.ts'
 
-const ENV_SCHEMA = `
-CREATE TABLE IF NOT EXISTS env_browser_configs (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    url TEXT NOT NULL,
-    username TEXT NOT NULL,
-    password TEXT NOT NULL,
-    remark TEXT,
-    auto_login INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`
-
-// 建表语句交给平台层统一执行（与 chrome-sandbox 共用同一连接）
-registerSchema(ENV_SCHEMA)
-
-// 共享连接由平台层统一管理（建目录 / WAL / 外键 / 关闭），这里不再自建连接
-function getDb(): import('better-sqlite3').Database {
-  return getSharedDatabase()
+function getEnvsPath(): string {
+  return path.join(getEnvBrowserDataDirectory(), 'envs.json')
 }
 
-/** 关闭共享连接（数据根目录变更后 / 退出时调用，下次访问按新目录重开） */
-export function closeEnvDatabase(): void {
-  closeSharedDatabase()
-}
-
-function rowToEnv(row: Record<string, unknown>): EnvConfig {
-  return {
-    id: row.id as string,
-    name: row.name as string,
-    url: row.url as string,
-    username: row.username as string,
-    password: row.password as string,
-    remark: (row.remark as string | null) ?? null,
-    autoLogin: (row.auto_login as number) ?? 1,
-    createdAt: (row.created_at as string) ?? null,
-    updatedAt: (row.updated_at as string) ?? null,
+function readEnvs(): EnvConfig[] {
+  const data = readJsonDocument<unknown>(getEnvsPath(), () => [])
+  if (!Array.isArray(data)) {
+    logger.warn('Env store file has unexpected shape, ignoring', { file: 'envs.json' })
+    return []
   }
+  return data as EnvConfig[]
 }
 
-function getById(id: string): EnvConfig | null {
-  const row = getDb().prepare('SELECT * FROM env_browser_configs WHERE id = ?').get(id) as Record<string, unknown> | undefined
-  return row ? rowToEnv(row) : null
+function writeEnvs(envs: EnvConfig[]): void {
+  writeJsonDocument(getEnvsPath(), envs)
 }
 
 export const envStore = {
   getAll(): EnvConfig[] {
-    const database = getDb()
-    const rows = database.prepare('SELECT * FROM env_browser_configs ORDER BY created_at DESC').all() as Record<string, unknown>[]
-    return rows.map(rowToEnv)
+    // 与旧 SQL 的 ORDER BY created_at DESC 保持一致：最新创建的在最前
+    return [...readEnvs()].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
   },
 
   create(payload: EnvCreatePayload): EnvConfig {
-    const database = getDb()
-    const id = `env_${randomUUID().replace(/-/g, '').slice(0, 10)}`
     const now = new Date().toISOString()
-    database.prepare(`
-      INSERT INTO env_browser_configs (id, name, url, username, password, remark, auto_login, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      payload.name,
-      payload.url,
-      payload.username,
-      payload.password,
-      payload.remark || null,
-      payload.autoLogin === false ? 0 : 1,
-      now,
-      now,
-    )
-    logger.info('Env created', { id, name: payload.name })
-    return getById(id)!
+    const env: EnvConfig = {
+      id: `env_${randomUUID().replace(/-/g, '').slice(0, 10)}`,
+      name: payload.name,
+      url: payload.url,
+      username: payload.username,
+      password: payload.password,
+      remark: payload.remark || null,
+      autoLogin: payload.autoLogin === false ? 0 : 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    writeEnvs([...readEnvs(), env])
+    logger.info('Env created', { id: env.id, name: env.name })
+    return env
   },
 
   update(id: string, payload: EnvUpdatePayload): EnvConfig | null {
-    const existing = getById(id)
-    if (!existing) return null
-    const database = getDb()
-    const now = new Date().toISOString()
-    const name = payload.name ?? existing.name
-    const url = payload.url ?? existing.url
-    const username = payload.username ?? existing.username
-    const password = payload.password ?? existing.password
-    const remark = payload.remark !== undefined ? payload.remark : existing.remark
-    const autoLogin = payload.autoLogin !== undefined ? (payload.autoLogin ? 1 : 0) : existing.autoLogin
+    const envs = readEnvs()
+    const index = envs.findIndex(env => env.id === id)
+    if (index === -1) return null
 
-    database.prepare(`
-      UPDATE env_browser_configs SET name=?, url=?, username=?, password=?, remark=?, auto_login=?, updated_at=? WHERE id=?
-    `).run(name, url, username, password, remark, autoLogin, now, id)
-    return getById(id)
+    const existing = envs[index]
+    const updated: EnvConfig = {
+      ...existing,
+      ...(payload.name !== undefined ? { name: payload.name } : {}),
+      ...(payload.url !== undefined ? { url: payload.url } : {}),
+      ...(payload.username !== undefined ? { username: payload.username } : {}),
+      ...(payload.password !== undefined ? { password: payload.password } : {}),
+      ...(payload.remark !== undefined ? { remark: payload.remark } : {}),
+      ...(payload.autoLogin !== undefined ? { autoLogin: payload.autoLogin ? 1 : 0 } : {}),
+      updatedAt: new Date().toISOString(),
+    }
+
+    const next = [...envs]
+    next[index] = updated
+    writeEnvs(next)
+    return updated
   },
 
   delete(id: string): boolean {
-    const database = getDb()
-    const result = database.prepare('DELETE FROM env_browser_configs WHERE id=?').run(id)
-    return result.changes > 0
+    const envs = readEnvs()
+    const next = envs.filter(env => env.id !== id)
+    if (next.length === envs.length) return false
+    writeEnvs(next)
+    return true
   },
 }

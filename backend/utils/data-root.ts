@@ -1,4 +1,4 @@
-// edt 应用级数据根目录（所有工具的数据库 / 配置 / 产出都落在其下）的唯一事实来源：
+// edt 应用级数据根目录（所有工具的配置 / 缓存 / 产出都落在其下）的唯一事实来源：
 // 默认目录、用户覆盖（data-root.json 引导配置 + data-root.path 镜像文件）、setup 状态。
 // 与具体工具域无关；Chrome / 沙箱专属路径见 tools/chrome-sandbox/backend/utils/path-helper.ts。
 import { readFile, writeFile } from 'node:fs/promises'
@@ -144,8 +144,4 @@ async function saveDataDirectoryOverride(dataDirectory: string | null): Promise<
 
   await writeJson(bootstrapPath, { dataDirectory })
   await updateCustomDataPathFile(dataDirectory)
-}
-
-export function getDatabasePath(): string {
-  return path.join(getDataDirectory(), 'config.db')
 }

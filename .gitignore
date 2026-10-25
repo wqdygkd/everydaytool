@@ -3,7 +3,6 @@ dist/
 dist-electron/
 release/
 data/
-*.db
 package-lock.json
 yarn.lock
 .DS_Store

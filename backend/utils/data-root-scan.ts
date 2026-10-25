@@ -1,7 +1,7 @@
 // 数据根目录的磁盘用量扫描与缓存清理（平台级，与工具域无关）：
 // - 用量：总占用 + 顶层条目分解 + Chromium 缓存目录合计
 // - 清理：删除目录树下标准 Chromium 缓存目录（Cache / Code Cache / GPUCache 等），
-//   只动可再生的缓存，不碰数据库与配置；工具域可通过 registerCacheSkipProvider
+//   只动可再生的缓存，不碰配置与数据文件；工具域可通过 registerCacheSkipProvider
 //   注册需整体排除的路径（如运行中沙箱的 profile），被占用的文件按 best-effort 跳过。
 // 扫描不应用跳过路径（磁盘实况如实呈现）；跳过只作用于清理。
 import { readdir, rm, stat } from 'node:fs/promises'

@@ -8,7 +8,7 @@ import { wxpEnhancerBackend } from '../tools/wxp-enhancer/backend/index.ts'
 export interface ToolBackend {
   initialize: () => Promise<void> | void
   dispose?: () => Promise<void> | void
-  /** 数据根目录变更后的域内重载（重开数据库等）；未实现的域默认实时从 data-root 取路径 */
+  /** 数据根目录变更后的域内重载（丢弃自定义内存缓存等）；未实现的域默认实时从 data-root 取路径 */
   onDataDirectoryChanged?: () => Promise<void> | void
 }
 

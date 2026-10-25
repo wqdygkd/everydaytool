@@ -1,21 +1,16 @@
 import type { AppConfig, SetupState } from '../../../../shared/sandbox.ts'
 import { isDataDirectoryConfigured, markDataDirectoryConfigured } from '../../../../backend/utils/data-root.ts'
-import { logger } from '../../../../backend/utils/logger.ts'
-import { getDatabase } from './database.ts'
+import { sandboxStore } from './sandbox-store.ts'
 
+/** 已配置过数据目录，或本地已有沙箱数据（老用户升级）——都视为已完成首次配置 */
 async function resolveDataDirectoryConfigured(): Promise<boolean> {
   if (await isDataDirectoryConfigured()) {
     return true
   }
 
-  try {
-    const hasSandbox = getDatabase().prepare('SELECT 1 FROM sandboxes LIMIT 1').get()
-    if (hasSandbox) {
-      await markDataDirectoryConfigured()
-      return true
-    }
-  } catch (error) {
-    logger.warn('Failed to check sandbox migration state', { error: (error as Error).message })
+  if (sandboxStore.getAll().length > 0) {
+    await markDataDirectoryConfigured()
+    return true
   }
 
   return false

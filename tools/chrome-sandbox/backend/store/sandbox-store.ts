@@ -1,56 +1,11 @@
-import type {
-  Sandbox,
-  SandboxMetadata,
-  SandboxStatus,
-  SandboxUpdatePayload,
-} from '../../../../shared/sandbox.ts'
+// 沙箱列表存储（data/chrome-sandbox/sandboxes.json）：一个 JSON 数组，字段即 shared/sandbox.ts
+// 的 Sandbox 结构。进程内由 json-store 缓存，写入整体替换文件。
+import type { Sandbox, SandboxMetadata, SandboxUpdatePayload } from '../../../../shared/sandbox.ts'
+import path from 'node:path'
+import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
 import { SANDBOX_COLORS } from '../constants/sandbox.ts'
-import { getDatabase } from './database.ts'
-
-interface SandboxRow {
-  id: string
-  name: string
-  category: string | null
-  color: string | null
-  user_data_path: string
-  chrome_pid: number | null
-  status: SandboxStatus
-  fingerprint_id: string | null
-  created_at: string | null
-  last_used_at: string | null
-  last_active_at: string | null
-  metadata: string | null
-}
-
-const FIELD_MAP: Record<string, keyof SandboxRow> = {
-  name: 'name',
-  category: 'category',
-  color: 'color',
-  userDataPath: 'user_data_path',
-  chromePid: 'chrome_pid',
-  status: 'status',
-  fingerprintId: 'fingerprint_id',
-  lastUsedAt: 'last_used_at',
-  lastActiveAt: 'last_active_at',
-}
-
-function mapRow(row: SandboxRow | undefined): Sandbox | null {
-  if (!row) return null
-  return {
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    color: row.color,
-    userDataPath: row.user_data_path,
-    chromePid: row.chrome_pid,
-    status: row.status,
-    fingerprintId: row.fingerprint_id,
-    createdAt: row.created_at,
-    lastUsedAt: row.last_used_at,
-    lastActiveAt: row.last_active_at,
-    metadata: row.metadata ? JSON.parse(row.metadata) as SandboxMetadata : null,
-  }
-}
+import { getChromeSandboxDataDirectory } from '../utils/path-helper.ts'
 
 interface SandboxCreateData {
   id: string
@@ -62,57 +17,81 @@ interface SandboxCreateData {
   metadata?: SandboxMetadata | null
 }
 
+function getSandboxesPath(): string {
+  return path.join(getChromeSandboxDataDirectory(), 'sandboxes.json')
+}
+
+/** 结构不符（手改坏 / 旧版本残留）时按空列表处理并告警，不让单个坏文件卡死整个工具 */
+function readSandboxes(): Sandbox[] {
+  const data = readJsonDocument<unknown>(getSandboxesPath(), () => [])
+  if (!Array.isArray(data)) {
+    logger.warn('Sandbox store file has unexpected shape, ignoring', { file: 'sandboxes.json' })
+    return []
+  }
+  return data as Sandbox[]
+}
+
+function writeSandboxes(sandboxes: Sandbox[]): void {
+  writeJsonDocument(getSandboxesPath(), sandboxes)
+}
+
 export const sandboxStore = {
   getAll(): Sandbox[] {
-    const rows = getDatabase().prepare('SELECT * FROM sandboxes').all() as SandboxRow[]
-    return rows.map(mapRow).filter((row): row is Sandbox => row !== null)
+    return readSandboxes().map(sandbox => ({ ...sandbox }))
   },
 
   getById(id: string): Sandbox | null {
-    const row = getDatabase().prepare('SELECT * FROM sandboxes WHERE id = ?').get(id) as
-      | SandboxRow
-      | undefined
-    return mapRow(row)
+    const sandbox = readSandboxes().find(item => item.id === id)
+    return sandbox ? { ...sandbox } : null
   },
 
   create(data: SandboxCreateData): Sandbox | null {
-    getDatabase().prepare(`
-      INSERT INTO sandboxes (id, name, category, color, user_data_path, fingerprint_id, metadata)
-      VALUES (@id, @name, @category, @color, @userDataPath, @fingerprintId, @metadata)
-    `).run({
+    const sandbox: Sandbox = {
       id: data.id,
       name: data.name,
       category: data.category || 'other',
       color: data.color || SANDBOX_COLORS.sandbox,
       userDataPath: data.userDataPath,
+      chromePid: null,
+      status: 'stopped',
       fingerprintId: data.fingerprintId,
-      metadata: data.metadata ? JSON.stringify(data.metadata) : null,
-    })
-    return this.getById(data.id)
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
+      lastActiveAt: null,
+      metadata: data.metadata ?? null,
+    }
+    writeSandboxes([...readSandboxes(), sandbox])
+    return { ...sandbox }
   },
 
+  /** 部分更新：只覆盖显式传入的字段（undefined 视为未提供，null 是有效值） */
   update(id: string, data: SandboxUpdatePayload): Sandbox | null {
-    const fields: string[] = []
-    const params: Record<string, unknown> = { id }
+    const sandboxes = readSandboxes()
+    const index = sandboxes.findIndex(sandbox => sandbox.id === id)
+    if (index === -1) return null
 
-    for (const [key, col] of Object.entries(FIELD_MAP)) {
-      if (data[key as keyof SandboxUpdatePayload] !== undefined) {
-        fields.push(`${col} = @${key}`)
-        params[key] = data[key as keyof SandboxUpdatePayload]
-      }
+    const updated: Sandbox = {
+      ...sandboxes[index],
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
+      ...(data.color !== undefined ? { color: data.color } : {}),
+      ...(data.chromePid !== undefined ? { chromePid: data.chromePid } : {}),
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.fingerprintId !== undefined ? { fingerprintId: data.fingerprintId } : {}),
+      ...(data.lastUsedAt !== undefined ? { lastUsedAt: data.lastUsedAt } : {}),
+      ...(data.lastActiveAt !== undefined ? { lastActiveAt: data.lastActiveAt } : {}),
+      ...(data.metadata !== undefined ? { metadata: data.metadata } : {}),
     }
 
-    if (data.metadata !== undefined) {
-      fields.push('metadata = @metadata')
-      params.metadata = data.metadata ? JSON.stringify(data.metadata) : null
-    }
-
-    if (fields.length === 0) return this.getById(id)
-    getDatabase().prepare(`UPDATE sandboxes SET ${fields.join(', ')} WHERE id = @id`).run(params)
-    return this.getById(id)
+    const next = [...sandboxes]
+    next[index] = updated
+    writeSandboxes(next)
+    return { ...updated }
   },
 
   delete(id: string): void {
-    getDatabase().prepare('DELETE FROM sandboxes WHERE id = ?').run(id)
+    const sandboxes = readSandboxes()
+    const next = sandboxes.filter(sandbox => sandbox.id !== id)
+    if (next.length !== sandboxes.length) writeSandboxes(next)
   },
 }

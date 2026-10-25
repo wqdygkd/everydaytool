@@ -64,6 +64,11 @@ export function getDefaultChromePaths(): string[] {
   return getChromePaths().executables
 }
 
+/** chrome-sandbox 工具的数据目录（沙箱列表 / 指纹 / 工具配置的 JSON 文件都落在其下） */
+export function getChromeSandboxDataDirectory(): string {
+  return path.join(getDataDirectory(), 'chrome-sandbox')
+}
+
 /** 所有沙箱 profile 的根目录：删除等写操作必须局限在此目录内 */
 export function getSandboxesDirectory(): string {
   return path.join(getDataDirectory(), 'sandboxes')

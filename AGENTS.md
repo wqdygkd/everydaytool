@@ -23,8 +23,9 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7
 - 前端（`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts`）：TS 相对导入无后缀，Vue SFC 保留 `.vue`。
 - Electron/后端（`electron/**`、`backend/**`、`tools/*/backend/**`）：Node ESM，源码相对 TS 导入写 `.ts` 后缀（`scripts/build-electron.mjs` 的 esbuild 插件在产物中还原为 `.js` 运行时后缀）。
 - 前端禁止直接 `import backend/**` 或 `import tools/*/backend/**`，必须经 preload 暴露的 IPC API 调用（`renderer/shared/ipc/createIpcHelpers` 工厂，或各工具的 `ipc.ts`）。
-- `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、数据库。
-- `backend/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/backend/`，禁止工具间互相 import 对方的 backend。
+- `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、文件系统存储。
+- `backend/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root / JSON 文档存储 json-store），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/backend/`，禁止工具间互相 import 对方的 backend。
+- 本地数据一律是应用数据根目录下的 JSON 文件（`backend/utils/json-store.ts`：进程内缓存 + 临时文件 rename 原子写入），**不引入数据库 / 原生依赖**；工具域按 `<工具 id>/xxx.json` 分文件存放。
 - 高度链必须完整：`flex` 容器 + `flex:1` 子项需配 `min-height:0`，避免内容溢出。
 
 ## 布局 / 交互要点
@@ -154,9 +155,11 @@ export default defineTool({
 | 路由配置 | `renderer/router/routes.ts` |
 | IPC 通道 | `tools/chrome-sandbox/backend/ipc/channels.ts` |
 | IPC 处理 | `tools/chrome-sandbox/backend/ipc/handlers.ts` |
-| 沙箱数据库 | `tools/chrome-sandbox/backend/store/database.ts` |
-| 平台后端基建（logger / file-ops / 数据根目录） | `backend/utils/` |
-| 应用数据根目录 / 共享数据库路径 | `backend/utils/data-root.ts` |
+| 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
+| 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
+| 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| JSON 文档存储（同步缓存 + 原子写入） | `backend/utils/json-store.ts` |
+| 应用数据根目录 / 数据目录切换 | `backend/utils/data-root.ts` |
 | 窗口外观设置（半透明 / 材质）持久化 | `backend/utils/appearance-store.ts` |
 | 平台能力判定（透明 / 材质 / vibrancy） | `shared/appearance.ts` |
 | 渲染层外观状态 composable | `renderer/shared/composables/useAppearance.ts` |

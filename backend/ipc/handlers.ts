@@ -21,6 +21,7 @@ import {
   markDataDirectoryConfigured,
 } from '../utils/data-root.ts'
 import { safeHandle } from '../utils/ipc-safety.ts'
+import { invalidateJsonDocuments } from '../utils/json-store.ts'
 import { logger } from '../utils/logger.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
@@ -68,8 +69,9 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     if (result.changed) {
       await options.notifyDataDirectoryChanged()
       await markDataDirectoryConfigured()
-      // 目录已切换，缓存的扫描结果不再有效
+      // 目录已切换：缓存的扫描结果与 JSON 文档（按绝对路径缓存）都不再有效
       invalidateScanCache()
+      invalidateJsonDocuments()
       logger.info('Data directory changed', { changed: true })
     }
     return { ...getDataDirectoryInfo(), changed: result.changed }
