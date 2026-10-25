@@ -1,6 +1,7 @@
 // edt 应用级数据根目录（所有工具的配置 / 缓存 / 产出都落在其下）的唯一事实来源：
 // 默认目录、用户覆盖（data-root.json 引导配置 + data-root.path 镜像文件）、setup 状态。
 // 与具体工具域无关；Chrome / 沙箱专属路径见 tools/chrome-sandbox/backend/utils/path-helper.ts。
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -129,6 +130,23 @@ export async function loadDataDirectoryOverride(): Promise<void> {
     logger.warn('Failed to load data directory override', { error: (error as Error).message })
   } finally {
     await syncCustomDataPathFile()
+  }
+}
+
+/**
+ * 同步版本：供 `ready` 之前设置 sessionData 使用（异步读取可能晚于 ready）。
+ * 只读引导配置，不做镜像文件同步；后续 `loadDataDirectoryOverride` 会补齐。
+ */
+export function loadDataDirectoryOverrideSync(): void {
+  const bootstrapPath = getBootstrapConfigPath()
+  try {
+    if (!existsSync(bootstrapPath)) return
+    const raw = JSON.parse(readFileSync(bootstrapPath, 'utf8')) as { dataDirectory?: unknown }
+    if (typeof raw.dataDirectory === 'string') {
+      setDataDirectoryOverride(normalizeDataDirectory(raw.dataDirectory))
+    }
+  } catch (error) {
+    logger.warn('Failed to load data directory override synchronously', { error: (error as Error).message })
   }
 }
 

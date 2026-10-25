@@ -4,7 +4,7 @@ const tool = defineTool({
   id: 'treease-editor',
   name: 'Treease 编辑器',
   description: '在线树形结构编辑器（treease.com/editor）',
-  version: '1.0.0',
+  version: '1.2.0',
   color: '#6c61df',
   icon: 'treease',
   category: { key: 'dev', name: '开发工具' },

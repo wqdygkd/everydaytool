@@ -6,8 +6,10 @@ import process from 'node:process'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
+import { loadDataDirectoryOverrideSync } from '../backend/utils/data-root.ts'
 import { initIpcSafety } from '../backend/utils/ipc-safety.ts'
 import { logger } from '../backend/utils/logger.ts'
+import { configureSessionDataDirectory } from '../backend/utils/session-data.ts'
 import {
   parseWindowsBuild,
   resolveAppearanceCapabilities,
@@ -19,6 +21,11 @@ import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.ts'
 
 const require = createRequire(import.meta.url)
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron') as typeof import('electron')
+
+// Chromium 会话数据（Cookies / Cache / LocalStorage / Partitions）必须在 ready 之前重定向到
+// 应用数据目录；否则 persist 分区会固定落在 userData，只能靠链接搬移。
+loadDataDirectoryOverrideSync()
+configureSessionDataDirectory()
 
 // 调试端口只在开发态（或 EDT_REMOTE_DEBUG=1 显式开启）下启用：
 // Chromium 的 --remote-debugging-port=0 表示“启用并监听随机端口”，生产包必须完全不设置，
