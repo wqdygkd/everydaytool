@@ -21,6 +21,7 @@ export const icons = {
   'chevronDown': { vb: 20, paths: ['m6 8 4 4 4-4'], sw: 1.8 },
   'chevronRight': { vb: 12, paths: ['M4.5 2.5L8 6l-3.5 3.5'], sw: 1.4 },
   'arrowLeft': { vb: 20, paths: ['M11.5 5 6.5 10l5 5', 'M6.5 10h9'], sw: 1.6 },
+  'arrowRight': { vb: 20, paths: ['M8.5 5l5 5-5 5', 'M13.5 10h-9'], sw: 1.6 },
   'more': { vb: 20, circles: [[5, 10, 1.4, true], [10, 10, 1.4, true], [15, 10, 1.4, true]] },
   'pencil': { vb: 20, paths: ['m12.9 4.2 2.9 2.9-8.1 8.1-3.5.6.6-3.5z', 'm11.6 5.5 2.9 2.9'] },
   'info': { vb: 20, paths: ['M10 9v4.5', 'M10 6.5v.01'], circles: [[10, 10, 7.5]] },
@@ -95,6 +96,16 @@ export const icons = {
   'layers': {
     vb: 20,
     paths: ['M10 3 3.5 6.5l6.5 3.25L16.5 6.5 10 3z', 'M3.5 10.5 10 13.75l6.5-3.25', 'M3.5 14.5 10 17.75l6.5-3.25'],
+    sw: 1.6,
+  },
+  'refresh': {
+    vb: 20,
+    paths: ['M15.8 10a5.8 5.8 0 1 1-1.7-4.1', 'M15.8 4.4v3.4h-3.4'],
+    sw: 1.6,
+  },
+  'telegram': {
+    vb: 20,
+    paths: ['M17.2 3.4 3 9.4l5.7 2.2', 'M17.2 3.4l-4.1 13.2-4.4-7.4', 'M8.7 11.6v3.6l2.4-2.4'],
     sw: 1.6,
   },
 } satisfies Record<string, IconDef>

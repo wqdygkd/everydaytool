@@ -7,6 +7,8 @@ withDefaults(defineProps<{
   size?: number
   /** 高亮态（如固定图钉的警示色） */
   active?: boolean
+  /** 禁用态（交由 el-button 原生处理，保持与平台其它按钮一致的禁用色） */
+  disabled?: boolean
   /** 无障碍标签与悬停提示 */
   label?: string
   /** neutral = 弱化描边 + hover 抬深；danger = 弱化灰 + hover 转危险色 */
@@ -27,6 +29,7 @@ const emit = defineEmits<{
     class="ui-icon-button"
     :class="[`is-${tone}`, { 'is-active': active }]"
     :style="{ width: `${size}px`, height: `${size}px` }"
+    :disabled="disabled"
     :aria-label="label"
     :title="label"
     @click="emit('click', $event)"

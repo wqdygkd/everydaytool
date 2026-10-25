@@ -2,6 +2,7 @@ import { chromeSandboxBackend } from '../tools/chrome-sandbox/backend/index.ts'
 import { envBrowserBackend } from '../tools/env-browser/backend/index.ts'
 import { interceptorBackend } from '../tools/interceptor/backend/index.ts'
 import { offlinePackBackend } from '../tools/offline-pack/backend/index.ts'
+import { telegramCacheBackend } from '../tools/telegram-cache/backend/index.ts'
 import { treeaseEditorBackend } from '../tools/treease-editor/backend/index.ts'
 import { wxpEnhancerBackend } from '../tools/wxp-enhancer/backend/index.ts'
 
@@ -12,7 +13,7 @@ export interface ToolBackend {
   onDataDirectoryChanged?: () => Promise<void> | void
 }
 
-export const toolBackends: ToolBackend[] = [interceptorBackend, chromeSandboxBackend, envBrowserBackend, treeaseEditorBackend, wxpEnhancerBackend, offlinePackBackend]
+export const toolBackends: ToolBackend[] = [interceptorBackend, chromeSandboxBackend, envBrowserBackend, treeaseEditorBackend, wxpEnhancerBackend, offlinePackBackend, telegramCacheBackend]
 
 /** 数据根目录变更后依次通知各工具域重载（backend/ipc 的设置页处理器经 main.ts 注入调用） */
 export async function notifyDataDirectoryChanged(): Promise<void> {

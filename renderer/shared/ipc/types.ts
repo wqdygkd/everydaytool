@@ -25,6 +25,7 @@ declare global {
     envBrowser: IpcInvokeApi
     treeaseEditor: IpcInvokeApi
     wxpEnhancer: IpcInvokeApi
+    telegramCache: IpcInvokeApi
   }
 }
 

@@ -19,6 +19,7 @@ const backendEntryPoints = [
   'tools/chrome-sandbox/backend/**/*.ts',
   'tools/env-browser/backend/**/*.ts',
   'tools/offline-pack/backend/**/*.ts',
+  'tools/telegram-cache/backend/**/*.ts',
   'tools/treease-editor/backend/**/*.ts',
   'tools/wxp-enhancer/backend/**/*.ts',
 ]

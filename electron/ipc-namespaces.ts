@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../tools/chrome-sandbox/backend/ipc/channels.ts'
 import { ENV_BROWSER_IPC_CHANNELS } from '../tools/env-browser/backend/ipc/channels.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/channels.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
+import { TELEGRAM_IPC_CHANNELS } from '../tools/telegram-cache/backend/ipc/channels.ts'
 import { TREEASE_IPC_CHANNELS } from '../tools/treease-editor/backend/ipc/channels.ts'
 import { WXP_IPC_CHANNELS } from '../tools/wxp-enhancer/backend/ipc/channels.ts'
 
@@ -21,4 +22,5 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'treeaseEditor', channels: TREEASE_IPC_CHANNELS },
   { preloadNamespace: 'wxpEnhancer', channels: WXP_IPC_CHANNELS },
   { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },
+  { preloadNamespace: 'telegramCache', channels: TELEGRAM_IPC_CHANNELS },
 ]

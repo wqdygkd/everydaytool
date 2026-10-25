@@ -24,6 +24,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "create:tool": "node scripts/create-tool.mjs",
+    "telegram:session": "node scripts/telegram-session.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "web": "vite",
     "dev": "concurrently -k \"vite\" \"node scripts/dev-electron.mjs\"",
@@ -39,6 +40,7 @@
     "node-forge": "^1.4.0",
     "pinia": "^4.1.0",
     "sass": "^1.105.2",
+    "teleproto": "^1.232.0",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0",
     "ws": "^8.22.0"
