@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +8,35 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const outDir = path.join(rootDir, 'dist-electron')
 
+/** 递归收集某个工具后端目录下的全部 .ts（相对 rootDir，供 esbuild outbase 保持目录结构） */
+async function collectToolBackendEntries(dir) {
+  let entries = []
+  let dirents
+  try {
+    dirents = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return entries
+  }
+  for (const dirent of dirents) {
+    if (dirent.name === 'node_modules') continue
+    const fullPath = path.join(dir, dirent.name)
+    if (dirent.isDirectory()) {
+      entries = entries.concat(await collectToolBackendEntries(fullPath))
+    } else if (dirent.name.endsWith('.ts')) {
+      entries.push(path.relative(rootDir, fullPath))
+    }
+  }
+  return entries
+}
+
+// 工具后端入口按 tools/*/backend 动态发现：新增工具不需要在构建脚本里登记。
+const toolIds = (await readdir(path.join(rootDir, 'tools'), { withFileTypes: true }))
+  .filter(dirent => dirent.isDirectory())
+  .map(dirent => dirent.name)
+const toolBackendEntries = (await Promise.all(
+  toolIds.map(toolId => collectToolBackendEntries(path.join(rootDir, 'tools', toolId, 'backend'))),
+)).flat()
+
 const backendEntryPoints = [
   'electron/main.ts',
   'electron/tool-registry.ts',
@@ -15,13 +44,7 @@ const backendEntryPoints = [
   'backend/**/*.ts',
   // shared/** 里含后端运行时值导入（如 sleep、webview 分区常量），必须随编译产出到 dist-electron/shared/
   'shared/**/*.ts',
-  'tools/interceptor/backend/**/*.ts',
-  'tools/chrome-sandbox/backend/**/*.ts',
-  'tools/env-browser/backend/**/*.ts',
-  'tools/offline-pack/backend/**/*.ts',
-  'tools/telegram-cache/backend/**/*.ts',
-  'tools/treease-editor/backend/**/*.ts',
-  'tools/wxp-enhancer/backend/**/*.ts',
+  ...toolBackendEntries,
 ]
 
 const backendAssets = [

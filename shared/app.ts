@@ -9,8 +9,8 @@ export interface AppDataDirectoryInfo {
 }
 
 export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
+  /** 本次是否记录了变更（变更一律在下次启动迁移生效，渲染层据此提示重启） */
   changed: boolean
-  restartRequired: boolean
 }
 
 export interface DataRootEntryUsage {

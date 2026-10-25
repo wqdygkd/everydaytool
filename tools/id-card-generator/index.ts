@@ -14,7 +14,7 @@ const tool = defineTool({
   route: {
     path: 'id-card-generator',
     name: 'tool-id-card-generator',
-    component: () => import('./renderer/pages/IdCardGenerator.vue'),
+    component: () => import('./renderer/pages/IdCardGeneratorPage.vue'),
     meta: { toolId: 'id-card-generator', title: '身份证号生成器' },
   },
 })

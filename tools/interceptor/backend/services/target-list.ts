@@ -16,11 +16,6 @@ export function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/^\[|\]$/g, '')
 }
 
-/** 条目是否生效（历史数据无 enabled 字段 = 启用） */
-export function isTargetEnabled(target: InterceptorTarget): boolean {
-  return target.enabled !== false
-}
-
 export interface TargetMatch {
   target: InterceptorTarget
 }

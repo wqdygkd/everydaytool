@@ -11,15 +11,14 @@ const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const rendererWaitTimeout = 15_000
-const watchRoots = [
-  'electron',
-  'shared',
-  'backend',
-  'tools/chrome-sandbox/backend',
-  'tools/env-browser/backend',
-  'tools/treease-editor/backend',
-  'tools/wxp-enhancer/backend',
-].map(dir => path.join(rootDir, dir))
+// 监视根：electron / shared / backend 固定；工具后端按 tools/*/backend 动态发现，
+// 与 build-electron.mjs 的入口扫描保持一致（新增工具不需要在两处登记，也不会漏掉热重编译）。
+const toolBackendRoots = fs
+  .readdirSync(path.join(rootDir, 'tools'), { withFileTypes: true })
+  .filter(entry => entry.isDirectory())
+  .map(entry => path.join('tools', entry.name, 'backend'))
+  .filter(relativeDir => fs.existsSync(path.join(rootDir, relativeDir)))
+const watchRoots = ['electron', 'shared', 'backend', ...toolBackendRoots].map(dir => path.join(rootDir, dir))
 
 let electronProcess = null
 let stoppingElectron = false
@@ -106,8 +105,9 @@ function startElectron() {
 
   // 用绝对路径且不开 shell：既不受 PATH 影响，也不会触发 DEP0190（shell:true 拼接参数）
   // EDT_NO_SANDBOX=1：安全软件（火绒 HIPS 等）阻止 Chromium 用受限令牌创建子进程时，
-  // 表现为「GPU process launch failed / GPU process isn't usable」后立即退出，开发期可借此绕过
-  const electronArgs = ['.', '--remote-debugging-port=0']
+  // 表现为「GPU process launch failed / GPU process isn't usable」后立即退出，开发期可借此绕过。
+  // 不在此传 --remote-debugging-port：调试端口由 electron/main.ts 按 NODE_ENV=development 统一开启。
+  const electronArgs = ['.']
   if (process.env.EDT_NO_SANDBOX === '1') {
     electronArgs.push('--no-sandbox')
     console.warn('⚠ EDT_NO_SANDBOX=1：已关闭 Chromium 沙箱，仅用于被安全软件拦截时的本地开发')

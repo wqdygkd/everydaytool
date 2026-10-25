@@ -1,7 +1,7 @@
 // 应用菜单动作清单的单一事实来源（electron/main.ts 系统菜单使用），避免清单漂移。
 // 仅常量，无运行时逻辑。
 
-// 应用菜单动作（preload `menuAction` → 主进程执行；页内菜单已移除，桥接保留）
+// 应用菜单动作（主进程系统菜单以 Electron role 执行；页内菜单已移除，渲染层不再有动作桥接）
 export type ShellMenuAction
   = | 'quit'
     | 'undo'
@@ -22,7 +22,7 @@ export type ShellMenuAction
 export interface ShellMenuItem {
   label: string
   action: ShellMenuAction
-  /** 页内菜单右侧展示的快捷键文本；系统菜单的快捷键由 Electron role 自带，忽略此字段 */
+  /** 快捷键展示文本（仅文档/占位用途；系统菜单的快捷键由 Electron role 自带，运行时忽略此字段） */
   accel?: string
   /** 该项上方显示分隔线 */
   divided?: boolean

@@ -18,10 +18,7 @@
   "afterSign": "scripts/after-sign.mjs",
   "files": [
     "dist-electron/**/*",
-    "electron/**/*",
-    "tools/**/*",
     "dist/**/*",
-    "shared/**/*",
     "package.json"
   ],
   "extraResources": [

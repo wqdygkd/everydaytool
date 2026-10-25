@@ -19,8 +19,8 @@ await mkdir(path.join(toolDir, 'renderer/pages'), { recursive: true })
 
 await writeFile(
   path.join(toolDir, 'index.ts'),
-  `import { defineTool } from '../../renderer/shared/tool/defineTool';
-import ${pageName} from './renderer/pages/${pageName}.vue';
+  `import { defineTool } from '../../renderer/shared/tool/defineTool'
+import ${pageName} from './renderer/pages/${pageName}.vue'
 
 const tool = defineTool({
   id: '${toolId}',
@@ -28,6 +28,7 @@ const tool = defineTool({
   description: '',
   version: '1.0.0',
   color: '#3b82f6',
+  icon: 'toolbox',
   category: { key: 'general', name: '通用工具' },
   keywords: ['${toolId}'],
   supportedTargets: ['web', 'win', 'mac'],
@@ -38,9 +39,9 @@ const tool = defineTool({
     component: ${pageName},
     meta: { toolId: '${toolId}', title: '${toolId}' },
   },
-});
+})
 
-export default tool;
+export default tool
 `,
   { flag: 'wx' },
 )

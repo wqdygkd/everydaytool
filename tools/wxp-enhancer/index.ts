@@ -14,7 +14,7 @@ const tool = defineTool({
   route: {
     path: 'wxp-enhancer',
     name: 'tool-wxp-enhancer',
-    component: () => import('./renderer/pages/WxpEnhancer.vue'),
+    component: () => import('./renderer/pages/WxpEnhancerPage.vue'),
     meta: { toolId: 'wxp-enhancer', title: 'WXP 增强' },
   },
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MotionScope } from '@renderer/shared/composables/useGsap'
 import { createMotionScope, gsap } from '@renderer/shared/composables/useGsap'
-import { invokeIpc, ipcChannels, onIpc } from '../ipc'
+import { chromeSandboxIpcChannels, invokeChromeSandboxIpc, onChromeSandboxIpc } from '../ipc'
 import { useSandboxStore } from '../stores/sandboxStore'
 
 const router = useRouter()
@@ -15,7 +15,7 @@ const showCreate = ref(false)
 const showSettings = ref(false)
 const showFingerprint = ref(false)
 const showSetup = ref(false)
-const channels = ipcChannels()
+const channels = chromeSandboxIpcChannels()
 const rootEl = ref<HTMLElement | null>(null)
 let motion: MotionScope | undefined
 
@@ -52,8 +52,8 @@ const unsubscribers = []
 async function initPage() {
   await store.loadAll()
   unsubscribers.push(
-    onIpc(channels.EVENT_STATUS_CHANGED, () => store.loadAll()),
-    onIpc(channels.EVENT_PROCESS_EXITED, () => store.loadAll()),
+    onChromeSandboxIpc(channels.EVENT_STATUS_CHANGED, () => store.loadAll()),
+    onChromeSandboxIpc(channels.EVENT_PROCESS_EXITED, () => store.loadAll()),
   )
   ready.value = true
 }
@@ -65,7 +65,7 @@ async function onSettingsSaved(result) {
 }
 
 onMounted(async () => {
-  const config = await invokeIpc(channels.CONFIG_GET)
+  const config = await invokeChromeSandboxIpc(channels.CONFIG_GET)
   if (!config.dataDirectoryConfigured) {
     showSetup.value = true
     return
