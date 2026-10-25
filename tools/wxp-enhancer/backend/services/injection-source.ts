@@ -32,17 +32,17 @@ export interface InjectionSourceOptions {
 
 // —— 键名单一来源：注入脚本、清除脚本、采集脚本共用这些键，改动只动这里 ——
 /** 应用存于 sessionStorage 的用户信息键（路由守卫恢复 Vuex 用户的同一来源） */
-const USER_CACHE_KEY = 'user-info-cache'
+export const USER_CACHE_KEY = 'user-info-cache'
 /** 登录会话整体快照（localStorage，{v,at,data} 信封，兼容旧版裸 map） */
-const SNAPSHOT_KEY = '__wxpEnhancerSessionSnapshot'
+export const SNAPSHOT_KEY = '__wxpEnhancerSessionSnapshot'
 /** 旧版单键用户信息镜像（localStorage，兼容读取） */
-const LEGACY_SNAPSHOT_KEY = '__wxpEnhancerUserCache'
+export const LEGACY_SNAPSHOT_KEY = '__wxpEnhancerUserCache'
 /** 登录响应参数镜像（localStorage）：NameNode 地址 / 租户状态源，仅存于应用内存 */
-const LOGIN_PARAMS_KEY = '__wxpEnhancerLoginParams'
+export const LOGIN_PARAMS_KEY = '__wxpEnhancerLoginParams'
 /** 链接收藏（localStorage）：对象数组，字段 sceneformal / simpleName / accessPoint / targetPoint / hospital */
-const LINK_FAVORITES_KEY = '__wxpEnhancerLinkFavorites'
+export const LINK_FAVORITES_KEY = '__wxpEnhancerLinkFavorites'
 /** 链接收藏变更时间戳（localStorage）：每次星标切换更新，与工具侧备份比新旧 */
-const LINK_FAVORITES_TS_KEY = '__wxpEnhancerLinkFavoritesTs'
+export const LINK_FAVORITES_TS_KEY = '__wxpEnhancerLinkFavoritesTs'
 
 const BADGE_STYLE = [
   '#wxp-enhancer-badge{display:inline-flex;align-items:center;align-self:center;gap:6px;',

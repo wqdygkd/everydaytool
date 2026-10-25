@@ -2,7 +2,7 @@
 // - 只解析本工具需要的子集：no-store / no-cache / private / public / max-age / must-revalidate /
 //   immutable / Vary / ETag / Last-Modified / Age。
 // - **不使用启发式新鲜度**（没有 max-age 就不本地复用），保守优先。
-// - 本地响应只对图片开放；视频/音频有 Range 语义，必须单独验收后再扩。
+// - 本地响应按 MIME 分类：图片整份复用；音视频只走单区间 Range（由 localMediaRangeEnabled 独立开关控制）。
 import type { TelegramServeClass } from '../../../../shared/telegram-cache.ts'
 import { TELEGRAM_LOCAL_RESPONSE_MIME_PREFIX } from '../../../../shared/telegram-cache.ts'
 

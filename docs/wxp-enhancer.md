@@ -45,7 +45,7 @@ app.asar 仅 4.9MB，可用 Node 手写解包器提取（JSON 头定位 `{"files
 ## 注入脚本架构（2026-10-07 定稿）
 
 ```
-enhancement-script.ts      薄壳：键名单一来源（7 个缓存键常量）+ 选项接口 + env 组装 + buildClearLoginCacheSnippet
+injection-source.ts        薄壳：键名单一来源（6 个缓存键常量）+ 选项接口 + env 组装 + buildClearLoginCacheSnippet
 injection-main.ts          脚本本体 injectionMain()：真实 TS 函数，ES5 风格，自包含
 injection-script.ts        装配：window.__wxpEnv = <JSON>; (injectionMain.toString())();
 data-collector.ts          数据采集：buildCollectExpression() + collectWxpData(port)
@@ -80,5 +80,5 @@ cdp-client.ts              CDP 基础：连接/求值/注入；evaluateInPageTar
 - **pnpm dev 运行中锁 dist-electron（EBUSY）**——重编译前先关 dev。
 - fnm 环境：Bash `cd` 进项目先 `eval "$(fnm env)"`。
 - WXP 是用户桌面上的活应用：CDP 测试窗口期不稳定，测试要快、一次会话闭环；Node fetch 连 9553 会间歇 ECONNREFUSED（curl 同时正常），加重试。
-- 附加模式（WXP 已在运行）无子进程，用 4s 间隔存活看门狗（连续 2 次检测不到 exe 判定退出）；拉起模式走 onExit 回调。
+- 附加模式（WXP 已在运行）无子进程，用 15s 间隔存活看门狗（连续 2 次检测不到 exe 判定退出）；拉起模式走 onExit 回调。
 - 用户并行编辑文件/暂存区：Edit 前重读文件，汇报区分非自己做的改动。

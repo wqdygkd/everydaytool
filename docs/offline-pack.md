@@ -28,8 +28,8 @@ utils/downloads.ts  下载目录 + 落盘 + 进度广播 + 取消（AbortControl
 **下载统一入口** `DOWNLOAD`：按 `kind` 分发——`docker` 走 `downloadDockerImage`（逐层刷 token → 下载 → 解压 → 打包 TAR）；其余走 `downloadSimpleFile`（流式落盘 + 可选 CRX→ZIP）。前端生成 `taskId`，`EVENT_PROGRESS` 按 taskId 关联，`CANCEL_DOWNLOAD` 取消。
 
 **硬约束**：
-- 前端不 import backend，经 preload 命名空间 `offlinePack` 调 IPC（`createIpcHelpers('offlinePack', '离线包下载')`）。
-- `scripts/build-electron.mjs` 的 `backendEntryPoints` 必须含 `tools/offline-pack/backend/**/*.ts`，否则 esbuild 不产出后端（曾漏加导致运行时 `Cannot find module`）。
+- 前端不 import backend，经 preload 命名空间 `offlinePack` 调 IPC：统一入口 `renderer/ipc.ts`（`getOfflinePackApi()`，网页预览返回 null）；store / 组件不得自行创建 helper；外链统一走 `@renderer/shared/ipc/openExternal`。
+- 工具后端入口由 `scripts/build-electron.mjs` 动态扫描 `tools/*/backend/**/*.ts` 产出，新增工具无需在构建脚本登记（曾因手工清单漏加导致运行时 `Cannot find module`）。
 - 下载文件名走 `sanitizeFilename`（去路径分隔符 + 引号），URL 强制 http(s)。
 
 ## 3. 样式规范

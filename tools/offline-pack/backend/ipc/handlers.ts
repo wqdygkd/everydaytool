@@ -4,7 +4,7 @@ import type {
   OfflinePackSimpleDownloadRequest,
 } from '../../../../shared/offline-pack.ts'
 // offline-pack 后端 IPC handler：把 5 类上游代理 + 统一下载能力经 safeHandle 暴露给渲染层。
-import { createRequire } from 'node:module'
+import { ipcMain, shell } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { buildChromeDownloadUrl, CHROME_UA, getChromeDetail, searchChrome } from '../services/chrome-service.ts'
 import { downloadDockerImage, getManifest, getPlatforms, getTagList, getToken, searchImages } from '../services/docker-service.ts'
@@ -16,12 +16,9 @@ import { clearHistory, deleteHistory, listHistory } from '../utils/history.ts'
 import { toHttpError } from '../utils/http.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from './channels.ts'
 
-const require = createRequire(import.meta.url)
-const { ipcMain, shell } = require('electron') as typeof import('electron')
-
 let handlersRegistered = false
 
-/** 统一错误归一：上游 HTTP 错误给可读提示，业务错误原样透出 */
+/** 统一错误归一：仅上游 HTTP（带 status）与超时错误加可读前缀，业务错误原样透出（保留原始 message 与 cause 链） */
 async function guard<T>(fn: () => Promise<T>, prefix: string): Promise<T> {
   try {
     return await fn()
@@ -30,7 +27,9 @@ async function guard<T>(fn: () => Promise<T>, prefix: string): Promise<T> {
     if (err.status !== undefined) {
       throw new Error(`${prefix}失败：上游返回 ${err.status}`)
     }
-    throw err
+    if (err.isTimeout) throw err
+    // 业务错误不经 toHttpError 改写 message，原样抛出
+    throw error
   }
 }
 

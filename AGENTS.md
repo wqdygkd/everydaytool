@@ -22,7 +22,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 8
 
 - 前端（`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts`）：TS 相对导入无后缀，Vue SFC 保留 `.vue`。
 - Electron/后端（`electron/**`、`backend/**`、`tools/*/backend/**`）：Node ESM，源码相对 TS 导入写 `.ts` 后缀（`scripts/build-electron.mjs` 的 esbuild 插件在产物中还原为 `.js` 运行时后缀）。
-- 前端禁止直接 `import backend/**` 或 `import tools/*/backend/**`，必须经 preload 暴露的 IPC API 调用（`renderer/shared/ipc/createIpcHelpers` 工厂，或各工具的 `ipc.ts`）。
+- 前端禁止直接 `import backend/**` 或 `import tools/*/backend/**`，必须经 preload 暴露的 IPC API 调用（`renderer/shared/ipc/createIpcHelpers` 工厂）。**每个工具的 `renderer/ipc.ts` 是唯一 helper 实例**，store / 页面不得自行 `createIpcHelpers`；外链统一走 `@renderer/shared/ipc/openExternal`（不得直接摸 `window.edtRuntime`）。
 - `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、文件系统存储。
 - `backend/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root / JSON 文档存储 json-store），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/backend/`，禁止工具间互相 import 对方的 backend。
 - 本地数据一律是应用数据根目录下的 JSON 文件（`backend/utils/json-store.ts`：进程内缓存 + 临时文件 rename 原子写入），**不引入数据库 / 原生依赖**；工具域按 `<工具 id>/xxx.json` 分文件存放。
@@ -158,6 +158,9 @@ export default defineTool({
 | 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
 | 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| IPC 调用方白名单（safeHandle / safeOn sender 校验） | `backend/utils/ipc-safety.ts` |
+| IPC 发送方 URL 白名单（主进程 + 导航闸共用） | `backend/utils/ipc-sender.ts` |
+| 路径边界守卫（路径包含 / 数据目录合法性） | `backend/utils/path-guard.ts` |
 | **数据目录 / 缓存位置总览与切换迁移** | `docs/data-directory.md` |
 | **Chromium 会话目录（sessionData）重定向** | `backend/utils/session-data.ts` |
 | 数据目录整体迁移（切换时复制→校验→删除） | `backend/utils/data-migration.ts` |

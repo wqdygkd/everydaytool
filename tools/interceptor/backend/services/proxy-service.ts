@@ -27,7 +27,7 @@ const gunzip = promisify(zlib.gunzip)
 const inflate = promisify(zlib.inflate)
 const brotliDecompress = promisify(zlib.brotliDecompress)
 
-/** 内存缓冲上限：请求/响应体在此范围内完整缓冲（支持改体与完整日志），超出降级为直通 */
+/** 内存缓冲上限：请求/响应体在此范围内完整缓冲（支持改体与完整日志）。超出时请求侧（需缓冲才能匹配/改体）直接 502，响应侧放弃改体改为直通 */
 const BUFFER_LIMIT_BYTES = 8 * 1024 * 1024
 /** 上游请求超时 */
 const UPSTREAM_TIMEOUT_MS = 30_000

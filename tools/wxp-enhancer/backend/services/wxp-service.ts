@@ -60,7 +60,7 @@ async function checkAttachedAlive(settings: WxpSettings): Promise<void> {
   }
 }
 
-/** 结束注入会话并清理运行状态（应用退出、看门狗判定退出、手动停止共用） */
+/** 结束注入会话并清理运行状态（看门狗判定退出、手动停止共用；应用退出走 handleAppExit） */
 async function teardownSession(): Promise<boolean> {
   stopAttachWatchdog()
   stopAutoCollect()

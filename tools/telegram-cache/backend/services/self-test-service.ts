@@ -1,4 +1,4 @@
-// M1 + M2 自检：注入 runner 验证单飞协调器，纯函数验证 HTTP 缓存语义（不需要网络、不需要真实下载）。
+// M1 + M2 + M3-B 自检：注入 runner 验证单飞协调器，纯函数验证 HTTP 缓存语义（不需要网络、不需要真实下载）。
 // 覆盖方案文档 §15 的 M1 验收项：同键合并、异键隔离、取消传播、失败清理、重试；以及 M2 的缓存准入条件。
 import type { Hash } from 'node:crypto'
 import type { TelegramBenchmarkCounters, TelegramSelfTestResult, TelegramSelfTestStep } from '../../../../shared/telegram-cache.ts'

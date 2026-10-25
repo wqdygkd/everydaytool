@@ -3,7 +3,7 @@
 // 约束：
 // - 函数必须自包含：只使用参数、window/document 等浏览器全局，不引用任何模块导入
 // - 函数体保持 ES5 风格（var / function），避免构建降级引入外部 helper 破坏自包含性
-// - 运行环境是 WXP 页面（浏览器全局），而非 Node——本文件不做类型检查（@ts-nocheck），
+// - 运行环境是 WXP 页面（浏览器全局），而非 Node——本文件用 declare const 声明页面全局，避开 DOM 类型检查（@ts-nocheck 被 lint 禁用），
 //   ESLint 现代风格规则也已按文件豁免；行为验证靠等价性测试（见项目记忆）
 /* eslint-disable
   no-var,
@@ -483,7 +483,7 @@ export function injectionMain(): void {
       if (mergedFavs.length !== pageFavs.length) {
         var pageTs = 0;
         try { pageTs = Number(localStorage.getItem(FAV_TS_KEY)) || 0; } catch (e) {}
-        writeFavs(mergedFavs, Math.max(BACKUP_TS, pageTs, Date.now()));
+        writeFavs(mergedFavs, Math.max(BACKUP_TS, pageTs));
       }
     }
   } catch (e) {}

@@ -2,6 +2,7 @@ import type { WxpDataCache, WxpLinkFavorite } from '../../../../shared/wxp.ts'
 import { normalizeWxpLinkFavorites, sameWxpLinkFavorite } from '../../../../shared/wxp-favorite.ts'
 import { evaluateOnMainPage } from '../services/cdp-client.ts'
 import { dataCacheStore } from '../store/data-cache-store.ts'
+import { LINK_FAVORITES_KEY, LINK_FAVORITES_TS_KEY, LOGIN_PARAMS_KEY, SNAPSHOT_KEY } from './injection-source.ts'
 
 /**
  * 采集脚本（在 WXP 主页面执行）：读取登录令牌残留 / 参数镜像 / 收藏，
@@ -18,10 +19,10 @@ export function buildCollectExpression(): string {
   out.refreshToken = ls('wxp_refresh_token')
   out.accessExpiresAt = Number(ls('wxp_access_expires_at')) || 0
   out.refreshExpiresAt = Number(ls('wxp_refresh_expires_at')) || 0
-  out.snapshotExists = !!ls('__wxpEnhancerSessionSnapshot')
-  try { out.loginParams = JSON.parse(ls('__wxpEnhancerLoginParams') || '{}') } catch (e) { out.loginParams = {} }
-  try { out.favorites = JSON.parse(ls('__wxpEnhancerLinkFavorites') || '[]') } catch (e) { out.favorites = [] }
-  out.favUpdatedAt = Number(ls('__wxpEnhancerLinkFavoritesTs')) || 0
+  out.snapshotExists = !!ls('${SNAPSHOT_KEY}')
+  try { out.loginParams = JSON.parse(ls('${LOGIN_PARAMS_KEY}') || '{}') } catch (e) { out.loginParams = {} }
+  try { out.favorites = JSON.parse(ls('${LINK_FAVORITES_KEY}') || '[]') } catch (e) { out.favorites = [] }
+  out.favUpdatedAt = Number(ls('${LINK_FAVORITES_TS_KEY}')) || 0
   out.user = null
   try {
     var vm = (document.getElementById('app') || {}).__vue__
@@ -48,7 +49,7 @@ export function buildLoginStateExpression(): string {
     var user = vm && vm.$store && vm.$store.getters && vm.$store.getters.user
     if (user) out.userCode = user.code || user.userCode || ''
   } catch (e) {}
-  try { out.favUpdatedAt = Number(localStorage.getItem('__wxpEnhancerLinkFavoritesTs')) || 0 } catch (e) {}
+  try { out.favUpdatedAt = Number(localStorage.getItem('${LINK_FAVORITES_TS_KEY}')) || 0 } catch (e) {}
   return out
 })()`
 }
