@@ -11,7 +11,7 @@ import type {
   TrafficEntry,
 } from '../../../../shared/interceptor.ts'
 import { randomUUID } from 'node:crypto'
-import { writeFile } from 'node:fs/promises'
+import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
@@ -30,7 +30,7 @@ import {
 import { INTERCEPTOR_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getConfigSnapshot, loadConfig, resetConfigStore, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
 import { deleteRule, getRulesSnapshot, loadRules, resetRulesStore, upsertRule } from '../store/rules-store.ts'
-import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getRuntimeExtensionPath } from '../utils/paths.ts'
+import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getLegacyRuntimeExtensionPath, getRuntimeExtensionPath } from '../utils/paths.ts'
 import { getCaTrustState, installCaTrust, uninstallCaTrust } from './ca-trust.ts'
 import { ensureRootCa, isRootCaGenerated, readRootCa, resetCertCaches } from './cert-service.ts'
 import { createProxyService } from './proxy-service.ts'
@@ -122,13 +122,20 @@ function buildRuntimeStatus(): InterceptorRuntimeStatus {
   }
 }
 
-/** 打包态把扩展资源复制到 userData 稳定路径（安装目录可变，load unpacked 的路径必须稳） */
+/** 打包态把扩展资源复制到数据目录稳定路径（安装目录可变，load unpacked 的路径必须稳） */
 async function prepareExtensionDirectory(): Promise<string> {
   const source = getExtensionSourcePath()
   if (isDev) return source
 
   const target = getRuntimeExtensionPath()
   try {
+    // 早期版本在 userData；先搬到数据目录，避免登录/配置散落在 userData
+    const legacy = getLegacyRuntimeExtensionPath()
+    if (!await pathExists(path.join(target, 'manifest.json')) && await pathExists(path.join(legacy, 'manifest.json'))) {
+      await copyPath(legacy, target)
+      await rm(legacy, { recursive: true, force: true }).catch(() => {})
+      logger.info('Legacy interceptor extension moved to data directory', { target })
+    }
     const [sourceManifest, targetManifest] = await Promise.all([
       readJson<{ version?: string }>(path.join(source, 'manifest.json')),
       pathExists(path.join(target, 'manifest.json'))

@@ -31,6 +31,16 @@ export function configureSessionDataDirectory(): string {
       error: (error as Error).message,
     })
   }
+  // Electron 自己的崩溃转储 / 日志也不要留在 userData
+  try {
+    const appDirectory = path.join(getDataDirectory(), 'app')
+    mkdirSync(path.join(appDirectory, 'crash-dumps'), { recursive: true })
+    mkdirSync(path.join(appDirectory, 'logs'), { recursive: true })
+    app.setPath('crashDumps', path.join(appDirectory, 'crash-dumps'))
+    app.setPath('logs', path.join(appDirectory, 'logs'))
+  } catch (error) {
+    logger.warn('Failed to configure Electron crash/log directories', { error: (error as Error).message })
+  }
   return app.getPath('sessionData')
 }
 

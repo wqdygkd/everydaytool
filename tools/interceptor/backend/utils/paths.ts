@@ -39,10 +39,15 @@ export function getExtensionSourcePath(): string {
 }
 
 /**
- * 运行时扩展目录：打包态复制到 userData 下的稳定路径。
+ * 运行时扩展目录：打包态复制到数据目录下的稳定路径。
  * 原因：安装目录可被用户更改/升级，load unpacked 的路径一旦失效扩展就消失；
- * userData 路径跨版本稳定，且扩展 ID 由 manifest.key 固定，不随路径变化。
+ * 数据目录跨版本稳定（扩展 ID 由 manifest.key 固定，不随路径变化）。
  */
 export function getRuntimeExtensionPath(): string {
+  return path.join(getInterceptorDataDirectory(), 'extension')
+}
+
+/** 早期版本把扩展放在 userData；首次准备时迁移 */
+export function getLegacyRuntimeExtensionPath(): string {
   return path.join(app.getPath('userData'), 'interceptor-extension')
 }
