@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { OfflinePackMsStoreFile, OfflinePackMsStoreResolveResult } from '@shared/offline-pack'
+import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
-import { getOfflinePackApi, openExternal } from '../ipc'
+import { getOfflinePackApi } from '../ipc'
 import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()

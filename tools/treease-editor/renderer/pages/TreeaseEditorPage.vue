@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease'
 import { isElectronEnvironment } from '@renderer/shared/environment'
-import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview'
+import { getTreeaseEditorApi } from '../ipc'
 import { freshBuiltInRules, mergeStoredRules } from '../shared/interceptRules'
 
 const SRC = 'https://treease.com/editor'
@@ -26,15 +26,9 @@ interface RuleForm {
 
 const isElectron = ref(isElectronEnvironment())
 
-const { getApi: getTreeaseEditorApi } = createIpcHelpers('treeaseEditor', 'Treease 编辑器')
-
 // 网页预览无 preload 注入时返回 null，调用方各自走降级分支
 function getIpc() {
-  try {
-    return getTreeaseEditorApi()
-  } catch {
-    return null
-  }
+  return getTreeaseEditorApi()
 }
 
 function genId(): string {

@@ -1,21 +1,15 @@
 import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env'
-import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
+import { getEnvBrowserApi } from '../ipc'
 
 export type { EnvConfig, EnvCreatePayload, EnvUpdatePayload }
 
 const STORAGE_KEY = STORAGE_KEYS.envBrowserConfigs
 
-const { getApi: getEnvBrowserApi } = createIpcHelpers('envBrowser', '环境浏览器')
-
 // Electron 内由 preload 注入；网页预览缺注入时返回 undefined，调用方回退 localStorage
 function getIpc() {
-  try {
-    return getEnvBrowserApi()
-  } catch {
-    return undefined
-  }
+  return getEnvBrowserApi() ?? undefined
 }
 
 function readLocal(): EnvConfig[] {

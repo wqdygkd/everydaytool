@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
-import { invokeIpc, ipcChannels } from '../ipc'
+import { chromeSandboxIpcChannels, invokeChromeSandboxIpc } from '../ipc'
 
 const props = defineProps({
   modelValue: Boolean,
@@ -12,7 +12,7 @@ const emit = defineEmits(['update:modelValue', 'saved'])
 const loading = ref(false)
 const local = ref(null)
 const visible = useDialogVisible(props, emit)
-const channels = ipcChannels()
+const channels = chromeSandboxIpcChannels()
 
 watch(
   () => props.fingerprint,
@@ -23,14 +23,14 @@ watch(
 )
 
 async function randomize() {
-  local.value = await invokeIpc(channels.FINGERPRINT_GENERATE_RANDOM)
+  local.value = await invokeChromeSandboxIpc(channels.FINGERPRINT_GENERATE_RANDOM)
 }
 
 async function save() {
   if (!props.sandboxId || !local.value) return
   loading.value = true
   try {
-    await invokeIpc(channels.FINGERPRINT_UPDATE, props.sandboxId, local.value)
+    await invokeChromeSandboxIpc(channels.FINGERPRINT_UPDATE, props.sandboxId, local.value)
     ElMessage.success('指纹已更新')
     visible.value = false
     emit('saved')

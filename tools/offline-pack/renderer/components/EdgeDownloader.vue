@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { OfflinePackEdgeDetail, OfflinePackEdgeSearchItem } from '@shared/offline-pack'
+import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { parseEdgeQuery } from '@shared/offline-pack'
 import { ElMessage } from 'element-plus'
 import { onUnmounted, ref } from 'vue'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
-import { getOfflinePackApi, openExternal } from '../ipc'
+import { getOfflinePackApi } from '../ipc'
 import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()

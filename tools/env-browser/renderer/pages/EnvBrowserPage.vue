@@ -2,6 +2,7 @@
 import type { WebviewTag } from '../composables/useWebview'
 import type { EnvConfig } from '../stores/envStore'
 import { isElectronEnvironment } from '@renderer/shared/environment'
+import { openExternal } from '@renderer/shared/ipc/openExternal'
 import EnvDialog from '../components/EnvDialog.vue'
 import { useWebview } from '../composables/useWebview'
 import { useEnvBrowserStore } from '../stores/envStore'
@@ -126,8 +127,8 @@ function handleNav(
     const url = webviewStatus[id]?.url || activeEnv.value?.url
     if (!url) return
     // Electron：window.open 已被主进程 deny，改走受控通道（主进程校验协议后交系统浏览器）
-    if (isElectron && window.edtRuntime?.openExternal) {
-      window.edtRuntime.openExternal(url)
+    if (isElectron) {
+      openExternal(url)
       ElMessage.info('已在系统浏览器中打开')
     } else {
       window.open(url, '_blank', 'noopener,noreferrer')

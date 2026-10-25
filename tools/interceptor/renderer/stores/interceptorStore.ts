@@ -9,10 +9,8 @@ import type {
   ProxyPortUpdateResult,
   TrafficEntry,
 } from '../../../../shared/interceptor'
-import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { defineStore } from 'pinia'
-
-const { getApi } = createIpcHelpers('interceptor', '拦截器')
+import { getInterceptorApi } from '../ipc'
 
 export interface CaActionResult {
   ok: boolean
@@ -30,7 +28,7 @@ export interface AddTargetResult {
 }
 
 function api(): IpcInvokeApi {
-  return getApi()
+  return getInterceptorApi()
 }
 
 export const useInterceptorStore = defineStore('interceptor/state', () => {

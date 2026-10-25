@@ -1,5 +1,9 @@
 import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 
-const { channels: ipcChannels, invoke: invokeIpc, on: onIpc } = createIpcHelpers('chromeSandbox', 'Electron')
+const {
+  channels: chromeSandboxIpcChannels,
+  invoke: invokeChromeSandboxIpc,
+  on: onChromeSandboxIpc,
+} = createIpcHelpers('chromeSandbox', 'Electron')
 
-export { invokeIpc, ipcChannels, onIpc }
+export { chromeSandboxIpcChannels, invokeChromeSandboxIpc, onChromeSandboxIpc }

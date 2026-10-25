@@ -10,9 +10,3 @@ export function getOfflinePackApi() {
     return null
   }
 }
-
-/** 外链经主进程校验协议后交给系统浏览器打开 */
-export function openExternal(url: string): void {
-  const w = window as unknown as { edtRuntime?: { openExternal?: (u: string) => void } }
-  w.edtRuntime?.openExternal?.(url)
-}

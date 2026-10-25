@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
 import { appIpcChannels, invokeAppIpc } from '@renderer/shared/ipc/useAppIpc'
-import { invokeIpc, ipcChannels } from '../ipc'
+import { chromeSandboxIpcChannels, invokeChromeSandboxIpc } from '../ipc'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'saved'])
@@ -14,21 +14,21 @@ const form = reactive({
   preserveDataOnClose: true,
 })
 const visible = useDialogVisible(props, emit)
-const channels = ipcChannels()
+const channels = chromeSandboxIpcChannels()
 const appChannels = appIpcChannels()
 // 打开时快照的目录值，用于判断用户是否真的改了数据目录
 let initialDataDirectory = ''
 
 watch(visible, async (open) => {
   if (!open) return
-  const config = await invokeIpc(channels.CONFIG_GET)
+  const config = await invokeChromeSandboxIpc(channels.CONFIG_GET)
   Object.assign(form, config)
   initialDataDirectory = form.dataDirectory
 })
 
 async function detectChrome() {
   try {
-    const chromePath = await invokeIpc(channels.CHROME_DETECT_PATH)
+    const chromePath = await invokeChromeSandboxIpc(channels.CHROME_DETECT_PATH)
     if (!chromePath) return
     form.chromePath = chromePath
     ElMessage.success('已检测到 Chrome')
@@ -56,7 +56,7 @@ async function save() {
     }
 
     const { dataDirectory: _ignored, ...rest } = form
-    const result = await invokeIpc(channels.CONFIG_UPDATE, { ...rest })
+    const result = await invokeChromeSandboxIpc(channels.CONFIG_UPDATE, { ...rest })
     ElMessage.success('设置已保存')
     visible.value = false
     emit('saved', { ...result, dataDirectoryChanged })

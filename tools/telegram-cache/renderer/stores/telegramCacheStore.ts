@@ -14,11 +14,9 @@ import type {
   TelegramTaskSnapshot,
   TelegramTrafficEntry,
 } from '../../../../shared/telegram-cache'
-import { createIpcHelpers } from '@renderer/shared/ipc/createIpcHelpers'
 import { defineStore } from 'pinia'
 import { TELEGRAM_TRAFFIC_LIMIT } from '../../../../shared/telegram-cache'
-
-const { getApi, invoke, on } = createIpcHelpers('telegramCache', 'Telegram 网络优化')
+import { invokeTelegramCacheIpc as invoke, onTelegramCacheIpc as on, telegramCacheIpcChannels } from '../ipc'
 
 export interface AcquireOutcome {
   reused: boolean
@@ -64,7 +62,7 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
   let initialized = false
 
   function channels(): Record<string, string> {
-    return getApi().channels
+    return telegramCacheIpcChannels()
   }
 
   function applySnapshot(next: TelegramSnapshot): void {

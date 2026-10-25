@@ -4,7 +4,7 @@ import type {
   SandboxCreatePayload,
   SandboxUpdatePayload,
 } from '../../../../shared/sandbox'
-import { invokeIpc, ipcChannels } from '../ipc'
+import { chromeSandboxIpcChannels, invokeChromeSandboxIpc } from '../ipc'
 
 export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
   const sandboxes = ref<Sandbox[]>([])
@@ -19,7 +19,7 @@ export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
   }
 
   async function loadAll(): Promise<void> {
-    sandboxes.value = await invokeIpc<Sandbox[]>(ipcChannels().SANDBOX_GET_ALL)
+    sandboxes.value = await invokeChromeSandboxIpc<Sandbox[]>(chromeSandboxIpcChannels().SANDBOX_GET_ALL)
     if (!selectedId.value && sandboxes.value.length > 0) {
       selectedId.value = sandboxes.value[0]?.id ?? null
     }
@@ -30,7 +30,7 @@ export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
   }
 
   async function create(data: SandboxCreatePayload): Promise<Sandbox | null> {
-    const sandbox = await invokeIpc<Sandbox | null>(ipcChannels().SANDBOX_CREATE, data)
+    const sandbox = await invokeChromeSandboxIpc<Sandbox | null>(chromeSandboxIpcChannels().SANDBOX_CREATE, data)
     await loadAll()
     selectedId.value = sandbox?.id ?? null
     return sandbox
@@ -38,24 +38,24 @@ export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
 
   async function activate(id: string | null): Promise<void> {
     if (!id) return
-    await invokeIpc(ipcChannels().SANDBOX_ACTIVATE, id)
+    await invokeChromeSandboxIpc(chromeSandboxIpcChannels().SANDBOX_ACTIVATE, id)
     await loadAll()
   }
 
   async function close(id: string | null): Promise<void> {
     if (!id) return
-    await invokeIpc(ipcChannels().SANDBOX_CLOSE, id)
+    await invokeChromeSandboxIpc(chromeSandboxIpcChannels().SANDBOX_CLOSE, id)
     await loadAll()
   }
 
   async function remove(id: string): Promise<void> {
-    await invokeIpc(ipcChannels().SANDBOX_DELETE, id)
+    await invokeChromeSandboxIpc(chromeSandboxIpcChannels().SANDBOX_DELETE, id)
     if (selectedId.value === id) selectedId.value = null
     await loadAll()
   }
 
   async function update(id: string, data: SandboxUpdatePayload): Promise<void> {
-    await invokeIpc(ipcChannels().SANDBOX_UPDATE, id, data)
+    await invokeChromeSandboxIpc(chromeSandboxIpcChannels().SANDBOX_UPDATE, id, data)
     await loadAll()
   }
 
@@ -65,8 +65,8 @@ export const useSandboxStore = defineStore('chrome-sandbox/sandbox', () => {
       fingerprint.value = null
       return
     }
-    fingerprint.value = await invokeIpc<Fingerprint | null>(
-      ipcChannels().FINGERPRINT_GET_BY_ID,
+    fingerprint.value = await invokeChromeSandboxIpc<Fingerprint | null>(
+      chromeSandboxIpcChannels().FINGERPRINT_GET_BY_ID,
       sandbox.fingerprintId,
     )
   }
