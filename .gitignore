@@ -10,3 +10,8 @@ Thumbs.db
 .pnpm-store
 .agents
 .workbuddy
+
+# 本地凭据：api_id / api_hash / MTProto 会话字符串绝不入库
+.env
+.env.*
+!.env.example
