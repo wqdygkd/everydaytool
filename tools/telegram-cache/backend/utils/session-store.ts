@@ -11,13 +11,10 @@
 // - 清除只删除本工具生成的密文文件，不碰用户的 .env。
 import { Buffer } from 'node:buffer'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
+import { app, safeStorage } from 'electron'
 import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-
-const require = createRequire(import.meta.url)
-const { app, safeStorage } = require('electron') as typeof import('electron')
 
 const SESSION_FILE = 'telegram-session.bin'
 

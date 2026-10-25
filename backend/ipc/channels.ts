@@ -16,6 +16,9 @@ export const EDT_APP_IPC_CHANNELS = {
   APPEARANCE_SET: 'edt-app:appearance:set',
   // 主进程 → 渲染层推送：外观已变更（含平台降级后的最终值）
   EVENT_APPEARANCE_CHANGED: 'edt-app:event:appearance-changed',
+  // 外部链接：window.open 已由主进程 deny，渲染层统一经此通道交给系统浏览器打开
+  // （主进程校验协议与调用方来源，见 electron/main.ts）
+  OPEN_EXTERNAL: 'edt-app:open-external',
 } as const
 
 export type EdtAppIpcChannel = (typeof EDT_APP_IPC_CHANNELS)[keyof typeof EDT_APP_IPC_CHANNELS]

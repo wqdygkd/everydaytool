@@ -17,17 +17,14 @@ import type {
   TelegramTrafficEntry,
 } from '../../../../shared/telegram-cache.ts'
 import type { HttpResourceIdentity } from './identity.ts'
-import { createRequire } from 'node:module'
+import { webContents } from 'electron'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { TELEGRAM_RESOURCE_LIMIT, TELEGRAM_TRAFFIC_LIMIT } from '../../../../shared/telegram-cache.ts'
 import { TELEGRAM_WEBVIEW_PARTITION } from '../../../../shared/webview.ts'
-import { TELEGRAM_IPC_CHANNELS } from '../ipc/channels.ts'
+import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import { describeUrl } from './identity.ts'
 import { getTelegramSession } from './telegram-session.ts'
-
-const require = createRequire(import.meta.url)
-const { webContents } = require('electron') as typeof import('electron')
 
 /** 只保留与观测 / 诊断相关的响应头，授权头 / Cookie 一律不进内存 */
 const HEADER_WHITELIST = [
@@ -156,7 +153,7 @@ function pushTraffic(entry: TelegramTrafficEntry): void {
   if (traffic.length > TELEGRAM_TRAFFIC_LIMIT) {
     traffic = traffic.slice(traffic.length - TELEGRAM_TRAFFIC_LIMIT)
   }
-  broadcastToWindows(TELEGRAM_IPC_CHANNELS.EVENT_TRAFFIC, entry, {
+  broadcastToWindows(TELEGRAM_CACHE_IPC_CHANNELS.EVENT_TRAFFIC, entry, {
     onError: error => logger.warn('Telegram traffic broadcast failed', { error: error.message }),
   })
 }

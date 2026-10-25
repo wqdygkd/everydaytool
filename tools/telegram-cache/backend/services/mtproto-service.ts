@@ -22,7 +22,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { TELEGRAM_IPC_CHANNELS } from '../ipc/channels.ts'
+import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import {
   getTelegramResourceRecord,
   isVerifiedCompleteRecord,
@@ -249,7 +249,7 @@ function emitStatus(force = false): void {
   const now = Date.now()
   if (!force && now - lastEmitAt < EMIT_THROTTLE_MS) return
   lastEmitAt = now
-  broadcastToWindows(TELEGRAM_IPC_CHANNELS.EVENT_MTPROTO, getMtprotoStatus(), {
+  broadcastToWindows(TELEGRAM_CACHE_IPC_CHANNELS.EVENT_MTPROTO, getMtprotoStatus(), {
     onError: error => logger.warn('MTProto status broadcast failed', { error: error.message }),
   })
 }

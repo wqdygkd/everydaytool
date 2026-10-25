@@ -1,4 +1,4 @@
-export const TREEASE_IPC_CHANNELS = {
+export const TREEASE_EDITOR_IPC_CHANNELS = {
   INTERCEPT_START: 'treease:intercept-start',
   INTERCEPT_STOP: 'treease:intercept-stop',
   INTERCEPT_UPDATE_RULES: 'treease:intercept-update-rules',
@@ -6,3 +6,5 @@ export const TREEASE_IPC_CHANNELS = {
   CACHE_CLEAR: 'treease:cache-clear',
   EVENT_INTERCEPT_LOG: 'treease:intercept-log',
 } as const
+
+export type TreeaseEditorIpcChannel = (typeof TREEASE_EDITOR_IPC_CHANNELS)[keyof typeof TREEASE_EDITOR_IPC_CHANNELS]

@@ -1,9 +1,6 @@
 // 主进程 → 渲染层广播的统一封装：工具域不必各自遍历 BrowserWindow，
 // 这里统一处理「窗口正在关闭 / 已销毁」导致的发送失败（单窗口失败不影响其余）。
-import { createRequire } from 'node:module'
-
-const require = createRequire(import.meta.url)
-const { BrowserWindow } = require('electron') as typeof import('electron')
+import { BrowserWindow } from 'electron'
 
 export interface BroadcastOptions {
   /** 记录失败原因（可选） */

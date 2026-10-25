@@ -1,7 +1,7 @@
 // telegram-cache 后端 IPC handler：全部为窄接口 —— 资源键 / 页面内核 ID / 枚举 / 数字。
 // 渲染层永远不能传 URL、文件路径或 shell 命令；路径一律由主进程按数据根目录拼。
 import type { TelegramResourceKind } from '../../../../shared/telegram-cache.ts'
-import { createRequire } from 'node:module'
+import { ipcMain } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { listTelegramArchives, openTelegramArchiveDir } from '../services/archive-service.ts'
 import { clearBenchmarks, getBenchmarkStatus, startBenchmark, stopBenchmark } from '../services/benchmark-service.ts'
@@ -35,10 +35,7 @@ import {
   buildTelegramSnapshot,
 } from '../services/snapshot-service.ts'
 import { updateTelegramCacheConfig } from '../store/config-store.ts'
-import { TELEGRAM_IPC_CHANNELS } from './channels.ts'
-
-const require = createRequire(import.meta.url)
-const { ipcMain } = require('electron') as typeof import('electron')
+import { TELEGRAM_CACHE_IPC_CHANNELS } from './channels.ts'
 
 let handlersRegistered = false
 
@@ -66,10 +63,10 @@ export function registerTelegramCacheHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.SNAPSHOT_GET, () => buildTelegramSnapshot())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.TRAFFIC_GET, () => getTelegramTraffic())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.SNAPSHOT_GET, () => buildTelegramSnapshot())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.TRAFFIC_GET, () => getTelegramTraffic())
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.CONFIG_SET, (_event, patch: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.CONFIG_SET, (_event, patch: unknown) => {
     const next = updateTelegramCacheConfig(patch)
     setTelegramObservationEnabled(next.observationEnabled)
     // 并发上限即时生效（排队任务按新上限调度）
@@ -82,7 +79,7 @@ export function registerTelegramCacheHandlers(): void {
     return { config: next, snapshot: buildTelegramSnapshot() }
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.OBSERVATION_SET_ENABLED, (_event, value: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.OBSERVATION_SET_ENABLED, (_event, value: unknown) => {
     const enabled = value === true
     updateTelegramCacheConfig({ observationEnabled: enabled })
     setTelegramObservationEnabled(enabled)
@@ -90,24 +87,24 @@ export function registerTelegramCacheHandlers(): void {
     return buildTelegramSnapshot()
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.OBSERVATION_CLEAR, () => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.OBSERVATION_CLEAR, () => {
     clearTelegramObservation()
     broadcastTelegramSnapshotNow()
     return buildTelegramSnapshot()
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.PAGE_ATTACH, (_event, value: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.PAGE_ATTACH, (_event, value: unknown) => {
     const result = attachTelegramPage(requireWebContentsId(value))
     // 页面 attach 后才具备捕获目标；开关已开启时立即绑定 CDP
     syncPageCaptureWithConfig()
     return result
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.PAGE_PROBE, (_event, value: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.PAGE_PROBE, (_event, value: unknown) => {
     return probeTelegramPage(requireWebContentsId(value))
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.ACQUIRE, async (_event, value: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.ACQUIRE, async (_event, value: unknown) => {
     const { resourceKey, kind } = parseAcquirePayload(value)
     const result = await acquireTelegramResource(resourceKey, kind)
     broadcastTelegramSnapshotNow()
@@ -128,30 +125,30 @@ export function registerTelegramCacheHandlers(): void {
     }
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.TASK_CANCEL, (_event, value: unknown) => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.TASK_CANCEL, (_event, value: unknown) => {
     return cancelTelegramTask(requireTaskId(value))
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.ARCHIVE_LIST, () => listTelegramArchives())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.ARCHIVE_OPEN_DIR, () => openTelegramArchiveDir())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.ARCHIVE_LIST, () => listTelegramArchives())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.ARCHIVE_OPEN_DIR, () => openTelegramArchiveDir())
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.CACHE_CLEAR, async () => {
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.CACHE_CLEAR, async () => {
     const result = await clearTelegramCache()
     broadcastTelegramSnapshotNow()
     return { ...result, snapshot: buildTelegramSnapshot() }
   })
 
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.SELF_TEST, () => runTelegramSelfTest())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.M3_REPORT, () => buildTelegramFeasibilityReport())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.MT_STATUS, () => getMtprotoStatus())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.MT_DOWNLOAD, (_event, link: unknown) => beginMtprotoDownload(link))
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.MT_CANCEL, () => cancelMtprotoDownload())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.MT_SESSION_MIGRATE, () => migrateSessionToSecureStorage())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.MT_SESSION_CLEAR, () => clearSecureSessionStorage())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.BENCHMARK_STATUS, () => getBenchmarkStatus())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.BENCHMARK_START, (_event, label: unknown) => startBenchmark(label))
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.BENCHMARK_STOP, () => stopBenchmark())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.BENCHMARK_CLEAR, () => clearBenchmarks())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.DIAGNOSTICS_EXPORT, () => exportTelegramDiagnostics())
-  safeHandle(ipcMain, TELEGRAM_IPC_CHANNELS.OPEN_DATA_DIR, () => openTelegramDataDir())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.SELF_TEST, () => runTelegramSelfTest())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.M3_REPORT, () => buildTelegramFeasibilityReport())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MT_STATUS, () => getMtprotoStatus())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MT_DOWNLOAD, (_event, link: unknown) => beginMtprotoDownload(link))
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MT_CANCEL, () => cancelMtprotoDownload())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MT_SESSION_MIGRATE, () => migrateSessionToSecureStorage())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MT_SESSION_CLEAR, () => clearSecureSessionStorage())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.BENCHMARK_STATUS, () => getBenchmarkStatus())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.BENCHMARK_START, (_event, label: unknown) => startBenchmark(label))
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.BENCHMARK_STOP, () => stopBenchmark())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.BENCHMARK_CLEAR, () => clearBenchmarks())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.DIAGNOSTICS_EXPORT, () => exportTelegramDiagnostics())
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.OPEN_DATA_DIR, () => openTelegramDataDir())
 }

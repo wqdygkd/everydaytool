@@ -5,3 +5,5 @@ export const ENV_BROWSER_IPC_CHANNELS = {
   ENV_UPDATE: 'env-browser:update',
   ENV_DELETE: 'env-browser:delete',
 } as const
+
+export type EnvBrowserIpcChannel = (typeof ENV_BROWSER_IPC_CHANNELS)[keyof typeof ENV_BROWSER_IPC_CHANNELS]

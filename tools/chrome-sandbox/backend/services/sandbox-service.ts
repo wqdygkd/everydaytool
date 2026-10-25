@@ -8,7 +8,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { ensureDir, removeIfExists } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { isPathWithin } from '../../../../shared/path-guard.ts'
+import { isPathWithin } from '../../../../backend/utils/path-guard.ts'
 import { setupSandboxDeveloperMode, shouldSkipDeveloperModeSetup } from '../chrome/developer-mode.ts'
 import { launchChrome } from '../chrome/launcher.ts'
 import { findRunningPid, isRunning, killProcess, onProcessExit, queryChromeSandboxProcesses } from '../chrome/process-manager.ts'
@@ -16,7 +16,7 @@ import { focusChromeWindow } from '../chrome/window-controller.ts'
 import { SANDBOX_COLORS } from '../constants/sandbox.ts'
 import { prepareFingerprintExtension, updateFingerprintConfig } from '../fingerprint/config-writer.ts'
 import { generateRandomFingerprint } from '../fingerprint/generator.ts'
-import { IPC_CHANNELS } from '../ipc/channels.ts'
+import { CHROME_SANDBOX_IPC_CHANNELS } from '../ipc/channels.ts'
 import { initSandboxUserData, repairSandboxProfile } from '../profile/cloner.ts'
 import { fingerprintStore } from '../store/fingerprint-store.ts'
 import { sandboxStore } from '../store/sandbox-store.ts'
@@ -33,7 +33,7 @@ let statusEmitter: ((channel: string, payload: unknown) => void) | null = null
 export function setStatusEmitter(emitter: (channel: string, payload: unknown) => void): void {
   statusEmitter = emitter
   onProcessExit((sandboxId) => {
-    emit(IPC_CHANNELS.EVENT_PROCESS_EXITED, { sandboxId })
+    emit(CHROME_SANDBOX_IPC_CHANNELS.EVENT_PROCESS_EXITED, { sandboxId })
     sandboxStore.update(sandboxId, { status: 'stopped', chromePid: null })
   })
 }
@@ -50,7 +50,7 @@ function syncRunningState(sandbox: Sandbox): Sandbox | null {
   if (!shouldUpdate) return sandbox
 
   const newStatus = running ? 'running' : 'stopped'
-  if (!running) emit(IPC_CHANNELS.EVENT_PROCESS_EXITED, { sandboxId: sandbox.id })
+  if (!running) emit(CHROME_SANDBOX_IPC_CHANNELS.EVENT_PROCESS_EXITED, { sandboxId: sandbox.id })
   return sandboxStore.update(sandbox.id, {
     status: newStatus,
     chromePid: running ? sandbox.chromePid : null,
@@ -173,7 +173,7 @@ export const sandboxService = {
       ...(metadata !== sandbox.metadata ? { metadata } : {}),
     })
 
-    emit(IPC_CHANNELS.EVENT_STATUS_CHANGED, { sandboxId, status: 'running' })
+    emit(CHROME_SANDBOX_IPC_CHANNELS.EVENT_STATUS_CHANGED, { sandboxId, status: 'running' })
     return (await refreshSandboxPid(sandboxId)) || sandbox
   },
 
@@ -187,7 +187,7 @@ export const sandboxService = {
       chromePid: null,
     })
 
-    emit(IPC_CHANNELS.EVENT_STATUS_CHANGED, { sandboxId, status: 'stopped' })
+    emit(CHROME_SANDBOX_IPC_CHANNELS.EVENT_STATUS_CHANGED, { sandboxId, status: 'stopped' })
     return updated
   },
 

@@ -9,14 +9,11 @@ import { mkdirSync } from 'node:fs'
 // 约束：
 // - 必须在 ready 之前调用；运行期切换数据目录只在下次启动生效；
 // - 会同时移动应用自身的 localStorage（收藏 / 页签），不做迁移（开发阶段取舍）。
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { app } from 'electron'
 import { getDataDirectory } from './data-root.ts'
 import { logger } from './logger.ts'
-
-const require = createRequire(import.meta.url)
-const { app } = require('electron') as typeof import('electron')
 
 /** 在 app ready 之前调用一次；返回实际使用的 sessionData 目录 */
 export function configureSessionDataDirectory(): string {

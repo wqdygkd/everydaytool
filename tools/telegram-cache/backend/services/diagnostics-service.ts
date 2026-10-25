@@ -5,18 +5,15 @@
 // - 只写数据根目录下的 telegram-cache/diagnostics，文件名由应用生成。
 import type { TelegramDiagnosticsExport } from '../../../../shared/telegram-cache.ts'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { shell } from 'electron'
 import { getTelegramCacheRoot, getTelegramDiagnosticsDir, toTelegramRelativePath } from '../utils/paths.ts'
 import { listTelegramArchives } from './archive-service.ts'
 import { listBenchmarkRecords } from './benchmark-service.ts'
 import { buildTelegramFeasibilityReport } from './feasibility-service.ts'
 import { getTelegramTraffic } from './observation-service.ts'
 import { buildTelegramSnapshot } from './snapshot-service.ts'
-
-const require = createRequire(import.meta.url)
-const { shell } = require('electron') as typeof import('electron')
 
 function timestampForFileName(date: Date): string {
   const pad = (value: number, size = 2): string => String(value).padStart(size, '0')

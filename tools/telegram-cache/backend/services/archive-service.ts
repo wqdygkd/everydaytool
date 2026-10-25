@@ -5,15 +5,12 @@ import type { TelegramResourceRecord } from '../store/resource-registry.ts'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import path from 'node:path'
+import { shell } from 'electron'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { incrementTelegramArchiveRef, resolveTelegramObjectPath } from '../store/resource-registry.ts'
 import { getTelegramArchiveIndexPath, getTelegramArchiveRoot, getTelegramCacheRoot, toTelegramRelativePath } from '../utils/paths.ts'
-
-const require = createRequire(import.meta.url)
-const { shell } = require('electron') as typeof import('electron')
 
 interface ArchiveDocument {
   schemaVersion: 1

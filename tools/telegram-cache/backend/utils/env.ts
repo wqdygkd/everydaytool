@@ -4,15 +4,12 @@
 // - missing 只返回字段名，不返回任何值；
 // - .env 的顺序：项目根（开发）→ 数据目录 → userData；process.env 优先级最高。
 import { existsSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
+import { app } from 'electron'
 import { APP_ROOT_DEV, getDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { isSessionEncryptionAvailable, readSecureSession } from './session-store.ts'
-
-const require = createRequire(import.meta.url)
-const { app } = require('electron') as typeof import('electron')
 
 export type MtprotoSessionSource = 'secure' | 'env' | 'none'
 

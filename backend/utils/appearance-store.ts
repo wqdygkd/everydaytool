@@ -3,15 +3,12 @@
 // 与具体工具域无关，属平台级应用壳配置。
 import type { WindowAppearance, WindowAppearanceUpdate } from '../../shared/appearance.ts'
 import { copyFile, mkdir, rename, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import path from 'node:path'
+import { app } from 'electron'
 import { DEFAULT_WINDOW_APPEARANCE, sanitizeWindowAppearance } from '../../shared/appearance.ts'
 import { getDataDirectory } from './data-root.ts'
 import { pathExists, readJson, writeJson } from './file-ops.ts'
 import { logger } from './logger.ts'
-
-const require = createRequire(import.meta.url)
-const { app } = require('electron') as typeof import('electron')
 
 const FILENAME = 'window-appearance.json'
 

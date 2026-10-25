@@ -1,12 +1,9 @@
 import type { TreeaseInterceptLog, TreeaseInterceptPatch, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease.ts'
 import { Buffer } from 'node:buffer'
-import { createRequire } from 'node:module'
+import { session as electronSession, webContents } from 'electron'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview.ts'
-import { TREEASE_IPC_CHANNELS } from '../ipc/channels.ts'
-
-const require = createRequire(import.meta.url)
-const { session: electronSession, webContents } = require('electron') as typeof import('electron')
+import { TREEASE_EDITOR_IPC_CHANNELS } from '../ipc/channels.ts'
 
 type GuestSession = import('electron').Session
 
@@ -40,7 +37,7 @@ function recordHit(): void {
     webContentsId: active.webContentsId,
     hits: active.hits,
   }
-  broadcastToWindows(TREEASE_IPC_CHANNELS.EVENT_INTERCEPT_LOG, log)
+  broadcastToWindows(TREEASE_EDITOR_IPC_CHANNELS.EVENT_INTERCEPT_LOG, log)
 }
 
 // 规则 → 预编译正则：避免每个请求、每条规则都重新构造 RegExp（并限制 pattern 长度防 ReDoS）

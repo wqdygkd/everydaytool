@@ -1,11 +1,8 @@
 import type { EnvCreatePayload, EnvUpdatePayload } from '../../../../shared/env.ts'
-import { createRequire } from 'node:module'
+import { ipcMain } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { envStore } from '../store/env-store.ts'
 import { ENV_BROWSER_IPC_CHANNELS } from './channels.ts'
-
-const require = createRequire(import.meta.url)
-const { ipcMain } = require('electron') as typeof import('electron')
 
 const MAX_TEXT_LENGTH = 512
 

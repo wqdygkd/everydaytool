@@ -14,7 +14,7 @@ import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { getPartitionStoragePath, isSessionDataInDataDirectory } from '../../../../backend/utils/session-data.ts'
 import { TELEGRAM_RESOURCE_LIMIT } from '../../../../shared/telegram-cache.ts'
-import { TELEGRAM_IPC_CHANNELS } from '../ipc/channels.ts'
+import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getTelegramCacheConfig } from '../store/config-store.ts'
 import { isVerifiedCompleteRecord, listTelegramResourceRecords } from '../store/resource-registry.ts'
 import { getTelegramArchiveCount, listTelegramArchives } from './archive-service.ts'
@@ -158,7 +158,7 @@ export function buildTelegramSnapshot(): TelegramSnapshot {
 }
 
 function pushSnapshot(): void {
-  broadcastToWindows(TELEGRAM_IPC_CHANNELS.EVENT_SNAPSHOT, buildTelegramSnapshot(), {
+  broadcastToWindows(TELEGRAM_CACHE_IPC_CHANNELS.EVENT_SNAPSHOT, buildTelegramSnapshot(), {
     onError: error => logger.warn('Telegram snapshot broadcast failed', { error: error.message }),
   })
 }

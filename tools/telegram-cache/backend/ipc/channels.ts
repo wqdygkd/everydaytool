@@ -1,6 +1,6 @@
 // telegram-cache IPC 通道：全部为窄接口（键 / 枚举 / 数字），不接受任意 URL、
 // 文件路径或 shell 命令。EVENT_ 前缀为「主进程 → 渲染层」推送通道（preload 白名单据此区分）。
-export const TELEGRAM_IPC_CHANNELS = {
+export const TELEGRAM_CACHE_IPC_CHANNELS = {
   // 状态 / 配置
   SNAPSHOT_GET: 'telegram-cache:snapshot:get',
   CONFIG_SET: 'telegram-cache:config:set',
@@ -39,3 +39,5 @@ export const TELEGRAM_IPC_CHANNELS = {
   EVENT_MTPROTO: 'telegram-cache:event:mtproto',
   EVENT_BENCHMARK: 'telegram-cache:event:benchmark',
 } as const
+
+export type TelegramCacheIpcChannel = (typeof TELEGRAM_CACHE_IPC_CHANNELS)[keyof typeof TELEGRAM_CACHE_IPC_CHANNELS]

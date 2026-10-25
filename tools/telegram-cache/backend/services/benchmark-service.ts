@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { TELEGRAM_IPC_CHANNELS } from '../ipc/channels.ts'
+import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getTelegramBenchmarkPath } from '../utils/paths.ts'
 import { diffBenchmarkCounters } from './benchmark-core.ts'
 import { getTelegramCacheMeters } from './cache-manager.ts'
@@ -83,7 +83,7 @@ export function listBenchmarkRecords(): TelegramBenchmarkRecord[] {
 }
 
 function emitStatus(): void {
-  broadcastToWindows(TELEGRAM_IPC_CHANNELS.EVENT_BENCHMARK, getBenchmarkStatus(), {
+  broadcastToWindows(TELEGRAM_CACHE_IPC_CHANNELS.EVENT_BENCHMARK, getBenchmarkStatus(), {
     onError: error => logger.warn('Benchmark status broadcast failed', { error: error.message }),
   })
 }

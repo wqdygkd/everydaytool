@@ -2,13 +2,10 @@
 // 统一 UA、超时、错误归一；提供文本 / JSON / Buffer / 流式落盘四种形态。
 import { Buffer } from 'node:buffer'
 import { createWriteStream } from 'node:fs'
-import { createRequire } from 'node:module'
-import { OFFLINE_PACK_USER_AGENT } from '../../../../shared/offline-pack.ts'
-
-const require = createRequire(import.meta.url)
 // 用 Electron net.fetch 走 Chromium 网络栈（继承系统代理），Node 原生 fetch 不走系统代理，
 // 导致大陆环境挂代理仍无法访问 Docker Hub 等被墙上游。
-const { net } = require('electron') as typeof import('electron')
+import { net } from 'electron'
+import { OFFLINE_PACK_USER_AGENT } from '../../../../shared/offline-pack.ts'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 

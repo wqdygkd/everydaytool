@@ -19,7 +19,7 @@ import { pipeline } from 'node:stream/promises'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { TELEGRAM_TASK_MAX_ATTEMPTS } from '../../../../shared/telegram-cache.ts'
-import { TELEGRAM_IPC_CHANNELS } from '../ipc/channels.ts'
+import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getTelegramCacheConfig } from '../store/config-store.ts'
 import {
   getTelegramResourceRecord,
@@ -54,7 +54,7 @@ function getManager(): SingleFlightTaskManager<TelegramResourceRecord> {
   manager = new SingleFlightTaskManager<TelegramResourceRecord>({
     maxConcurrent: getTelegramCacheConfig().maxHttpConcurrency,
     onChange: (snapshot) => {
-      broadcastToWindows(TELEGRAM_IPC_CHANNELS.EVENT_TASK, snapshot, {
+      broadcastToWindows(TELEGRAM_CACHE_IPC_CHANNELS.EVENT_TASK, snapshot, {
         onError: error => logger.warn('Telegram task broadcast failed', { error: error.message }),
       })
     },

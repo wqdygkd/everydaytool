@@ -1,4 +1,4 @@
-export const WXP_IPC_CHANNELS = {
+export const WXP_ENHANCER_IPC_CHANNELS = {
   GET_ALL: 'wxp:get-all',
   SAVE_SETTINGS: 'wxp:save-settings',
   SELECT_EXECUTABLE: 'wxp:select-executable',
@@ -13,4 +13,4 @@ export const WXP_IPC_CHANNELS = {
   EVENT_DATA_CACHE_UPDATED: 'wxp:data-cache-updated',
 } as const
 
-export type WxpIpcChannel = (typeof WXP_IPC_CHANNELS)[keyof typeof WXP_IPC_CHANNELS]
+export type WxpEnhancerIpcChannel = (typeof WXP_ENHANCER_IPC_CHANNELS)[keyof typeof WXP_ENHANCER_IPC_CHANNELS]

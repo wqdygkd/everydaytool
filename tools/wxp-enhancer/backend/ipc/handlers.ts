@@ -1,5 +1,5 @@
 import type { WxpSettings } from '../../../../shared/wxp.ts'
-import { createRequire } from 'node:module'
+import { dialog, ipcMain } from 'electron'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { setWxpDataCacheEmitter } from '../services/auto-collect-service.ts'
@@ -9,10 +9,7 @@ import { wxpConfigStore } from '../store/config-store.ts'
 import { dataCacheStore } from '../store/data-cache-store.ts'
 import { detectWxpExecutable } from '../utils/detect-executable.ts'
 import { resolveExecutablePath } from '../utils/resolve-executable.ts'
-import { WXP_IPC_CHANNELS } from './channels.ts'
-
-const require = createRequire(import.meta.url)
-const { ipcMain, dialog } = require('electron') as typeof import('electron')
+import { WXP_ENHANCER_IPC_CHANNELS } from './channels.ts'
 
 function broadcast(channel: string, payload: unknown): void {
   broadcastToWindows(channel, payload)
@@ -23,16 +20,16 @@ let handlersRegistered = false
 export function registerWxpHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
-  setWxpStatusEmitter(state => broadcast(WXP_IPC_CHANNELS.EVENT_STATUS_CHANGED, state))
-  setWxpDataCacheEmitter(cache => broadcast(WXP_IPC_CHANNELS.EVENT_DATA_CACHE_UPDATED, cache))
+  setWxpStatusEmitter(state => broadcast(WXP_ENHANCER_IPC_CHANNELS.EVENT_STATUS_CHANGED, state))
+  setWxpDataCacheEmitter(cache => broadcast(WXP_ENHANCER_IPC_CHANNELS.EVENT_DATA_CACHE_UPDATED, cache))
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.GET_ALL, async () => {
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.GET_ALL, async () => {
     const config = await wxpConfigStore.getAll()
     return { ...config, running: wxpService.getRunning() }
   })
 
   // executablePath 最终会进入 spawn：保存前先校验非空格式与端口范围，避免被写成任意可执行程序
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.SAVE_SETTINGS, async (_event, patch: Partial<WxpSettings>) => {
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.SAVE_SETTINGS, async (_event, patch: Partial<WxpSettings>) => {
     const merged = { ...(await wxpConfigStore.getSettings()), ...patch }
     assertSettings(merged)
     const settings = await wxpConfigStore.saveSettings(patch)
@@ -41,7 +38,7 @@ export function registerWxpHandlers(): void {
     return settings
   })
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.SELECT_EXECUTABLE, async () => {
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.SELECT_EXECUTABLE, async () => {
     const result = await dialog.showOpenDialog({
       title: '选择 WXP 可执行文件',
       properties: ['openFile'],
@@ -54,19 +51,19 @@ export function registerWxpHandlers(): void {
     return resolveExecutablePath(result.filePaths[0])
   })
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.DETECT_EXECUTABLE, async () => detectWxpExecutable())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.DETECT_EXECUTABLE, async () => detectWxpExecutable())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.LAUNCH, async () => wxpService.launch())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.LAUNCH, async () => wxpService.launch())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.STOP, async () => wxpService.stop())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.STOP, async () => wxpService.stop())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.REINJECT, async () => wxpService.reinject())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.REINJECT, async () => wxpService.reinject())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.CLEAR_LOGIN_CACHE, async () => wxpService.clearLoginCache())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.CLEAR_LOGIN_CACHE, async () => wxpService.clearLoginCache())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.GET_DATA_CACHE, async () => dataCacheStore.get())
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.GET_DATA_CACHE, async () => dataCacheStore.get())
 
-  safeHandle(ipcMain, WXP_IPC_CHANNELS.COLLECT_DATA, async () => {
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.COLLECT_DATA, async () => {
     const running = wxpService.getRunning()
     if (!running) {
       throw new Error('WXP 未在运行，无法读取数据；请先启动 WXP')

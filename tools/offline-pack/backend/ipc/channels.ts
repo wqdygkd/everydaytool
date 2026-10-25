@@ -26,3 +26,5 @@ export const OFFLINE_PACK_IPC_CHANNELS = {
   // 事件（主进程 → 渲染层推送）
   EVENT_PROGRESS: 'offline-pack:event:progress',
 } as const
+
+export type OfflinePackIpcChannel = (typeof OFFLINE_PACK_IPC_CHANNELS)[keyof typeof OFFLINE_PACK_IPC_CHANNELS]
