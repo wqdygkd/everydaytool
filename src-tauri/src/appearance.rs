@@ -128,7 +128,7 @@ pub fn resolve_user_data_dir(_app: &AppHandle) -> PathBuf {
     default_user_data_dir()
 }
 
-fn is_writable_dir(dir: &Path) -> bool {
+pub(crate) fn is_writable_dir(dir: &Path) -> bool {
     if fs::create_dir_all(dir).is_err() {
         return false;
     }
@@ -171,6 +171,22 @@ fn modified_at(path: &Path) -> Option<SystemTime> {
 /// 而 data-root.json / setup-state.json 这类决定数据目录在哪的引导文件必须留在 userData。
 pub(crate) fn config_dir() -> PathBuf {
     resolve_data_dir()
+}
+
+/// 日志目录解析（tauri-plugin-log 的 Folder 目标用）：数据根 `logs` 优先——
+/// dev 时在仓库 data/ 内、打包时随数据目录走（设置页「打开数据目录」即可达）；
+/// 回退 %LOCALAPPDATA%\<identifier>\logs（tauri LogDir 的标准语义）。
+/// 候选全部不可写时返回 None，调用方只保留 stdout 目标——日志初始化失败不能带走应用。
+pub fn resolve_log_dir() -> Option<PathBuf> {
+    let mut candidates = vec![resolve_data_dir().join("logs")];
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        candidates.push(
+            PathBuf::from(local)
+                .join("com.edt.everydaytool")
+                .join("logs"),
+        );
+    }
+    candidates.into_iter().find(|dir| is_writable_dir(dir))
 }
 
 /// 旧版把这两份配置放在 userData 根目录（userData 只读时还写进过回退目录），
@@ -224,7 +240,7 @@ pub(crate) fn config_write_path(app: &AppHandle, file: &str) -> PathBuf {
         .map(|dir| dir.join(file))
         .unwrap_or_else(|| preferred.clone());
     if path != preferred {
-        eprintln!("[config] 数据目录不可写，{file} 改存：{}", path.display());
+        log::warn!("[config] 数据目录不可写，{file} 改存：{}", path.display());
     }
     paths.insert(file.to_string(), path.clone());
     path
@@ -259,14 +275,14 @@ pub fn migrate_legacy_config(app: &AppHandle) {
             match fs::copy(&source, &target) {
                 Ok(_) => {
                     let _ = fs::remove_file(&source);
-                    eprintln!(
+                    log::warn!(
                         "[config] 已把 {file} 迁入数据目录：{} -> {}",
                         source.display(),
                         target.display()
                     );
                     break;
                 }
-                Err(error) => eprintln!("[config] 迁移 {file} 失败：{error}"),
+                Err(error) => log::warn!("[config] 迁移 {file} 失败：{error}"),
             }
         }
     }

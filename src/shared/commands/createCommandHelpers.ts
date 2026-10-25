@@ -1,5 +1,5 @@
 import type { CommandApi } from './types'
-import { COMMAND_GROUPS } from '../../../shared/command-groups/index.ts'
+import { COMMAND_GROUPS } from '@shared/command-groups'
 import { subscribeDesktopEvent } from '../../desktop/event-bus'
 import { invokeDesktop, isTauriEnvironment } from '../../desktop/tauri'
 

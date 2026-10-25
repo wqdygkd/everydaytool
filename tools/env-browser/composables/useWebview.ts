@@ -360,7 +360,7 @@ export function useWebview(
         url: env.url,
         profile: `env-${id}`,
         userAgent: ENV_BROWSER_UA,
-        disableWebSecurity: true,
+        preset: 'env-browser',
         x: Math.round(rect.left),
         y: Math.round(rect.top),
         width: Math.max(1, Math.round(rect.width)),

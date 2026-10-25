@@ -263,7 +263,7 @@ pub fn save_current(app: &AppHandle, window: &Window) {
         };
     }
     if let Err(error) = save(app, &geometry) {
-        eprintln!("[window-geometry] 窗口几何保存失败：{error}");
+        log::warn!("[window-geometry] 窗口几何保存失败：{error}");
     }
 }
 

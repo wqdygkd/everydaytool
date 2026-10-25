@@ -437,15 +437,15 @@ function openSettings() {
     box-shadow: inset 0 0 0 2px var(--color-primary);
   }
 
-  // 关闭按钮沿用 Windows 系统 caption button 的标准红，属平台 chrome 例外
+  // 关闭按钮沿用 Windows 系统 caption button 的标准红（令牌见 tokens.scss），属平台 chrome 例外
   &.is-close:hover {
-    background: #e81123;
-    color: #fff;
+    background: var(--color-caption-danger);
+    color: var(--color-on-solid);
   }
 
   &.is-close:active {
-    background: #f1707a;
-    color: #fff;
+    background: var(--color-caption-danger-active);
+    color: var(--color-on-solid);
   }
 }
 

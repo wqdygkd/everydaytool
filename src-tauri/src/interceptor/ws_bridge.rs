@@ -479,7 +479,7 @@ fn handle_message(
             let script_id = message.get("scriptId").cloned().unwrap_or(Value::Null);
             let level = message.get("level").cloned().unwrap_or(Value::Null);
             let log_message = message.get("message").cloned().unwrap_or(Value::Null);
-            eprintln!(
+            log::warn!(
                 "[interceptor] [script-log] clientId={client_id} scriptId={script_id} level={level} {log_message}"
             );
         }

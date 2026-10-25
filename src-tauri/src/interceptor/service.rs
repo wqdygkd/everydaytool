@@ -252,7 +252,7 @@ fn handle_ws_message(app: &tauri::AppHandle, kind: &str, message: Value) {
                 .get("error")
                 .and_then(Value::as_str)
                 .unwrap_or_default();
-            eprintln!(
+            log::warn!(
                 "[interceptor] 扩展代理状态：clientId={client_id} enabled={enabled} error={error}"
             );
         }
@@ -325,7 +325,7 @@ fn sync_rules_to_extension() {
 fn broadcast_targets(app: &tauri::AppHandle) {
     let closed = proxy::close_transparent_tunnels();
     if closed > 0 {
-        eprintln!("[interceptor] 名单变更后断开透传隧道 {closed} 条");
+        log::warn!("[interceptor] 名单变更后断开透传隧道 {closed} 条");
     }
     ws_bridge::broadcast(&json!({ "type": "targets-sync", "targets": targets() }));
     emit_targets(app);
@@ -524,7 +524,7 @@ fn start_proxy_on_configured_port(app: &tauri::AppHandle) -> Result<(), String> 
             }
             Err(error) => {
                 *PORT_NOTE.lock().unwrap() = Some(format!("端口 {port} 不可用，已改用随机端口"));
-                eprintln!("[interceptor] 配置端口不可用：{error}");
+                log::warn!("[interceptor] 配置端口不可用：{error}");
             }
         }
     }
@@ -587,10 +587,10 @@ pub fn initialize(app: &tauri::AppHandle) {
     }
 
     if let Err(error) = store::load_config() {
-        eprintln!("[interceptor] 配置加载失败：{error}");
+        log::warn!("[interceptor] 配置加载失败：{error}");
     }
     if let Err(error) = store::migrate_legacy_scripts() {
-        eprintln!("[interceptor] 旧版脚本迁移失败：{error}");
+        log::warn!("[interceptor] 旧版脚本迁移失败：{error}");
     }
 
     let extension_dir = prepare_extension_directory(app);
@@ -598,7 +598,7 @@ pub fn initialize(app: &tauri::AppHandle) {
 
     if let Err(error) = start_proxy_on_configured_port(app) {
         *PORT_NOTE.lock().unwrap() = Some("代理启动失败，请在状态页检查端口".into());
-        eprintln!("[interceptor] 代理启动失败：{error}");
+        log::error!("[interceptor] 代理启动失败：{error}");
     }
 
     // 扩展数据源
@@ -615,8 +615,8 @@ pub fn initialize(app: &tauri::AppHandle) {
             handle_ws_message(&ws_app, kind, message);
         });
     match ws_bridge::start(app, WS_PORT_BASE, WS_PORT_RANGE, handler) {
-        Ok(port) => eprintln!("[interceptor] WS 桥已启动：{port}"),
-        Err(error) => eprintln!("[interceptor] WS 桥启动失败：{error}"),
+        Ok(port) => log::info!("[interceptor] WS 桥已启动：{port}"),
+        Err(error) => log::error!("[interceptor] WS 桥启动失败：{error}"),
     }
 
     emit_status(app);
@@ -636,7 +636,7 @@ pub fn on_data_directory_changed(app: &tauri::AppHandle) {
     proxy::stop();
     if let Err(error) = start_proxy_on_configured_port(app) {
         *PORT_NOTE.lock().unwrap() = Some("代理重启失败，请在状态页检查端口".into());
-        eprintln!("[interceptor] 数据目录切换后代理重启失败：{error}");
+        log::error!("[interceptor] 数据目录切换后代理重启失败：{error}");
     }
     emit_status(app);
 }
@@ -764,7 +764,7 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             match open_directory(&dir) {
                 Ok(()) => Ok(json!(true)),
                 Err(error) => {
-                    eprintln!("[interceptor] 打开扩展目录失败：{error}");
+                    log::warn!("[interceptor] 打开扩展目录失败：{error}");
                     Ok(json!(false))
                 }
             }

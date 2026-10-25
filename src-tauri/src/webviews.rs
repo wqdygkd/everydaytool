@@ -236,15 +236,20 @@ async fn create_webview(app: AppHandle, map: WebviewMap, args: Value) -> Result<
         .get("userAgent")
         .and_then(|v| v.as_str())
         .map(str::to_string);
-    let insecure = args
-        .get("disableWebSecurity")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    // 关同源策略是 env-browser 的场景能力，收敛为 preset 白名单：
+    // 渲染层只传 preset，其它调用点传 disableWebSecurity 一律报错（防止注入面扩大）
+    if args.get("disableWebSecurity").is_some() {
+        return Err(
+            "disableWebSecurity 已移除：关闭同源策略仅限 env-browser，请改传 preset: 'env-browser'"
+                .into(),
+        );
+    }
     let preset = args
         .get("preset")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let insecure = preset == "env-browser";
     let x = number(&args, "x");
     let y = number(&args, "y");
     let width = number(&args, "width").max(0.0);

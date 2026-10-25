@@ -115,7 +115,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
   border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
   background: color-mix(in srgb, var(--color-primary) 5%, transparent);
   border-radius: var(--radius-sm);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .result-icon {

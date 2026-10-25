@@ -5,7 +5,9 @@ mod appearance;
 mod chrome_sandbox;
 mod commands;
 mod env_browser;
-// 阶段 5 移植中：WS 桥 / MITM 代理接入前尚未接线（接线后移除 allow）
+// 已接线（commands.rs 按 interceptor 域注册），但迁移后仍留有未调用的预留 API
+// （service::shutdown / status_snapshot / extension_dir、store::persist 等 11 项）；
+// 接线或删除这些 API 后移除本 allow。
 #[allow(dead_code)]
 mod interceptor;
 mod iso_time;
@@ -89,9 +91,6 @@ fn create_main_window(app: &tauri::AppHandle) -> tauri::Result<WebviewWindow> {
     #[cfg(windows)]
     let builder = builder.data_directory(appearance::webview_data_dir());
 
-    // WebView2 数据目录已在 run() 中通过 WEBVIEW2_USER_DATA_FOLDER 固定，
-    // 这里不再传 data_directory（避免同一窗口出现两套环境配置）。
-
     builder.build()
 }
 
@@ -139,7 +138,36 @@ pub fn run() {
     // WebView2 数据目录跟随数据根目录（设置页可改），目录绑定在 create_main_window 的 data_directory。
     let _ = std::fs::create_dir_all(appearance::webview_data_dir());
 
+    // 日志目录走候选链解析（appearance::resolve_log_dir：数据根 logs 优先，回退标准目录）；
+    // 全部不可写时只留 stdout——插件初始化失败会让建窗 panic，日志绝不能带走应用。
+    let mut log_targets = vec![tauri_plugin_log::Target::new(
+        tauri_plugin_log::TargetKind::Stdout,
+    )];
+    match appearance::resolve_log_dir() {
+        Some(dir) => log_targets.push(tauri_plugin_log::Target::new(
+            tauri_plugin_log::TargetKind::Folder {
+                path: dir,
+                file_name: Some("everydaytool".into()),
+            },
+        )),
+        None => eprintln!("[log] 没有可写的日志目录，本次运行仅输出 stdout"),
+    }
     let app = tauri::Builder::default()
+        // 单实例：必须最先注册。重复启动共享同一数据目录，双开会让拦截器把随机
+        // 代理端口写回 config、WebView2 数据目录锁冲突；这里只聚焦已有主窗口。
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                // dev 在终端可见；release（windows_subsystem="windows"）无 stderr，落盘见上
+                .targets(log_targets)
+                .level(log::LevelFilter::Info)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -156,6 +184,12 @@ pub fn run() {
             webviews::edt_webview,
         ])
         .setup(|app| {
+            // panic 钩子：release 丢弃 stderr（windows_subsystem="windows"），崩溃前先落一条日志
+            let default_hook = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                log::error!("[panic] {info}");
+                default_hook(info);
+            }));
             // 旧版把窗口外观 / 几何放在 userData 根目录：先迁进数据目录，再读外观建窗
             appearance::migrate_legacy_config(app.handle());
             let current = appearance::load(app.handle());

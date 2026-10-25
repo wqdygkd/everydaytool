@@ -10,6 +10,12 @@ export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
   changed: boolean
 }
 
+/** 首次启动引导状态（应用壳与 chrome-sandbox 工具域共用同一份 setup 标记） */
+export interface AppSetupState {
+  /** 数据目录是否已确认过：true 则不再弹首次引导 */
+  dataDirectoryConfigured: boolean
+}
+
 export interface DataRootEntryUsage {
   name: string
   bytes: number

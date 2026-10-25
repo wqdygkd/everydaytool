@@ -198,7 +198,7 @@ pub fn handle(
             // webview 已关闭或运行时未注入时，停止操作仍应把状态复位。
             if get_webview(&map, WEBVIEW_ID).is_ok() {
                 if let Err(error) = apply_rules(&map, &[], true) {
-                    eprintln!("[treease] reset rules failed: {error}");
+                    log::warn!("[treease] reset rules failed: {error}");
                 }
             }
             state.active.store(false, Ordering::SeqCst);

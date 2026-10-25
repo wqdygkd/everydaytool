@@ -15,9 +15,12 @@ export interface WebviewCreateOptions extends WebviewBounds {
   url: string
   profile?: string
   userAgent?: string
-  disableWebSecurity?: boolean
-  /** 内置注入预设（treease：接口拦截运行时） */
-  preset?: 'treease'
+  /**
+   * 内置注入预设，同时是能力白名单——
+   * env-browser：允许关闭同源策略（--disable-web-security）
+   * treease：接口拦截运行时注入
+   */
+  preset?: 'env-browser' | 'treease'
 }
 
 export type WebviewEventKind = 'loading-start' | 'loading-stop' | 'navigate' | 'new-window' | 'title'

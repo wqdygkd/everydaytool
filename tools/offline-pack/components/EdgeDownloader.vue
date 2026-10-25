@@ -199,7 +199,7 @@ onUnmounted(() => {
   padding: 0 16px;
   border-radius: 12px;
   background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-border) inset, 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 1px var(--color-border) inset, var(--shadow-sm);
 }
 
 .offline-pack-input :deep(.el-input__wrapper.is-focus) {
@@ -222,7 +222,7 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
   background: var(--color-raised);
   border-color: transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .offline-pack-examples :deep(.el-button:hover) {
@@ -261,7 +261,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-border-light);
   background: var(--color-raised);
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .offline-pack-actions {

@@ -1275,7 +1275,7 @@ fn handle_http_with_mitm(
         outgoing_body = Some(replace.as_bytes().to_vec());
     } else if let Some(_script) = &plan.body_script {
         // 动态请求体脚本需要 JS 引擎（见 docs/interceptor.md）；Rust 侧暂不执行，保留原体
-        eprintln!("[interceptor] 动态请求体脚本暂未在 Rust 侧执行，已保留原请求体");
+        log::warn!("[interceptor] 动态请求体脚本暂未在 Rust 侧执行，已保留原请求体");
     }
     if outgoing_body != request_body {
         let length = outgoing_body.as_ref().map(|body| body.len()).unwrap_or(0);

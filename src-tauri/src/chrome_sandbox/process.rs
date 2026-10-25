@@ -23,7 +23,7 @@ static TRACKED: LazyLock<Mutex<HashMap<String, TrackedProcess>>> =
 static QUERY_CACHE: LazyLock<Mutex<QueryCacheMap>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn log(message: &str) {
-    eprintln!("[chrome-sandbox] {message}");
+    log::warn!("[chrome-sandbox] {message}");
 }
 
 /// 广播事件到前端（与 Node 侧 broadcastToWindows 同一通道）

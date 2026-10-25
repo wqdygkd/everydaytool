@@ -3,6 +3,7 @@
 // （浏览器均支持；Node 版是 RSA 2048，算法不构成兼容性约束）。
 // 从磁盘加载的 CA 通过 from_ca_cert_pem 重建签发者：同 subject + 同密钥，
 // 叶子证书的签发者 DN / AKI 都指向真实受信 CA，链路不变。
+use crate::interceptor::key_guard;
 use crate::interceptor::paths;
 use base64::Engine;
 use rcgen::{
@@ -148,7 +149,8 @@ fn load_root_ca_from_disk() -> Option<RootCa> {
     if !key_path.exists() || !cert_path.exists() {
         return None;
     }
-    let key_pem = std::fs::read_to_string(&key_path).ok()?;
+    // Windows 侧 key_guard 负责 DPAPI 解密与旧明文迁移；解不开视为文件损坏（走重新生成）
+    let key_pem = key_guard::read_ca_key(&key_path).ok()?;
     let cert_pem = std::fs::read_to_string(&cert_path).ok()?;
     let ca_key = KeyPair::from_pem(&key_pem).ok()?;
     let ca_params = CertificateParams::from_ca_cert_pem(&cert_pem).ok()?;
@@ -167,16 +169,12 @@ fn load_root_ca_from_disk() -> Option<RootCa> {
 fn persist_root_ca(info: &RootCa) {
     let dir = paths::certs_directory();
     let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(paths::ca_key_path(), &info.key_pem);
-    let _ = std::fs::write(paths::ca_cert_path(), &info.cert_pem);
-    // 私钥收紧权限；Windows 上为 no-op，失败不影响主流程
-    #[cfg(unix)]
-    {
-        let _ = std::fs::set_permissions(std::path::Path::new(&paths::ca_key_path()), {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::Permissions::from_mode(0o600)
-        });
+    // 私钥经 key_guard 保护（Windows DPAPI / Unix 0600）；写失败时本次会话仍用内存 CA，
+    // 下次启动会重新生成并要求重装信任——宁可不落盘也不写明文根钥
+    if let Err(error) = key_guard::write_ca_key(&paths::ca_key_path(), &info.key_pem) {
+        log::error!("[interceptor] CA 私钥写盘失败：{error}");
     }
+    let _ = std::fs::write(paths::ca_cert_path(), &info.cert_pem);
 }
 
 static ROOT_CA: LazyLock<Mutex<Option<Arc<RootCa>>>> = LazyLock::new(|| Mutex::new(None));

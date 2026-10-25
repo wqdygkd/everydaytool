@@ -137,7 +137,7 @@ function switchTab(key: string): void {
 .offline-pack-tabs :deep(.el-tabs__item.is-active) {
   background: var(--color-raised);
   color: var(--color-text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .tab-label {

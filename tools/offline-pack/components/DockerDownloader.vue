@@ -491,7 +491,7 @@ async function handleDownload(): Promise<void> {
   padding: 0 16px;
   border-radius: 12px;
   background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-border) inset, 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 1px var(--color-border) inset, var(--shadow-sm);
 }
 
 .offline-pack-input :deep(.el-input__wrapper.is-focus) {
@@ -514,7 +514,7 @@ async function handleDownload(): Promise<void> {
   color: var(--color-text-secondary);
   background: var(--color-raised);
   border-color: transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .offline-pack-examples :deep(.el-button:hover) {
@@ -634,7 +634,7 @@ async function handleDownload(): Promise<void> {
   border: 1px solid var(--color-border-light);
   background: var(--color-raised);
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .offline-pack-picker-title {
@@ -687,7 +687,7 @@ async function handleDownload(): Promise<void> {
   border: 1px solid var(--color-border-light);
   background: var(--color-raised);
   border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
 }
 
 .manifest-title {

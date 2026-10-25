@@ -47,7 +47,7 @@ fn appearance_set(app: &AppHandle, state: &AppState, patch: &Value) -> Result<Va
     };
     // 持久化失败不应阻断本次切换：先应用 + 广播，再尽力写盘（受限环境下会走可写回退目录）。
     if let Err(error) = appearance::save(app, &next) {
-        eprintln!("[appearance] 保存失败（仅当前会话生效）：{error}");
+        log::warn!("[appearance] 保存失败（仅当前会话生效）：{error}");
     }
     if let Ok(mut guard) = state.appearance.lock() {
         *guard = next.clone();
@@ -63,6 +63,17 @@ fn appearance_set(app: &AppHandle, state: &AppState, patch: &Value) -> Result<Va
         }),
     );
     serde_json::to_value(next).map_err(|error| error.to_string())
+}
+
+/// 统一的域调度：各域 handle 是同步代码（文件 IO / 进程等待），统一放进阻塞线程池，
+/// 避免占住 async 运行时线程拖慢其它命令与事件推送。
+async fn dispatch_blocking<F>(label: &str, task: F) -> Result<Value, String>
+where
+    F: FnOnce() -> Result<Value, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("{label}：{error}"))?
 }
 
 async fn run_command(
@@ -86,72 +97,71 @@ async fn run_command(
                 let handle = app.clone();
                 let command_clone = command.clone();
                 let args_clone = args.clone();
-                return tauri::async_runtime::spawn_blocking(move || {
+                return dispatch_blocking("应用壳调度失败", move || {
                     crate::app_domain::handle(&handle, &command_clone, &args_clone)
                 })
-                .await
-                .map_err(|error| format!("应用壳调度失败：{error}"))?;
+                .await;
             }
         }
     }
 
     if domain == "envBrowser" {
-        return crate::env_browser::handle(&command, &args);
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return dispatch_blocking("环境浏览器调度失败", move || {
+            crate::env_browser::handle(&command_clone, &args_clone)
+        })
+        .await;
     }
 
     if domain == "chromeSandbox" {
         let handle = app.clone();
         let command_clone = command.clone();
         let args_clone = args.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
+        return dispatch_blocking("沙箱调度失败", move || {
             crate::chrome_sandbox::handle(&handle, &command_clone, &args_clone)
         })
-        .await
-        .map_err(|error| format!("沙箱调度失败：{error}"))?;
+        .await;
     }
 
     if domain == "offlinePack" {
         let handle = app.clone();
         let command_clone = command.clone();
         let args_clone = args.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
+        return dispatch_blocking("离线包调度失败", move || {
             crate::offline_pack::handle(&handle, &command_clone, &args_clone)
         })
-        .await
-        .map_err(|error| format!("离线包调度失败：{error}"))?;
+        .await;
     }
 
     if domain == "wxpEnhancer" {
         let handle = app.clone();
         let command_clone = command.clone();
         let args_clone = args.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
+        return dispatch_blocking("WXP 调度失败", move || {
             crate::wxp::handle(&handle, &command_clone, &args_clone)
         })
-        .await
-        .map_err(|error| format!("WXP 调度失败：{error}"))?;
+        .await;
     }
 
     if domain == "interceptor" {
         let handle = app.clone();
         let command_clone = command.clone();
         let args_clone = args.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
+        return dispatch_blocking("拦截器调度失败", move || {
             crate::interceptor::handle(&handle, &command_clone, &args_clone)
         })
-        .await
-        .map_err(|error| format!("拦截器调度失败：{error}"))?;
+        .await;
     }
 
     if domain == "treeaseEditor" {
         let handle = app.clone();
         let map = webviews.map.clone();
         let args_clone = args.clone();
-        return tauri::async_runtime::spawn_blocking(move || {
+        return dispatch_blocking("treease 调度失败", move || {
             crate::treease::handle(handle, map, treease, &command, &args_clone)
         })
-        .await
-        .map_err(|error| format!("treease 调度失败：{error}"))?;
+        .await;
     }
 
     let _ = state;

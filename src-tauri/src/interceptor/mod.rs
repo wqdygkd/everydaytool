@@ -1,6 +1,7 @@
 // interceptor 域：Rust 原生实现（origin / 存储 / 证书 / 信任 / 规则引擎 / WS 桥 / 流量 / MITM 代理 / 服务装配）。
 pub mod ca_trust;
 pub mod certs;
+mod key_guard;
 pub mod origin;
 pub mod paths;
 pub mod proxy;

@@ -47,7 +47,7 @@ scripts/                   开发 / 构建 / 环境检查脚本（按平台分�
 
 | 项 | 版本 |
 | ------ | ------ |
-| Node.js | 22+（仓库 `.node-version` 记录开发机版本） |
+| Node.js | 22+（`.node-version` 当前为 26，是开发机版本仅供参考；CI 固定 22） |
 | pnpm | 10+（**勿用 npm**，本仓库无 `package-lock.json`） |
 | Rust | stable（CI 固定 1.96.0；`Cargo.toml` 的 `rust-version` 为 MSRV 1.80） |
 | Tauri CLI | 2.12.4（随 `pnpm install` 安装，无需全局） |
@@ -140,6 +140,7 @@ pnpm dist:installer     # 同 pnpm build
 | Linux | `target/release/bundle/deb/*.deb`（以及 rpm / appimage） |
 
 > 构建目录由 `.cargo/config.toml` 的 `target-dir = target` 指定（仓库根）。需要换位置时自行设置 `CARGO_TARGET_DIR`。
+> 冷构建后 `target/` 约 10 GB（含全部依赖产物），磁盘紧张时建议用 `CARGO_TARGET_DIR` 移出仓库。
 > 从旧版本升级的仓库可能残留 `src-tauri/target`，可以删除。
 
 ## 代码检查
@@ -147,6 +148,8 @@ pnpm dist:installer     # 同 pnpm build
 ```bash
 pnpm typecheck                        # 渲染层 TS
 pnpm lint                             # ESLint（含 tools）
+pnpm test                             # 前端纯函数冒烟（vitest）
+pnpm test:treease                     # treease 拦截 webview 端到端验收（需桌面端运行中）
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -158,8 +161,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 | Job | Runner | 内容 |
 | ------ | ------ | ------ |
-| `quality` | ubuntu-22.04 | doctor / typecheck / lint / cargo fmt / clippy / cargo test |
-| `build (windows)` | windows-latest | doctor / 前端构建 / `--bundles nsis` / 上传 exe |
+| `quality` | ubuntu-22.04 | doctor / typecheck / lint / vitest / cargo fmt / clippy / cargo test |
+| `build (windows)` | windows-latest | doctor / 前端构建 / `--bundles msi` / 上传 msi |
 | `build (macos)` | macos-latest | doctor / 前端构建 / `--bundles app,dmg` / 上传 dmg |
 | `build (linux)` | ubuntu-22.04 | doctor / 前端构建 / `--bundles deb` / 上传 deb |
 
@@ -216,6 +219,13 @@ Rust 代码的调试信息完全不受影响，构建目录也不需要搬出仓
 
 **macOS 上 `xcrun: error`**
 `xcode-select --install` 安装 Command Line Tools，无需完整 Xcode。
+
+**桌面端日志在哪？**
+
+日志目录按候选链解析：`<数据根目录>/logs` 优先（设置页「打开数据目录」可达），回退
+`%LOCALAPPDATA%\com.edt.everydaytool\logs\`（Windows）、`~/Library/Logs/com.edt.everydaytool/`（macOS）、
+`~/.local/share/com.edt.everydaytool/logs/`（Linux）。候选都不可写时只保留 stdout 输出，
+日志初始化失败不会阻断启动。dev 构建直接看启动终端；崩溃（panic）退出前也会先写一条日志。
 
 **pnpm install 报 lockfile 不匹配**
 本仓库使用 pnpm。请使用 `pnpm install --frozen-lockfile`（CI 即如此），不要用 npm。

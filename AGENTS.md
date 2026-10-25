@@ -33,6 +33,9 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
   `app.get_webview("main")`（webview 级：devtools / clear_all_browsing_data），
   或在命令里注入 `tauri::Window` 拿调用方窗口。
 - 新增窗口相关能力时按上面三种方式取句柄，不要再写 `get_webview_window`。
+- **DevTools 是有意保留的产品能力**（开发者工具定位：设置页入口、子 Webview 页面检查、platform 命令三处调用）
+  ——Cargo.toml 里 tauri 的 `devtools` feature 必须保留，不要当疏忽移除；debug 构建本就自带 DevTools，
+  未来若要出无 DevTools 的正式包再按 feature 门控（注意它是全局开关，无法只关主窗保留子窗）。
 - 主窗口几何（大小 / 位置 / 最大化）由 `src-tauri/src/window_geometry.rs` 记忆，存 `<数据目录>/window-geometry.json`：
   启动时先按当前显示器校验再还原（拔副屏 / 改分辨率不会把窗口开到屏幕外），关窗与 `ExitRequested` 时落盘；
   最大化 / 全屏 / 最小化时只更新 `maximized` 标记，不覆盖正常态尺寸与位置。尺寸与坐标一律逻辑像素。
@@ -124,6 +127,7 @@ pnpm build:web    # 仅构建前端
 pnpm typecheck    # TS 类型检查（渲染层）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
+pnpm test         # 前端纯函数冒烟测试（vitest）
 pnpm build        # Tauri build（Windows 只出中文 MSI；产物在仓库 target/）
 pnpm dist:installer # 同 pnpm build
 pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
@@ -139,8 +143,9 @@ pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
 - Windows：`scripts/windows/_env.bat` 用 `vswhere` 发现 VS、`VsDevCmd.bat` 在构建进程链里初始化环境；
   **这是唯一需要按平台包一层的理由**，不要再为每个平台写独立的 dev / build 脚本。
 - macOS / Linux：系统工具链（Xcode CLT / gcc）本来就在 PATH 里，`scripts/tauri.mjs` 直接调用 Tauri CLI。
-- 平台相关的打包配置走 Tauri 的配置合并：`src-tauri/tauri.windows.conf.json` / `tauri.macos.conf.json` /
-  `tauri.linux.conf.json`（例如 Windows 的 `bundle.targets = ["msi"]`，即不再打 NSIS），**不要写进脚本**。
+- 平台相关的打包配置走 Tauri 的配置合并：目前唯一的平台差异文件是 `src-tauri/tauri.windows.conf.json`
+  （`bundle.targets = ["msi"]`，即 Windows 本地与 CI 都只出中文 MSI、不打 NSIS；macOS / Linux 暂无差异文件）。
+  CI 在各平台用 `--bundles` 选取子集（msi / app,dmg / deb），不得与此口径矛盾；**平台差异不要写进脚本**。
 - 统一入口：`scripts/tauri.mjs`（`pnpm dev` / `pnpm build` / `pnpm tauri <args>` 都是它）；
   `scripts/doctor.mjs` 只读检查（含实跑一次 `_env.bat` 验证 MSVC 环境）。
 - **不做构建目录搬迁**：D8050 由 `src-tauri/Cargo.toml` 的 `[profile.dev.package.ring] debug = false`
@@ -203,6 +208,10 @@ export default defineTool({
 | 沙箱 / 环境浏览器 | `src-tauri/src/chrome_sandbox/`、`src-tauri/src/env_browser.rs` |
 | 应用壳域（数据目录 / 用量扫描 / 缓存清理 / DevTools） | `src-tauri/src/app_domain.rs` |
 | 离线包 / WXP 增强 / 拦截器 | `src-tauri/src/offline_pack/`、`src-tauri/src/wxp/`、`src-tauri/src/interceptor/` |
+| 拦截器 CA 私钥落盘保护（Windows DPAPI / Unix 0600） | `src-tauri/src/interceptor/key_guard.rs` |
+| 子 Webview 能力白名单（关同源策略按 preset） | `src-tauri/src/webviews.rs`（`preset`） |
+| 日志与 panic 落盘（tauri-plugin-log） | `src-tauri/src/lib.rs`（注册）、`appearance.rs::resolve_log_dir`（目录候选链） |
+| 前端纯函数冒烟测试 | `shared/*.test.ts`、`tools/**/*.test.ts`（vitest.config.ts） |
 | 应用数据根目录解析 | `src-tauri/src/appearance.rs`（`resolve_data_dir`） |
 | 桌面壳（窗口 / Tauri commands / 平台能力） | `src-tauri/src/` |
 | 窗口外观设置（半透明 / 材质）持久化与生效 | `src-tauri/src/appearance.rs` |

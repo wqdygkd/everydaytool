@@ -49,13 +49,13 @@ withDefaults(defineProps<{
   &.is-warning {
     border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
     background: color-mix(in srgb, var(--color-warning) 10%, transparent);
-    color: color-mix(in srgb, var(--color-warning) 80%, #000);
+    color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text-primary));
   }
 
   &.is-danger {
     border-color: color-mix(in srgb, var(--color-error) 35%, transparent);
     background: color-mix(in srgb, var(--color-error) 10%, transparent);
-    color: color-mix(in srgb, var(--color-error) 85%, #000);
+    color: color-mix(in srgb, var(--color-error) 85%, var(--color-text-primary));
   }
 
   &.is-info {

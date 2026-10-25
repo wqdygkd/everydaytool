@@ -412,7 +412,6 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
                 let is_default = normalize_for_compare(&normalized)
                     == normalize_for_compare(&default_data_directory());
                 save_data_directory_override(if is_default { None } else { Some(&normalized) })?;
-                mark_data_directory_configured()?;
                 // 应用级配置（窗口外观 / 几何）跟着数据目录走，换目录不能等于静默重置
                 appearance::carry_config(&previous, &normalized);
                 appearance::invalidate_config_paths();
@@ -420,6 +419,10 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
                 // 工具域重载（拦截器代理按新配置重启）
                 crate::interceptor::on_data_directory_changed(app);
             }
+            // 「已配置」标记必须落在 changed 判断之外：首次引导若选的正是默认目录
+            // （dev 下即仓库 data/），changed=false，跳过它会导致弹窗每次启动重现
+            // ——命令返回成功、无任何报错，但什么都没写盘。
+            mark_data_directory_configured()?;
             let mut info = data_directory_info();
             info["changed"] = json!(changed);
             Ok(info)

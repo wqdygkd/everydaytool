@@ -1,0 +1,5 @@
+# 换行策略：Windows 脚本保持 CRLF，sh 保持 LF；其余文件交给 git text=auto 处理
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.sh text eol=lf

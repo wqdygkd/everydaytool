@@ -11,6 +11,8 @@
   --color-success: #10b981; /* 成功 / 运行中 */
   --color-warning: #f59e0b; /* 警告 / 固定标记 */
   --color-error: #ef4343; /* 错误 / 危险操作 */
+  --color-caption-danger: #e81123; /* Windows 自绘标题栏关闭钮 hover 红（系统 caption button 标准色） */
+  --color-caption-danger-active: #f1707a; /* 关闭钮按下红 */
 
   /* ── surfaces（冷灰） ── */
   --color-app-bg: #f4f4f5; /* 工具页 / 内容区底色（兜底用，画布多为透明） */
