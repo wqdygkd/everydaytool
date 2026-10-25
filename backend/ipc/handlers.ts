@@ -1,7 +1,6 @@
 // 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、磁盘用量、缓存清理、
 // 窗口外观（半透明 / 系统材质）的读取与切换、打开调试控制台。
-// 由 electron/main.ts 注册；数据目录变更后的各工具域内重载通过
-// options.notifyDataDirectoryChanged 注入（避免 backend 反向依赖 electron/tool-registry）。
+// 数据目录切换只写 pending，实际迁移与生效在下次启动的 ready 之前完成。
 import type {
   AppDataDirectoryInfo,
   AppDataDirectoryUpdateResult,
@@ -13,15 +12,15 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { isSafeDataDirectory } from '../../shared/path-guard.ts'
 import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
-import { clearDataRootCaches, invalidateScanCache, scanDataRoot } from '../utils/data-root-scan.ts'
+import { clearDataRootCaches, scanDataRoot } from '../utils/data-root-scan.ts'
 import {
-  applyDataDirectoryChange,
   getDataDirectory,
   getDefaultDataDirectory,
+  getPendingDataDirectory,
   markDataDirectoryConfigured,
+  requestDataDirectoryChange,
 } from '../utils/data-root.ts'
 import { safeHandle } from '../utils/ipc-safety.ts'
-import { invalidateJsonDocuments } from '../utils/json-store.ts'
 import { logger } from '../utils/logger.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
@@ -29,7 +28,6 @@ const require = createRequire(import.meta.url)
 const { BrowserWindow, dialog, ipcMain, session, shell } = require('electron') as typeof import('electron')
 
 export interface AppIpcOptions {
-  notifyDataDirectoryChanged: () => Promise<void>
   /** 外观变更后由 main.ts 应用到真实窗口，并回推最新值给渲染层 */
   applyWindowAppearance: (appearance: WindowAppearance) => void
   /** 平台能力由 main.ts 注入（需要读 process.platform / Windows build） */
@@ -43,6 +41,7 @@ function getDataDirectoryInfo(): AppDataDirectoryInfo {
     dataDirectory,
     defaultDataDirectory,
     isCustom: path.resolve(dataDirectory) !== path.resolve(defaultDataDirectory),
+    pendingDataDirectory: getPendingDataDirectory(),
   }
 }
 
@@ -65,16 +64,12 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
       throw new Error(guard.reason || '数据目录不合法')
     }
 
-    const result = await applyDataDirectoryChange(nextDirectory)
+    const result = await requestDataDirectoryChange(nextDirectory)
     if (result.changed) {
-      await options.notifyDataDirectoryChanged()
       await markDataDirectoryConfigured()
-      // 目录已切换：缓存的扫描结果与 JSON 文档（按绝对路径缓存）都不再有效
-      invalidateScanCache()
-      invalidateJsonDocuments()
-      logger.info('Data directory changed', { changed: true })
+      logger.info('Data directory change pending restart', { target: result.pendingDataDirectory })
     }
-    return { ...getDataDirectoryInfo(), changed: result.changed }
+    return { ...getDataDirectoryInfo(), changed: result.changed, restartRequired: result.changed }
   })
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_OPEN, async () => {

@@ -17,7 +17,7 @@ import {
 } from '../shared/appearance.ts'
 import { isTrustedIpcSenderUrl } from '../shared/ipc-sender.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
-import { notifyDataDirectoryChanged, toolBackends } from './tool-registry.ts'
+import { toolBackends } from './tool-registry.ts'
 
 const require = createRequire(import.meta.url)
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron') as typeof import('electron')
@@ -187,7 +187,6 @@ initIpcSafety({ appPath: app.getAppPath() })
 
 // 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理 / 窗口外观（preload 命名空间 edtApp）
 registerAppIpcHandlers({
-  notifyDataDirectoryChanged,
   applyWindowAppearance,
   getAppearanceCapabilities: () => APPEARANCE_CAPABILITIES,
 })

@@ -4,10 +4,13 @@ export interface AppDataDirectoryInfo {
   dataDirectory: string
   defaultDataDirectory: string
   isCustom: boolean
+  /** 已请求但需重启后迁移生效的目标目录 */
+  pendingDataDirectory: string | null
 }
 
 export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
   changed: boolean
+  restartRequired: boolean
 }
 
 export interface DataRootEntryUsage {

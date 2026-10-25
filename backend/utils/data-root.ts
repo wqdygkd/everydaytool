@@ -1,12 +1,13 @@
 // edt 应用级数据根目录（所有工具的配置 / 缓存 / 产出都落在其下）的唯一事实来源：
 // 默认目录、用户覆盖（data-root.json 引导配置 + data-root.path 镜像文件）、setup 状态。
 // 与具体工具域无关；Chrome / 沙箱专属路径见 tools/chrome-sandbox/backend/utils/path-helper.ts。
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureDir, pathExists, readJson, removeIfExists, writeJson } from './file-ops.ts'
+import { migrateDataDirectory } from './data-migration.ts'
+import { pathExists, readJson, removeIfExists, writeJson } from './file-ops.ts'
 import { logger } from './logger.ts'
 
 const require = createRequire(import.meta.url)
@@ -41,6 +42,10 @@ function getBootstrapConfigPath(): string {
 
 function getSetupStatePath(): string {
   return getUserDataFile('setup-state.json')
+}
+
+function getPendingConfigPath(): string {
+  return getUserDataFile('data-root.pending.json')
 }
 
 function getCustomDataPathFile(): string {
@@ -89,22 +94,68 @@ function isSameDataDirectory(a: string, b: string): boolean {
   return path.resolve(a) === path.resolve(b)
 }
 
-export async function applyDataDirectoryChange(
-  nextDirectory: string,
-): Promise<{ dataDirectory: string, changed: boolean }> {
-  const normalized = normalizeDataDirectory(nextDirectory) || getDefaultDataDirectory()
-  await ensureDir(normalized)
+function isNestedDataDirectory(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
 
-  const changed = !isSameDataDirectory(normalized, getDataDirectory())
-  if (!changed) {
-    return { dataDirectory: normalized, changed: false }
+/**
+ * 请求切换数据目录：只写入 pending 标记，不立即切换。
+ * 下次启动会在 ready 之前把旧目录整体迁移到新目录，再指向新目录——
+ * 这样 sessionData 与各工具缓存都能保持有效。
+ */
+export async function requestDataDirectoryChange(
+  nextDirectory: string,
+): Promise<{ dataDirectory: string, pendingDataDirectory: string | null, changed: boolean }> {
+  const normalized = normalizeDataDirectory(nextDirectory) || getDefaultDataDirectory()
+  const current = getDataDirectory()
+  if (isSameDataDirectory(normalized, current)) {
+    await removeIfExists(getPendingConfigPath())
+    return { dataDirectory: current, pendingDataDirectory: null, changed: false }
+  }
+  if (isNestedDataDirectory(current, normalized) || isNestedDataDirectory(normalized, current)) {
+    throw new Error('新旧数据目录不能互相嵌套')
+  }
+  if (existsSync(normalized) && readdirSync(normalized).length > 0) {
+    throw new Error('目标目录非空，请选择一个空目录（迁移不会覆盖已有文件）')
   }
 
-  const bootstrapTarget = isSameDataDirectory(normalized, getDefaultDataDirectory()) ? null : normalized
-  await saveDataDirectoryOverride(bootstrapTarget)
-  setDataDirectoryOverride(bootstrapTarget)
+  await writeJson(getPendingConfigPath(), { dataDirectory: normalized })
+  logger.info('Data directory change requested; migration will run on next launch', {
+    from: current,
+    to: normalized,
+  })
+  return { dataDirectory: current, pendingDataDirectory: normalized, changed: true }
+}
 
-  return { dataDirectory: normalized, changed: true }
+export function getPendingDataDirectory(): string | null {
+  const pendingPath = getPendingConfigPath()
+  try {
+    if (!existsSync(pendingPath)) return null
+    const raw = JSON.parse(readFileSync(pendingPath, 'utf8')) as { dataDirectory?: unknown }
+    return typeof raw.dataDirectory === 'string' ? normalizeDataDirectory(raw.dataDirectory) : null
+  } catch {
+    return null
+  }
+}
+
+function saveDataDirectoryOverrideSync(directory: string | null): void {
+  const bootstrapPath = getBootstrapConfigPath()
+  const customPathFile = getCustomDataPathFile()
+  if (!directory) {
+    rmSync(bootstrapPath, { force: true })
+    rmSync(customPathFile, { force: true })
+    return
+  }
+  mkdirSync(path.dirname(bootstrapPath), { recursive: true })
+  const tmp = `${bootstrapPath}.${Date.now()}.tmp`
+  writeFileSync(tmp, `${JSON.stringify({ dataDirectory: directory }, null, 2)}\n`, 'utf8')
+  renameSync(tmp, bootstrapPath)
+  writeFileSync(customPathFile, directory, 'utf8')
+}
+
+function clearPendingConfigSync(): void {
+  rmSync(getPendingConfigPath(), { force: true })
 }
 
 export function normalizeDataDirectory(dir: string | null | undefined): string | null {
@@ -135,31 +186,40 @@ export async function loadDataDirectoryOverride(): Promise<void> {
 
 /**
  * 同步版本：供 `ready` 之前设置 sessionData 使用（异步读取可能晚于 ready）。
- * 只读引导配置，不做镜像文件同步；后续 `loadDataDirectoryOverride` 会补齐。
+ * 若存在 pending 目录，先完成整体迁移再切换；迁移失败则继续使用旧目录。
  */
 export function loadDataDirectoryOverrideSync(): void {
   const bootstrapPath = getBootstrapConfigPath()
   try {
-    if (!existsSync(bootstrapPath)) return
-    const raw = JSON.parse(readFileSync(bootstrapPath, 'utf8')) as { dataDirectory?: unknown }
-    if (typeof raw.dataDirectory === 'string') {
-      setDataDirectoryOverride(normalizeDataDirectory(raw.dataDirectory))
+    if (existsSync(bootstrapPath)) {
+      const raw = JSON.parse(readFileSync(bootstrapPath, 'utf8')) as { dataDirectory?: unknown }
+      if (typeof raw.dataDirectory === 'string') {
+        setDataDirectoryOverride(normalizeDataDirectory(raw.dataDirectory))
+      }
     }
   } catch (error) {
     logger.warn('Failed to load data directory override synchronously', { error: (error as Error).message })
   }
-}
 
-async function saveDataDirectoryOverride(dataDirectory: string | null): Promise<void> {
-  const bootstrapPath = getBootstrapConfigPath()
-  await ensureDir(path.dirname(bootstrapPath))
-
-  if (!dataDirectory) {
-    await removeIfExists(bootstrapPath)
-    await updateCustomDataPathFile(null)
+  const pending = getPendingDataDirectory()
+  if (!pending) return
+  if (isSameDataDirectory(pending, getDataDirectory())) {
+    clearPendingConfigSync()
     return
   }
 
-  await writeJson(bootstrapPath, { dataDirectory })
-  await updateCustomDataPathFile(dataDirectory)
+  const result = migrateDataDirectory(getDataDirectory(), pending)
+  if (!result.ok) {
+    logger.warn('Pending data directory migration failed; keeping current directory', {
+      pending,
+      error: result.error,
+    })
+    return
+  }
+
+  const bootstrapTarget = isSameDataDirectory(pending, getDefaultDataDirectory()) ? null : pending
+  saveDataDirectoryOverrideSync(bootstrapTarget)
+  clearPendingConfigSync()
+  setDataDirectoryOverride(bootstrapTarget)
+  logger.info('Data directory switch completed', { dataDirectory: getDataDirectory(), pending })
 }

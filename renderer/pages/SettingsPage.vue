@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../shared/app'
+import type { AppDataDirectoryInfo, AppDataDirectoryUpdateResult, CacheCleanResult, DataRootUsage } from '../../shared/app'
 import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
 import { useAppearance } from '../shared/composables/useAppearance'
 import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
@@ -124,14 +124,13 @@ async function selectDirectory() {
 
   changing.value = true
   try {
-    const result = await invokeAppIpc<AppDataDirectoryInfo & { changed: boolean }>(
+    const result = await invokeAppIpc<AppDataDirectoryUpdateResult>(
       appIpcChannels().DATA_DIRECTORY_UPDATE,
       directory,
     )
     info.value = result
     if (result.changed) {
-      ElMessage.success('数据目录已更新')
-      void loadUsage()
+      ElMessage.success('已记录新的数据目录；重启应用后会整体迁移并生效')
     } else {
       ElMessage.info('目录未发生变化')
     }
@@ -220,8 +219,16 @@ onMounted(() => {
           更改…
         </el-button>
       </UiGroup>
+      <div v-if="info?.pendingDataDirectory" class="directory-row">
+        <span class="muted">待切换</span>
+        <span class="directory-path mono">{{ info.pendingDataDirectory }}</span>
+        <UiChip tone="warning">
+          重启后生效
+        </UiChip>
+      </div>
       <UiHint block>
-        所有工具的数据库、配置与产出都存放在此目录；更改后立即生效，已有数据不会自动迁移到新目录。
+        所有工具的配置、缓存与产出都存放在此目录。更改需重启：启动时会先整体迁移旧目录（含登录缓存），
+        确认成功后才切换到新目录，因此缓存与登录态保持有效；目标目录必须为空。
       </UiHint>
     </UiPanel>
 
