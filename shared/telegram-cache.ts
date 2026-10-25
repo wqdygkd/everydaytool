@@ -1,7 +1,8 @@
 // telegram-cache（Telegram Web A 网络资源优化）共享类型与常量：
 // 纯类型 / 常量 / 纯函数，前端与 Electron 主进程共用。
 // 覆盖方案文档 M0（被动观测）+ M1（资源索引 / 任务去重）+ M2（HTTP 缓存语义 / 配额淘汰 /
-// 受控的本地响应复用，默认关闭）。不注入页面、不做 MTProto 下载。设计见 docs/telegram-cache.md。
+// 受控的本地响应复用，默认关闭）+ M3（页面捕获）+ 可选 M3-B（MTProto 下载，需 .env 凭据）。
+// 设计见 docs/telegram-cache.md。
 
 /** 默认承载的 Telegram Web A 地址（用户可在页面内返回首页，导航由主进程 allowlist 约束） */
 export const TELEGRAM_DEFAULT_URL = 'https://web.telegram.org/a/'
@@ -30,7 +31,7 @@ export const TELEGRAM_MIN_CACHE_BYTES = 256 * 1024 * 1024
 export const TELEGRAM_MAX_CACHE_BYTES = 20 * 1024 * 1024 * 1024
 export const TELEGRAM_DEFAULT_CACHE_BYTES = 3 * 1024 * 1024 * 1024
 
-/** 本地响应复用当前只开放图片类资源（视频 / 音频有 Range 语义，必须单独验收） */
+/** 图片类资源的 MIME 前缀（本地响应默认只做图片；音视频走单区间 Range，见 localMediaRangeEnabled） */
 export const TELEGRAM_LOCAL_RESPONSE_MIME_PREFIX = 'image/'
 
 /** Chromium 的 resourceType 子集（与本工具统计口径一致） */
@@ -99,8 +100,8 @@ export const TELEGRAM_DEFAULT_CONFIG: TelegramCacheConfig = {
 
 /**
  * 能力矩阵：明确区分「可观测 / 可捕获 / 不可访问」。
- * MTProto 下载器恒为 false —— 不提供独立 MTProto 下载，这是方案文档
- * 「先观测、再逐类验证」的硬性前提，不要用 UI 文案暗示已具备。
+ * telegramDownloader 表示独立 MTProto 下载能力是否已具备（实现需要 .env 凭据与会话，
+ * 运行时状态见 TelegramMtprotoStatus）；UI 文案以该字段与 status 为准。
  */
 export interface TelegramCapabilities {
   /** webRequest 已挂载在该分区 session 上（只观测、不改写） */
