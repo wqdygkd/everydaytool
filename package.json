@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.1.0",
   "packageManager": "pnpm@10.6.3",
-  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，首个工具 Chrome沙箱 提供多沙箱浏览器管理",
+  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，内置 Chrome 沙箱 / 环境浏览器 / 接口拦截 / 离线包 / WXP 增强 / Telegram 网络优化等工具",
   "author": "",
   "license": "MIT",
   "keywords": [
@@ -29,7 +29,7 @@
     "web": "vite",
     "dev": "concurrently -k \"vite\" \"node scripts/dev-electron.mjs\"",
     "build": "pnpm run build:electron && vite build",
-    "start": "electron . --remote-debugging-port=0",
+    "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
     "pack": "pnpm run build && electron-builder --dir",
     "dist": "pnpm run build && electron-builder"

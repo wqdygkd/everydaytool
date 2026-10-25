@@ -1,5 +1,6 @@
-import type { ShellMenuAction } from '../shared/menu.ts'
+import type { IpcChannels } from '../shared/ipc-validation.ts'
 import { contextBridge, ipcRenderer } from 'electron'
+import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { isAllowedIpcChannel, isAllowedIpcEventChannel } from '../shared/ipc-validation.ts'
 import { ipcNamespaces } from './ipc-namespaces.ts'
 
@@ -9,17 +10,12 @@ const _platform = (globalThis as unknown as { process?: { platform?: string } })
 const EDT_RUNTIME = {
   target: _platform === 'darwin' ? 'mac' : 'win',
   platform: _platform,
-  // 应用菜单动作桥接（主进程执行；页内菜单已移除，保留备用）
-  menuAction: (action: ShellMenuAction) => {
-    ipcRenderer.send('edt:menu-action', action)
-  },
   // 外部打开：window.open 已被主进程 deny，外跳统一由主进程校验协议后交给系统浏览器
   openExternal: (url: string) => {
-    ipcRenderer.send('edt:open-external', url)
+    ipcRenderer.send(EDT_APP_IPC_CHANNELS.OPEN_EXTERNAL, url)
   },
 } as const
 
-type IpcChannels = Record<string, string>
 type IpcListener = (payload: unknown) => void
 
 function exposeIpcApi(channels: IpcChannels) {

@@ -30,6 +30,12 @@ export interface WindowAppearanceUpdate extends Partial<WindowAppearance> {}
 export interface WindowAppearanceCapabilities {
   /** 是否支持半透明窗口（win32 需 frameless，darwin 恒支持，linux 依赖合成器） */
   supportsTransparent: boolean
+  /**
+   * 半透明的实现方式：css = 透明窗口（Windows 用 titleBarStyle:'hidden' 的窗口形态，
+   * Chromium 合成 alpha）；vibrancy = macOS 原生磨砂；none = 平台不支持。
+   * 主进程据此决定构造参数，避免在两个生命周期各写一份 process.platform 分支。
+   */
+  transparentMode: 'css' | 'vibrancy' | 'none'
   /** 是否支持系统背景材质（win32 22H2+） */
   supportsMaterial: boolean
   /** 可用材质清单（空数组表示该平台无系统材质） */
@@ -62,6 +68,7 @@ export function resolveAppearanceCapabilities(
   if (platform === 'darwin') {
     return {
       supportsTransparent: true,
+      transparentMode: 'vibrancy',
       supportsMaterial: false,
       materials: [],
       vibrancies: ['sidebar', 'hud', 'under-window', 'fullscreen-ui'],
@@ -73,8 +80,10 @@ export function resolveAppearanceCapabilities(
   if (platform === 'win32') {
     const supported = windowsBuild !== null && windowsBuild >= WIN32_MATERIAL_MIN_BUILD
     return {
-      // 透明窗口在 Windows 上必须 frameless（否则 Chromium 不会合成 alpha 通道）
+      // 透明窗口在 Windows 上依赖无系统标题栏的窗口形态（本项目经 titleBarStyle:'hidden'
+      // + titleBarOverlay 实现），否则 Chromium 不会合成 alpha 通道
       supportsTransparent: true,
+      transparentMode: 'css',
       supportsMaterial: supported,
       materials: supported ? ['mica', 'acrylic', 'tabbed'] : [],
       vibrancies: [],
@@ -85,12 +94,52 @@ export function resolveAppearanceCapabilities(
 
   return {
     supportsTransparent: false,
+    transparentMode: 'none',
     supportsMaterial: false,
     materials: [],
     vibrancies: [],
     defaultMaterial: 'none',
     defaultVibrancy: 'none',
   }
+}
+
+/**
+ * 窗口外观的「生效形态」：主进程构造窗口与运行期切换都消费这一份结论，
+ * 平台分支只在这里做一次（构造期 / 运行期不再各自判断）。
+ */
+export interface WindowAppearancePlan {
+  /** 是否处于半透明模式（sanitize 后的最终开关） */
+  enabled: boolean
+  /** 是否用透明窗口承载（Windows 无系统材质时） */
+  transparent: boolean
+  /** 系统背景材质；none = 不用材质 */
+  material: WindowMaterial
+  /** macOS vibrancy；none = 不用 */
+  vibrancy: MacVibrancy
+}
+
+export function resolveWindowAppearance(
+  appearance: WindowAppearance,
+  capabilities: WindowAppearanceCapabilities,
+): WindowAppearancePlan {
+  const safe = sanitizeWindowAppearance(appearance, capabilities)
+  if (!safe.enabled) return { enabled: false, transparent: false, material: 'none', vibrancy: 'none' }
+
+  // macOS：vibrancy 是唯一的半透明实现（自带模糊背景，不能再叠 transparent）
+  if (capabilities.transparentMode === 'vibrancy') {
+    return { enabled: true, transparent: false, material: 'none', vibrancy: safe.vibrancy }
+  }
+
+  // Windows：有系统材质时由 DWM 画背景；无材质才走透明窗口让 CSS alpha 透出桌面
+  if (capabilities.transparentMode === 'css') {
+    if (safe.material !== 'none') {
+      return { enabled: true, transparent: false, material: safe.material, vibrancy: 'none' }
+    }
+    return { enabled: true, transparent: true, material: 'none', vibrancy: 'none' }
+  }
+
+  // 其余平台（linux）：能力表声明不支持，保持不透明
+  return { enabled: false, transparent: false, material: 'none', vibrancy: 'none' }
 }
 
 /**

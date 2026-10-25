@@ -1,5 +1,7 @@
 // IPC 调用方合法性校验（主进程侧）：只允许应用自身页面（file:// 打包产物或
 // dev server 源）发起调用，阻断被注入脚本 / 远程页面借用 preload 句柄的越权调用。
+// 放在 backend/utils/ 而非 shared/：这里依赖 node:process，属于主进程专属能力，
+// shared/ 只放可被渲染层安全引用的纯类型/常量/纯函数（见 AGENTS.md）。
 import process from 'node:process'
 
 export interface IpcSafetyOptions {

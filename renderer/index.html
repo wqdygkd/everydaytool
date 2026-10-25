@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Electron 安全清单：生产页面必须声明 CSP。script 只允许自身打包产物；
+      style 放行 inline（Vue 过渡 / Element Plus 运行时样式、Vite 开发态注入）；
+      connect 放行本地 dev server（HMR ws）与工具域本地服务；frame 只允许 http(s)（工具内嵌 iframe）。
+      webview 内容属于独立会话与文档，不受本页 CSP 约束（见 electron/main.ts 的 will-attach-webview）。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; frame-src http: https:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
     <title>everydaytool</title>
   </head>
   <body>
