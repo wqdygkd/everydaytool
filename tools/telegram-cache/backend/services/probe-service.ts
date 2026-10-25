@@ -4,19 +4,18 @@
 // - 同时给 guest 装导航 allowlist：只允许 Telegram 自己的域名，其它 http(s) 交给系统浏览器。
 import type { WebContents } from 'electron'
 import type { TelegramPageProbe } from '../../../../shared/telegram-cache.ts'
-import { createRequire } from 'node:module'
+import { app, shell, webContents } from 'electron'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { describeUrl } from './identity.ts'
 import { getTelegramSession } from './telegram-session.ts'
-
-const require = createRequire(import.meta.url)
-const { shell, webContents } = require('electron') as typeof import('electron')
 
 /** 允许在 webview 内导航的域名（登录 / 聊天主界面）；其它一律外跳或拦截 */
 const ALLOWED_HOSTS = ['web.telegram.org', 'telegram.org', 'www.telegram.org', 't.me', 'www.t.me']
 
 let attachedPageId: number | null = null
-const attachedCleanup: Array<() => void> = []
+let releaseAttachedWindowOpen: (() => void) | null = null
+/** guest.id → 释放该 guest 导航 allowlist 的函数（创建时安装，页面销毁时自清） */
+const guardedGuests = new Map<number, () => void>()
 
 function isAllowedTelegramHost(host: string): boolean {
   const normalized = host.toLowerCase()
@@ -41,14 +40,52 @@ function openExternalSafely(rawUrl: string): void {
 }
 
 function releasePageHandlers(): void {
-  for (const dispose of attachedCleanup.splice(0)) {
-    try {
-      dispose()
-    } catch {
-      // webContents 已销毁时移除监听可能抛错，忽略
-    }
-  }
+  releaseAttachedWindowOpen?.()
+  releaseAttachedWindowOpen = null
   attachedPageId = null
+}
+
+/** 给 guest 装导航 allowlist（幂等）：webview 创建即装，不等渲染层 dom-ready 后调 PAGE_ATTACH */
+function installNavigationGuard(guest: WebContents): void {
+  if (guardedGuests.has(guest.id)) return
+
+  const onWillNavigate = (event: Electron.Event, url: string) => {
+    if (isAllowedNavigation(url)) return
+    event.preventDefault()
+    openExternalSafely(url)
+  }
+  const onWillRedirect = (event: Electron.Event, url: string) => {
+    if (isAllowedNavigation(url)) return
+    event.preventDefault()
+    openExternalSafely(url)
+  }
+
+  guest.on('will-navigate', onWillNavigate)
+  guest.on('will-redirect', onWillRedirect)
+  guest.once('destroyed', () => guardedGuests.delete(guest.id))
+  guardedGuests.set(guest.id, () => {
+    guest.removeListener('will-navigate', onWillNavigate)
+    guest.removeListener('will-redirect', onWillRedirect)
+    guardedGuests.delete(guest.id)
+  })
+}
+
+let guestGuardsInstalled = false
+
+/**
+ * 在 webview 创建时安装导航 allowlist：渲染层要等 dom-ready 才调 PAGE_ATTACH，
+ * 这期间页面已能自行导航；全局 scheme 闸只挡非 http(s)，域名级放行规则必须提前装。
+ * 由 telegram-cache 后端 initialize 调用一次（主进程生命周期内持续有效）。
+ */
+export function installTelegramGuestGuards(): void {
+  if (guestGuardsInstalled) return
+  guestGuardsInstalled = true
+
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() !== 'webview') return
+    if (contents.session !== getTelegramSession()) return
+    installNavigationGuard(contents)
+  })
 }
 
 /**
@@ -78,34 +115,21 @@ export function attachTelegramPage(webContentsId: number): { attached: boolean, 
   }
   releasePageHandlers()
   attachedPageId = guest.id
+  // 幂等：webview 创建时已装过导航 allowlist，这里只补新窗口策略
+  installNavigationGuard(guest)
 
-  const onWillNavigate = (event: Electron.Event, url: string) => {
-    if (isAllowedNavigation(url)) return
-    event.preventDefault()
-    openExternalSafely(url)
-  }
-  const onWillRedirect = (event: Electron.Event, url: string) => {
-    if (isAllowedNavigation(url)) return
-    event.preventDefault()
-    openExternalSafely(url)
-  }
-  const onDestroyed = () => releasePageHandlers()
-
-  guest.on('will-navigate', onWillNavigate)
-  guest.on('will-redirect', onWillRedirect)
-  guest.once('destroyed', onDestroyed)
   // 新窗口一律不创建（会继承父页面安全配置），允许的 http(s) 交给系统浏览器
   guest.setWindowOpenHandler(({ url }) => {
     openExternalSafely(url)
     return { action: 'deny' }
   })
-
-  attachedCleanup.push(
-    () => guest.removeListener('will-navigate', onWillNavigate),
-    () => guest.removeListener('will-redirect', onWillRedirect),
-    () => guest.removeListener('destroyed', onDestroyed),
-    () => guest.setWindowOpenHandler(() => ({ action: 'deny' })),
-  )
+  releaseAttachedWindowOpen = () => {
+    try {
+      guest.setWindowOpenHandler(() => ({ action: 'deny' }))
+    } catch {
+      // webContents 已销毁时设置会抛错，忽略
+    }
+  }
 
   logger.info('Telegram page attached', { webContentsId: guest.id })
   return { attached: true, url: guest.getURL() || '' }
@@ -124,6 +148,9 @@ function isAllowedNavigation(rawUrl: string): boolean {
 
 export function detachTelegramPage(): void {
   releasePageHandlers()
+  // 退出时把仍存活的 guest 守卫一并释放（页面销毁事件自清之外的兜底）
+  for (const dispose of [...guardedGuests.values()]) dispose()
+  guardedGuests.clear()
 }
 
 export function getAttachedPageId(): number | null {
