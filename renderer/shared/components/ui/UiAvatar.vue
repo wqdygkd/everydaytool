@@ -26,7 +26,7 @@ const iconSize = computed(() => Math.round(props.size * 0.5))
       width: `${size}px`,
       height: `${size}px`,
       fontSize: `${fontSize}px`,
-      background: `linear-gradient(180deg, color-mix(in srgb, ${color} 75%, #fff) 0%, ${color} 100%)`,
+      background: `linear-gradient(180deg, color-mix(in srgb, ${color} 75%, var(--color-on-solid)) 0%, ${color} 100%)`,
     }"
     aria-hidden="true"
   >
@@ -43,7 +43,7 @@ const iconSize = computed(() => Math.round(props.size * 0.5))
   flex-shrink: 0;
   border-radius: 999px;
   color: var(--color-on-solid);
-  font-family: "Nunito", "Roboto", sans-serif;
+  font-family: var(--font-brand);
   font-weight: 800;
   line-height: 1;
   user-select: none;

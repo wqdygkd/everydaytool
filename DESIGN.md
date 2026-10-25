@@ -131,7 +131,7 @@
 | ------ | ------ |
 | 正文 UI | `Roboto`(400/500，自托管) + 系统中文字体（PingFang SC / Microsoft YaHei 等） |
 | 等宽 / 数字 | `--font-mono`：Cascadia Mono / Roboto Mono / SF Mono / Menlo / Consolas |
-| 字母头像 / 品牌标 | `Nunito` ExtraBold 800 |
+| 字母头像 / 品牌标 | `--font-brand`：`Nunito` ExtraBold 800（Roboto / sans-serif 兜底） |
 
 > 数字看板与计数统一用 `--font-mono` + `font-variant-numeric: tabular-nums` 对齐。
 
@@ -165,11 +165,12 @@
 | ------ | ----- | ------ |
 | `--radius-xs` | `8px` | 小件（图标钮 hover 底、代码块） |
 | `--radius-sm` | `12px` | 控件（输入框、编辑器卡片、弹层菜单） |
+| `--radius-control` | `14px` | 圆角矩形控件（按钮、页签、搜索框） |
 | `--radius-md` | `16px` | 行 / 菜单（弹层、消息） |
 | `--radius-lg` | `20px` | 浮岛（卡片、面板、表格容器） |
 | `--radius-xl` | `28px` | 模态（对话框） |
 
-> 按钮、页签为**圆角矩形**（14px / 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
+> 按钮、页签为**圆角矩形**（`--radius-control` 14px / `--radius-sm` 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
 
 ### 3.6 阴影
 

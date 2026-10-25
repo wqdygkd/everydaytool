@@ -91,6 +91,8 @@
   /* ── shape(阶梯:小件 8 / 控件 12 / 卡片 16 / 浮岛 20 / 模态 28) ── */
   --radius-xs: 8px; /* 小件：图标钮 hover 底 / 代码块 / 键盘提示 */
   --radius-sm: 12px; /* 控件：输入框 / 编辑器卡片 / 弹层菜单 */
+  /* 圆角矩形控件（按钮 / 页签 / 搜索框）：DESIGN §3.5 的既定设计值，偏离主阶梯故单独命名 */
+  --radius-control: 14px;
   --radius-md: 16px; /* 行 / 菜单：弹层 / 消息 */
   --radius-lg: 20px; /* 浮岛：卡片 / 面板 / 表格容器 */
   --radius-xl: 28px; /* 模态：对话框 */
@@ -135,6 +137,7 @@
   /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
   font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif; /* 正文 UI */
   --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace; /* 等宽 / 数字 */
+  --font-brand: "Nunito", "Roboto", sans-serif; /* 品牌标 / 字母头像（Nunito ExtraBold 800 自托管） */
   font-synthesis-weight: none; /* 禁止合成字重，避免自托管字体发虚 */
   /* 不设背景：底色由页面自理（工具页 .tool-page 自带 app-bg，首页透出窗口），
      :root 留白才能让半透明窗口透出桌面 */
