@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { APP_ROOT_DEV, getDataDirectory, isDev } from '../../../../backend/utils/data-root.ts'
+import { APP_ROOT_DEV, getDataDirectory, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 
 interface ChromePaths {
@@ -47,7 +47,7 @@ function getChromePaths(): ChromePaths {
 export function getExtensionTemplatePath(): string {
   // In dev: source directory
   // In prod: extraResources copied to resources/extension/
-  return isDev
+  return isDevEnvironment
     ? path.join(APP_ROOT_DEV, 'tools', 'chrome-sandbox', 'extension')
     : path.join(process.resourcesPath, 'extension')
 }

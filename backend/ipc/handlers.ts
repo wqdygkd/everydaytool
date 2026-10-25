@@ -8,9 +8,7 @@ import type {
   DataRootUsage,
 } from '../../shared/app.ts'
 import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../shared/appearance.ts'
-import { createRequire } from 'node:module'
-import path from 'node:path'
-import { isSafeDataDirectory } from '../../shared/path-guard.ts'
+import { BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
 import { clearDataRootCaches, scanDataRoot } from '../utils/data-root-scan.ts'
 import {
@@ -22,10 +20,8 @@ import {
 } from '../utils/data-root.ts'
 import { safeHandle } from '../utils/ipc-safety.ts'
 import { logger } from '../utils/logger.ts'
+import { isSafeDataDirectory, isSamePath } from '../utils/path-guard.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
-
-const require = createRequire(import.meta.url)
-const { BrowserWindow, dialog, ipcMain, session, shell } = require('electron') as typeof import('electron')
 
 export interface AppIpcOptions {
   /** 外观变更后由 main.ts 应用到真实窗口，并回推最新值给渲染层 */
@@ -40,7 +36,7 @@ function getDataDirectoryInfo(): AppDataDirectoryInfo {
   return {
     dataDirectory,
     defaultDataDirectory,
-    isCustom: path.resolve(dataDirectory) !== path.resolve(defaultDataDirectory),
+    isCustom: !isSamePath(dataDirectory, defaultDataDirectory),
     pendingDataDirectory: getPendingDataDirectory(),
   }
 }
@@ -69,7 +65,7 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
       await markDataDirectoryConfigured()
       logger.info('Data directory change pending restart', { target: result.pendingDataDirectory })
     }
-    return { ...getDataDirectoryInfo(), changed: result.changed, restartRequired: result.changed }
+    return { ...getDataDirectoryInfo(), changed: result.changed }
   })
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_OPEN, async () => {

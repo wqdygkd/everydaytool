@@ -15,7 +15,7 @@ import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
-import { isDev } from '../../../../backend/utils/data-root.ts'
+import { isDevEnvironment } from '../../../../backend/utils/data-root.ts'
 import { copyPath, pathExists, readJson, readJsonFile, writeJson } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import {
@@ -28,11 +28,11 @@ import {
   RULE_TYPE_LABELS,
 } from '../../../../shared/interceptor.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../ipc/channels.ts'
-import { getConfigSnapshot, loadConfig, resetConfigStore, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
-import { deleteRule, getRulesSnapshot, loadRules, resetRulesStore, upsertRule } from '../store/rules-store.ts'
+import { getConfigSnapshot, loadConfig, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
+import { deleteRule, getRulesSnapshot, loadRules, upsertRule } from '../store/rules-store.ts'
 import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getLegacyRuntimeExtensionPath, getRuntimeExtensionPath } from '../utils/paths.ts'
 import { getCaTrustState, installCaTrust, uninstallCaTrust } from './ca-trust.ts'
-import { ensureRootCa, isRootCaGenerated, readRootCa, resetCertCaches } from './cert-service.ts'
+import { ensureRootCa, isRootCaGenerated, readRootCa } from './cert-service.ts'
 import { createProxyService } from './proxy-service.ts'
 import { ruleAppliesToHost } from './rule-engine.ts'
 import { compileScriptRules } from './script-compile.ts'
@@ -125,7 +125,7 @@ function buildRuntimeStatus(): InterceptorRuntimeStatus {
 /** 打包态把扩展资源复制到数据目录稳定路径（安装目录可变，load unpacked 的路径必须稳） */
 async function prepareExtensionDirectory(): Promise<string> {
   const source = getExtensionSourcePath()
-  if (isDev) return source
+  if (isDevEnvironment) return source
 
   const target = getRuntimeExtensionPath()
   try {
@@ -586,30 +586,6 @@ export const interceptorService = {
     await startProxyOnConfiguredPort()
     await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE)
     logger.info('Browser bridge started', { proxyPort: proxyService.getPort(), wsPort: wsBridge.getPort() })
-  },
-
-  onDataDirectoryChanged(): void {
-    // 数据目录切换：配置/规则/证书全部换址，内存缓存与流量一并丢弃
-    resetConfigStore()
-    resetRulesStore()
-    resetCertCaches()
-    clearTrafficEntries()
-    caStatusCache = null
-    // 扩展运行时目录随数据目录换址（打包态在 userData 下），需重新解析
-    extensionDir = null
-    void (async () => {
-      await loadConfig()
-      extensionDir = await prepareExtensionDirectory()
-      // 端口配置也随目录换了：按新配置重启代理，避免「配置显示 A / 实际监听 B」
-      try {
-        await proxyService.stop()
-        await startProxyOnConfiguredPort()
-      } catch (error) {
-        proxyPortNote = '代理重启失败，请在状态页检查端口'
-        logger.error('Proxy restart after data directory change failed', { error: (error as Error).message })
-      }
-      emitRuntimeStatus()
-    })()
   },
 
   async dispose(): Promise<void> {

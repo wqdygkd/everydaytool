@@ -1,22 +1,22 @@
 // edt 应用级数据根目录（所有工具的配置 / 缓存 / 产出都落在其下）的唯一事实来源：
 // 默认目录、用户覆盖（data-root.json 引导配置 + data-root.path 镜像文件）、setup 状态。
 // 与具体工具域无关；Chrome / 沙箱专属路径见 tools/chrome-sandbox/backend/utils/path-helper.ts。
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { app } from 'electron'
 import { migrateDataDirectory } from './data-migration.ts'
 import { pathExists, readJson, removeIfExists, writeJson } from './file-ops.ts'
+import { writeJsonDocument } from './json-store.ts'
 import { logger } from './logger.ts'
-
-const require = createRequire(import.meta.url)
-const { app } = require('electron') as typeof import('electron')
+import { isSamePath, isStrictlyWithin } from './path-guard.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Use app.isPackaged for reliable detection (NODE_ENV may not be set in packaged apps)
-export const isDev = !app.isPackaged
+// 是否运行在未打包环境（源码 / pnpm dev / 构建产物直接运行）：决定默认数据目录与资源路径。
+// 注意与 electron/main.ts 的 isDevServer（NODE_ENV=development）区分：二者语义不同。
+export const isDevEnvironment = !app.isPackaged
 
 // In development: source files live under tools/, compiled files under dist-electron/tools/.
 const sourceRootCandidate = path.resolve(__dirname, '..', '..', '..')
@@ -25,7 +25,7 @@ export const APP_ROOT_DEV = path.basename(sourceRootCandidate) === 'dist-electro
   : sourceRootCandidate
 
 export function getDefaultDataDirectory(): string {
-  return isDev
+  return isDevEnvironment
     ? path.join(APP_ROOT_DEV, 'data')
     : path.join(app.getPath('userData'), 'data')
 }
@@ -90,15 +90,6 @@ function setDataDirectoryOverride(dir: string | null): void {
   dataDirectoryOverride = normalizeDataDirectory(dir)
 }
 
-function isSameDataDirectory(a: string, b: string): boolean {
-  return path.resolve(a) === path.resolve(b)
-}
-
-function isNestedDataDirectory(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child)
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
-}
-
 /**
  * 请求切换数据目录：只写入 pending 标记，不立即切换。
  * 下次启动会在 ready 之前把旧目录整体迁移到新目录，再指向新目录——
@@ -109,11 +100,11 @@ export async function requestDataDirectoryChange(
 ): Promise<{ dataDirectory: string, pendingDataDirectory: string | null, changed: boolean }> {
   const normalized = normalizeDataDirectory(nextDirectory) || getDefaultDataDirectory()
   const current = getDataDirectory()
-  if (isSameDataDirectory(normalized, current)) {
+  if (isSamePath(normalized, current)) {
     await removeIfExists(getPendingConfigPath())
     return { dataDirectory: current, pendingDataDirectory: null, changed: false }
   }
-  if (isNestedDataDirectory(current, normalized) || isNestedDataDirectory(normalized, current)) {
+  if (isStrictlyWithin(current, normalized) || isStrictlyWithin(normalized, current)) {
     throw new Error('新旧数据目录不能互相嵌套')
   }
   if (existsSync(normalized) && readdirSync(normalized).length > 0) {
@@ -147,10 +138,9 @@ function saveDataDirectoryOverrideSync(directory: string | null): void {
     rmSync(customPathFile, { force: true })
     return
   }
-  mkdirSync(path.dirname(bootstrapPath), { recursive: true })
-  const tmp = `${bootstrapPath}.${Date.now()}.tmp`
-  writeFileSync(tmp, `${JSON.stringify({ dataDirectory: directory }, null, 2)}\n`, 'utf8')
-  renameSync(tmp, bootstrapPath)
+  // 原子写复用 json-store（临时文件 + rename + mkdir）；读取仍走同步裸读，
+  // 避免把启动期引导配置纳入 json-store 的进程内缓存，造成 pending/迁移时序上的脏读。
+  writeJsonDocument(bootstrapPath, { dataDirectory: directory })
   writeFileSync(customPathFile, directory, 'utf8')
 }
 
@@ -203,7 +193,7 @@ export function loadDataDirectoryOverrideSync(): void {
 
   const pending = getPendingDataDirectory()
   if (!pending) return
-  if (isSameDataDirectory(pending, getDataDirectory())) {
+  if (isSamePath(pending, getDataDirectory())) {
     clearPendingConfigSync()
     return
   }
@@ -217,7 +207,7 @@ export function loadDataDirectoryOverrideSync(): void {
     return
   }
 
-  const bootstrapTarget = isSameDataDirectory(pending, getDefaultDataDirectory()) ? null : pending
+  const bootstrapTarget = isSamePath(pending, getDefaultDataDirectory()) ? null : pending
   saveDataDirectoryOverrideSync(bootstrapTarget)
   clearPendingConfigSync()
   setDataDirectoryOverride(bootstrapTarget)

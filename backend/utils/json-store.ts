@@ -1,7 +1,8 @@
 // 平台级 JSON 文档存储（同步）：小体量的本地数据（沙箱列表 / 指纹 / 工具配置 / 环境账号）
 // 直接落 JSON 文件，进程内按绝对路径缓存解析结果，避免每次读取都碰磁盘。
 // 读多写少且单进程独占：写入走「临时文件 + rename」，不会留下半截 JSON；
-// 数据根目录变更后由平台 IPC 调用 invalidateJsonDocuments() 丢弃按绝对路径缓存的旧条目。
+// 缓存按绝对路径为键，数据目录切换在下次启动整体迁移（见 docs/data-directory.md），
+// 因此运行期不需要手动失效缓存。
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -71,12 +72,4 @@ export function writeJsonDocument<T>(filePath: string, data: T): void {
   }
 
   documents.set(resolved, data)
-}
-
-/**
- * 数据根目录变更后清空全部缓存：文档按绝对路径缓存，旧目录的条目必须一起丢弃，
- * 否则切回旧目录时会读到切换前的内存快照而不是磁盘现状。
- */
-export function invalidateJsonDocuments(): void {
-  documents.clear()
 }

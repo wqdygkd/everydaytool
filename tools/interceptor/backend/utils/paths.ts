@@ -1,12 +1,9 @@
 // interceptor 工具域路径（数据目录 / 证书目录 / 扩展目录解析）。
 // 应用数据根目录来自平台基建 backend/utils/data-root.ts。
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
-import { APP_ROOT_DEV, getDataDirectory, isDev } from '../../../../backend/utils/data-root.ts'
-
-const require = createRequire(import.meta.url)
-const { app } = require('electron') as typeof import('electron')
+import { app } from 'electron'
+import { APP_ROOT_DEV, getDataDirectory, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
 
 export function getInterceptorDataDirectory(): string {
   return path.join(getDataDirectory(), 'interceptor')
@@ -33,7 +30,7 @@ export const CA_EXPORT_FILE_NAME = 'edt-interceptor-ca.crt'
  * - 打包：extraResources 附带 resources/extension-interceptor。
  */
 export function getExtensionSourcePath(): string {
-  return isDev
+  return isDevEnvironment
     ? path.join(APP_ROOT_DEV, 'tools', 'interceptor', 'extension')
     : path.join(process.resourcesPath, 'extension-interceptor')
 }

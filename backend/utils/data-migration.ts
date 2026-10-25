@@ -8,16 +8,12 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { logger } from './logger.ts'
+import { isStrictlyWithin } from './path-guard.ts'
 
 export interface DataDirectoryMigrationResult {
   ok: boolean
   moved: string[]
   error?: string
-}
-
-function isNested(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child)
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
 }
 
 function isEmptyDirectory(directory: string): boolean {
@@ -37,7 +33,7 @@ export function migrateDataDirectory(fromPath: string, toPath: string): DataDire
   const from = path.resolve(fromPath)
   const to = path.resolve(toPath)
   if (from === to) return { ok: true, moved: [] }
-  if (isNested(from, to) || isNested(to, from)) {
+  if (isStrictlyWithin(from, to) || isStrictlyWithin(to, from)) {
     return { ok: false, moved: [], error: '源目录与目标目录不能互相嵌套' }
   }
   if (!existsSync(from)) {

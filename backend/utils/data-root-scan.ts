@@ -8,6 +8,7 @@ import { readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getDataDirectory } from './data-root.ts'
 import { logger } from './logger.ts'
+import { comparePaths } from './path-guard.ts'
 
 // Chromium 系浏览器在用户数据目录内固定的缓存目录名（沙箱 profile 内同样适用）
 const CHROMIUM_CACHE_DIR_NAMES = new Set([
@@ -77,8 +78,8 @@ function collectSkipPaths(): Set<string> {
 
 function isWithinSkipped(targetPath: string, skipPaths: Set<string>): boolean {
   for (const skipPath of skipPaths) {
-    const rel = path.relative(skipPath, targetPath)
-    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) return true
+    const relation = comparePaths(skipPath, targetPath)
+    if (relation.same || relation.inside) return true
   }
   return false
 }
@@ -220,7 +221,7 @@ export async function scanDataRoot(options: { force?: boolean } = {}): Promise<D
   return scanInFlight
 }
 
-/** 数据目录变更后调用：丢弃扫描缓存，避免继续返回旧目录的结果 */
+/** 清空扫描缓存（清理缓存目录后调用；下一次扫描会按磁盘现状重建） */
 export function invalidateScanCache(): void {
   scanCache = null
 }
