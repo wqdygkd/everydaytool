@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AppDataDirectoryInfo, AppDataDirectoryUpdateResult, CacheCleanResult, DataRootUsage } from '../../shared/app'
 import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
+import type { WindowBoundsState } from '../../shared/window-bounds'
 import { useAppearance } from '../shared/composables/useAppearance'
 import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
 
@@ -83,6 +84,41 @@ async function chooseMaterial(value: WindowMaterial | MacVibrancy) {
 // 用来检查卡片底色压在高对比背景上是否还够干净。
 async function toggleTestWallpaper(value: boolean) {
   await updateAppearance({ testWallpaper: value })
+}
+
+// ── 窗口大小与位置 ──
+// 与外观同理：唯一事实来源是主进程（<data>/app/window-bounds.json），这里只读当前记录、
+// 提交开关 / 重置。具体几何由主进程在 move / resize 时自己记，渲染层不经手。
+const bounds = ref<WindowBoundsState | null>(null)
+const boundsResetting = ref(false)
+const rememberBoundsOn = computed(() => bounds.value?.enabled === true)
+
+async function loadBounds() {
+  try {
+    bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_GET)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '读取窗口位置记录失败')
+  }
+}
+
+async function toggleRememberBounds(value: boolean) {
+  try {
+    bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_SET, value)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '切换窗口位置记忆失败')
+  }
+}
+
+async function resetBounds() {
+  boundsResetting.value = true
+  try {
+    bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_RESET)
+    ElMessage.success('已恢复默认大小并居中')
+  } catch (error) {
+    ElMessage.error((error as Error).message || '重置窗口大小失败')
+  } finally {
+    boundsResetting.value = false
+  }
 }
 
 async function loadInfo() {
@@ -195,6 +231,7 @@ onMounted(() => {
   void loadInfo()
   void loadUsage()
   void loadAppearance()
+  void loadBounds()
 })
 </script>
 
@@ -301,6 +338,28 @@ onMounted(() => {
       </div>
     </UiPanel>
 
+    <UiPanel title="窗口大小与位置">
+      <UiSwitchField :model-value="rememberBoundsOn" align="start" @update:model-value="toggleRememberBounds">
+        记住窗口大小与位置
+      </UiSwitchField>
+      <UiHint block>
+        启动时恢复上次退出前的尺寸与位置（含最大化状态）。若记录落在已拔掉的外接屏上或超出了当前屏幕，
+        会改回默认尺寸并居中，不会把窗口还原到屏幕外。
+      </UiHint>
+      <div class="bounds-row">
+        <span class="muted">上次记录</span>
+        <span v-if="bounds?.bounds" class="mono">
+          {{ bounds.bounds.width }} × {{ bounds.bounds.height }}{{ bounds.maximized ? '（最大化）' : '' }}
+        </span>
+        <span v-else class="muted">暂无记录，按默认尺寸居中</span>
+      </div>
+      <UiGroup>
+        <el-button size="small" :loading="boundsResetting" @click="resetBounds">
+          重置为默认大小
+        </el-button>
+      </UiGroup>
+    </UiPanel>
+
     <UiPanel title="清理缓存">
       <UiHint block>
         清除沙箱浏览器产生的缓存文件，不影响配置与登录数据；运行中的沙箱会自动跳过。
@@ -363,6 +422,16 @@ onMounted(() => {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   word-break: break-all;
+}
+
+/* 窗口位置面板的记录摘要：与数据目录那行同构造（弱化标签 + 等宽值），只是值更短 */
+.bounds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-sm) 0;
+  font-size: var(--font-size-sm);
 }
 
 /* 材质选择：卡片式单选（比 el-radio 更容易表达「这是哪种视觉」） */

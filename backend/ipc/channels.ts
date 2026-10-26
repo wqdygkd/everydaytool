@@ -16,6 +16,10 @@ export const EDT_APP_IPC_CHANNELS = {
   APPEARANCE_SET: 'edt-app:appearance:set',
   // 主进程 → 渲染层推送：外观已变更（含平台降级后的最终值）
   EVENT_APPEARANCE_CHANGED: 'edt-app:event:appearance-changed',
+  // 窗口大小 / 位置：读取当前记录、开关「记住窗口大小与位置」、重置回默认尺寸居中
+  WINDOW_BOUNDS_GET: 'edt-app:window-bounds:get',
+  WINDOW_BOUNDS_SET: 'edt-app:window-bounds:set',
+  WINDOW_BOUNDS_RESET: 'edt-app:window-bounds:reset',
   // 外部链接：window.open 已由主进程 deny，渲染层统一经此通道交给系统浏览器打开
   // （主进程校验协议与调用方来源，见 electron/main.ts）
   OPEN_EXTERNAL: 'edt-app:open-external',

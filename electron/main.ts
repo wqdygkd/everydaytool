@@ -1,8 +1,9 @@
 import type { WindowAppearance } from '../shared/appearance.ts'
 import type { ShellMenuAction } from '../shared/menu.ts'
+import type { WindowBoundsState } from '../shared/window-bounds.ts'
 import path from 'node:path'
 import process from 'node:process'
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
@@ -11,8 +12,10 @@ import { initIpcSafety, safeOn } from '../backend/utils/ipc-safety.ts'
 import { isTrustedIpcSenderUrl } from '../backend/utils/ipc-sender.ts'
 import { logger } from '../backend/utils/logger.ts'
 import { configureSessionDataDirectory } from '../backend/utils/session-data.ts'
+import { clearWindowBoundsGeometry, getWindowBoundsState, loadWindowBounds, recordWindowBounds, setWindowBoundsEnabled } from '../backend/utils/window-bounds-store.ts'
 import { parseWindowsBuild, resolveAppearanceCapabilities, resolveWindowAppearance, sanitizeWindowAppearance } from '../shared/appearance.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
+import { DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE, resolveWindowPlacement } from '../shared/window-bounds.ts'
 import { toolBackends } from './tool-registry.ts'
 
 // Chromium 会话数据（Cookies / Cache / LocalStorage / Partitions）必须在 ready 之前重定向到
@@ -55,6 +58,11 @@ const TITLEBAR_COLORS = { color: '#00000000', symbolColor: '#000000' } as const
 // 窗口原生底色：恒透明——外壳与各页面自理底色
 // （工具页 .tool-page 自带 app-bg，首页透出桌面），窗口层不兜实色。
 const TRANSPARENT_WINDOW_BG = '#00000000'
+
+// ── 窗口大小 / 位置 ──
+// 记录用 debounce：拖动 / 缩放会连续触发 resize / move，攒到 400ms 才落一次盘；
+// 关窗时立即同步写入——退出流程没有等异步写的余量。
+const WINDOW_BOUNDS_SAVE_DELAY = 400
 
 // ── 窗口外观（半透明 / 系统材质） ──
 // 平台能力在进程启动时解析一次：Windows 要读系统版本判断是否 22H2+（否则 DWM 会忽略材质），
@@ -119,6 +127,44 @@ function applyWindowAppearance(appearance: WindowAppearance): void {
   const safe = sanitizeWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
   win.webContents.send(EDT_APP_IPC_CHANNELS.EVENT_APPEARANCE_CHANGED, safe)
   logger.info('Window appearance updated', { appearance: safe })
+}
+
+/**
+ * 把持久化的窗口几何换算成 BrowserWindow 构造参数：
+ * 是否恢复、恢复到哪里由 shared/window-bounds.ts 的纯函数决断（屏幕拔掉 / 分辨率变小会
+ * 自动放弃恢复，改用默认尺寸让 Electron 居中）。
+ */
+function resolveWindowBoundsOptions(): { options: Partial<Electron.BrowserWindowConstructorOptions>, maximized: boolean } {
+  const placement = resolveWindowPlacement(
+    getWindowBoundsState(),
+    screen.getAllDisplays().map(display => display.workArea),
+  )
+  if (!placement) return { options: { ...DEFAULT_WINDOW_SIZE }, maximized: false }
+  return { options: { ...placement.bounds }, maximized: placement.maximized }
+}
+
+/** 设置页开关：关闭后不再记录；重新开启时补记一次当前几何，避免下次启动跳回关闭前的老位置 */
+function setWindowBoundsEnabledFromUi(enabled: boolean): WindowBoundsState {
+  const state = setWindowBoundsEnabled(enabled)
+  const win = mainWindow
+  if (!enabled || !win || win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return state
+  recordWindowBounds(win.getNormalBounds(), win.isMaximized())
+  return getWindowBoundsState()
+}
+
+/** 设置页「重置为默认大小」：清掉记录，把当前窗口收回默认尺寸并居中（新几何随即重新记录） */
+function resetWindowBounds(): WindowBoundsState {
+  clearWindowBoundsGeometry()
+
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return getWindowBoundsState()
+
+  if (win.isFullScreen()) win.setFullScreen(false)
+  if (win.isMaximized()) win.unmaximize()
+  win.setSize(DEFAULT_WINDOW_SIZE.width, DEFAULT_WINDOW_SIZE.height)
+  win.center()
+  recordWindowBounds(win.getNormalBounds(), win.isMaximized())
+  return getWindowBoundsState()
 }
 
 // 新窗口 / webview 的协议白名单：只允许 http(s)。
@@ -238,6 +284,8 @@ function registerAppIpc(): void {
   registerAppIpcHandlers({
     applyWindowAppearance,
     getAppearanceCapabilities: () => APPEARANCE_CAPABILITIES,
+    setWindowBoundsEnabled: setWindowBoundsEnabledFromUi,
+    resetWindowBounds,
   })
 
   // 「外部打开」统一入口：window.open 已全部 deny，页面需要外跳时调用本通道，
@@ -275,11 +323,13 @@ async function createWindow(): Promise<void> {
   // import.meta.dirname 由 Node 22 提供，已处理路径里的百分号编码，安装路径含空格 / 中文时不会解析错。
   const __dirname = import.meta.dirname
 
+  // 上次退出时的大小 / 位置；记录不可用（未开启记忆 / 屏幕变化）时是默认尺寸（位置交给 Electron 居中）
+  const savedBounds = resolveWindowBoundsOptions()
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 900,
-    minWidth: 800,
-    minHeight: 500,
+    ...savedBounds.options,
+    minWidth: MIN_WINDOW_SIZE.width,
+    minHeight: MIN_WINDOW_SIZE.height,
     title: 'everydaytool',
     // 隐藏系统标题栏，网页头部即标题栏；
     // Windows/Linux 右上角保留原生最小化/最大化/关闭按钮，高度与 .app-header(44px) 对齐
@@ -325,6 +375,37 @@ async function createWindow(): Promise<void> {
     // 置空避免后续菜单 / IPC 操作已销毁的 webContents 而抛异常
     mainWindow = null
   })
+
+  // ── 记录窗口几何 ──
+  // 最大化 / 全屏下也记录：取 getNormalBounds() 的还原尺寸，下次仍以同样大小建窗；
+  // 最小化时不记录（那是临时状态，不代表用户想要的大小）。
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null
+  const recordBoundsNow = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
+    recordWindowBounds(win.getNormalBounds(), win.isMaximized())
+  }
+  const scheduleBoundsRecord = () => {
+    if (boundsTimer) clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null
+      recordBoundsNow()
+    }, WINDOW_BOUNDS_SAVE_DELAY)
+  }
+  win.on('resize', scheduleBoundsRecord)
+  win.on('move', scheduleBoundsRecord)
+  win.on('maximize', scheduleBoundsRecord)
+  win.on('unmaximize', scheduleBoundsRecord)
+  win.on('close', () => {
+    // 退出前把攒着的记录立刻写掉：异步 / 定时器都可能来不及跑
+    if (boundsTimer) {
+      clearTimeout(boundsTimer)
+      boundsTimer = null
+    }
+    recordBoundsNow()
+  })
+
+  // 上次退出时是最大化：先按记录的普通态几何建窗再最大化，还原后回到原来的大小
+  if (savedBounds.maximized) win.maximize()
 
   if (isDevServer) {
     await win.loadURL('http://localhost:5173')
@@ -396,6 +477,8 @@ async function bootstrap(): Promise<void> {
   // 外观必须先于 createWindow 读盘：窗口构造参数（transparent / vibrancy / backgroundMaterial）
   // 只在创建时生效，之后再改只能部分切换，读不到就等于这次启动丢了用户选择。
   await loadWindowAppearance()
+  // 窗口几何同样必须在 createWindow 之前读盘：恢复位置只能通过构造参数传入
+  loadWindowBounds()
   await createWindow()
 }
 

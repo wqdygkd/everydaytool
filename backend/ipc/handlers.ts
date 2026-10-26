@@ -8,6 +8,7 @@ import type {
   DataRootUsage,
 } from '../../shared/app.ts'
 import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../shared/appearance.ts'
+import type { WindowBoundsState } from '../../shared/window-bounds.ts'
 import { BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
 import { clearDataRootCaches, scanDataRoot } from '../utils/data-root-scan.ts'
@@ -21,6 +22,7 @@ import {
 import { safeHandle } from '../utils/ipc-safety.ts'
 import { logger } from '../utils/logger.ts'
 import { isSafeDataDirectory, isSamePath } from '../utils/path-guard.ts'
+import { getWindowBoundsState } from '../utils/window-bounds-store.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
 export interface AppIpcOptions {
@@ -28,6 +30,10 @@ export interface AppIpcOptions {
   applyWindowAppearance: (appearance: WindowAppearance) => void
   /** 平台能力由 main.ts 注入（需要读 process.platform / Windows build） */
   getAppearanceCapabilities: () => WindowAppearanceCapabilities
+  /** 记忆开关由 main.ts 落地：开启瞬间补记一次当前几何，否则会恢复成关闭前的老位置 */
+  setWindowBoundsEnabled: (enabled: boolean) => WindowBoundsState
+  /** 重置记录并把当前窗口收回默认尺寸并居中（要操作真实窗口，故由 main.ts 注入） */
+  resetWindowBounds: () => WindowBoundsState
 }
 
 function getDataDirectoryInfo(): AppDataDirectoryInfo {
@@ -94,6 +100,16 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     options.applyWindowAppearance(next)
     return next
   })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.WINDOW_BOUNDS_GET, (): WindowBoundsState => getWindowBoundsState())
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.WINDOW_BOUNDS_SET, (_event, enabled: unknown): WindowBoundsState => {
+    // 渲染层只能开关记忆；具体几何由主进程在 move / resize 时自己记（渲染层拿不到可靠值）
+    if (typeof enabled !== 'boolean') throw new Error('参数不合法')
+    return options.setWindowBoundsEnabled(enabled)
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.WINDOW_BOUNDS_RESET, (): WindowBoundsState => options.resetWindowBounds())
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.CACHE_CLEAR, async (): Promise<CacheCleanResult> => {
     const result = await clearDataRootCaches()

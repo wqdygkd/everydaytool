@@ -10,7 +10,7 @@
 | 数据 | 位置 | 说明 |
 | --- | --- | --- |
 | 数据目录引导（硬限制） | `userData/data-root.json`、`setup-state.json`、`data-root.path`、`data-root.pending.json` | 必须先知道数据目录在哪，不能放进数据目录 |
-| 应用壳配置 | `<data>/app/window-appearance.json` | 窗口外观；早期在 userData，首次读取自动搬入 |
+| 应用壳配置 | `<data>/app/window-appearance.json`、`<data>/app/window-bounds.json` | 窗口外观 + 记住的窗口大小 / 位置；外观早期在 userData，首次读取自动搬入 |
 | Electron 崩溃/日志 | `<data>/app/crash-dumps`、`<data>/app/logs` | `app.setPath('crashDumps' / 'logs')` |
 | Chromium 会话（全部 webview） | `<data>/session` | Cookies / LocalStorage / IndexedDB / Cache / Partitions；见 §2 |
 | chrome-sandbox | `<data>/chrome-sandbox/` | `sandboxes.json` / `fingerprints.json` / `config.json`；profile 见下 |

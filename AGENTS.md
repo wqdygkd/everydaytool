@@ -32,7 +32,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 
 - 主壳 `renderer/App.vue`：自定义标题栏（`electron/main.ts` 用 `titleBarStyle: 'hidden'` 隐藏系统标题栏 + `titleBarOverlay` 右上角窗口按钮）；标题栏整行 `-webkit-app-region: drag`，页签区与设置入口 no-drag；页内菜单已移除，菜单动作仅由主进程系统菜单提供（清单见 `shared/menu.ts`）；底部状态栏已删除，主区直抵窗口底缘。
 - **设置是页签，不是弹窗**：入口在标题栏右端（`.header-settings`，Windows 上即最小化按钮左侧），点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 用同一张表常驻挂载。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
-  桌面端专属页面（如设置：数据目录 / 空间占用 / 缓存清理 / 窗口外观都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
+  桌面端专属页面（如设置：数据目录 / 空间占用 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
   命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
 - 首页 `renderer/pages/HomePage.vue`：工具网格按分类分组，支持搜索 / 收藏。
 - 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
@@ -82,6 +82,18 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 - **测试壁纸**是调 alpha / 玻璃的对照面（`--appearance.testWallpaper` → `<html>.has-test-wallpaper`），
   样式只在 `translucency.scss` 一处、铺在 `body`（必须在 teleport 出去的弹层之下）；
   它不进 `sanitizeWindowAppearance` 的平台裁剪，任何平台 / 不透明模式下都能开。
+
+### 窗口大小与位置（记住上次几何）
+
+- 主进程同样是唯一事实来源（`backend/utils/window-bounds-store.ts` → `<data>/app/window-bounds.json`），
+  渲染层（设置页签 →「窗口大小与位置」）只经 IPC 读取状态、提交开关 / 重置，**不自己记几何**。
+- **恢复判定是纯逻辑**：`shared/window-bounds.ts` 的 `resolveWindowPlacement` 只认「仍落在某块屏工作区内、
+  且可见面积足够拖动」的记录；外接屏拔掉 / 分辨率变小时返回 `null`，主进程改用默认尺寸让 Electron 居中
+  ——绝不允许把窗口还原到屏幕外。坐标换算 / 越界收敛都写在这里，主进程只做传参。
+- `enabled` / `maximized` / `bounds` 三个字段：关闭开关即不记录也不恢复；最大化只记标记，几何恒取
+  `getNormalBounds()`（还原后的尺寸），下次先按普通态建窗再 `maximize()`。
+- 存储走**同步** JSON 存储（`backend/utils/json-store.ts`），不用外观那套异步写：`move` / `resize` 高频触发，
+  关窗时还必须在进程退出前落盘。写入用 400ms debounce + 值不变不写，`close` 时立刻 flush。
 
 ## 常用命令
 
@@ -148,7 +160,7 @@ export default defineTool({
 | **UI 组件库（面板/分组/键值/对话框等 25 组件）** | `renderer/shared/components/ui/` |
 | 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `renderer/App.vue` |
 | **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
-| 设置页（数据目录 / 空间占用 / 窗口外观） | `renderer/pages/SettingsPage.vue` |
+| 设置页（数据目录 / 空间占用 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |
@@ -169,6 +181,8 @@ export default defineTool({
 | 窗口外观设置（半透明 / 材质）持久化 | `backend/utils/appearance-store.ts` |
 | 平台能力判定（透明 / 材质 / vibrancy） | `shared/appearance.ts` |
 | 渲染层外观状态 composable | `renderer/shared/composables/useAppearance.ts` |
+| 窗口大小 / 位置持久化（记住上次几何） | `backend/utils/window-bounds-store.ts` |
+| 窗口几何恢复 / 越界收敛（纯逻辑） | `shared/window-bounds.ts` |
 | **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
 | **telegram-cache 模块记忆（观测口径 / 单飞去重 / HTTP 缓存与本地响应 / 页面捕获与 MTProto 边界）** | `docs/telegram-cache.md` |
 | **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |
