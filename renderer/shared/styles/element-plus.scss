@@ -19,6 +19,14 @@
   --el-component-size: var(--control-height);
   --el-component-size-small: 24px;
   --el-component-size-large: 40px;
+  /* 字号 5 档：EP 的 extra-small / small / base / medium / large 全部接到令牌，
+     组件（按钮 / 输入 / 表格 / 弹层 / 消息）不再各自一套默认值——改 tokens.scss 即全站生效。
+     注意 EP 默认的 small=13px、extra-small=12px，接过来后统一为 12 / 11。 */
+  --el-font-size-extra-small: var(--font-size-xs);
+  --el-font-size-small: var(--font-size-sm);
+  --el-font-size-base: var(--font-size-base);
+  --el-font-size-medium: var(--font-size-lg);
+  --el-font-size-large: var(--font-size-xl);
   --el-bg-color: var(--color-input);
   --el-bg-color-page: var(--color-canvas);
   --el-bg-color-overlay: var(--color-overlay);

@@ -44,7 +44,7 @@ const iconSize = computed(() => Math.round(props.size * 0.5))
   border-radius: 999px;
   color: var(--color-on-solid);
   font-family: var(--font-brand);
-  font-weight: 800;
+  font-weight: var(--font-weight-brand);
   line-height: 1;
   user-select: none;
 }

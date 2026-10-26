@@ -263,7 +263,7 @@ function openSettings() {
     color: var(--color-primary);
     font-family: var(--font-brand);
     font-size: var(--font-size-sm);
-    font-weight: 800;
+    font-weight: var(--font-weight-brand);
     letter-spacing: 0.02em;
     text-transform: uppercase;
     cursor: pointer;

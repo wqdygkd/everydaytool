@@ -106,8 +106,11 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
 .panel-header {
   margin-bottom: var(--spacing-xl);
 
+  /* 沙箱名按「区块标题」取字阶：标题标签已全局 reset 为 inherit，这里显式给档 */
   h2 {
     margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
   }
 }
 

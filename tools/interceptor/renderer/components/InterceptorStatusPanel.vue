@@ -311,7 +311,7 @@ function formatTime(at: number): string {
   margin: 0 0 var(--spacing-sm);
   padding-left: var(--spacing-xl);
   color: var(--color-text-secondary);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
 .port-note {

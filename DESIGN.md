@@ -112,21 +112,9 @@
   开态只剩一块被轨道染色的圆点；各模式取值见 §7.1.1。
 - 高光与轨道都**不加 `backdrop-filter`**：滑块背后是轨道、轨道背后是卡片，没有「背后的内容」可磨。
 
-### 3.2 字阶与字体
+### 3.2 字体与字阶
 
-| 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--font-size-xs` | `11px` | 徽章、表格辅助、代码 |
-| `--font-size-sm` | `12px` | 说明、键值、表格正文 |
-| `--font-size-base` | `14px` | 正文、面板标题 |
-| `--font-size-lg` | `16px` | 区块标题、状态名 |
-| `--font-size-xl` | `18px` | 大标题（规则编辑器标题） |
-| `--font-weight-regular` | `400` | 正文 |
-| `--font-weight-medium` | `500` | 按钮、页签、标签 |
-| `--font-weight-semibold` | `600` | 卡片名、面板标题、区块标题 |
-| `--font-weight-bold` | `700` | — |
-
-**字体栈**
+#### 3.2.1 字体栈
 
 | 用途 | 字体 |
 | ------ | ------ |
@@ -134,10 +122,68 @@
 | 等宽 / 数字 | `--font-mono`：Cascadia Mono / Roboto Mono / SF Mono / Menlo / Consolas |
 | 字母头像 / 品牌标 | `--font-brand`：`Nunito` ExtraBold 800（Roboto / sans-serif 兜底） |
 
-> 数字看板与计数统一用 `--font-mono` + `font-variant-numeric: tabular-nums` 对齐。
->
-> **硬性约定**：数字 / 等宽一律用 `.mono` 工具类，**禁止硬编码 `Consolas` / `ui-monospace` 等字体栈**；
-> 字母头像与品牌标用自托管 Nunito ExtraBold 800（`--font-brand`）。
+> 等宽只通过 `.mono` 工具类使用（`--font-mono` + `font-variant-numeric: tabular-nums`），
+> **禁止硬编码 `Consolas` / `ui-monospace`**；品牌标与字母头像用 `--font-brand` + `--font-weight-brand`。
+
+#### 3.2.2 字阶：5 档，唯一字号来源
+
+| 令牌 | 值 | 角色 | 典型用法 |
+| ------ | ----- | ------ | ------ |
+| `--font-size-xs` | `11px` | 元信息 | 时间戳、徽章（`UiChip`）、表格辅助列、代码、计数 |
+| `--font-size-sm` | `12px` | 辅助正文 | 说明 / 提示（`UiHint`）、键值、表格正文、次级按钮（`size="small"`）、下拉项 |
+| `--font-size-base` | `14px` | 正文 | 正文、控件文字、面板标题（`UiPanel` 默认）、卡片名、目录树 |
+| `--font-size-lg` | `16px` | 区块标题 | `UiSectionHeader`、`UiPanel titleSize="lg"`、状态名、设置页分区标题 |
+| `--font-size-xl` | `18px` | 页面标题 | 工具页 / 设置页一级标题、规则编辑器标题（**全站上限**） |
+
+**规则**
+
+- 字号**只引用令牌**，禁止 `font-size: 13px` 这类字面量，也不用 `em/rem` 做页面缩放（桌面壳不支持缩放）。
+- **18px 是上限**：本应用没有营销型大标题，不再出现 20 / 24 / 28px 的散值；需要强调时用字重与颜色，不放大字号。
+- Element Plus 的 5 档字号已全部绑到本表（`--el-font-size-extra-small/small/base/medium/large`），
+  改 `tokens.scss` 即按钮 / 输入 / 表格 / 弹层 / 消息同步生效（EP 默认 small 13 / extra-small 12 已统一为 12 / 11）。
+- 数字看板与计数**不放大字号**，靠 `.mono` + `--font-weight-bold` 提升可读性。
+
+#### 3.2.3 字重
+
+| 令牌 | 值 | 用途 |
+| ------ | ----- | ------ |
+| `--font-weight-regular` | 400 | 正文、表格正文、说明 |
+| `--font-weight-medium` | 500 | 按钮、页签、标签、卡片名、面板标题 |
+| `--font-weight-semibold` | 600 | 区块标题、`h1–h6` 默认、强调性小标题 |
+| `--font-weight-bold` | 700 | `<strong>` / `<b>`、数字看板 |
+| `--font-weight-brand` | 800 | 只给 Nunito 品牌标与字母头像 |
+
+> 正文与 UI 禁用 300 / 800（自托管字体没有对应字重，会走合成粗体发虚）；`<strong>` 已全局绑到 `--font-weight-bold`。
+
+#### 3.2.4 行高
+
+| 场景 | 取值 |
+| ------ | ------ |
+| 单行控件 / 表格 / 徽标 | `--line-height-control`（`20px`） |
+| 正文 / 列表项 | `1.5`（`body` 全局默认） |
+| 紧凑说明（11–12px 提示） | `1.4` |
+| 长文段落（步骤、说明块） | `1.6` |
+| 图标 / 纯图形 / 单行窄标签 | `1`（或等值 px，如 mono 徽标 `14px`） |
+
+> 正文行高不得低于 `1.4`，不再出现 `1.7` 以上的散值；表格的实际行高 = `.cell` 上下内边距（§7.5）+ 行高。
+
+#### 3.2.5 字距
+
+- 正文与标题：`0`，**不加字距**。
+- 小号全大写 / 等宽短标签：`0.25–0.5px`（如 interceptor 规则类型标签、品牌标 `0.02em`），仅限短标签。
+- 禁止在长文本 / 段落上使用 `letter-spacing`。
+
+#### 3.2.6 标题标签（`h1–h6`）
+
+- 已全局 reset：`margin: 0` + `font-size: inherit` + `font-weight: var(--font-weight-semibold)` + `text-wrap: balance`。
+- 因此**标题必须显式取令牌字号**（例：`UiSectionHeader` 用 `lg`、工具卡名用 `base`、沙箱名用 `lg`）；
+  禁止依赖浏览器默认的 h1–h6 字号（21 / 18 / 16px，会直接越过 18px 上限）。
+
+#### 3.2.7 数字与等宽
+
+- 数字 / ID / 字节 / 时间 / 代码统一 `.mono`；表格数字列右对齐，计数不放大字号。
+- 等宽字号跟随上下文令牌（表格里 `sm`、徽章里 `xs`），不为等宽单开档位。
+- **唯一例外**：`UiAvatar` 的字母字号按头像直径计算（`size × 0.43`，内联 style），因为它是图形元素而非文本。
 
 ### 3.3 间距
 
