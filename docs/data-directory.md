@@ -23,6 +23,7 @@
 | treease-editor | `<data>/treease-editor/`（预留） | 无独立业务数据；页面缓存/登录在 Chromium 分区 |
 | wxp-enhancer | `<data>/wxp-enhancer/config.json` | 注入设置；目标微信的聊天文件属于外部应用 |
 | telegram-cache | `<data>/telegram-cache/` | 资源索引 / 对象 / 归档 / 断点 / 基准 / MTProto 会话密文 |
+| workbuddy2api-panel | `<data>/workbuddy2api-panel/` | manifest / 设置 / downloads / runtime 二进制 / run 工作目录；二进制不进安装包 |
 | id-card-generator | 无持久化文件 | 纯前端生成，不落盘 |
 | 系统 Chrome 安装/默认 Profile | 系统路径 | 仅作为沙箱克隆源（只读） |
 | 根 CA 信任库 | Windows 用户 Root / macOS login keychain | 系统信任存储，硬限制 |
@@ -74,6 +75,7 @@ Chromium 没有“每个 persist 分区自定义磁盘路径”的 API；`sessio
 | offline-pack | ✅ `<data>/offline-pack` | 用户另存位置除外 |
 | wxp-enhancer | ✅ `<data>/wxp-enhancer` | 目标微信数据在外部 |
 | telegram-cache | ✅ `<data>/telegram-cache` | Chromium 分区在 `session/Partitions` |
+| workbuddy2api-panel | ✅ `<data>/workbuddy2api-panel` | 上游二进制与 run/ 配置；面板 session 在 `session/Partitions` |
 | treease-editor | ✅ `<data>/treease-editor`（预留） | 页面数据在 Chromium 分区 |
 | id-card-generator | — | 无持久化 |
 

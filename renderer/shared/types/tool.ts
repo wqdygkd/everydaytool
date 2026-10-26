@@ -2,7 +2,7 @@ import type { AsyncComponentLoader, Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import type { IconName } from '../components/ui/icons'
 
-export type ToolClientTarget = 'web' | 'win' | 'mac'
+export type ToolClientTarget = 'web' | 'win' | 'mac' | 'linux'
 
 export interface ToolCategory {
   key: string

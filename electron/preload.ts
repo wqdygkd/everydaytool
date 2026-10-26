@@ -8,7 +8,7 @@ import { ipcNamespaces } from './ipc-namespaces.ts'
 const _platform = (globalThis as unknown as { process?: { platform?: string } }).process?.platform
   ?? 'win32'
 const EDT_RUNTIME = {
-  target: _platform === 'darwin' ? 'mac' : 'win',
+  target: _platform === 'darwin' ? 'mac' : _platform === 'linux' ? 'linux' : 'win',
   platform: _platform,
   // 外部打开：window.open 已被主进程 deny，外跳统一由主进程校验协议后交给系统浏览器
   openExternal: (url: string) => {

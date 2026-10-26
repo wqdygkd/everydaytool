@@ -108,6 +108,11 @@ export const icons = {
     paths: ['M17.2 3.4 3 9.4l5.7 2.2', 'M17.2 3.4l-4.1 13.2-4.4-7.4', 'M8.7 11.6v3.6l2.4-2.4'],
     sw: 1.6,
   },
+  'wb2api': {
+    vb: 20,
+    paths: ['M4 14.5 10 4.5l6 10', 'M6.5 14.5h7', 'M8.2 11.2h3.6'],
+    sw: 1.6,
+  },
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof icons

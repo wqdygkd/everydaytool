@@ -7,3 +7,6 @@ export const TREEASE_WEBVIEW_PARTITION = 'persist:treease-editor'
 // 观测 / session.fetch 共用同一个分区，保证「观测到的请求」「页面登录态」「下载请求」
 // 落在同一个 cookie / 代理上下文里。分区名带 persist: 前缀，登录态可跨重启保留。
 export const TELEGRAM_WEBVIEW_PARTITION = 'persist:telegram-cache'
+
+// workbuddy2api-panel 内嵌上游 /panel/ 的 session 分区：与宿主页隔离，保留面板登录态。
+export const WB2API_WEBVIEW_PARTITION = 'persist:workbuddy2api-panel'

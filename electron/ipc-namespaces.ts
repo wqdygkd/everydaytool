@@ -6,6 +6,7 @@ import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/chann
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
 import { TELEGRAM_CACHE_IPC_CHANNELS } from '../tools/telegram-cache/backend/ipc/channels.ts'
 import { TREEASE_EDITOR_IPC_CHANNELS } from '../tools/treease-editor/backend/ipc/channels.ts'
+import { WB2API_PANEL_IPC_CHANNELS } from '../tools/workbuddy2api-panel/backend/ipc/channels.ts'
 import { WXP_ENHANCER_IPC_CHANNELS } from '../tools/wxp-enhancer/backend/ipc/channels.ts'
 
 export interface IpcNamespace {
@@ -26,4 +27,5 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'wxpEnhancer', channels: WXP_ENHANCER_IPC_CHANNELS },
   { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },
   { preloadNamespace: 'telegramCache', channels: TELEGRAM_CACHE_IPC_CHANNELS },
+  { preloadNamespace: 'workbuddy2apiPanel', channels: WB2API_PANEL_IPC_CHANNELS },
 ]

@@ -6,9 +6,10 @@ import interceptor from '@tools/interceptor/index'
 import offlinePack from '@tools/offline-pack/index'
 import telegramCache from '@tools/telegram-cache/index'
 import treeaseEditor from '@tools/treease-editor/index'
+import workbuddy2apiPanel from '@tools/workbuddy2api-panel/index'
 import wxpEnhancer from '@tools/wxp-enhancer/index'
 
-export const allToolRegistry: ToolDefinition[] = [interceptor, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, telegramCache]
+export const allToolRegistry: ToolDefinition[] = [interceptor, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, telegramCache, workbuddy2apiPanel]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
   // 兼容预加载时序：优先读 window.edtRuntime，兜底 UA 判断
@@ -16,7 +17,9 @@ function getCurrentToolClientTarget(): ToolClientTarget {
   if (w.edtRuntime?.target) return w.edtRuntime.target
   if (navigator.userAgent.includes('Electron')) {
     // Electron 环境但 edtRuntime 尚未注入时，按平台推断
-    return navigator.userAgent.includes('Mac') ? 'mac' : 'win'
+    if (navigator.userAgent.includes('Mac')) return 'mac'
+    if (/Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent)) return 'linux'
+    return 'win'
   }
   return 'web'
 }

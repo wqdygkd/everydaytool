@@ -4,7 +4,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的开发约
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 8 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache）。
+Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / workbuddy2api-panel）。
 
 ## 设计系统（重要）
 
@@ -123,7 +123,7 @@ export default defineTool({
   icon: 'toolbox',
   category: { key: 'general', name: '通用工具' },
   keywords: ['tool-name'],
-  supportedTargets: ['web', 'win', 'mac'], // web 网页端 / win Windows / mac macOS
+  supportedTargets: ['web', 'win', 'mac', 'linux'], // web 网页端 / win Windows / mac macOS / linux
   route: {
     path: 'tool-name',
     name: 'tool-tool-name',
@@ -172,3 +172,4 @@ export default defineTool({
 | **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
 | **telegram-cache 模块记忆（观测口径 / 单飞去重 / HTTP 缓存与本地响应 / 页面捕获与 MTProto 边界）** | `docs/telegram-cache.md` |
 | **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |
+| **workbuddy2api-panel 模块记忆（托管上游二进制 / 探活 / 更新回滚）** | `docs/workbuddy2api-panel.md` |
