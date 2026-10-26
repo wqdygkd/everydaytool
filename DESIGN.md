@@ -52,7 +52,8 @@
 
 每个表面角色拆成「基准色（`--color-<role>-base`）× 透明度（`--alpha-<role>`）」，
 两者在 `translucency.scss` 里用 `color-mix` 合成出 `--color-<role>` 供组件引用。
-**新增角色需同时改三处**：tokens.scss 的 base + alpha，translucency.scss 的合成与各模式取值。
+**新增角色需同时改四处**：`tokens.scss` 的 `--color-<role>-base` + `--alpha-<role>` + `--glass-<role>`，
+以及 `translucency.scss` 的合成与各模式取值。新增模式只加一条模式规则（alpha + glass 两组），组件零改动。
 
 | 角色 | 用途 | 独立调节入口 |
 | ------ | ------ | ------------- |
@@ -134,6 +135,9 @@
 | 字母头像 / 品牌标 | `--font-brand`：`Nunito` ExtraBold 800（Roboto / sans-serif 兜底） |
 
 > 数字看板与计数统一用 `--font-mono` + `font-variant-numeric: tabular-nums` 对齐。
+>
+> **硬性约定**：数字 / 等宽一律用 `.mono` 工具类，**禁止硬编码 `Consolas` / `ui-monospace` 等字体栈**；
+> 字母头像与品牌标用自托管 Nunito ExtraBold 800（`--font-brand`）。
 
 ### 3.3 间距
 
@@ -147,6 +151,12 @@
 | `--spacing-lg` | `16px` | | |
 
 > 取值规则：魔法数字就近向上取整到最近阶梯（6→sm、10→md、14→lg、18→xl、22px 行高→`--line-height-control`、28~42→2xl/3xl）。
+>
+> **豁免项**（结构常数，不受阶梯约束）：边框宽度、图标 / svg 尺寸（12–20px）、1–2px 微内边距、999px 胶囊圆角、
+> 表格列宽 / `min-width`、内容栏 `max-width`、组件几何（如 `UiMenuHorizontal` 条高 48 / 项高 40）。
+>
+> **同一模式只写一次**：卡片 / 灰底面版 / 虚线新增钮等同构模式合并为「单一类 + 修饰类」，
+> 宽度一律走 `.ctl-*` 阶梯或 `flex` 填充，不为一点差异新增魔法数字。
 
 ### 3.4 几何外壳
 
@@ -211,9 +221,20 @@
 
 **覆写原则**：只在局部覆写几何差异（高度 / 圆角 / 边框宽度），颜色与状态一律交全局绑定；视觉不一致时优先改全局绑定，不要单点堆 `:deep`。
 
+**注入顺序（必踩的坑）**：EP 的组件 CSS 由 `ElementPlusResolver({ importStyle: 'css' })` 懒加载、**晚于** `element-plus.scss` 注入，
+同权声明会被 EP 盖回。需要压过 EP 默认值的规则一律带 `html` / `.el-xxx .el-yyy` 前缀并在注释写明原因
+（现有先例：`html .el-switch`、`html .el-table`、`html .el-alert`）。
+
 ## 5. UI 组件库
 
-平台级组件库（27 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
+平台级组件库（27 个组件 + `icons.ts` 图标名表），源码在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import；composable 需显式 import）。以下是完整规范。
+
+**使用约定（硬性）**
+
+- **新工具页优先用组件**：卡片 / 分组 / 键值 / 提示 / 空态 / 表格 / 进度 / 徽章 / 对话框等模式一律走本库，禁止在业务文件里重写同类通用样式；组件确不满足时写局部样式并在注释说明原因。
+- **表格与进度条必须走 `UiTable` / `UiProgress`**，不直接写 `el-table` / `el-progress`；状态标签用 `UiChip`（`variant="soft"`），不写 `el-tag`。`pnpm check:ui` 会断言这三类用法归零。
+- EP 类名知识只允许存在于本库组件内部；组件对外只暴露语义 props（`tone` / `variant` / `padding` …），不暴露 EP 类名。
+- `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，**不得恢复**。
 
 ### 5.1 布局
 
@@ -293,6 +314,13 @@
 | `.radio-flush` | 消除 EP 单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
 | `.full-width` | 占满容器宽度 |
 
+**使用约定**
+
+- 弱化说明文字用 `.muted` 或 `--color-text-secondary`；**排版统一用语义色，不用 `--el-text-color-*`**（那是 EP 内部绑定入口）。
+- 卡片 / 网格 / 键值 / 提示 / 行内组等通用模式一律用组件库（见 §5），不得在 `main.scss` 恢复旧通用类。
+- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉，先用平台组件（`UiTable` / `el-radio-button` / `el-menu` / `el-input` / `el-dropdown`）再谈覆写。
+- 结构性间距 / 宽度 / 圆角见 §3.3–§3.5 的阶梯与豁免项，不要为一点差异新增魔法数字。
+
 ## 7. 布局模式
 
 ### 7.1 应用外壳
@@ -305,6 +333,7 @@
 - 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
 - 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
 - 主区 `flex:1; min-height:0`，滚动只发生在内容区。
+- **页签机制是工程约定**：应用级页面（设置等）与工具页共享同一套页签（`APP_TABS` 注册、`electronOnly` 裁剪、`subRoutes` 拍平），注册方式与命名约定见 [AGENTS.md](./AGENTS.md)「布局与页签机制」。
 
 #### 7.1.1 半透明窗口
 
