@@ -255,3 +255,24 @@ export interface OfflinePackHistoryItem {
   size: number
   createdAt: string
 }
+
+// ==================== 展示格式化 ====================
+/** 字节数 → 人类可读（B / KB / MB / GB，非整字节保留 1 位小数）。纯函数，前后端 / 各页面共用。 */
+export function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index++
+  }
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+}
+
+/** ISO 时间 → 本地化时间字符串；缺省 / 非法值返回空串 */
+export function formatDateTime(iso?: string): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
+}

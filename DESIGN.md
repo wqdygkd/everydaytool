@@ -225,7 +225,7 @@
 | `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
-| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge? }[]`）、`update:modelValue` | 横向分段菜单：药丸选中态 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px |
+| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：药丸选中态 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo） |
 
 ### 5.2 数据展示
 
@@ -431,7 +431,7 @@
 ### 7.3 工具页
 
 - **侧栏 + 主区**（chrome-sandbox / env-browser）：`grid-template-columns: <sidebar> 1fr`，窄屏（≤760px）折为上下堆叠。
-- **页签 + 面板**（interceptor）：`tool-page` 容器 + `el-tabs`，子视图由路由驱动。
+- **页签 + 面板**（interceptor / telegram-cache / offline-pack）：`tool-page` 容器 + `UiMenuHorizontal` 页签栏 + `KeepAlive` 包裹的 `<component :is>` 面板，子视图由路由驱动；需要品牌图标时给 `items` 传 `icon`。
 - **顶栏 + 内容**（treease / wxp）：`UiToolbar` 顶栏 + 下方滚动内容。
 - **居中表单**（id-card-generator）：`tool-page` 内居中卡片。
 
