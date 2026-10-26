@@ -14,6 +14,7 @@
 | 左 webview 右运维 | 无日志面板；失败 stderr → `lastError`（主动 STOP 清 stderr，不当错误） |
 | GitHub + 本地 zip | 远端必须有 asset `digest`（`sha256:…`）；本地无远端 digest 时自算，`source: local-file` |
 | 更新单轨 + 回滚 | 先 stop → 装新 → 探活命中身份；失败换回 `previous` |
+| 取消下载 | 仅**下载阶段**可取消（按钮在 `phase === download` 且 `updating` 时出现）：`abort` 下载流 → 删 `<asset>.zip.part`；取消不算错误（不写 `lastError`，不弹失败提示）；「应用更新」中途取消会把已停掉的原版本重新拉起 |
 | START 强制本机 | 每次 START 写 `listen=127.0.0.1:<port>` |
 | 关自更新 | `update.auto_enabled=false` |
 | 首启 api_key | 从 example 初始化 / 下次 START 时替换占位 `test_key` / 空为随机密钥 |
@@ -35,9 +36,36 @@
 
 1. **启停**：启动 / 停止 / 重启；残留端口可「结束占用」（不接管）
 2. **状态**：运行态文案、版本、可复制的协议地址（OpenAI `/v1`、Anthropic 根、面板 `/panel/`）、API Key（默认隐藏 + 复制）、手动刷新
-3. **安装 / 更新**：GitHub / 本地 ZIP、检查与应用更新、取消下载、打开数据目录
+3. **安装 / 更新**：顶部显示「已安装 + 版本号」（读 manifest，不必先点检查；未安装时整行不出现，避免「已安装 / 未安装」自相矛盾）；GitHub / 本地 ZIP、检查与应用更新、取消下载（仅下载阶段）、打开数据目录
 4. **说明**：上游仓库外链 + 非显而易见约定
 5. **最近错误**（若有）
+
+### 3.1 按钮状态矩阵（不要相互冲突）
+
+`busy = loading（本地动作在飞）|| state.updating（后端安装 / 更新中）`；**唯一豁免是「取消下载」**。
+
+| 按钮 | 可用条件 | 说明 |
+| --- | --- | --- |
+| 启动 | 已安装 && 未运行 && 无残留端口 && !busy | 端口被外部进程占用时禁用（先「结束占用」） |
+| 停止 | 运行中 && !busy | |
+| 重启 | 已安装 && !busy | |
+| 结束占用 | 残留端口 && !busy | |
+| GitHub 安装 / 本地 ZIP | 未运行 && 无残留端口 && !busy | 运行中换不掉 exe（Windows），后端 `installFrom*` 同样拒绝 |
+| 检查更新 | 已安装 && 未运行 && !busy | 未安装无比较基准（后端 `checkUpdate` 也拒） |
+| 应用更新 | 已安装 && 有可用更新 && 无残留端口 && !busy | 自行先停服；失败回滚并恢复运行 |
+| 取消下载 | `progress.phase === 'download'` | 不看 loading（下载期 INSTALL 调用未返回） |
+
+状态只用**禁用态**表达：运行中禁用安装与「检查更新」，未安装时更新相关按钮保持禁用。
+不再加「请先停止 / 尚未安装」这类随状态出现的提示文案，避免文案与进度互相打架。
+
+首次安装进行中（`updating && !installed`）文案进入「安装中」口径：状态标签显示「安装中」、
+左栏空态改说「正在安装上游二进制」，避免与进度打架。
+
+
+> **检查更新结果缓存在主进程**（`Wb2apiPanelState.update`）：只缓存上游 release 快照
+> （`Wb2apiReleaseSnapshot`：latest tag / 资产 / digest / 检查时间），已安装版本每次按 manifest 现算
+> ——本地 ZIP 换版本后 `hasUpdate` 立即跟着变，不会拿旧结论误报。缓存只在进程内，
+> 重启后点一次「检查更新」即可；`CHECK_UPDATE` 会顺带 `publishStateNow()`，重开页签 / 其它窗口同源。
 
 ## 4. 文件地图
 
@@ -60,7 +88,7 @@ tools/workbuddy2api-panel/
     services/health-service.ts         service 字段探活（主进程；不推 raw 到 UI）
     services/process-service.ts        spawn / STOP / orphan / quarantine
     services/install-service.ts        GitHub / 本地 zip / 更新回滚
-    services/state-service.ts          状态聚合 + EVENT_STATE（运行中约 3s 轮询）
+    services/state-service.ts          状态聚合 + EVENT_STATE（运行中约 3s 轮询）+ 检查更新快照缓存
     services/guest-guards.ts           分区 webview：本机放行，外链 openExternal
     services/busy-flag.ts
     utils/{paths,platform,zip,digest,http}.ts

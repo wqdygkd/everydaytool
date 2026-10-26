@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { cancelActiveDownload } from '../services/busy-flag.ts'
+import { cancelActiveDownload, isWb2apiCancelled } from '../services/busy-flag.ts'
 import { readConfigJson, resolveConfiguredPort } from '../services/config-service.ts'
 import {
   applyUpdate,
@@ -31,8 +31,8 @@ export function registerWb2apiPanelHandlers(): void {
       await installFromGithub()
       return await publishStateNow()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setLastError(message)
+      // 用户主动取消不算失败：不写 lastError，否则右栏会多出一条假的「最近错误」
+      if (!isWb2apiCancelled(error)) setLastError(error instanceof Error ? error.message : String(error))
       await publishStateNow()
       throw error
     }
@@ -58,7 +58,12 @@ export function registerWb2apiPanelHandlers(): void {
     return { cancelled: ok }
   })
 
-  safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.CHECK_UPDATE, async () => checkUpdate())
+  safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.CHECK_UPDATE, async () => {
+    const info = await checkUpdate()
+    // 检查结果缓存在主进程：推一次状态，重开页签 / 其它窗口都能直接看到「最新版本」
+    await publishStateNow()
+    return info
+  })
 
   safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.APPLY_UPDATE, async () => {
     setLastError(null)
@@ -66,8 +71,7 @@ export function registerWb2apiPanelHandlers(): void {
       await applyUpdate()
       return await publishStateNow()
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setLastError(message)
+      if (!isWb2apiCancelled(error)) setLastError(error instanceof Error ? error.message : String(error))
       await publishStateNow()
       throw error
     }

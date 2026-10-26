@@ -2,6 +2,7 @@ import type {
   Wb2apiInstallSource,
   Wb2apiManifest,
   Wb2apiProgressEvent,
+  Wb2apiReleaseSnapshot,
   Wb2apiUpdateInfo,
 } from '../../../../shared/workbuddy2api-panel.ts'
 import { copyFile, cp, mkdir, rename, rm } from 'node:fs/promises'
@@ -11,6 +12,7 @@ import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import {
   buildWb2apiAssetName,
+  buildWb2apiUpdateInfo,
   WB2API_GITHUB_REPO_SLUG,
   wb2apiTagFromVersion,
   wb2apiVersionFromTag,
@@ -32,11 +34,12 @@ import {
   isInstallBusy,
   setActiveAbort,
   setInstallBusy,
+  Wb2apiCancelledError,
 } from './busy-flag.ts'
 import { ensureRunConfigInitialized } from './config-service.ts'
 import { probeHealthz } from './health-service.ts'
-import { prepareBinaryPermissions, resolveCurrentBinaryPath, startManagedProcess, stopManagedProcess } from './process-service.ts'
-import { publishStateSoon, setLastProgress } from './state-service.ts'
+import { isProcessManagedAlive, prepareBinaryPermissions, resolveCurrentBinaryPath, startManagedProcess, stopManagedProcess } from './process-service.ts'
+import { publishStateSoon, setLastProgress, setReleaseSnapshot } from './state-service.ts'
 
 interface GithubReleaseAsset {
   name: string
@@ -191,8 +194,23 @@ async function pickReleaseAsset(tag?: string): Promise<ReleaseAssetPick> {
   return { release, asset, version, tag: release.tag_name }
 }
 
+/** 这次拿到的 release → 可缓存的快照（不含已安装版本，后者由 state-service 按 manifest 现算） */
+function snapshotFromPick(pick: ReleaseAssetPick, digest: string): Wb2apiReleaseSnapshot {
+  return {
+    latestVersion: pick.version,
+    latestTag: pick.tag,
+    assetName: pick.asset.name,
+    digest,
+    downloadUrl: pick.asset.browser_download_url,
+    checkedAt: new Date().toISOString(),
+  }
+}
+
 export async function installFromGithub(tag?: string): Promise<Wb2apiManifest> {
   if (isInstallBusy()) throw new Error('已有安装/更新任务进行中')
+  // 运行中不换版本：Windows 上 current/ 里正在执行的 exe 换不掉，且「装着新版本、跑着旧进程」
+  // 会让状态与版本对不上。要换版本请先「停止」（更新流程 applyUpdate 会自己先停）。
+  if (isProcessManagedAlive()) throw new Error('服务运行中，请先停止再安装 / 切换版本')
   setInstallBusy(true)
   const controller = new AbortController()
   setActiveAbort(controller)
@@ -216,13 +234,17 @@ export async function installFromGithub(tag?: string): Promise<Wb2apiManifest> {
       },
     })
 
-    return await installFromZipFile(dest, {
+    const manifest = await installFromZipFile(dest, {
       version: pick.version,
       tag: pick.tag,
       assetName: pick.asset.name,
       digest,
       source: 'github',
     })
+    // 装的就是 latest release 时顺手写缓存，面板不必再点一次「检查更新」；
+    // 显式指定 tag 的安装不冒充「最新」。
+    if (!tag) setReleaseSnapshot(snapshotFromPick(pick, digest))
+    return manifest
   } catch (error) {
     const cancelled = controller.signal.aborted
     emitProgress({
@@ -232,7 +254,8 @@ export async function installFromGithub(tag?: string): Promise<Wb2apiManifest> {
       error: cancelled ? undefined : error instanceof Error ? error.message : String(error),
       message: cancelled ? '已取消' : undefined,
     })
-    throw error
+    // 用户取消不算失败：统一成可识别的取消错误，上层据此不写 lastError
+    throw cancelled ? new Wb2apiCancelledError() : error
   } finally {
     setActiveAbort(null)
     setInstallBusy(false)
@@ -241,6 +264,8 @@ export async function installFromGithub(tag?: string): Promise<Wb2apiManifest> {
 
 export async function installFromLocalZip(): Promise<Wb2apiManifest | null> {
   if (isInstallBusy()) throw new Error('已有安装/更新任务进行中')
+  // 与 GitHub 安装同一约束：运行中不换版本（先弹文件框再报错只会白让人选一遍文件）
+  if (isProcessManagedAlive()) throw new Error('服务运行中，请先停止再安装 / 切换版本')
   const result = await dialog.showOpenDialog({
     title: '选择 workbuddy2api-panel 安装包',
     properties: ['openFile'],
@@ -287,20 +312,18 @@ export async function installFromLocalZip(): Promise<Wb2apiManifest | null> {
 }
 
 export async function checkUpdate(): Promise<Wb2apiUpdateInfo> {
+  // 只对「已安装」判断更新：没有 manifest 就没有比较基准，硬比较只会得到
+  // 「可更新」这种像结论其实没意义的输出。
+  const installedVersion = readManifest()?.version ?? null
+  if (!installedVersion) throw new Error('尚未安装，无法检查更新')
+
   const pick = await pickReleaseAsset()
   const digest = normalizeDigest(pick.asset.digest) ?? ''
   if (!digest) throw new Error(`最新版本资产 ${pick.asset.name} 缺少 digest`)
-  const current = readManifest()
-  const currentVersion = current?.version ?? null
-  return {
-    currentVersion,
-    latestVersion: pick.version,
-    latestTag: pick.tag,
-    assetName: pick.asset.name,
-    digest,
-    downloadUrl: pick.asset.browser_download_url,
-    hasUpdate: currentVersion !== pick.version,
-  }
+  // 缓存上游快照：面板重开 / 其它窗口都能直接看到「最新版本」，不用再打一次 GitHub
+  const snapshot = snapshotFromPick(pick, digest)
+  setReleaseSnapshot(snapshot)
+  return buildWb2apiUpdateInfo(snapshot, installedVersion)
 }
 
 /**
@@ -310,10 +333,13 @@ export async function checkUpdate(): Promise<Wb2apiUpdateInfo> {
  */
 export async function applyUpdate(): Promise<Wb2apiManifest> {
   if (isInstallBusy()) throw new Error('已有安装/更新任务进行中')
+  // 未安装时没有「旧版本」可回滚，也没有更新语义：拒绝，让调用方走安装。
+  // 必须在 setInstallBusy 之前判，否则抛错会把 busy 永久置 true。
+  const previousManifest = readManifest()
+  if (!previousManifest) throw new Error('尚未安装，无法应用更新')
   setInstallBusy(true)
   const controller = new AbortController()
   setActiveAbort(controller)
-  const previousManifest = readManifest()
   try {
     await ensureWb2apiDirs()
     await stopManagedProcess()
@@ -363,6 +389,8 @@ export async function applyUpdate(): Promise<Wb2apiManifest> {
       throw error
     }
 
+    // 更新成功：这次发布的快照进缓存，面板立刻显示「已是最新」
+    setReleaseSnapshot(snapshotFromPick(pick, digest))
     return manifest
   } catch (error) {
     const cancelled = controller.signal.aborted
@@ -371,8 +399,18 @@ export async function applyUpdate(): Promise<Wb2apiManifest> {
       downloadedBytes: 0,
       totalBytes: 0,
       error: cancelled ? undefined : error instanceof Error ? error.message : String(error),
+      message: cancelled ? '已取消' : undefined,
     })
-    throw error
+    if (cancelled) {
+      // 取消发生在下载阶段：更新流程已经停过服务，把原来那版重新拉起来——
+      // 用户只是放弃这次更新，不该顺带把正在用的服务停掉。
+      try {
+        await startManagedProcess()
+      } catch (restartError) {
+        logger.warn('wb2api restart after cancel failed', { error: (restartError as Error).message })
+      }
+    }
+    throw cancelled ? new Wb2apiCancelledError() : error
   } finally {
     setActiveAbort(null)
     setInstallBusy(false)

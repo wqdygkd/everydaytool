@@ -71,6 +71,21 @@ export interface Wb2apiUpdateInfo {
   hasUpdate: boolean
 }
 
+/**
+ * 最近一次「检查更新」拿到的上游 release 快照（主进程内存缓存，重开页签仍在）。
+ * 只缓存上游那一半：**已安装版本不缓存**——它随时可能被本地 ZIP 装成别的版本，
+ * 只能按 manifest 现算，否则会拿着过期结论误报「可更新 / 已最新」。
+ */
+export interface Wb2apiReleaseSnapshot {
+  latestVersion: string
+  latestTag: string
+  assetName: string
+  digest: string
+  downloadUrl: string
+  /** 检查时间（ISO）；仅用于展示「什么时候查的」，不参与比较 */
+  checkedAt: string
+}
+
 export interface Wb2apiPanelState {
   status: Wb2apiRuntimeStatus
   version: string | null
@@ -83,6 +98,8 @@ export interface Wb2apiPanelState {
   orphanLikely: boolean
   updating: boolean
   progress: Wb2apiProgressEvent | null
+  /** 最近一次检查更新的结果（由缓存的 release 快照 + 当前 manifest 版本现算）；从未检查过为 null */
+  update: Wb2apiUpdateInfo | null
 }
 
 export function defaultWb2apiAppSettings(): Wb2apiAppSettings {
@@ -101,6 +118,23 @@ export function defaultWb2apiPanelState(): Wb2apiPanelState {
     orphanLikely: false,
     updating: false,
     progress: null,
+    update: null,
+  }
+}
+
+/** 快照 + 当前已安装版本 → 面板展示用的检查结果（hasUpdate 永远按最新事实重算） */
+export function buildWb2apiUpdateInfo(
+  snapshot: Wb2apiReleaseSnapshot,
+  currentVersion: string | null,
+): Wb2apiUpdateInfo {
+  return {
+    currentVersion,
+    latestVersion: snapshot.latestVersion,
+    latestTag: snapshot.latestTag,
+    assetName: snapshot.assetName,
+    digest: snapshot.digest,
+    downloadUrl: snapshot.downloadUrl,
+    hasUpdate: currentVersion !== snapshot.latestVersion,
   }
 }
 

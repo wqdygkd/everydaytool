@@ -1,9 +1,14 @@
-import type { Wb2apiPanelState, Wb2apiProgressEvent } from '../../../../shared/workbuddy2api-panel.ts'
+import type {
+  Wb2apiPanelState,
+  Wb2apiProgressEvent,
+  Wb2apiReleaseSnapshot,
+} from '../../../../shared/workbuddy2api-panel.ts'
 import { access } from 'node:fs/promises'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import {
   buildWb2apiPanelUrl,
+  buildWb2apiUpdateInfo,
   defaultWb2apiPanelState,
 } from '../../../../shared/workbuddy2api-panel.ts'
 import { WB2API_PANEL_IPC_CHANNELS } from '../ipc/channels.ts'
@@ -21,6 +26,11 @@ import {
 
 let lastError: string | null = null
 let lastProgress: Wb2apiProgressEvent | null = null
+/**
+ * 最近一次检查更新拿到的上游 release 快照。只放内存：上游随时可能发新版本，
+ * 落盘只会让「可更新 / 已最新」这个结论在重启后继续骗人；已安装版本另有 manifest 持久化。
+ */
+let releaseSnapshot: Wb2apiReleaseSnapshot | null = null
 let publishTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -33,6 +43,10 @@ export function setLastError(message: string | null): void {
 
 export function setLastProgress(progress: Wb2apiProgressEvent | null): void {
   lastProgress = progress
+}
+
+export function setReleaseSnapshot(snapshot: Wb2apiReleaseSnapshot | null): void {
+  releaseSnapshot = snapshot
 }
 
 async function binaryInstalled(): Promise<boolean> {
@@ -56,6 +70,10 @@ export async function buildState(): Promise<Wb2apiPanelState> {
 
   state.installed = installed
   state.version = manifest?.version ?? null
+  // 已安装版本按 manifest 现算，最新版本来自检查更新缓存：两者拼出「可更新 / 已最新」
+  state.update = releaseSnapshot
+    ? buildWb2apiUpdateInfo(releaseSnapshot, state.version)
+    : null
   state.port = port
   state.panelUrl = buildWb2apiPanelUrl(port)
   state.apiKey = typeof config?.api_key === 'string' && config.api_key.trim()

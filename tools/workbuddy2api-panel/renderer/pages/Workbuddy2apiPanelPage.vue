@@ -27,9 +27,15 @@ function openUpstreamRepo() {
 
 const state = ref<Wb2apiPanelState | null>(null)
 const loading = ref(false)
+const cancelling = ref(false)
+/** 用户点了「取消下载」：由 abort 引发的中断不是失败，runAction 据此吞掉错误提示 */
+const cancelRequested = ref(false)
 const progress = ref<Wb2apiProgressEvent | null>(null)
-const updateInfo = ref<Wb2apiUpdateInfo | null>(null)
 const apiKeyVisible = ref(false)
+
+// 检查更新的结果缓存在主进程（state.update）：重开页签 / 刷新都在，渲染层不再自留一份副本。
+// 已安装版本来自 manifest（state.version），与检查结果里的 currentVersion 同源现算。
+const updateInfo = computed(() => state.value?.update ?? null)
 
 const apiKeyDisplay = computed(() => {
   const key = state.value?.apiKey
@@ -54,12 +60,30 @@ const isRunning = computed(() =>
 const showWebview = computed(() =>
   status.value === 'running' || status.value === 'running_empty',
 )
+const installed = computed(() => state.value?.installed === true)
+/**
+ * 是否有动作在飞：本地动作（loading）或后端安装 / 更新中（state.updating，例如别的窗口触发）。
+ * 除「取消下载」外所有按钮都据此锁住——安装 / 更新会换 current 二进制并停服，
+ * 期间再点启动 / 重启 / 再次安装只会互相打断，后端也只会回「已有任务进行中」。
+ */
+const busy = computed(() => loading.value || state.value?.updating === true)
+/** 左栏空态文案：首次安装进行中时「尚未安装…请去安装」会自相矛盾，改说正在装 */
+const emptyText = computed(() => {
+  if (status.value === 'not_installed') {
+    return state.value?.updating === true
+      ? '正在安装上游二进制，完成后点击「启动」即可打开面板'
+      : '尚未安装上游二进制，请在右侧从 GitHub 或本地 ZIP 安装'
+  }
+  return '服务未运行。安装完成后点击「启动」，面板将显示在此处'
+})
 const panelSrc = computed(() => state.value?.panelUrl ?? '')
 const endpointPort = computed(() => state.value?.port ?? WB2API_DEFAULT_PORT)
 const openAiBaseUrl = computed(() => buildWb2apiOpenAiBaseUrl(endpointPort.value))
 const anthropicBaseUrl = computed(() => buildWb2apiAnthropicBaseUrl(endpointPort.value))
 const panelUrl = computed(() => state.value?.panelUrl ?? buildWb2apiPanelUrl(endpointPort.value))
 const statusTone = computed<'neutral' | 'success' | 'warning' | 'danger'>(() => {
+  // 首次安装中 status 还是 not_installed（二进制尚未落盘），但语义是「进行中」：用 warning
+  if (state.value?.updating === true && !installed.value) return 'warning'
   switch (status.value) {
     case 'running': return 'success'
     case 'running_empty':
@@ -69,6 +93,12 @@ const statusTone = computed<'neutral' | 'success' | 'warning' | 'danger'>(() => 
     default: return 'neutral'
   }
 })
+/** 状态文案：首次安装期间标签改说「安装中」，别让「未安装」和安装进度同时出现 */
+const statusLabel = computed(() =>
+  state.value?.updating === true && !installed.value
+    ? '安装中'
+    : wb2apiStatusLabel(status.value),
+)
 
 function applyState(next: Wb2apiPanelState) {
   state.value = next
@@ -95,10 +125,17 @@ async function runAction(action: () => Promise<unknown>, okMsg?: string) {
     }
     if (okMsg) ElMessage.success(okMsg)
   } catch (error) {
+    if (cancelRequested.value) {
+      // 主动取消引发的中断：已由 onCancelDownload 提示过，这里只同步状态
+      cancelRequested.value = false
+      await refresh().catch(() => {})
+      return
+    }
     ElMessage.error(error instanceof Error ? error.message : String(error))
     await refresh().catch(() => {})
   } finally {
     loading.value = false
+    cancelRequested.value = false
   }
 }
 
@@ -110,8 +147,25 @@ function onInstallZip() {
   return runAction(() => invokeWb2apiIpc(channels.value!.INSTALL_FROM_ZIP), '安装完成，可点击启动')
 }
 
-function onCancelDownload() {
-  return runAction(() => invokeWb2apiIpc(channels.value!.CANCEL_DOWNLOAD), '已取消下载')
+// 不走 runAction：它会置 loading、把取消本身当成一次「动作」等返回；这里只是给正在跑的
+// 那次 install / update 发一个中止信号，因此必须随时可点、也不阻塞其它按钮。
+async function onCancelDownload() {
+  cancelling.value = true
+  cancelRequested.value = true
+  try {
+    const result = await invokeWb2apiIpc(channels.value!.CANCEL_DOWNLOAD) as { cancelled: boolean }
+    if (result.cancelled) {
+      ElMessage.info('已取消下载，临时文件已清理')
+    } else {
+      cancelRequested.value = false
+      ElMessage.info('当前没有进行中的下载')
+    }
+  } catch (error) {
+    cancelRequested.value = false
+    ElMessage.error(error instanceof Error ? error.message : String(error))
+  } finally {
+    cancelling.value = false
+  }
 }
 
 function onStart() {
@@ -135,10 +189,19 @@ function onOpenDataDir() {
 }
 
 async function onCheckUpdate() {
+  // 检查更新只服务「已安装」后的升级判断：没装时「可更新」没有比较基准，
+  // 顺手点「应用更新」还会退化成重装。按钮已禁用，这里再兜一层（键盘 / 程序触发）。
+  if (!installed.value) {
+    ElMessage.info('安装后才能检查更新')
+    return
+  }
+  if (busy.value) return
   loading.value = true
   try {
-    updateInfo.value = await invokeWb2apiIpc(channels.value!.CHECK_UPDATE) as Wb2apiUpdateInfo
-    if (!updateInfo.value.hasUpdate) ElMessage.success('已是最新版本')
+    const info = await invokeWb2apiIpc(channels.value!.CHECK_UPDATE) as Wb2apiUpdateInfo
+    if (!info.hasUpdate) ElMessage.success('已是最新版本')
+    // 结果已缓存在主进程，这里刷一次让面板（含已安装版本对照）取到同一份结论
+    await refresh()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : String(error))
   } finally {
@@ -147,13 +210,21 @@ async function onCheckUpdate() {
 }
 
 async function onApplyUpdate() {
-  if (!updateInfo.value?.hasUpdate) {
-    await onCheckUpdate()
-    if (!updateInfo.value?.hasUpdate) return
+  if (!installed.value) {
+    ElMessage.info('安装后才能应用更新')
+    return
+  }
+  if (busy.value) return
+  const info = updateInfo.value
+  // 「应用更新」只消费已有的检查结果（按钮无可用更新时本就禁用）：
+  // 这里不再顺手触发检查，避免一次点击里跑两个动作、loading 互相覆盖。
+  if (!info?.hasUpdate) {
+    ElMessage.info('没有可用更新，请先「检查更新」')
+    return
   }
   try {
     await ElMessageBox.confirm(
-      `将更新到 ${updateInfo.value.latestTag}（${updateInfo.value.assetName}）。失败会回滚 previous。`,
+      `将更新到 ${info.latestTag}（${info.assetName}）。失败会回滚 previous。`,
       '确认更新',
       { confirmButtonText: '更新', cancelButtonText: '取消', type: 'warning' },
     )
@@ -166,12 +237,23 @@ async function onApplyUpdate() {
 const progressText = computed(() => {
   const p = progress.value
   if (!p) return ''
+  // 终态不留常驻文案：完成 / 取消都有 toast，结果也由「已安装」行与状态面板表达；
+  // 留着只会让「安装完成」一直挂在面板上，看起来像还有事没做完。
+  if (p.phase === 'done' || p.phase === 'cancelled') return ''
   if (p.phase === 'download' && p.totalBytes > 0) {
     const pct = Math.min(100, Math.round((p.downloadedBytes / p.totalBytes) * 100))
     return `${p.message ?? '下载中'} ${pct}%`
   }
   return p.message || p.error || p.phase
 })
+
+/**
+ * 取消只在下载阶段开放：校验 / 解压 / 晋升不可中断，这几段继续显示按钮只会骗人。
+ * 判据不看 loading —— 下载期间 INSTALL 调用还没返回，loading 恒为 true。
+ */
+const canCancelDownload = computed(() =>
+  state.value?.updating === true && progress.value?.phase === 'download',
+)
 
 let offState: (() => void) | null = null
 let offProgress: (() => void) | null = null
@@ -237,9 +319,7 @@ onUnmounted(() => {
           class="wb2api-empty"
           center
           icon="wb2api"
-          :text="status === 'not_installed'
-            ? '尚未安装上游二进制，请在右侧从 GitHub 或本地 ZIP 安装'
-            : '服务未运行。安装完成后点击「启动」，面板将显示在此处'"
+          :text="emptyText"
         />
       </section>
 
@@ -248,15 +328,15 @@ onUnmounted(() => {
           <div class="wb2api-actions">
             <el-button
               type="primary"
-              :disabled="loading || !state?.installed || isRunning"
+              :disabled="busy || !installed || isRunning || state?.orphanLikely"
               @click="onStart"
             >
               启动
             </el-button>
-            <el-button :disabled="loading || !isRunning" @click="onStop">
+            <el-button :disabled="busy || !isRunning" @click="onStop">
               停止
             </el-button>
-            <el-button :disabled="loading || !state?.installed" @click="onRestart">
+            <el-button :disabled="busy || !installed" @click="onRestart">
               重启
             </el-button>
           </div>
@@ -268,7 +348,7 @@ onUnmounted(() => {
             class="full-width"
             size="small"
             type="warning"
-            :disabled="loading"
+            :disabled="busy"
             @click="onKillOrphan"
           >
             结束占用
@@ -283,7 +363,7 @@ onUnmounted(() => {
           </template>
           <div class="wb2api-status-row">
             <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
-            <span class="wb2api-status-label">{{ wb2apiStatusLabel(status) }}</span>
+            <span class="wb2api-status-label">{{ statusLabel }}</span>
           </div>
           <UiKeyValue label="版本" mono label-width="72px">
             {{ state?.version ?? '—' }}
@@ -318,39 +398,46 @@ onUnmounted(() => {
         </UiPanel>
 
         <UiPanel title="安装 / 更新" padding="var(--spacing-md)">
+          <!-- 已安装版本（来自 manifest）：不用点「检查更新」也知道当前装的是哪一版。
+               没装出这一行——否则标签「已安装」配值「未安装」会自相矛盾。 -->
+          <UiKeyValue v-if="state?.version" class="wb2api-installed" label="已安装" label-width="72px" mono muted>
+            {{ state.version }}
+          </UiKeyValue>
           <div class="wb2api-actions">
-            <el-button :disabled="loading || state?.updating" @click="onInstallGithub">
+            <!-- 运行中 / 端口被占用时不允许换版本：旧二进制还在执行，Windows 下 current/ 换不掉 -->
+            <el-button :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
               GitHub 安装
             </el-button>
-            <el-button :disabled="loading || state?.updating" @click="onInstallZip">
+            <el-button :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
               本地 ZIP
             </el-button>
           </div>
           <div class="wb2api-actions">
-            <el-button size="small" :disabled="loading" @click="onCheckUpdate">
+            <!-- 检查 / 应用更新只对「已安装」开放（applyUpdate 在没有 current 时等于重装）；
+                 运行中只禁「检查更新」，用禁用态表达，不额外堆提示文案。 -->
+            <el-button size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
               检查更新
             </el-button>
             <el-button
               size="small"
               type="primary"
               plain
-              :disabled="loading || !updateInfo?.hasUpdate"
+              :disabled="busy || !installed || !updateInfo?.hasUpdate || state?.orphanLikely"
               @click="onApplyUpdate"
             >
               应用更新
             </el-button>
             <el-button
-              v-if="state?.updating"
+              v-if="canCancelDownload"
               size="small"
-              :disabled="loading"
+              :loading="cancelling"
               @click="onCancelDownload"
             >
               取消下载
             </el-button>
           </div>
           <UiHint v-if="updateInfo" class="wb2api-hint">
-            当前 {{ updateInfo.currentVersion ?? '未安装' }}
-            → 最新 {{ updateInfo.latestTag }}
+            最新 {{ updateInfo.latestTag }}
             <span v-if="updateInfo.hasUpdate">（可更新）</span>
             <span v-else>（已最新）</span>
           </UiHint>
@@ -453,6 +540,8 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-sm);
 }
 
+/* 「已安装」行（UiKeyValue muted 无内边距）与提示行同构：统一与下一段拉开间距 */
+.wb2api-installed,
 .wb2api-hint {
   margin-bottom: var(--spacing-sm);
 }
