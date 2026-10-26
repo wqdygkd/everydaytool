@@ -213,7 +213,7 @@
 
 ## 5. UI 组件库
 
-平台级组件库（25 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
+平台级组件库（27 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
 
 ### 5.1 布局
 
@@ -235,13 +235,15 @@
 | `UiDetailItem` | `label`、`mono`、`wrap`、`size`（sm/xs） | 详情卡片单项（label 上 / value 下，描边卡片） |
 | `UiCodeBlock` | `maxHeight`（200px）、`wrap` | 等宽代码块（app-bg 底 + radius-sm + 滚动） |
 | `UiEmpty` | `text`、`variant`（plain/bordered）、`center`、`icon`、`padding` | 空状态（纯文本 / 虚线框） |
+| `UiTable` | `data`、`loading`、`emptyText`、`height`、`maxHeight`、`rowKey`、`mono`、`rowClickable`、`#empty` 插槽；默认插槽放 `el-table-column` | 表格基座：内部 `el-table size="small"`，统一 loading、空态（渲染 `UiEmpty`）、整表等宽与可点行手型。其余属性 / 事件（`@row-click`、`@sort-change`、`row-class-name`、`:tree-props`、`default-expand-all`、`class`）由单根组件自动透传，树形表格也能直接用 |
+| `UiProgress` | `percentage`、`strokeWidth`（6）、`status`（success/warning/exception）、`showText` | 进度条：百分比自动收敛 0–100；颜色与轨道走全局 EP 绑定（`--el-color-primary` / `--el-border-color-lighter`），两端胶囊圆角；**不要直接写 `el-progress`** |
 | `UiBreadcrumb` | `items`、`navigate` 事件 | 面包屑导航 |
 
 ### 5.3 徽章 / 状态
 
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
-| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`mono` | 小胶囊徽章；`success` 为实底绿白字（未读徽章式） |
+| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`variant`（auto/soft/solid/outline）、`mono` | 小胶囊徽章。`variant="auto"`（默认）按 tone 取历史外观：neutral→描边、success→实底绿白字、其余→浅底彩字；`soft` 浅底彩字（对齐原 `el-tag` 默认样式）、`outline` 透明底彩边（对齐 `effect="plain"`）、`solid` 实底反白（计数徽章） |
 | `UiStatusTag` | `tone`（neutral/success/warning/danger）、`pulsing` | 状态点（10px 圆点）；`pulsing` 呼吸光环 |
 
 ### 5.4 表单与输入
@@ -288,6 +290,7 @@
 | `.ctl-xs/sm/md/lg` | 表单控件定宽阶梯（90/140/200/280px） |
 | `.ctl-fill` | 弹性填充剩余宽度 |
 | `.btn-flush` | 消除 EP 按钮间原生 12px 左边距 |
+| `.radio-flush` | 消除 EP 单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
 | `.full-width` | 占满容器宽度 |
 
 ## 7. 布局模式
@@ -443,8 +446,9 @@
 
 ### 7.5 表格
 
-- 统一用 `el-table`（`size="small"`），表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg` 由全局绑定。
-- 数字列用 `.mono`，时间列用 `.muted`，状态列用 `el-tag` 或 `UiChip`。
+- 统一用 `UiTable`（内部 `el-table size="small"`，几何由全局绑定：表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg`、表体 12px）。
+- 列定义仍写 `el-table-column`；整表等宽传 `mono`（ID / 摘要 / 字节列），行可点击传 `rowClickable`，空态用 `emptyText`（内部渲染 `UiEmpty`）。
+- 数字列用 `.mono`，时间列用 `.muted`，状态列用 `UiChip`（`variant="soft"`）。
 
 ## 8. 交互与动效
 

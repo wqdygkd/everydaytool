@@ -22,6 +22,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check:ui": "node scripts/ui-ep-check.mjs --strict",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "create:tool": "node scripts/create-tool.mjs",
     "telegram:session": "node scripts/telegram-session.mjs",

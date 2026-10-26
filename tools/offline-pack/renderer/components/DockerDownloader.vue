@@ -388,7 +388,7 @@ async function handleDownload(): Promise<void> {
         </UiChip>
       </template>
 
-      <el-table :data="manifest.layers" size="small" max-height="240">
+      <UiTable :data="manifest.layers" max-height="240">
         <el-table-column label="#" width="52" align="right">
           <template #default="{ $index }">
             <span class="mono muted">{{ $index + 1 }}</span>
@@ -404,7 +404,7 @@ async function handleDownload(): Promise<void> {
             <span class="mono">{{ formatBytes(row.size) }}</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
 
       <UiKeyValue class="manifest-total" label="总计（压缩）" mono>
         {{ formatBytes(totalSize) }}

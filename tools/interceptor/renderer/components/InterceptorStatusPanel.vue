@@ -120,9 +120,9 @@ function formatTime(at: number): string {
         运行状态
       </template>
       <template #actions>
-        <el-tag :type="store.status?.proxyRunning ? 'success' : 'info'" size="small">
+        <UiChip :tone="store.status?.proxyRunning ? 'success' : 'info'" variant="soft">
           {{ store.status?.proxyRunning ? '代理运行中' : '未运行' }}
-        </el-tag>
+        </UiChip>
       </template>
       <UiKeyValue label="代理端口" mono>
         {{ store.status?.proxyPort ?? '—' }}
@@ -160,13 +160,13 @@ function formatTime(at: number): string {
 
       <div v-for="connection in connections" :key="connection.clientId" class="connection-item">
         <UiGroup gap="sm">
-          <el-tag size="small">
+          <UiChip variant="outline">
             {{ connection.appId }}
-          </el-tag>
+          </UiChip>
           <span class="mono muted">#{{ connection.clientId.slice(0, 8) }}</span>
-          <el-tag :type="connection.proxyEnabled ? 'success' : 'warning'" size="small">
+          <UiChip :tone="connection.proxyEnabled ? 'success' : 'warning'" variant="soft">
             {{ connection.proxyEnabled ? '代理已挂载' : '未挂载' }}
-          </el-tag>
+          </UiChip>
         </UiGroup>
         <UiHint block>
           连接于 {{ formatTime(connection.connectedAt) }}
@@ -213,9 +213,9 @@ function formatTime(at: number): string {
 
     <UiPanel title="HTTPS 根证书">
       <template #actions>
-        <el-tag :type="caTagType" size="small">
+        <UiChip :tone="caTagType" variant="soft">
           {{ caLabel }}
-        </el-tag>
+        </UiChip>
       </template>
       <UiKeyValue label="证书名" mono>
         {{ store.ca?.commonName || '—' }}

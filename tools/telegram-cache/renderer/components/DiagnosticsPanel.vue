@@ -607,7 +607,7 @@ async function openDataDir(): Promise<void> {
             <template v-if="mtActive.resumedFrom > 0"> · 从 {{ formatBytes(mtActive.resumedFrom) }} 续传</template>
           </span>
         </div>
-        <el-progress :percentage="mtProgress" :stroke-width="6" :show-text="false" :status="mtActive.phase === 'failed' ? 'exception' : undefined" />
+        <UiProgress :percentage="mtProgress" :status="mtActive.phase === 'failed' ? 'exception' : undefined" />
         <span class="muted mt-file">{{ mtActive.fileName || '解析中…' }}</span>
       </template>
 
@@ -670,7 +670,7 @@ async function openDataDir(): Promise<void> {
         现在执行固定场景（同一聊天、同样的滚动 / 播放 / 切图操作），完成后点「结束并保存」。
       </UiHint>
 
-      <el-table :data="benchmarkRecords.slice(0, 10)" size="small" height="220" empty-text="还没有样本：先建立 baseline，再开启本地响应采集对照">
+      <UiTable :data="benchmarkRecords.slice(0, 10)" height="220" empty-text="还没有样本：先建立 baseline，再开启本地响应采集对照">
         <el-table-column label="样本" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="benchmark-cell">
@@ -699,7 +699,7 @@ async function openDataDir(): Promise<void> {
             <span class="mono muted">{{ formatBytes(row.cacheServedBytes) }}</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
 
       <UiDetailGrid v-if="benchmarkComparison" :columns="2">
         <UiDetailItem label="网络字节 Δ（最新 − 上一）" size="xs" mono>

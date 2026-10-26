@@ -114,7 +114,12 @@ onUnmounted(() => {
 
     <!-- padding="" ：表格自带 radius-lg 与描边，直接贴住面板边缘，避免「卡片里再套一层圆角」 -->
     <UiPanel padding="">
-      <el-table v-if="items.length" v-loading="loading" :data="items" size="small">
+      <UiTable
+        :data="items"
+        :loading="loading"
+        row-key="id"
+        empty-text="暂无下载记录"
+      >
         <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
         <el-table-column label="来源" width="90">
           <template #default="{ row }">
@@ -138,9 +143,7 @@ onUnmounted(() => {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
-
-      <UiEmpty v-else center padding="var(--spacing-3xl)" text="暂无下载记录" />
+      </UiTable>
     </UiPanel>
   </section>
 </template>

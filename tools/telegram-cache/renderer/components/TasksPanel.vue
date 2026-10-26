@@ -47,12 +47,12 @@ async function cancelTask(task: TelegramTaskSnapshot): Promise<void> {
         </UiChip>
       </template>
 
-      <el-table :data="store.tasks" size="small" height="520" empty-text="还没有任务：在资源行点「存库」或「归档」">
+      <UiTable :data="store.tasks" height="520" empty-text="还没有任务：在资源行点「存库」或「归档」">
         <el-table-column label="状态" width="82">
           <template #default="{ row }">
-            <el-tag size="small" :type="statusInfo(row.status).type">
+            <UiChip :tone="statusInfo(row.status).type" variant="soft">
               {{ statusInfo(row.status).label }}
-            </el-tag>
+            </UiChip>
           </template>
         </el-table-column>
         <el-table-column label="资源（已脱敏）" min-width="200" show-overflow-tooltip>
@@ -69,11 +69,9 @@ async function cancelTask(task: TelegramTaskSnapshot): Promise<void> {
         </el-table-column>
         <el-table-column label="进度" width="118">
           <template #default="{ row }">
-            <el-progress
+            <UiProgress
               v-if="row.status === 'running' || row.status === 'completed'"
               :percentage="progressOf(row)"
-              :stroke-width="6"
-              :show-text="false"
               :status="row.status === 'completed' ? 'success' : undefined"
             />
             <span v-else class="mono muted">—</span>
@@ -105,7 +103,7 @@ async function cancelTask(task: TelegramTaskSnapshot): Promise<void> {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
 
       <UiHint block>
         同一资源同时只有一个底层下载任务：第二个消费者会<strong>合并</strong>进来（不重复下载），单个消费者取消不影响其他消费者；
@@ -148,10 +146,5 @@ async function cancelTask(task: TelegramTaskSnapshot): Promise<void> {
   font-size: var(--font-size-xs);
   color: var(--color-error);
   word-break: break-all;
-}
-
-:deep(.el-table .cell) {
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 </style>

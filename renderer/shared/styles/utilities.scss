@@ -29,6 +29,14 @@
   margin-left: 0;
 }
 
+/* 单选组用 gap 控制间距时，抵消 EP 原生的 margin-right 与固定高度。
+   与 .btn-flush 同构：把「flex 布局取代原生外边距」这件事收成全局工具类，
+   业务里不再各自写 :deep(.el-radio)。 */
+.radio-flush .el-radio {
+  margin-right: 0;
+  height: auto;
+}
+
 /* 占满容器宽度的按钮 / 输入框（如侧栏底部整行按钮） */
 .full-width {
   width: 100%;

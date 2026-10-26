@@ -192,11 +192,9 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
         </UiDetailItem>
       </UiDetailGrid>
 
-      <el-progress
+      <UiProgress
         class="cache-bar"
         :percentage="cacheUsagePercent"
-        :stroke-width="6"
-        :show-text="false"
         :status="cacheUsagePercent >= 95 ? 'warning' : undefined"
       />
 
@@ -208,7 +206,7 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
     </UiPanel>
 
     <UiPanel title="资源类型分布">
-      <el-table :data="stats?.byType ?? []" size="small" height="180" empty-text="还没有可观测请求">
+      <UiTable :data="stats?.byType ?? []" height="180" empty-text="还没有可观测请求">
         <el-table-column label="类型" min-width="110">
           <template #default="{ row }">
             <span class="mono">{{ row.resourceType }}</span>
@@ -224,11 +222,11 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
             <span class="mono muted">{{ formatBytes(row.bytes) }}</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
     </UiPanel>
 
     <UiPanel title="主机分布">
-      <el-table :data="stats?.byHost ?? []" size="small" height="180" empty-text="还没有可观测请求">
+      <UiTable :data="stats?.byHost ?? []" height="180" empty-text="还没有可观测请求">
         <el-table-column label="主机" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono">{{ row.host }}</span>
@@ -244,7 +242,7 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
             <span class="mono muted">{{ formatBytes(row.bytes) }}</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
     </UiPanel>
 
     <UiPanel title="最近请求">
@@ -253,7 +251,7 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
           {{ store.traffic.length }}
         </UiChip>
       </template>
-      <el-table :data="recentTraffic" size="small" height="260" empty-text="还没有请求：先让 Telegram 页面加载聊天内容">
+      <UiTable :data="recentTraffic" height="260" empty-text="还没有请求：先让 Telegram 页面加载聊天内容">
         <el-table-column label="时间" width="82">
           <template #default="{ row }">
             <span class="mono muted">{{ formatClock(row.at) }}</span>
@@ -271,12 +269,12 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
         </el-table-column>
         <el-table-column label="状态" width="66">
           <template #default="{ row }">
-            <el-tag v-if="row.error" size="small" type="danger">
+            <UiChip v-if="row.error" tone="danger" variant="soft">
               ERR
-            </el-tag>
-            <el-tag v-else size="small" :type="statusTagType(row.statusCode)">
+            </UiChip>
+            <UiChip v-else :tone="statusTagType(row.statusCode)" variant="soft">
               {{ row.statusCode ?? '—' }}
-            </el-tag>
+            </UiChip>
           </template>
         </el-table-column>
         <el-table-column label="大小" width="82" align="right">
@@ -294,7 +292,7 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
             <span class="mono path-cell">{{ row.host }}{{ row.path }}</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
     </UiPanel>
   </div>
 </template>

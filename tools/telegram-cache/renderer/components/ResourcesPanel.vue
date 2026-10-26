@@ -111,7 +111,7 @@ async function refreshArchives(): Promise<void> {
         </el-radio-group>
       </UiToolbar>
 
-      <el-table :data="filteredResources" size="small" height="420" empty-text="还没有观测到资源：先让页面加载聊天里的图片 / 视频缩略图">
+      <UiTable :data="filteredResources" height="420" empty-text="还没有观测到资源：先让页面加载聊天里的图片 / 视频缩略图">
         <el-table-column label="资源（已脱敏）" min-width="230" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="resource-cell">
@@ -166,7 +166,7 @@ async function refreshArchives(): Promise<void> {
             </div>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
 
       <UiHint block>
         资源地址来自<strong>本次会话</strong>的 webRequest 观测，完整 URL（含签名参数）只留在主进程内存，表格里查询参数值统一为
@@ -184,7 +184,7 @@ async function refreshArchives(): Promise<void> {
         </el-button>
       </template>
 
-      <el-table :data="store.archives.slice(0, 30)" size="small" height="240" empty-text="还没有归档：在资源行点「归档」">
+      <UiTable :data="store.archives.slice(0, 30)" height="240" empty-text="还没有归档：在资源行点「归档」">
         <el-table-column label="归档时间" width="132">
           <template #default="{ row }">
             <span class="mono muted">{{ formatDateTime(row.savedAt) }}</span>
@@ -208,7 +208,7 @@ async function refreshArchives(): Promise<void> {
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-      </el-table>
+      </UiTable>
 
       <UiHint block>
         归档按内容哈希（SHA-256）去重，副本独立于资源库；缓存清理不会删除归档。同一内容只保留一份。
@@ -257,10 +257,5 @@ async function refreshArchives(): Promise<void> {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-}
-
-:deep(.el-table .cell) {
-  padding-top: 4px;
-  padding-bottom: 4px;
 }
 </style>

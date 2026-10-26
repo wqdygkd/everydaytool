@@ -83,11 +83,11 @@ function headersText(headers?: Record<string, string>): string {
       <span class="mono">chrome-extension:</span> 不走代理，其它 origin 不在名单里也不记录。
     </UiHint>
 
-    <el-table
+    <UiTable
       :data="filteredTraffic"
-      size="small"
       height="460"
       empty-text="暂无流量：只有命中处理名单的请求才会记录（未命中按透传处理）。先确认目标 origin 已在名单里、且浏览器已挂上代理"
+      row-clickable
       @row-click="openDetail"
     >
       <el-table-column label="时间" width="110">
@@ -107,12 +107,12 @@ function headersText(headers?: Record<string, string>): string {
       </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
-          <el-tag v-if="row.error" size="small" type="danger">
+          <UiChip v-if="row.error" tone="danger" variant="soft">
             ERR
-          </el-tag>
-          <el-tag v-else size="small" :type="statusTagType(row.status)">
+          </UiChip>
+          <UiChip v-else :tone="statusTagType(row.status)" variant="soft">
             {{ row.status ?? '—' }}
-          </el-tag>
+          </UiChip>
         </template>
       </el-table-column>
       <el-table-column label="耗时" width="90">
@@ -123,21 +123,21 @@ function headersText(headers?: Record<string, string>): string {
       <el-table-column label="标记" min-width="180">
         <template #default="{ row }">
           <UiGroup wrap gap="sm">
-            <el-tag v-if="row.canceled" size="small" type="danger">
+            <UiChip v-if="row.canceled" tone="danger" variant="soft">
               取消
-            </el-tag>
-            <el-tag v-if="row.mocked" size="small" type="warning">
+            </UiChip>
+            <UiChip v-if="row.mocked" tone="warning" variant="soft">
               Mock
-            </el-tag>
-            <el-tag v-if="row.redirectedTo" size="small" type="info">
+            </UiChip>
+            <UiChip v-if="row.redirectedTo" tone="info" variant="soft">
               重定向
-            </el-tag>
-            <el-tag v-if="row.delayedByMs" size="small" type="warning" effect="plain">
+            </UiChip>
+            <UiChip v-if="row.delayedByMs" tone="warning" variant="outline">
               +{{ row.delayedByMs }}ms
-            </el-tag>
-            <el-tag v-for="name in row.matchedRuleNames ?? []" :key="name" size="small" type="info" effect="plain">
+            </UiChip>
+            <UiChip v-for="name in row.matchedRuleNames ?? []" :key="name" tone="info" variant="outline">
               {{ name }}
-            </el-tag>
+            </UiChip>
           </UiGroup>
         </template>
       </el-table-column>
@@ -148,33 +148,33 @@ function headersText(headers?: Record<string, string>): string {
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </UiTable>
   </UiPanel>
 
   <UiDialog v-model="detailVisible" title="流量详情" width="min(860px, 94vw)" destroy-on-close>
     <UiGroup v-if="detail" direction="column" gap="sm">
       <UiGroup wrap gap="sm">
-        <el-tag size="small">
+        <UiChip variant="outline">
           {{ detail.method }}
-        </el-tag>
-        <el-tag v-if="detail.status" size="small" :type="statusTagType(detail.status)">
+        </UiChip>
+        <UiChip v-if="detail.status" :tone="statusTagType(detail.status)" variant="soft">
           {{ detail.status }}
-        </el-tag>
-        <el-tag v-if="detail.canceled" size="small" type="danger">
+        </UiChip>
+        <UiChip v-if="detail.canceled" tone="danger" variant="soft">
           取消
-        </el-tag>
-        <el-tag v-if="detail.mocked" size="small" type="warning">
+        </UiChip>
+        <UiChip v-if="detail.mocked" tone="warning" variant="soft">
           Mock 短路
-        </el-tag>
-        <el-tag v-if="detail.redirectedTo" size="small" type="info">
+        </UiChip>
+        <UiChip v-if="detail.redirectedTo" tone="info" variant="soft">
           重定向
-        </el-tag>
-        <el-tag v-if="detail.delayedByMs" size="small" type="warning">
+        </UiChip>
+        <UiChip v-if="detail.delayedByMs" tone="warning" variant="soft">
           延迟 {{ detail.delayedByMs }}ms
-        </el-tag>
-        <el-tag v-for="name in detail.matchedRuleNames ?? []" :key="name" size="small" type="info">
+        </UiChip>
+        <UiChip v-for="name in detail.matchedRuleNames ?? []" :key="name" tone="info" variant="soft">
           {{ name }}
-        </el-tag>
+        </UiChip>
         <span class="mono muted">{{ detail.durationMs != null ? `${detail.durationMs}ms` : '' }}</span>
       </UiGroup>
       <div class="detail-url mono">
@@ -254,10 +254,6 @@ function headersText(headers?: Record<string, string>): string {
 <style scoped>
 .url-cell {
   font-size: var(--font-size-sm);
-}
-
-:deep(.el-table__row) {
-  cursor: pointer;
 }
 
 .detail-url {

@@ -34,10 +34,9 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
         </el-button>
       </UiGroup>
 
-      <el-progress
+      <UiProgress
         v-if="progress && progress.totalBytes > 0"
         :percentage="percentage(progress)"
-        :show-text="false"
       />
     </UiGroup>
   </UiPanel>

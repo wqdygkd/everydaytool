@@ -97,11 +97,13 @@ declare module 'vue' {
     UiMenuHorizontal: typeof import('./renderer/shared/components/ui/UiMenuHorizontal.vue')['default']
     UiPanel: typeof import('./renderer/shared/components/ui/UiPanel.vue')['default']
     UiPathField: typeof import('./renderer/shared/components/ui/UiPathField.vue')['default']
+    UiProgress: typeof import('./renderer/shared/components/ui/UiProgress.vue')['default']
     UiSearchInput: typeof import('./renderer/shared/components/ui/UiSearchInput.vue')['default']
     UiSectionHeader: typeof import('./renderer/shared/components/ui/UiSectionHeader.vue')['default']
     UiSidebar: typeof import('./renderer/shared/components/ui/UiSidebar.vue')['default']
     UiStatusTag: typeof import('./renderer/shared/components/ui/UiStatusTag.vue')['default']
     UiSwitchField: typeof import('./renderer/shared/components/ui/UiSwitchField.vue')['default']
+    UiTable: typeof import('./renderer/shared/components/ui/UiTable.vue')['default']
     UiToolbar: typeof import('./renderer/shared/components/ui/UiToolbar.vue')['default']
     VSCodeDownloader: typeof import('./tools/offline-pack/renderer/components/VSCodeDownloader.vue')['default']
   }

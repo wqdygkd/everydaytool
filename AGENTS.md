@@ -40,19 +40,20 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 
 ### UI 组件库（`renderer/shared/components/ui/`，新工具优先复用）
 
-平台级 UI 组件库（25 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
+平台级 UI 组件库（27 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
 
 - **新工具页优先使用组件，不要在业务里重复写通用样式**；组件确不满足时写局部样式并在注释说明原因。
+- 表格与进度条必须走 `UiTable` / `UiProgress`（不直接写 `el-table` / `el-progress`）；状态标签用 `UiChip`（`variant="soft"`），不写 `el-tag`。`pnpm check:ui` 会断言这三类用法归零。
 - `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，不得恢复。
 
 ### 通用工具类（`main.scss`）
 
-核心工具类：`.tool-page` / `.muted` / `.mono` / `.ctl-*` / `.btn-flush` / `.full-width`；完整清单见 [DESIGN.md](./DESIGN.md) §6。
+核心工具类：`.tool-page` / `.muted` / `.mono` / `.ctl-*` / `.btn-flush` / `.radio-flush` / `.full-width`；完整清单见 [DESIGN.md](./DESIGN.md) §6。
 
 - 弱化说明文字用 `.muted` 或 `--color-text-secondary`，统一用语义色不用 `--el-text-color-*` 做排版。
 - 卡片 / 网格 / 键值 / 提示 / 行内组等通用模式一律用 UI 组件库，不得在 `main.scss` 恢复旧通用类。
 - **样式反过度设计**：间距一律取 `--spacing-*` 阶梯（6→sm、10→md、14→lg、18→xl、22px 行高→`--line-height-control`、28/34/36/40/42→2xl/3xl），禁止为一点差异新增魔法数字；同构模式（卡片 / 灰底面版 / 虚线新增钮）合并为单一类 + 修饰类；宽度一律走 `.ctl-*` 阶梯或 `flex` 填充。豁免项：边框宽度、图标/svg 尺寸（12–20px）、1–2px 微内边距、999px 胶囊圆角、表格列宽 / `min-width` 等结构常数。
-- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉一律先用 Element Plus 组件（`el-table` / `el-radio-button` / `el-menu` / `el-input` / `el-dropdown`）再谈覆写。
+- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉一律先用平台组件（`UiTable` / `el-radio-button` / `el-menu` / `el-input` / `el-dropdown`）再谈覆写。
 
 ### 窗口外观（半透明 / 系统材质）
 
@@ -105,6 +106,7 @@ pnpm web          # 纯浏览器预览（无 preload / IPC：只列 supportedTar
 pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm vite build   # 仅构建前端
 pnpm typecheck    # TS 类型检查（前端 + 后端两套 tsconfig）
+pnpm check:ui     # EP 用法断言（el-tag / el-empty / el-progress / el-table 收敛状态）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
 pnpm build        # 完整构建
@@ -157,7 +159,9 @@ export default defineTool({
 | 全局样式入口（@use 顺序） | `renderer/shared/styles/main.scss` |
 | Element Plus `--el-*` 绑定与组件覆写 | `renderer/shared/styles/element-plus.scss` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
-| **UI 组件库（面板/分组/键值/对话框等 25 组件）** | `renderer/shared/components/ui/` |
+| **UI 组件库（面板/分组/键值/表格/进度/对话框等 27 组件）** | `renderer/shared/components/ui/` |
+| **EP 接触面收敛计划（B0–B6 批次 / 验收断言）** | `docs/ui-ep-convergence-plan.md` |
+| EP 用法断言（`pnpm check:ui`） | `scripts/ui-ep-check.mjs` |
 | 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `renderer/App.vue` |
 | **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
 | 设置页（数据目录 / 空间占用 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
