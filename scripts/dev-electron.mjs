@@ -134,7 +134,8 @@ function startElectron() {
     // 启动即挂掉（退出码非 0）时给一句能落地的提示，别只留一个静默的黑窗
     if (Date.now() - startedAt < 5000 && code !== 0) {
       console.warn(`⚠ Electron 启动后立即退出（code=${code} signal=${signal ?? '-'}）`)
-      console.warn('  常见原因：electron 二进制未下完整（pnpm rebuild electron）、安全软件拦截 Chromium 子进程、或与已运行实例冲突')
+      console.warn('  常见原因：electron 二进制未下完整（pnpm rebuild electron）、安全软件拦截 Chromium 子进程、或与已运行的开发态实例冲突')
+      console.warn('  「与已运行实例冲突」只指同一形态（另一个 pnpm dev / pnpm start）：安装版用独立的 userData，不会再顶掉开发态')
       if (process.env.EDT_NO_SANDBOX !== '1') {
         console.warn('  若是被安全软件（如火绒 HIPS）拦截子进程创建，可临时用 EDT_NO_SANDBOX=1 pnpm dev 绕过，并给项目目录加白名单')
       }

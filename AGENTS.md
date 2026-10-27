@@ -12,6 +12,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 
 - 前端（`renderer/**`、`tools/*/renderer/**`、`tools/*/index.ts`）：TS 相对导入无后缀，Vue SFC 保留 `.vue`。
 - Electron/后端（`electron/**`、`backend/**`、`tools/*/backend/**`）：Node ESM，源码相对 TS 导入写 `.ts` 后缀（`scripts/build-electron.mjs` 的 esbuild 插件在产物中还原为 `.js` 运行时后缀）。
+- 构建是 **`bundle: false` 的逐文件转译**（不内联依赖）：`electron/*.ts` / `backend/**` / `shared/**` / `tools/*/backend/**` 会被当作入口逐个产出，`electron/` 与工具后端都是**自动发现**、新增文件不必登记（`preload.ts` 例外，单独打成 cjs）。新增主进程模块后必须确认产物里真有对应 `.js`——漏产出会在运行期以 `ERR_MODULE_NOT_FOUND` 崩在启动瞬间。
 - 前端禁止直接 `import backend/**` 或 `import tools/*/backend/**`，必须经 preload 暴露的 IPC API 调用（`renderer/shared/ipc/createIpcHelpers` 工厂）。**每个工具的 `renderer/ipc.ts` 是唯一 helper 实例**，store / 页面不得自行 `createIpcHelpers`；外链统一走 `@renderer/shared/ipc/openExternal`（不得直接摸 `window.edtRuntime`）。
 - `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、文件系统存储。
 - `backend/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root / JSON 文档存储 json-store），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/backend/`，禁止工具间互相 import 对方的 backend。
@@ -50,6 +51,18 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 - **恢复判定是纯逻辑**：`shared/window-bounds.ts` 的 `resolveWindowPlacement` 只认「仍落在某块屏工作区内、且可见面积足够拖动」的记录；外接屏拔掉 / 分辨率变小时返回 `null`，主进程改用默认尺寸让 Electron 居中——绝不允许把窗口还原到屏幕外。坐标换算 / 越界收敛都写在这里，主进程只做传参。
 - `enabled` / `maximized` / `bounds` 三个字段：关闭开关即不记录也不恢复；最大化只记标记，几何恒取 `getNormalBounds()`（还原后的尺寸），下次先按普通态建窗再 `maximize()`。
 - 存储走**同步** JSON 存储（`backend/utils/json-store.ts`），不用外观那套异步写：`move` / `resize` 高频触发，关窗时还必须在进程退出前落盘。写入用 400ms debounce + 值不变不写，`close` 时立刻 flush。
+
+## 安装版与开发版并存
+
+「装好的 everydaytool」和「`pnpm dev`」同机同时运行是**受支持场景**，靠的只有一条：应用身份（userData）按形态分开。
+
+- `backend/utils/app-instance.ts` 的 `configureInstanceIdentity()` 必须在 `ready` 之前、**任何 `app.getPath('userData')` 读取之前**执行（`electron/main.ts` 顶部第一件事）：未打包运行（`pnpm dev` / `pnpm start`，判定沿用 `data-root.ts` 的 `isDevEnvironment`）把 userData 换成 `<appData>/<应用名>-dev`，安装版保持默认 `<appData>/<应用名>`。
+- 原因：Chromium 的目录级单实例锁（`app.requestSingleInstanceLock()`）以 userData 为命名空间。共用目录时后启动的一方拿不到锁直接 `app.quit()`——表现为「装好的 app 开着，`pnpm dev` 秒退（exit 0、无报错）」。
+- 同一形态内仍是单实例：dev 也不会开出第二个；`second-instance` 聚焦逻辑只作用于同一份 userData。
+- 目录必须**先 `mkdir` 再 `setPath`**：userData 根不存在时 Chromium 建不出 `SingletonLock`，会被判成「已有实例」直接退出。准备失败时降级回默认 userData 并 warn（宁可抢锁也要能启动）。
+- 数据根目录与此无关，本来就是分开的（dev `<仓库>/data`、安装版 `<userData>/data`）；**不要手动把两者切到同一个数据目录**——JSON store 是进程内缓存 + 原子写，双进程并发只会 last-writer-wins。
+- 旧共享 userData 里残留的 dev 早期 Chromium 缓存（`Cookies` / `Cache` / `DevToolsActivePort` 等）不用迁移：`sessionData` 已重定向，真正的会话数据在 `<data>/session`，删掉即可重新生成。
+- **图标也带标识**：`electron/dev-icon.ts` 在未打包运行时把 Dock（macOS，`app.dock.setIcon`）/ 窗口与任务栏（Windows / Linux，`BrowserWindow.icon`，Windows 用 `.ico`）换成 `resources/dev/icon-dev.*`（品牌蓝底 + `edt` + 琥珀色 `DEV` 底边带）。素材由 `scripts/make-dev-icon.py` 生成（macOS 字体 + Pillow，仅生成时用，不参与构建），文件缺失时静默退回系统默认图标；安装版始终用默认图标。
 
 ## 常用命令
 
@@ -143,6 +156,8 @@ export default defineTool({
 | 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
 | 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| **应用身份（安装版 / 开发版 userData 隔离）** | `backend/utils/app-instance.ts` |
+| **开发态图标（Dock / 任务栏 DEV 标识）** | `electron/dev-icon.ts`；素材 `resources/dev/`（`scripts/make-dev-icon.py` 生成） |
 | IPC 调用方白名单（safeHandle / safeOn sender 校验） | `backend/utils/ipc-safety.ts` |
 | IPC 发送方 URL 白名单（主进程 + 导航闸共用） | `backend/utils/ipc-sender.ts` |
 | 路径边界守卫（路径包含 / 数据目录合法性） | `backend/utils/path-guard.ts` |

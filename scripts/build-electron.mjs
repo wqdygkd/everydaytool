@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -7,6 +8,36 @@ import { build } from 'esbuild'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const outDir = path.join(rootDir, 'dist-electron')
+
+/**
+ * 产物自检：`bundle: false` 时产物只改写 import 后缀、不内联依赖，入口一旦漏登记就会产出
+ * 「import 了不存在的 .js」的产物——构建照样成功，直到运行期才以 ERR_MODULE_NOT_FOUND 崩在
+ * 启动瞬间（electron/dev-icon.ts 就踩过）。这里在构建末尾把所有相对导入静态验证一遍。
+ */
+export async function assertModuleGraphResolves() {
+  const missing = []
+  const visit = async (dir) => {
+    for (const dirent of await readdir(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, dirent.name)
+      if (dirent.isDirectory()) {
+        await visit(fullPath)
+        continue
+      }
+      if (!dirent.name.endsWith('.js')) continue
+      const code = await readFile(fullPath, 'utf8')
+      for (const match of code.matchAll(/(?:from\s+|import\s*\(\s*)"(\.[^"]+\.js)"/g)) {
+        const target = path.resolve(path.dirname(fullPath), match[1])
+        if (!existsSync(target)) {
+          missing.push(`${path.relative(outDir, fullPath)} -> ${match[1]}`)
+        }
+      }
+    }
+  }
+  await visit(outDir)
+  if (missing.length > 0) {
+    throw new Error(`产物里有无法解析的相对导入（入口漏登记？）：\n${missing.join('\n')}`)
+  }
+}
 
 /** 递归收集某个工具后端目录下的全部 .ts（相对 rootDir，供 esbuild outbase 保持目录结构） */
 async function collectToolBackendEntries(dir) {
@@ -37,9 +68,15 @@ const toolBackendEntries = (await Promise.all(
   toolIds.map(toolId => collectToolBackendEntries(path.join(rootDir, 'tools', toolId, 'backend'))),
 )).flat()
 
+// 主进程入口按 electron/*.ts 动态发现：`bundle: false` 下每个模块都必须自己出现在产物里
+// （产物只改写 import 后缀、不内联依赖），漏登记的新模块会在运行期 ERR_MODULE_NOT_FOUND。
+// preload 走下面的独立 cjs 打包，跳过。
+const electronEntries = (await readdir(path.join(rootDir, 'electron'), { withFileTypes: true }))
+  .filter(dirent => dirent.isFile() && dirent.name.endsWith('.ts') && dirent.name !== 'preload.ts')
+  .map(dirent => `electron/${dirent.name}`)
+
 const backendEntryPoints = [
-  'electron/main.ts',
-  'electron/tool-registry.ts',
+  ...electronEntries,
   // backend/** 平台级后端基建（logger / file-ops / data-root），松散产出到 dist-electron/backend/
   'backend/**/*.ts',
   // shared/** 里含后端运行时值导入（如 sleep、webview 分区常量），必须随编译产出到 dist-electron/shared/
@@ -105,6 +142,8 @@ export async function buildElectron(options = {}) {
     external: ['electron'],
     logLevel: log ? 'info' : 'silent',
   })
+
+  await assertModuleGraphResolves()
 
   if (log) {
     console.log('✓ Electron 主进程编译到 dist-electron/')

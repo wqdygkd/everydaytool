@@ -6,8 +6,9 @@ import process from 'node:process'
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
+import { configureInstanceIdentity } from '../backend/utils/app-instance.ts'
 import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
-import { loadDataDirectoryOverrideSync } from '../backend/utils/data-root.ts'
+import { getDataDirectory, isDevEnvironment, loadDataDirectoryOverrideSync } from '../backend/utils/data-root.ts'
 import { initIpcSafety, safeOn } from '../backend/utils/ipc-safety.ts'
 import { isTrustedIpcSenderUrl } from '../backend/utils/ipc-sender.ts'
 import { logger } from '../backend/utils/logger.ts'
@@ -16,12 +17,23 @@ import { clearWindowBoundsGeometry, getWindowBoundsState, loadWindowBounds, reco
 import { parseWindowsBuild, resolveAppearanceCapabilities, resolveWindowAppearance, sanitizeWindowAppearance } from '../shared/appearance.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
 import { DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE, resolveWindowPlacement } from '../shared/window-bounds.ts'
+import { applyDevDockIcon, resolveDevWindowIconPath } from './dev-icon.ts'
 import { toolBackends } from './tool-registry.ts'
+
+// 应用身份先定：开发态把 userData 换成 `<appData>/<应用名>-dev`，与安装版各持一把
+// Chromium 单实例锁，两者才能同时运行（见 backend/utils/app-instance.ts）。
+// 必须排在下面 loadDataDirectoryOverrideSync 之前——引导配置 data-root.json 就住在 userData 里。
+const userDataDirectory = configureInstanceIdentity()
 
 // Chromium 会话数据（Cookies / Cache / LocalStorage / Partitions）必须在 ready 之前重定向到
 // 应用数据目录；否则 persist 分区会固定落在 userData，只能靠链接搬移。
 loadDataDirectoryOverrideSync()
 configureSessionDataDirectory()
+
+if (isDevEnvironment) {
+  // 两种形态同时在跑时，日志里要能一眼看出这一条来自哪个 profile
+  logger.info('Development instance profile', { userData: userDataDirectory, data: getDataDirectory() })
+}
 
 // 调试端口只在显式开启时启用：pnpm dev 由 dev-electron.mjs 注入 NODE_ENV=development；
 // 运行构建产物调试用 EDT_REMOTE_DEBUG=1（只开 CDP，仍加载 dist 页面）。生产启动不带任何
@@ -326,8 +338,14 @@ async function createWindow(): Promise<void> {
   // 上次退出时的大小 / 位置；记录不可用（未开启记忆 / 屏幕变化）时是默认尺寸（位置交给 Electron 居中）
   const savedBounds = resolveWindowBoundsOptions()
 
+  // 开发态图标（带 DEV 标识）；安装版恒为 undefined，窗口沿用系统默认图标
+  const devWindowIcon = resolveDevWindowIconPath()
+
   mainWindow = new BrowserWindow({
     ...savedBounds.options,
+    // 开发态图标（带 DEV 标识）：Windows / Linux 只能通过窗口 icon 指定；macOS 该选项无效，
+    // Dock 图标由 applyDevDockIcon() 在 ready 后单独设置。见 electron/dev-icon.ts。
+    ...(devWindowIcon ? { icon: devWindowIcon } : {}),
     minWidth: MIN_WINDOW_SIZE.width,
     minHeight: MIN_WINDOW_SIZE.height,
     title: 'everydaytool',
@@ -469,6 +487,10 @@ async function bootstrap(): Promise<void> {
 
   await app.whenReady()
 
+  // 开发态 Dock 图标：dock API 在 ready 之后才可用，放在这里最早——晚于建窗只会让 Dock
+  // 先闪一下 Electron 默认图标。进程级设置，与窗口数量无关。
+  applyDevDockIcon()
+
   // 主会话与所有 webview 分区的权限策略（session-created 覆盖后续动态创建的 partition）
   configureSessionPermissions(session.defaultSession)
   app.on('session-created', createdSession => configureSessionPermissions(createdSession))
@@ -485,6 +507,8 @@ async function bootstrap(): Promise<void> {
 // 单实例锁：JSON store 是「进程内缓存 + 原子写」，双实例并发会 last-writer-wins 丢更新；
 // 数据目录迁移（backend/utils/data-migration.ts）在启动期做复制→校验→删源，两个实例同时
 // 启动还会互相踩到迁移中间态。第二个实例直接退出。
+// 锁的命名空间是 userData，所以这条只约束「同一形态」：开发态与安装版各在自己的 userData 上
+// 持锁，可以同时运行（backend/utils/app-instance.ts）。
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {

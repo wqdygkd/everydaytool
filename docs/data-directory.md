@@ -7,9 +7,11 @@
 
 数据根目录记为 `<data>`（默认：开发态 `仓库/data`，打包态 `userData/data`，可在设置中修改）。
 
+**userData 本身也按形态分开**：安装版 `<appData>/<应用名>`，未打包运行（`pnpm dev` / `pnpm start`）为 `<appData>/<应用名>-dev`（见 `backend/utils/app-instance.ts`，在 ready 之前、任何 `userData` 读取之前设置）。Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份时安装版与开发版会互相顶掉（后启动方直接 `app.quit()` 秒退）；分开后两者可同时运行，各自仍是单实例。两份 userData 里的 `data-root.json` 也彼此独立，但**不要手动把两者指向同一个 `<data>`**。
+
 | 数据 | 位置 | 说明 |
 | --- | --- | --- |
-| 数据目录引导（硬限制） | `userData/data-root.json`、`setup-state.json`、`data-root.path`、`data-root.pending.json` | 必须先知道数据目录在哪，不能放进数据目录 |
+| 数据目录引导（硬限制） | `userData/data-root.json`、`setup-state.json`、`data-root.path`、`data-root.pending.json` | 必须先知道数据目录在哪，不能放进数据目录；随 userData 按安装版 / 开发版分开 |
 | 应用壳配置 | `<data>/app/window-appearance.json`、`<data>/app/window-bounds.json` | 窗口外观 + 记住的窗口大小 / 位置；外观早期在 userData，首次读取自动搬入 |
 | Electron 崩溃/日志 | `<data>/app/crash-dumps`、`<data>/app/logs` | `app.setPath('crashDumps' / 'logs')` |
 | Chromium 会话（全部 webview） | `<data>/session` | Cookies / LocalStorage / IndexedDB / Cache / Partitions；见 §2 |
