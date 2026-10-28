@@ -65,7 +65,7 @@ Tauri 的子 Webview 有独立的 WebView2 数据目录（`WebviewBuilder::data_
 | --- | --- | --- |
 | chrome-sandbox | ✅ `<data>/chrome-sandbox` | 沙箱 profile 在 profile 目录下 |
 | env-browser | ✅ `<data>/env-browser` | 页面数据在 `webview-profiles/env-<id>` |
-| interceptor | ✅ `<data>/interceptor` | 系统 CA 信任在外部 |
+| interceptor | ✅ `<data>/interceptor` | 规则 / 名单 / 证书/**运行时扩展**（`interceptor/extension`，旧版在 `userData/interceptor-extension`，首次准备自动搬入）；系统 CA 信任在外部 |
 | offline-pack | ✅ `<data>/offline-pack` | 用户另存位置除外 |
 | wxp-enhancer | ✅ `<data>/wxp-enhancer` | 目标微信数据在外部 |
 | telegram-cache | ✅ `<data>/telegram-cache` | 页面数据在 `webview-profiles/telegram-cache` |

@@ -86,6 +86,22 @@ fn prepare_extension_directory(app: &tauri::AppHandle) -> String {
         return source.to_string_lossy().to_string();
     }
     let target = paths::runtime_extension_path();
+    // 旧版把运行时扩展放在 userData：数据目录里还没有时先搬过来（搬完删旧，避免两份并存）
+    let legacy = paths::legacy_runtime_extension_path();
+    if !target.exists() && legacy.is_dir() {
+        if let Some(parent) = target.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::rename(&legacy, &target) {
+            Ok(()) => log::info!("[interceptor] 运行时扩展已迁入数据目录：{}", target.display()),
+            Err(_) => {
+                // 跨卷 rename 会失败：退回复制 + 删旧
+                if copy_dir_all(&legacy, &target).is_ok() {
+                    let _ = std::fs::remove_dir_all(&legacy);
+                }
+            }
+        }
+    }
     let read_version = |dir: &std::path::Path| -> Option<String> {
         std::fs::read_to_string(dir.join("manifest.json"))
             .ok()

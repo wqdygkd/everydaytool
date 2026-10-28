@@ -37,8 +37,15 @@ pub fn extension_source_path(app: &tauri::AppHandle) -> PathBuf {
     }
 }
 
-/// 运行时扩展目录：打包态复制到 userData 下的稳定路径（安装目录可变，load unpacked 的路径必须稳）
+/// 运行时扩展目录：打包态复制到**数据目录**下的稳定路径（安装目录可变，load unpacked 的路径必须稳）。
+/// 早期版本放在 userData（`<userData>/interceptor-extension`）：首次准备时一次性搬进数据目录，
+/// 与「所有可持久化数据都在数据目录」的约定对齐（换目录时随整目录迁移一起走）。
 pub fn runtime_extension_path() -> PathBuf {
+    interceptor_data_directory().join("extension")
+}
+
+/// 旧位置（早期版本的运行时扩展目录）：仅用于一次性搬移。
+pub fn legacy_runtime_extension_path() -> PathBuf {
     crate::appearance::default_user_data_dir().join("interceptor-extension")
 }
 
