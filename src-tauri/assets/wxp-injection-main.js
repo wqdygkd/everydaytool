@@ -453,7 +453,7 @@ export function injectionMain(): void {
       if (mergedFavs.length !== pageFavs.length) {
         var pageTs = 0;
         try { pageTs = Number(localStorage.getItem(FAV_TS_KEY)) || 0; } catch (e) {}
-        writeFavs(mergedFavs, Math.max(BACKUP_TS, pageTs, Date.now()));
+        writeFavs(mergedFavs, Math.max(BACKUP_TS, pageTs));
       }
     }
   } catch (e) {}

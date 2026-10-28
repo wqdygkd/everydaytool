@@ -18,7 +18,7 @@
 | 应用级配置 | `<data>/window-appearance.json`、`<data>/window-geometry.json` | 窗口外观 + 记住的窗口大小 / 位置；旧版留在 userData 根目录的副本由 `migrate_legacy_config` 一次性迁入 |
 | 日志 | `<data>/logs` | `appearance::resolve_log_dir` 候选链的首选；不可写时回退 `%LOCALAPPDATA%\com.edt.everydaytool\logs`，仍不可写则只留 stdout |
 | 主窗口 WebView2 | `<data>/webview2` | 主界面浏览器数据（界面存储 / 着色器缓存）；`EDT_WEBVIEW_DATA_DIR` 可显式覆盖 |
-| 子 Webview profiles | `<data>/webview-profiles/<profile>` | env-browser（`env-<id>`）/ treease / telegram-cache / workbuddy2api-panel 各自的独立浏览数据与登录态 |
+| 子 Webview profiles | `<data>/webview-profiles/<profile>` | env-browser（`env-<id>`）/ treease（`treease`）/ telegram-cache / workbuddy2api-panel 各自的独立浏览数据与登录态 |
 | chrome-sandbox | `<data>/chrome-sandbox/` | 沙箱列表、指纹、配置与各沙箱 profile |
 | env-browser | `<data>/env-browser/` | 环境配置 |
 | interceptor | `<data>/interceptor/` | 规则、处理名单与 CA 证书（系统信任库在外部） |
@@ -70,7 +70,7 @@ Tauri 的子 Webview 有独立的 WebView2 数据目录（`WebviewBuilder::data_
 | wxp-enhancer | ✅ `<data>/wxp-enhancer` | 目标微信数据在外部 |
 | telegram-cache | ✅ `<data>/telegram-cache` | 页面数据在 `webview-profiles/telegram-cache` |
 | workbuddy2api-panel | ✅ `<data>/workbuddy2api-panel` | 上游二进制与 run/ 配置；面板数据在 `webview-profiles/workbuddy2api-panel` |
-| treease-editor | ✅ `<data>/treease-editor`（预留） | 页面数据在 `webview-profiles/treease-editor` |
+| treease-editor | ✅ `<data>/treease-editor`（预留） | 页面数据在 `webview-profiles/treease` |
 | id-card-generator | — | 无持久化 |
 
 应用级配置（窗口外观 / 窗口几何）放在 `<data>` 根，与各工具目录并列；不另建 `app/` 子目录

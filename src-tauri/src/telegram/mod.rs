@@ -511,7 +511,7 @@ pub fn clear_observation(app: &AppHandle) -> Value {
 }
 
 /// 清缓存：删内容对象，保留归档副本
-pub fn clear_cache(app: &AppHandle) -> Result<Value, String> {
+pub fn clear_cache(_app: &AppHandle) -> Result<Value, String> {
     let mut freed = 0u64;
     {
         let mut state = lock();
