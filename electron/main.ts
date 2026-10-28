@@ -8,6 +8,8 @@ import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { configureInstanceIdentity } from '../backend/utils/app-instance.ts'
 import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
+import { getAssetsRoot, loadAssetsRootSync } from '../backend/utils/assets-root.ts'
+import { upgradeDataLayout } from '../backend/utils/data-layout-upgrade.ts'
 import { getDataDirectory, isDevEnvironment, loadDataDirectoryOverrideSync } from '../backend/utils/data-root.ts'
 import { initIpcSafety, safeOn } from '../backend/utils/ipc-safety.ts'
 import { isTrustedIpcSenderUrl } from '../backend/utils/ipc-sender.ts'
@@ -25,9 +27,14 @@ import { toolBackends } from './tool-registry.ts'
 // 必须排在下面 loadDataDirectoryOverrideSync 之前——引导配置 data-root.json 就住在 userData 里。
 const userDataDirectory = configureInstanceIdentity()
 
-// Chromium 会话数据（Cookies / Cache / LocalStorage / Partitions）必须在 ready 之前重定向到
-// 应用数据目录；否则 persist 分区会固定落在 userData，只能靠链接搬移。
+// 启动顺序（不能变）：
+// 1. 数据目录地址（含 pending 迁移）——其它根的位置都以它为基准；
+// 2. 资产根（独立根，含 pending 迁移）——升级器要读它才知道归档搬到哪；
+// 3. v1 平铺布局 → v2 分层布局的升级——必须在 Chromium 打开会话文件之前完成；
+// 4. 重定向 Chromium 会话目录到 session 层（见 docs/data-layers.md §9）。
 loadDataDirectoryOverrideSync()
+loadAssetsRootSync()
+upgradeDataLayoutAtStartup()
 configureSessionDataDirectory()
 
 if (isDevEnvironment) {
@@ -83,6 +90,52 @@ const APPEARANCE_CAPABILITIES = resolveAppearanceCapabilities(
   process.platform,
   process.platform === 'win32' ? parseWindowsBuild(process.getSystemVersion()) : null,
 )
+
+/**
+ * 启动期把数据布局从 v1（平铺 `<data>/<工具>/…`）升级到 v2（`config` / `session` / `cache` 三层）。
+ * 幂等且失败安全：单条搬迁失败只记日志、文件留在旧位置（读取方用 resolveLayerPathWithFallback 回查），
+ * 只有零错误零冲突时才写布局版本标记。整段同步执行，必须在 Chromium 打开会话文件之前完成。
+ *
+ * 唯一的**硬拒绝**：数据根的 `layoutVersion` 高于本版支持值（数据来自更新的应用）。
+ * 这时一个字节都不动——老版本按自己的理解往新版布局里写只会毁数据。给出提示后退出，
+ * 逃生开关 `EDT_ALLOW_FUTURE_LAYOUT=1` 用于「明知风险、只想打开看一眼」的场景。
+ */
+function upgradeDataLayoutAtStartup(): void {
+  try {
+    const result = upgradeDataLayout({ dataDirectory: getDataDirectory(), assetsRoot: getAssetsRoot() })
+    if (result.blockedByNewerLayout) {
+      const detail = `数据目录 ${getDataDirectory()} 的布局版本是 v${result.plan.fromVersion}，`
+        + `高于本版应用支持的 v${result.plan.toVersion}。请升级应用，或把数据目录指回兼容的目录。`
+      logger.error('Refusing to start: data layout is newer than this app version', {
+        dataDirectory: getDataDirectory(),
+        layoutVersion: result.plan.fromVersion,
+        supportedVersion: result.plan.toVersion,
+      })
+      if (process.env.EDT_ALLOW_FUTURE_LAYOUT === '1') {
+        logger.warn('EDT_ALLOW_FUTURE_LAYOUT=1: continuing with a newer data layout (data may be damaged)')
+        return
+      }
+      dialog.showErrorBox('数据版本过新', detail)
+      app.exit(1)
+      return
+    }
+    if (result.dryRun || result.plan.fromVersion === result.plan.toVersion) return
+    logger.info('Data layout upgrade finished', {
+      moved: result.movedCount,
+      bytes: result.movedBytes,
+      quarantined: result.plan.quarantined.length,
+      untouchedUnknown: result.plan.untouchedUnknown.length,
+      errors: result.errors.length,
+      versionWritten: result.versionWritten,
+    })
+    if (result.errors.length > 0) {
+      logger.warn('Data layout upgrade left entries in legacy locations', { errors: result.errors })
+    }
+  } catch (error) {
+    // 升级失败绝不能阻止启动：老路径仍在，工具仍能按 v1 布局工作
+    logger.warn('Data layout upgrade failed; continuing with current layout', { error: (error as Error).message })
+  }
+}
 
 let mainWindow: BrowserWindow | null = null
 let backendInitialized = false

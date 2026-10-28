@@ -1,17 +1,30 @@
-// 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、磁盘用量、缓存清理、
-// 窗口外观（半透明 / 系统材质）的读取与切换、打开调试控制台。
-// 数据目录切换只写 pending，实际迁移与生效在下次启动的 ready 之前完成。
+// 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、分层用量、缓存清理、
+// 窗口外观（半透明 / 系统材质）的读取与切换、UI 偏好、备份与恢复、打开调试控制台。
+// 数据目录 / 资产目录的切换都只写 pending，实际迁移与生效在下次启动的 ready 之前完成。
 import type {
+  AppAssetsDirectoryInfo,
+  AppAssetsDirectoryUpdateResult,
   AppDataDirectoryInfo,
   AppDataDirectoryUpdateResult,
   CacheCleanResult,
-  DataRootUsage,
+  DataUsage,
+  UiPreferences,
 } from '../../shared/app.ts'
 import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../shared/appearance.ts'
+import type {
+  BackupExportOptions,
+  BackupExportResult,
+  BackupInspectResult,
+  BackupRestoreReport,
+} from '../../shared/backup.ts'
 import type { WindowBoundsState } from '../../shared/window-bounds.ts'
-import { BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import path from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { formatBackupFileName } from '../../shared/backup.ts'
 import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
-import { clearDataRootCaches, scanDataRoot } from '../utils/data-root-scan.ts'
+import { getAssetsRootState, requestAssetsRootChange } from '../utils/assets-root.ts'
+import { createBackup, inspectBackup, restoreBackup } from '../utils/backup-service.ts'
+import { clearDataLayerCaches, scanDataLayers } from '../utils/data-root-scan.ts'
 import {
   getDataDirectory,
   getDefaultDataDirectory,
@@ -22,6 +35,7 @@ import {
 import { safeHandle } from '../utils/ipc-safety.ts'
 import { logger } from '../utils/logger.ts'
 import { isSafeDataDirectory, isSamePath } from '../utils/path-guard.ts'
+import { getUiPreferences, setUiPreferences } from '../utils/ui-preferences-store.ts'
 import { getWindowBoundsState } from '../utils/window-bounds-store.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
@@ -84,8 +98,79 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     return true
   })
 
-  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_USAGE_GET, async (): Promise<DataRootUsage> => {
-    const { cacheDirs: _cacheDirs, ...usage } = await scanDataRoot()
+  // ── 资产根：独立于数据目录（默认 <data>/assets，可指到另一块盘）──
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.ASSETS_DIRECTORY_GET, (): AppAssetsDirectoryInfo => getAssetsRootState())
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.ASSETS_DIRECTORY_SELECT, async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择资产目录（归档存储位置）',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return result.filePaths[0]
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.ASSETS_DIRECTORY_UPDATE, async (_event, nextDirectory: string): Promise<AppAssetsDirectoryUpdateResult> => {
+    // 与数据目录同理：该目录会承载递归复制与删除，先做路径边界校验
+    const result = await requestAssetsRootChange(nextDirectory)
+    if (result.changed) logger.info('Assets directory change pending restart', { target: result.pendingAssetsRoot })
+    return result
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.ASSETS_DIRECTORY_OPEN, async () => {
+    const assetsRoot = getAssetsRootState().assetsRoot
+    const errorMessage = await shell.openPath(assetsRoot)
+    if (errorMessage) {
+      logger.warn('Failed to open assets directory', { error: errorMessage })
+      throw new Error(errorMessage)
+    }
+    return true
+  })
+
+  // ── 应用壳 UI 偏好（收藏的工具）：配置层文件为事实来源 ──
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.UI_PREFERENCES_GET, (): UiPreferences => getUiPreferences())
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.UI_PREFERENCES_SET, (_event, patch: { favoriteToolIds?: unknown }): UiPreferences => {
+    if (!patch || typeof patch !== 'object') throw new Error('偏好参数不合法')
+    return setUiPreferences({ favoriteToolIds: patch.favoriteToolIds })
+  })
+
+  // ── 备份包：导出 / 预检 / 恢复 ──
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.BACKUP_EXPORT, async (_event, options: BackupExportOptions): Promise<BackupExportResult | null> => {
+    const result = await dialog.showSaveDialog({
+      title: '导出备份',
+      defaultPath: path.join(app.getPath('documents'), formatBackupFileName(app.getVersion())),
+      filters: [{ name: 'everydaytool 备份', extensions: ['edtbackup'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    return createBackup(result.filePath, options ?? {})
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.BACKUP_INSPECT, async (_event, payload: { filePath?: string | null, password?: string | null } | null): Promise<BackupInspectResult | null> => {
+    let filePath = typeof payload?.filePath === 'string' && payload.filePath ? payload.filePath : null
+    if (!filePath) {
+      const picked = await dialog.showOpenDialog({
+        title: '选择备份包',
+        properties: ['openFile'],
+        filters: [{ name: 'everydaytool 备份', extensions: ['edtbackup'] }],
+      })
+      if (picked.canceled || !picked.filePaths[0]) return null
+      filePath = picked.filePaths[0]
+    }
+    return inspectBackup(filePath, { password: payload?.password ?? undefined })
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.BACKUP_RESTORE, async (_event, payload: { filePath: string, password?: string | null, includeSession?: boolean }): Promise<BackupRestoreReport> => {
+    if (!payload || typeof payload.filePath !== 'string' || !payload.filePath) throw new Error('缺少备份包路径')
+    return restoreBackup(payload.filePath, {
+      password: payload.password ?? undefined,
+      includeSession: payload.includeSession === true,
+    })
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_USAGE_GET, async (): Promise<DataUsage> => {
+    // cacheDirs 是清理用的内部字段，不进 IPC 载荷
+    const { cacheDirs: _cacheDirs, ...usage } = await scanDataLayers()
     return usage
   })
 
@@ -112,7 +197,7 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.WINDOW_BOUNDS_RESET, (): WindowBoundsState => options.resetWindowBounds())
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.CACHE_CLEAR, async (): Promise<CacheCleanResult> => {
-    const result = await clearDataRootCaches()
+    const result = await clearDataLayerCaches()
     // 应用自身（渲染层）的 HTTP 缓存一并清掉；体积不并入统计
     try {
       await session.defaultSession.clearCache()

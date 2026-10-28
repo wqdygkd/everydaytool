@@ -10,7 +10,7 @@ import { shell } from 'electron'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { incrementTelegramArchiveRef, resolveTelegramObjectPath } from '../store/resource-registry.ts'
-import { getTelegramArchiveIndexPath, getTelegramArchiveRoot, getTelegramCacheRoot, toTelegramRelativePath } from '../utils/paths.ts'
+import { getTelegramArchiveIndexPath, getTelegramArchiveRoot, resolveTelegramRelativePath, toTelegramRelativePath } from '../utils/paths.ts'
 
 interface ArchiveDocument {
   schemaVersion: 1
@@ -63,7 +63,7 @@ export function hasTelegramArchiveCopy(record: TelegramResourceRecord): boolean 
   const archiveId = `res-${record.sha256.slice(0, 16)}`
   const entry = readDocument().entries[archiveId]
   if (!entry) return false
-  return existsSync(path.resolve(getTelegramCacheRoot(), entry.relativePath))
+  return existsSync(resolveTelegramRelativePath(entry.relativePath))
 }
 
 /** 归档文件名由应用生成：内容哈希 + MIME 推断的扩展名，绝不使用原始文件名 / 用户文本 */
@@ -96,7 +96,7 @@ export async function archiveTelegramResource(record: TelegramResourceRecord): P
   const archiveId = archiveIdOf(record)
   const doc = readDocument()
   const existing = doc.entries[archiveId]
-  if (existing && existsSync(path.resolve(getTelegramCacheRoot(), existing.relativePath))) {
+  if (existing && existsSync(resolveTelegramRelativePath(existing.relativePath))) {
     incrementTelegramArchiveRef(record.resourceKey)
     return existing
   }

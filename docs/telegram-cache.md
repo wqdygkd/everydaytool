@@ -77,8 +77,8 @@ tools/telegram-cache/backend/
   services/diagnostics-service.ts        脱敏诊断包（含 M3 报告）
   services/self-test-service.ts          18 项自检（单飞 7 + HTTP 3 + Range + 304 + 分块 2 + 下载核心 2 + 链接 + 基准）
   utils/env.ts                           .env / 环境变量读取（api_id / api_hash / session，仅主进程）
-  utils/session-store.ts                 safeStorage 加密会话读写（<data>/telegram-cache/telegram-session.bin）
-  utils/paths.ts                         数据目录布局
+  utils/session-store.ts                 safeStorage 加密会话读写（<data>/config/telegram-cache/telegram-session.bin）
+  utils/paths.ts                         分层布局 + 索引相对路径的层路由
 
 tools/telegram-cache/renderer/
   pages/TelegramCachePage.vue            左 webview + 右面板，路由驱动视图
@@ -238,7 +238,7 @@ tools/telegram-cache/renderer/
 - 凭据只从进程环境或 `.env` 读取（项目根 → 数据目录 → userData，`process.env` 优先）：
   `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` / `TELEGRAM_SESSION`。**绝不出主进程、不进日志、不发渲染层**。
 - 会话存储：首次用 `.env` 明文连接成功后，自动迁移到 Electron `safeStorage` 加密文件
-  （`<data-root>/telegram-cache/telegram-session.bin`，Windows DPAPI / macOS Keychain）；之后优先读加密存储，
+  （`<data-root>/config/telegram-cache/telegram-session.bin`，Windows DPAPI / macOS Keychain）；之后优先读加密存储，
   解密失败才回退 `.env`。诊断页提供「迁移到加密存储 / 清除加密会话」，并显示来源与 safeStorage 是否可用。
   **注意**：safeStorage 不可用的平台上仍会回退 `.env` 明文，UI 会明确标出。
 - 登录：`pnpm telegram:session`（交互输入手机号 / 验证码 / 二步密码，打印 session 让你粘回 `.env`；
@@ -302,7 +302,7 @@ node --experimental-strip-types --input-type=module -e "import('./tools/telegram
 文件名由 MIME 推断，**不用原始文件名 / 用户文本**；`archive-index.json` 记录指针；
 同一内容幂等（只加引用计数）；复制同样走「临时文件 → 校验大小 → rename」。
 
-诊断（`diagnostics-service.ts`）：导出到 `telegram-cache/diagnostics/diagnostics-<时间>.json`，
+诊断（`diagnostics-service.ts`）：导出到 `cache/telegram-cache/diagnostics/diagnostics-<时间>.json`，
 含 runtime 版本、配置、能力矩阵、缓存统计、M3 可行性报告、统计、请求、资源、任务、归档，全部已脱敏。
 
 ## 9. IPC 与注册
@@ -341,21 +341,31 @@ node --experimental-strip-types --input-type=module -e "import('./tools/telegram
 
 ## 11. 数据目录
 
+分层布局（判据见 [data-layers.md](./data-layers.md)）：**配置 / 资产 / 会话 / 缓存**四层分开放，
+路径全部由 `backend/utils/paths.ts` 解析，工具内不手拼根目录。
+
 ```
-<data-root>/session/                    Chromium 会话数据（所有分区 + 应用自身 localStorage）
+<data-root>/session/                    Chromium 会话数据（会话层）
   Partitions/telegram-cache/            Telegram Web A 的 Cookies / Local Storage / IndexedDB / Cache
-<data-root>/telegram-cache/
+<data-root>/config/telegram-cache/      配置层（不可再生）
   config.json            观测开关 / 并发 / 上限 / 缓存配额 / 图片与媒体 Range / 页面捕获开关
   registry.json          资源索引（含 HTTP 缓存元数据 / 来源 / MTProto 指纹）
   archive-index.json     归档索引
-  telegram-session.bin   MTProto 会话密文（safeStorage；旧 userData 文件会自动迁移）
+  telegram-session.bin   MTProto 会话密文（safeStorage；旧位置文件会自动迁移）
+  benchmarks.json        基准测试样本（最多 50 条）
+<assets>/telegram-cache/archive/resources/…   资产层：归档副本（含 meta.json；MTProto 另有 message.json）
+                                              默认 <data>/assets；设置页可改到另一块盘；**源可能已被删，不可再生**
+<data-root>/cache/telegram-cache/      缓存层（可再生）
   objects/<ab>/<sha256>  内容对象（HTTP 与 MTProto 共用，按内容去重）
   tmp/*.part             下载临时文件（崩溃后可安全删除）
   mtproto/partial/*.json MTProto 断点（key / 指纹 / 总大小 / committed）
-  benchmarks.json        基准测试样本（最多 50 条）
-  archive/resources/…    归档副本（含 meta.json；MTProto 另有 message.json）
   diagnostics/*.json     脱敏诊断包
 ```
+
+**索引里的路径不带层前缀**：`registry.json` / `archive-index.json` 的 `relativePath` 是相对「工具命名空间」的
+（`objects/ab/hash`、`archive/resources/…`），由 `resolveTelegramRelativePath()` 按首段路由到 cache / assets / config。
+所以归档从数据目录搬到独立资产根后，**旧索引不需要改写**；清理缓存删掉 `objects/` 后，
+索引按 `existsSync` 判定缺失并重新下载。
 
 **会话目录物理落盘**：`electron/main.ts` 在 `ready` **之前**读取数据目录覆盖并调用
 `app.setPath('sessionData', <data-root>/session)`（`backend/utils/session-data.ts`）。
@@ -400,14 +410,14 @@ Chromium 的所有会话数据（Cookies / LocalStorage / IndexedDB / Cache / `P
     诊断页 MTProto 面板显示「已读取」、会话来源（`.env` 明文 / OS 加密存储）与 safeStorage 是否可用；
     缺字段时显示缺失清单，下载按钮应报错而不是静默失败。
 17. **会话加密迁移**：首次连接成功后来源应变为「OS 加密存储」并出现
-    `<数据目录>/telegram-cache/telegram-session.bin`；删除 `.env` 的 `TELEGRAM_SESSION` 后重启仍能连接；
+    `<数据目录>/config/telegram-cache/telegram-session.bin`；删除 `.env` 的 `TELEGRAM_SESSION` 后重启仍能连接；
     「清除加密会话」后回退到 `.env`（若仍存在）或显示缺失。
 18. **登录缓存位置**：诊断页「Web 登录缓存」应显示 `<数据目录>/session/Partitions/telegram-cache` 并标记「数据目录」；
     该目录是**真实目录**（不是 junction / 软链），内容为 Chromium 的 Cookies / LocalStorage / IndexedDB / Cache。
     切换数据目录后应提示重启；重启会先把旧目录整体迁移到新目录再切换（**缓存与登录态保持有效**）。
 19. **MTProto 下载**：公开链接与私密链接各试一条 → 进度条推进 → 完成显示 SHA-256 与归档相对路径；
-    归档目录里出现 `resource.<ext>`、`meta.json`、`message.json`（正文截断 20k）。
-20. **断点续传**：下载中取消 → `telegram-cache/mtproto/partial/` 出现断点；再次下载同一消息，
+    归档目录（`<assets>/telegram-cache/archive/…`）里出现 `resource.<ext>`、`meta.json`、`message.json`（正文截断 20k）。
+20. **断点续传**：下载中取消 → `<数据目录>/cache/telegram-cache/mtproto/partial/` 出现断点；再次下载同一消息，
     面板显示「从 X 续传」，最终 SHA-256 与一次完整下载一致。
 21. **基准测试**：关闭本地响应 → 开始 baseline → 固定聊天滚动/播放 → 结束；
     开启本地响应后重复 with-cache；诊断页应显示两条样本与「网络字节 Δ / 本地复用 Δ」。

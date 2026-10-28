@@ -1,6 +1,6 @@
 import type { WxpSettings } from '../../../../shared/wxp.ts'
 import path from 'node:path'
-import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath, resolveLayerPathWithFallback } from '../../../../backend/utils/data-layers.ts'
 import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp.ts'
 
@@ -16,12 +16,17 @@ const DEFAULT_CONFIG: WxpConfigFile = {
 }
 
 function getConfigPath(): string {
-  return path.join(getDataDirectory(), 'wxp-enhancer', 'config.json')
+  return resolveLayerPath('config', 'wxp-enhancer', 'config.json')
+}
+
+/** 读取：v2 优先，回查 v1 的 <data>/wxp-enhancer/config.json */
+function getConfigReadPath(): string {
+  return resolveLayerPathWithFallback('config', 'wxp-enhancer/config.json')
 }
 
 async function readConfig(): Promise<WxpConfigFile> {
-  const configPath = getConfigPath()
-  await ensureDir(path.dirname(configPath))
+  const configPath = getConfigReadPath()
+  await ensureDir(path.dirname(getConfigPath()))
   if (!(await pathExists(configPath))) {
     await writeJson(configPath, DEFAULT_CONFIG)
     return structuredClone(DEFAULT_CONFIG)

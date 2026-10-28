@@ -8,7 +8,7 @@
 | 约束 | 说明 |
 | --- | --- |
 | 资产名勿臆造 | `wb2api-panel-${VERSION}-{darwin\|linux\|windows}-{amd64\|arm64}.zip`，tag=`v${VERSION}` |
-| 不打包二进制 | 安装包不含 wb2api；运行时下到 `<data>/workbuddy2api-panel/` |
+| 不打包二进制 | 安装包不含 wb2api；运行时下到 `<data>/cache/workbuddy2api-panel/`（缓存层，可重下） |
 | 默认不启动 | 打开工具页 / 安装完成都不自动 `START` |
 | 关页签停服务 | `useTabCloseGuard`：在跑 → 确认 → `STOP` → close；`before-quit` 亦 `STOP` |
 | 左 webview 右运维 | 无日志面板；失败 stderr → `lastError`（主动 STOP 清 stderr，不当错误） |
@@ -24,13 +24,19 @@
 ## 2. 目录
 
 ```text
-<data>/workbuddy2api-panel/
-  manifest.json
+# 配置层（不可再生，进备份）
+<data>/config/workbuddy2api-panel/
+  manifest.json                    # 已安装版本记录（sealed 校验）
   app-settings.json
-  downloads/
+  run/{config.json,auths/,data/}   # 上游 cwd；换版本不碰；含 api_key
+# 缓存层（可再生，清缓存会删，删后须显示「需重新下载」）
+<data>/cache/workbuddy2api-panel/
+  downloads/                       # 下载的资产 zip
   runtime/{current,previous,staging}/
-  run/{config.json,auths/,data/}   # cwd；换版本不碰
 ```
+
+**层归属的后果**：清缓存只删二进制，`manifest.json` 仍在 → 「已安装」必须重新按「二进制存在」判定
+（`integrity: 'reinstall-required'`），否则会显示已安装但起不来。
 
 ## 3. 右栏 UI（自上而下）
 

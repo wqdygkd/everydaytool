@@ -117,13 +117,52 @@ function hasActiveRule(rules: TreeaseInterceptRule[]): boolean {
   return rules.some(r => r.enabled && r.urlPattern && (r.action === 'block' || r.patches.length > 0))
 }
 
-function persistRules(rules: TreeaseInterceptRule[]) {
-  // 配额满 / 隐私模式下 localStorage 写入会抛错，不能让规则保存连带中断后续流程
+/** LocalStorage 镜像写入：配额满 / 隐私模式下会抛错，只影响镜像，不影响配置层 */
+function writeLocalMirror(rules: TreeaseInterceptRule[]) {
   try {
     localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules))
     localStorage.setItem(ENABLED_STORAGE_KEY, interceptEnabled.value ? '1' : '0')
-  } catch (error) {
-    logger.warn('Failed to persist intercept rules', { error: (error as Error).message })
+  } catch {
+    // 镜像写不进去不影响功能：配置层文件才是事实来源
+  }
+}
+
+/**
+ * 保存规则：**配置层文件是唯一事实来源**（`<data>/config/treease-editor/rules.json`），
+ * LocalStorage 只做镜像（网页预览 / IPC 不可用时的降级）。
+ */
+function persistRules(rules: TreeaseInterceptRule[]) {
+  writeLocalMirror(rules)
+  const api = getIpc()
+  if (!api) return
+  void api.invoke(api.channels.RULES_SET, rules, interceptEnabled.value).catch((error: unknown) => {
+    // 写盘失败不回滚 UI（用户还能继续调），下次保存会再试
+    ElMessage.error((error as Error).message || '规则保存到数据目录失败')
+  })
+}
+
+/**
+ * 挂载时与配置层对齐：
+ * - 配置层有规则 → 以它为准覆盖 UI（并刷新镜像）；
+ * - 配置层为空 → 把 LocalStorage 里已有的规则迁上去（旧版本数据的一次性迁移）。
+ */
+async function syncRulesWithConfigLayer() {
+  const api = getIpc()
+  if (!api) return
+  try {
+    const document = await api.invoke(api.channels.RULES_GET) as { rules?: TreeaseInterceptRule[], enabled?: boolean }
+    const stored = Array.isArray(document?.rules) ? document.rules : []
+    if (stored.length > 0) {
+      ruleForms.value = mergeStoredRules(stored).map(toForm)
+      expanded.value = ruleForms.value.map(f => f.id)
+      interceptEnabled.value = document?.enabled !== false
+      writeLocalMirror(buildRules())
+      return
+    }
+    const local = buildRules()
+    if (local.length > 0) await api.invoke(api.channels.RULES_SET, local, interceptEnabled.value)
+  } catch {
+    // 配置层暂不可用（IPC 未就绪 / 文件损坏）：继续用镜像，不打断页面
   }
 }
 
@@ -322,6 +361,8 @@ async function handleReload() {
 
 onMounted(() => {
   ensureLogSubscription()
+  // 规则以配置层文件为准：晚一步加载，避免与首屏镜像渲染互相覆盖
+  void syncRulesWithConfigLayer()
   window.addEventListener('online', updateOnlineStatus)
   window.addEventListener('offline', updateOnlineStatus)
 })

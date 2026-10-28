@@ -57,7 +57,7 @@ function parseEnvFile(filePath: string): Record<string, string> {
 function candidateEnvFiles(): string[] {
   const files = [
     path.join(APP_ROOT_DEV, '.env'),
-    path.join(getDataDirectory(), '.env'),
+    path.join(getDataDirectory(), '.env'), // data-layers:allow 用户自备凭据，不属于任何层
   ]
   try {
     files.push(path.join(app.getPath('userData'), '.env'))

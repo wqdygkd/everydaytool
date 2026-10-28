@@ -254,6 +254,11 @@ export interface OfflinePackHistoryItem {
   savedPath: string
   size: number
   createdAt: string
+  /**
+   * 磁盘文件是否还在（listHistory 现算）。
+   * 下载产物在缓存层，清缓存会删掉它们：历史记录保留，但要能显示「文件已缺失」。
+   */
+  exists?: boolean
 }
 
 // ==================== 展示格式化 ====================

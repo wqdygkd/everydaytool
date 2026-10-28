@@ -6,7 +6,7 @@ import type { CacheFreshness } from '../services/http-semantics.ts'
 import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
-import { getTelegramCacheRoot, getTelegramRegistryPath } from '../utils/paths.ts'
+import { getTelegramRegistryPath, resolveTelegramRelativeRoot } from '../utils/paths.ts'
 
 export interface TelegramResourceRecord {
   resourceKey: string
@@ -153,7 +153,8 @@ export function isVerifiedCompleteRecord(record: TelegramResourceRecord | undefi
  */
 export function resolveTelegramObjectPath(record: TelegramResourceRecord): string | null {
   if (!record.relativePath) return null
-  const root = path.resolve(getTelegramCacheRoot())
+  // 根目录按首段路由到所属层（对象在 cache、归档在 assets），越界校验仍以该层工具根为界
+  const root = path.resolve(resolveTelegramRelativeRoot(record.relativePath))
   const target = path.resolve(root, record.relativePath)
   if (target !== root && !target.startsWith(root + path.sep)) return null
   return target

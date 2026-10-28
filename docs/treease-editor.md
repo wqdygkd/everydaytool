@@ -17,6 +17,15 @@
   把旧目录整体复制到新目录（含 `session`），成功后才切换。失败保留旧目录并继续使用，
   因此登录态与缓存不会失效。**应用自身的 localStorage（收藏 / 页签）在同一 sessionData 下，也一并迁移。**
 
+## 规则与配置的落点（分层现状）
+
+- 拦截规则与总开关的事实来源是**配置层文件** `<data>/config/treease-editor/rules.json`
+  （`backend/store/rules-store.ts`，字段白名单校验），走 IPC `RULES_GET` / `RULES_SET`。
+- 渲染层仍在 LocalStorage 写一份**镜像**（`edt:treease-intercept-rules` /
+  `edt:treease-intercept-enabled`）：网页预览没有 IPC、以及首屏不等异步加载，都靠它。
+- 首次挂载时：配置层有规则 → 以它为准覆盖 UI 并刷新镜像；配置层为空 → 把镜像迁上去（旧数据一次性迁移）。
+- 清缓存不会动规则（配置层 `clean: 'never'`）；换数据目录 / 恢复备份都会带上规则文件。
+
 ## 拦截与缓存
 
 - `installCacheHandlers()` 在 initialize 预装协议层 handler，页面缓存不依赖 `interceptService.start()`；

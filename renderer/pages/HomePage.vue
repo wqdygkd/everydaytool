@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import type { UiPreferences } from '../../shared/app'
 import type { ToolDefinition } from '../shared/types/tool'
+import { STORAGE_KEYS } from '../../shared/storage-keys'
 import { getToolRegistry, groupToolsByCategory } from '../config/tools'
+import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
 
-const FAVORITE_STORAGE_KEY = 'edt:favorite-tools'
+// 收藏是用户数据：**配置层文件**（<data>/config/app/ui-preferences.json）是事实来源，
+// LocalStorage 只做镜像（网页预览没有 IPC 时兜底；也保证首屏不必等 IPC 就有内容）。
+const FAVORITE_STORAGE_KEY = STORAGE_KEYS.favoriteTools
 const router = useRouter()
 const searchText = ref('')
 const allTools = computed(() => getToolRegistry())
@@ -39,12 +44,52 @@ function isFavorite(toolId: string): boolean {
   return favoriteIds.value.includes(toolId)
 }
 
+function writeFavoriteMirror() {
+  try {
+    localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(favoriteIds.value))
+  } catch {
+    // 隐私模式 / 配额满：镜像写不进去不影响配置层
+  }
+}
+
+function persistFavorites() {
+  void invokeAppIpc<UiPreferences>(appIpcChannels().UI_PREFERENCES_SET, { favoriteToolIds: favoriteIds.value })
+    .catch(() => {
+      // 网页预览 / preload 未注入：只有镜像生效，不打扰用户
+    })
+}
+
 function toggleFavorite(toolId: string) {
   favoriteIds.value = isFavorite(toolId)
     ? favoriteIds.value.filter(id => id !== toolId)
     : [...favoriteIds.value, toolId]
-  localStorage.setItem(FAVORITE_STORAGE_KEY, JSON.stringify(favoriteIds.value))
+  writeFavoriteMirror()
+  persistFavorites()
 }
+
+/**
+ * 挂载后与配置层对齐：
+ * - 配置层有收藏 → 以它为准（并刷新镜像）；
+ * - 配置层为空 → 把 LocalStorage 里已有的收藏迁上去（旧版本数据的一次性迁移）。
+ */
+async function syncFavoritesWithConfigLayer() {
+  try {
+    const stored = await invokeAppIpc<UiPreferences>(appIpcChannels().UI_PREFERENCES_GET)
+    const remote = Array.isArray(stored?.favoriteToolIds) ? stored.favoriteToolIds : []
+    if (remote.length > 0) {
+      favoriteIds.value = remote
+      writeFavoriteMirror()
+      return
+    }
+    if (favoriteIds.value.length > 0) persistFavorites()
+  } catch {
+    // 没有 IPC（网页预览）：保持镜像即可
+  }
+}
+
+onMounted(() => {
+  void syncFavoritesWithConfigLayer()
+})
 
 function readFavoriteIds(): string[] {
   try {

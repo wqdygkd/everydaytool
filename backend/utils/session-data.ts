@@ -12,12 +12,13 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
-import { getDataDirectory } from './data-root.ts'
+import { getLayerRoot, resolveLayerPath } from './data-layers.ts'
 import { logger } from './logger.ts'
 
 /** 在 app ready 之前调用一次；返回实际使用的 sessionData 目录 */
 export function configureSessionDataDirectory(): string {
-  const target = path.resolve(getDataDirectory(), 'session')
+  // session 层根就是 Electron 的 sessionData（唯一事实来源：shared/data-layers.ts）
+  const target = path.resolve(getLayerRoot('session'))
   try {
     mkdirSync(target, { recursive: true })
     app.setPath('sessionData', target)
@@ -28,13 +29,12 @@ export function configureSessionDataDirectory(): string {
       error: (error as Error).message,
     })
   }
-  // Electron 自己的崩溃转储 / 日志也不要留在 userData
+  // Electron 自己的崩溃转储 / 日志也不要留在 userData（属可再生缓存层，见 docs/data-layers.md）
   try {
-    const appDirectory = path.join(getDataDirectory(), 'app')
-    mkdirSync(path.join(appDirectory, 'crash-dumps'), { recursive: true })
-    mkdirSync(path.join(appDirectory, 'logs'), { recursive: true })
-    app.setPath('crashDumps', path.join(appDirectory, 'crash-dumps'))
-    app.setPath('logs', path.join(appDirectory, 'logs'))
+    mkdirSync(resolveLayerPath('cache', 'app', 'crash-dumps'), { recursive: true })
+    mkdirSync(resolveLayerPath('cache', 'app', 'logs'), { recursive: true })
+    app.setPath('crashDumps', resolveLayerPath('cache', 'app', 'crash-dumps'))
+    app.setPath('logs', resolveLayerPath('cache', 'app', 'logs'))
   } catch (error) {
     logger.warn('Failed to configure Electron crash/log directories', { error: (error as Error).message })
   }
@@ -52,7 +52,7 @@ export function getPartitionStoragePath(partition: string): string {
 /** sessionData 是否已指向当前数据目录；false 表示需要重启才能切换 */
 export function isSessionDataInDataDirectory(): boolean {
   const current = path.resolve(getSessionDataDirectory())
-  const expected = path.resolve(getDataDirectory(), 'session')
+  const expected = path.resolve(getLayerRoot('session'))
   if (process.platform === 'win32') {
     return current.toLowerCase() === expected.toLowerCase()
   }

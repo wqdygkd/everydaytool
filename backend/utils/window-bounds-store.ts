@@ -1,19 +1,24 @@
-// 窗口大小 / 位置的持久化：写在数据目录的 app/window-bounds.json。
+// 窗口大小 / 位置的持久化：写在数据目录配置层的 config/app/window-bounds.json。
 // 与外观配置同理，属平台级应用壳状态（数据目录在 ready 之前已同步加载，创建窗口前可取）。
 //
 // 这里走同步 JSON 存储（backend/utils/json-store.ts）而不是外观那套异步写：
 // resize / move 是高频事件，且关窗时必须在进程退出前完成落盘——异步写没有机会跑完。
 import type { WindowBounds, WindowBoundsState } from '../../shared/window-bounds.ts'
-import path from 'node:path'
 import { DEFAULT_WINDOW_BOUNDS_STATE, sanitizeWindowBoundsState } from '../../shared/window-bounds.ts'
-import { getDataDirectory } from './data-root.ts'
+import { resolveLayerPath, resolveLayerPathWithFallback } from './data-layers.ts'
 import { readJsonDocument, writeJsonDocument } from './json-store.ts'
 import { logger } from './logger.ts'
 
 const FILENAME = 'window-bounds.json'
 
+// 配置层：<data>/config/app/window-bounds.json（写入恒走这里）
 function getConfigPath(): string {
-  return path.join(getDataDirectory(), 'app', FILENAME)
+  return resolveLayerPath('config', 'app', FILENAME)
+}
+
+/** 读取：v2 优先，回查 v1 的 <data>/app/window-bounds.json（迁移单条失败时兜底） */
+function getReadPath(): string {
+  return resolveLayerPathWithFallback('config', `app/${FILENAME}`)
 }
 
 let current: WindowBoundsState = { ...DEFAULT_WINDOW_BOUNDS_STATE }
@@ -37,7 +42,7 @@ function persist(next: WindowBoundsState): WindowBoundsState {
 
 /** 启动时调用一次（必须在 createWindow 之前）：读坏了就退回默认（记住功能开启、但无记录） */
 export function loadWindowBounds(): WindowBoundsState {
-  const stored = readJsonDocument<unknown>(getConfigPath(), () => ({ ...DEFAULT_WINDOW_BOUNDS_STATE }))
+  const stored = readJsonDocument<unknown>(getReadPath(), () => ({ ...DEFAULT_WINDOW_BOUNDS_STATE }))
   current = sanitizeWindowBoundsState(stored)
   return current
 }

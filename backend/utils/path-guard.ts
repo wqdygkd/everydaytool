@@ -54,15 +54,18 @@ export function isPathWithin(root: string, target: string): PathGuardResult {
   return { ok: false, reason: '目标路径超出允许范围' }
 }
 
-/** 数据根目录校验：绝对路径、非盘符根、不在已知系统目录内 */
-export function isSafeDataDirectory(candidate: string): PathGuardResult {
-  if (!candidate || !candidate.trim()) return { ok: false, reason: '数据目录不能为空' }
-  if (!path.isAbsolute(candidate)) return { ok: false, reason: '数据目录必须是绝对路径' }
-  if (candidate.length > 4096) return { ok: false, reason: '数据目录路径过长' }
+/**
+ * 存储根目录校验的共用实现（数据根 / 资产根同规则）：
+ * 绝对路径、非盘符根、不在已知系统目录内。`label` 只用于提示文案。
+ */
+function isSafeStorageDirectory(candidate: string, label: string): PathGuardResult {
+  if (!candidate || !candidate.trim()) return { ok: false, reason: `${label}不能为空` }
+  if (!path.isAbsolute(candidate)) return { ok: false, reason: `${label}必须是绝对路径` }
+  if (candidate.length > 4096) return { ok: false, reason: `${label}路径过长` }
 
   const resolved = path.resolve(candidate)
   if (path.dirname(resolved) === resolved) {
-    return { ok: false, reason: '数据目录不能是磁盘根目录' }
+    return { ok: false, reason: `${label}不能是磁盘根目录` }
   }
 
   const forbiddenRoots = [
@@ -80,9 +83,22 @@ export function isSafeDataDirectory(candidate: string): PathGuardResult {
 
   for (const forbidden of forbiddenRoots) {
     if (isPathWithin(forbidden, resolved).ok) {
-      return { ok: false, reason: '数据目录不能位于系统目录内' }
+      return { ok: false, reason: `${label}不能位于系统目录内` }
     }
   }
 
   return { ok: true }
+}
+
+/** 数据根目录校验（切换数据目录时用） */
+export function isSafeDataDirectory(candidate: string): PathGuardResult {
+  return isSafeStorageDirectory(candidate, '数据目录')
+}
+
+/**
+ * 资产根目录校验（切换资产目录时用）：位置规则与数据根一致；
+ * 「不能等于数据根 / 不能把数据根套进去」属于两者关系判定，放在 assets-root.ts。
+ */
+export function isSafeAssetsDirectory(candidate: string): PathGuardResult {
+  return isSafeStorageDirectory(candidate, '资产目录')
 }

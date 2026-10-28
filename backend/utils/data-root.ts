@@ -198,13 +198,20 @@ export function loadDataDirectoryOverrideSync(): void {
     return
   }
 
-  const result = migrateDataDirectory(getDataDirectory(), pending)
+  // 切目录时不搬可再生缓存：`cache/` 会在新目录里重建，旧目录里剩下的它由用户自行删除
+  const result = migrateDataDirectory(getDataDirectory(), pending, { skipCache: true })
   if (!result.ok) {
     logger.warn('Pending data directory migration failed; keeping current directory', {
       pending,
       error: result.error,
     })
     return
+  }
+  if (result.skipped.length > 0) {
+    logger.info('Data directory switch skipped regenerable entries', {
+      skipped: result.skipped,
+      leftovers: getDataDirectory(),
+    })
   }
 
   const bootstrapTarget = isSamePath(pending, getDefaultDataDirectory()) ? null : pending

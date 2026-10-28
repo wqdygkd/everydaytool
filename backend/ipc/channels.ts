@@ -6,6 +6,18 @@ export const EDT_APP_IPC_CHANNELS = {
   DATA_DIRECTORY_UPDATE: 'edt-app:data-directory:update',
   DATA_DIRECTORY_OPEN: 'edt-app:data-directory:open',
   DATA_USAGE_GET: 'edt-app:data-usage:get',
+  // 应用壳 UI 偏好（收藏的工具）：落配置层 app/ui-preferences.json，LocalStorage 只做镜像
+  UI_PREFERENCES_GET: 'edt-app:ui-preferences:get',
+  UI_PREFERENCES_SET: 'edt-app:ui-preferences:set',
+  // 备份包（.edtbackup）：导出 / 预检 / 恢复。缓存层永不进包，资产默认只出清单
+  BACKUP_EXPORT: 'edt-app:backup:export',
+  BACKUP_INSPECT: 'edt-app:backup:inspect',
+  BACKUP_RESTORE: 'edt-app:backup:restore',
+  // 资产根（独立于数据目录的归档存储位置）：查看 / 选择 / 更改 / 打开
+  ASSETS_DIRECTORY_GET: 'edt-app:assets-directory:get',
+  ASSETS_DIRECTORY_SELECT: 'edt-app:assets-directory:select',
+  ASSETS_DIRECTORY_UPDATE: 'edt-app:assets-directory:update',
+  ASSETS_DIRECTORY_OPEN: 'edt-app:assets-directory:open',
   CACHE_CLEAR: 'edt-app:cache:clear',
   // 设置页的「打开调试控制台」：主进程为调用方窗口打开独立 DevTools 窗口
   DEVTOOLS_OPEN: 'edt-app:devtools:open',

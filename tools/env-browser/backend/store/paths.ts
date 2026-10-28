@@ -1,7 +1,6 @@
-import path from 'node:path'
-import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
 
-/** env-browser 工具的数据目录（环境账号 JSON 落在其下） */
+/** 配置层：环境账号 JSON（含账号密码，属不可再生配置） */
 export function getEnvBrowserDataDirectory(): string {
-  return path.join(getDataDirectory(), 'env-browser')
+  return resolveLayerPath('config', 'env-browser')
 }

@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { APP_ROOT_DEV, getDataDirectory, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath, resolveLegacyPath } from '../../../../backend/utils/data-layers.ts'
+import { APP_ROOT_DEV, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 
 interface ChromePaths {
@@ -66,39 +67,60 @@ export function getDefaultChromePaths(): string[] {
   return getChromePaths().executables
 }
 
-/** chrome-sandbox 工具的数据目录（沙箱列表 / 指纹 / 工具配置的 JSON 文件都落在其下） */
+/** 配置层：沙箱列表 / 指纹 / 工具配置的 JSON 都落在 <data>/config/chrome-sandbox */
 export function getChromeSandboxDataDirectory(): string {
-  return path.join(getDataDirectory(), 'chrome-sandbox')
+  return resolveLayerPath('config', 'chrome-sandbox')
 }
 
-type LayoutRoot = 'tool' | 'legacy'
+/** 会话层：沙箱 profile（Chrome --user-data-dir），含登录态，不可再生 */
+function getSandboxesTargetDirectory(): string {
+  return resolveLayerPath('session', 'sandbox')
+}
 
-let sandboxesRoot: LayoutRoot = 'tool'
-let sharedRoot: LayoutRoot = 'tool'
+/** 缓存层：共享指纹扩展（缺失时从 resources 重建） */
+function getSharedTargetDirectory(): string {
+  return resolveLayerPath('cache', 'chrome-sandbox', 'shared')
+}
 
 /**
- * 把旧的数据根目录布局收进 chrome-sandbox/：
- *   <data>/sandboxes  → <data>/chrome-sandbox/sandboxes
- *   <data>/shared     → <data>/chrome-sandbox/shared
- * 旧目录被 Chrome 占用时 rename 会失败，此时继续用旧布局（不复制、不破坏运行中的 profile）。
+ * pre-v1 的旧位置（早期把 profile / 共享扩展直接放在数据根下）。
+ * v1 布局（`<data>/chrome-sandbox/sandboxes`）由启动期布局升级统一搬到 v2，这里只兜底 pre-v1。
+ */
+function getSandboxesLegacyDirectories(): string[] {
+  // pre-v1 根下 profile / v1 工具目录下 profile：两处都只读回查，不写入
+  return [resolveLegacyPath('sandboxes'), resolveLegacyPath('chrome-sandbox/sandboxes')]
+}
+
+function getSharedLegacyDirectories(): string[] {
+  return [resolveLegacyPath('shared'), resolveLegacyPath('chrome-sandbox/shared')]
+}
+
+let sandboxesRoot = getSandboxesTargetDirectory()
+let sharedRoot = getSharedTargetDirectory()
+
+/**
+ * 旧位置收编（v2 分层布局）：
+ *   <data>/sandboxes                → <data>/session/sandbox          （profile，含登录态）
+ *   <data>/chrome-sandbox/sandboxes → <data>/session/sandbox          （v1 布局，通常已由启动期升级搬走）
+ *   <data>/shared                   → <data>/cache/chrome-sandbox/shared（可重建）
+ *   <data>/chrome-sandbox/shared    → 同上
+ * 旧目录被 Chrome 占用时 rename 会失败，本次运行继续用旧位置（不复制、不破坏运行中的 profile）。
  */
 export function ensureChromeSandboxLayout(): void {
-  const dataDirectory = getDataDirectory()
-  const legacySandboxes = path.join(dataDirectory, 'sandboxes')
-  const nextSandboxes = path.join(dataDirectory, 'chrome-sandbox', 'sandboxes')
-  sandboxesRoot = migrateInto(legacySandboxes, nextSandboxes)
-  if (sandboxesRoot === 'tool') rewriteSandboxPaths(legacySandboxes, nextSandboxes)
-
-  sharedRoot = migrateInto(
-    path.join(dataDirectory, 'shared'),
-    path.join(dataDirectory, 'chrome-sandbox', 'shared'),
-  )
+  const sandboxes = migrateInto(getSandboxesLegacyDirectories(), getSandboxesTargetDirectory())
+  sandboxesRoot = sandboxes.directory
+  const shared = migrateInto(getSharedLegacyDirectories(), getSharedTargetDirectory())
+  sharedRoot = shared.directory
+  // 记录里的绝对路径可能仍指向旧根：统一收敛到当前生效的 profile 根
+  rewriteSandboxPaths()
 }
 
 /** 迁移 profile 目录后同步沙箱记录里的绝对 userDataPath，避免旧路径失效 */
-function rewriteSandboxPaths(legacyRoot: string, nextRoot: string): void {
+function rewriteSandboxPaths(): void {
   const storePath = path.join(getChromeSandboxDataDirectory(), 'sandboxes.json')
   if (!existsSync(storePath)) return
+  const target = sandboxesRoot
+  const targets = [getSandboxesTargetDirectory(), ...getSandboxesLegacyDirectories()]
   try {
     const list = JSON.parse(readFileSync(storePath, 'utf8')) as Array<Record<string, unknown>>
     if (!Array.isArray(list)) return
@@ -106,9 +128,12 @@ function rewriteSandboxPaths(legacyRoot: string, nextRoot: string): void {
     for (const item of list) {
       const current = item.userDataPath
       if (typeof current !== 'string') continue
-      const relative = path.relative(legacyRoot, current)
-      if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) continue
-      item.userDataPath = path.join(nextRoot, relative)
+      const legacyRoot = targets.find((root) => {
+        const relative = path.relative(root, current)
+        return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+      })
+      if (!legacyRoot || legacyRoot === target) continue
+      item.userDataPath = path.join(target, path.relative(legacyRoot, current))
       changed = true
     }
     if (changed) writeFileSync(storePath, `${JSON.stringify(list, null, 2)}\n`, 'utf8')
@@ -119,29 +144,41 @@ function rewriteSandboxPaths(legacyRoot: string, nextRoot: string): void {
   }
 }
 
-function migrateInto(legacyPath: string, nextPath: string): LayoutRoot {
-  if (!existsSync(legacyPath)) return 'tool'
-  // 两边都存在时不做合并/改写：继续用旧布局，避免新目录缺少 profile 导致沙箱启动失败
-  if (existsSync(nextPath)) return 'legacy'
+interface MigrateResult {
+  /** 最终生效的根目录 */
+  directory: string
+  /** 是否仍在使用旧位置（本进程内回退：Chrome 占用导致 rename 失败） */
+  legacy: boolean
+}
+
+function migrateInto(legacyPaths: string[], targetPath: string): MigrateResult {
+  const existingLegacy = legacyPaths.find(item => existsSync(item))
+  if (!existingLegacy) return { directory: targetPath, legacy: false }
+  if (existsSync(targetPath)) {
+    logger.info('Legacy directory kept untouched; new layout location already exists', {
+      legacy: existingLegacy,
+      target: targetPath,
+    })
+    return { directory: targetPath, legacy: false }
+  }
   try {
-    mkdirSync(path.dirname(nextPath), { recursive: true })
-    renameSync(legacyPath, nextPath)
-    return 'tool'
+    mkdirSync(path.dirname(targetPath), { recursive: true })
+    renameSync(existingLegacy, targetPath)
+    return { directory: targetPath, legacy: false }
   } catch (error) {
-    logger.warn('Failed to move chrome-sandbox directory into tool folder; keeping legacy layout', {
-      from: legacyPath,
-      to: nextPath,
+    // Chrome 正在使用旧目录：本次运行继续用旧位置（不复制、不破坏运行中的 profile）
+    logger.warn('Failed to move legacy directory into new layout; using legacy location', {
+      from: existingLegacy,
+      to: targetPath,
       error: (error as Error).message,
     })
-    return 'legacy'
+    return { directory: existingLegacy, legacy: true }
   }
 }
 
 /** 所有沙箱 profile 的根目录：删除等写操作必须局限在此目录内 */
 export function getSandboxesDirectory(): string {
-  return sandboxesRoot === 'legacy'
-    ? path.join(getDataDirectory(), 'sandboxes')
-    : path.join(getDataDirectory(), 'chrome-sandbox', 'sandboxes')
+  return sandboxesRoot
 }
 
 export function getSandboxPath(sandboxId: string): string {
@@ -161,7 +198,5 @@ export function getSandboxFingerprintExtPath(sandboxId: string): string {
 }
 
 export function getSharedFingerprintExtPath(): string {
-  return sharedRoot === 'legacy'
-    ? path.join(getDataDirectory(), 'shared', 'fingerprint_ext')
-    : path.join(getDataDirectory(), 'chrome-sandbox', 'shared', 'fingerprint_ext')
+  return path.join(sharedRoot, 'fingerprint_ext')
 }

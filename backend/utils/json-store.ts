@@ -2,7 +2,10 @@
 // 直接落 JSON 文件，进程内按绝对路径缓存解析结果，避免每次读取都碰磁盘。
 // 读多写少且单进程独占：写入走「临时文件 + rename」，不会留下半截 JSON；
 // 缓存按绝对路径为键，数据目录切换在下次启动整体迁移（见 docs/data-directory.md），
-// 因此运行期不需要手动失效缓存。
+// 因此**正常运行期不需要手动失效缓存**。
+//
+// 唯一例外是备份恢复：它会在运行期替换掉 config 层文件，必须丢掉进程内缓存，
+// 所以提供一个显式的 invalidateJsonDocuments()，且只允许恢复流程调用。
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -72,4 +75,13 @@ export function writeJsonDocument<T>(filePath: string, data: T): void {
   }
 
   documents.set(resolved, data)
+}
+
+/**
+ * 丢弃全部进程内缓存（下次读取回到磁盘）。
+ * 只给「运行期替换了磁盘文件」的流程用——目前仅备份恢复（docs/data-layers.md §8）。
+ */
+export function invalidateJsonDocuments(): void {
+  documents.clear()
+  logger.info('JSON document cache invalidated')
 }

@@ -17,7 +17,7 @@
   ],
   "main": "dist-electron/electron/main.js",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "lint": "eslint .",
@@ -25,6 +25,8 @@
     "check:ui": "node scripts/ui-ep-check.mjs --strict",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "create:tool": "node scripts/create-tool.mjs",
+    "data-layout": "node scripts/data-layout.mjs",
+    "data-layers:check": "node scripts/data-layers-check.mjs",
     "telegram:session": "node scripts/telegram-session.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "web": "vite",

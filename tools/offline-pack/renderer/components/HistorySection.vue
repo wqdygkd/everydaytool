@@ -120,7 +120,15 @@ onUnmounted(() => {
         row-key="id"
         empty-text="暂无下载记录"
       >
-        <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span>{{ row.filename }}</span>
+            <!-- 下载产物在缓存层：清缓存后文件没了，记录还在，必须显式标出来 -->
+            <UiChip v-if="row.exists === false" tone="warning" variant="outline" class="missing-chip">
+              文件已缺失
+            </UiChip>
+          </template>
+        </el-table-column>
         <el-table-column label="来源" width="90">
           <template #default="{ row }">
             {{ KIND_LABELS[row.kind as OfflinePackTabKey] ?? row.kind }}
@@ -147,3 +155,9 @@ onUnmounted(() => {
     </UiPanel>
   </section>
 </template>
+
+<style scoped lang="scss">
+.missing-chip {
+  margin-left: var(--spacing-sm);
+}
+</style>

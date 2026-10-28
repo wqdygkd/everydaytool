@@ -6,14 +6,20 @@ import { copyFile, mkdir, rename, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
 import { DEFAULT_WINDOW_APPEARANCE, sanitizeWindowAppearance } from '../../shared/appearance.ts'
-import { getDataDirectory } from './data-root.ts'
+import { resolveLayerPath, resolveLegacyPath } from './data-layers.ts'
 import { pathExists, readJson, writeJson } from './file-ops.ts'
 import { logger } from './logger.ts'
 
 const FILENAME = 'window-appearance.json'
 
+// 配置层：<data>/config/app/window-appearance.json（docs/data-layers.md §4）
 function getConfigPath(): string {
-  return path.join(getDataDirectory(), 'app', FILENAME)
+  return resolveLayerPath('config', 'app', FILENAME)
+}
+
+/** v1 平铺位置：<data>/app/window-appearance.json（布局升级单条失败时仍能读到） */
+function getV1ConfigPath(): string {
+  return resolveLegacyPath(`app/${FILENAME}`)
 }
 
 function getLegacyConfigPath(): string {
@@ -49,19 +55,23 @@ function normalizeStored(value: unknown): WindowAppearance {
 /** 早期版本在 userData；首次读取时搬到数据目录 */
 async function migrateLegacyAppearance(): Promise<void> {
   const target = getConfigPath()
-  const legacy = getLegacyConfigPath()
-  if (await pathExists(target) || !await pathExists(legacy)) return
-  try {
-    await mkdir(path.dirname(target), { recursive: true })
+  if (await pathExists(target)) return
+  // 两个历史位置：userData 根（早期版本）与 <data>/app（v1 平铺布局）
+  for (const legacy of [getV1ConfigPath(), getLegacyConfigPath()]) {
+    if (!await pathExists(legacy)) continue
     try {
-      await rename(legacy, target)
-    } catch {
-      await copyFile(legacy, target)
-      await rm(legacy, { force: true })
+      await mkdir(path.dirname(target), { recursive: true })
+      try {
+        await rename(legacy, target)
+      } catch {
+        await copyFile(legacy, target)
+        await rm(legacy, { force: true })
+      }
+      logger.info('Window appearance moved into data directory config layer')
+      return
+    } catch (error) {
+      logger.warn('Failed to move window appearance', { error: (error as Error).message })
     }
-    logger.info('Window appearance moved to data directory')
-  } catch (error) {
-    logger.warn('Failed to move window appearance', { error: (error as Error).message })
   }
 }
 

@@ -8,15 +8,16 @@ import type {
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
-import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../ipc/channels.ts'
 import { convertCrxToZip } from './crx.ts'
 import { addHistory } from './history.ts'
 import { downloadToFile } from './http.ts'
 
+/** 缓存层：下载产物（可重新下载；清缓存会删掉，历史里会显示「文件已缺失」） */
 export function getOfflinePackDownloadDir(): string {
-  return path.join(getDataDirectory(), 'offline-pack', 'downloads')
+  return resolveLayerPath('cache', 'offline-pack', 'downloads')
 }
 
 export async function ensureOfflinePackDownloadDir(): Promise<string> {

@@ -2,6 +2,7 @@ import type { TreeaseInterceptRule } from '../../../../shared/treease.ts'
 import { ipcMain } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { interceptService } from '../services/intercept-service.ts'
+import { treeaseRulesStore } from '../store/rules-store.ts'
 import { TREEASE_EDITOR_IPC_CHANNELS } from './channels.ts'
 
 let handlersRegistered = false
@@ -31,5 +32,12 @@ export function registerTreeaseHandlers(): void {
 
   safeHandle(ipcMain, TREEASE_EDITOR_IPC_CHANNELS.CACHE_CLEAR, async () => {
     return interceptService.clearCache()
+  })
+
+  // 规则 / 开关：配置层文件是唯一事实来源，LocalStorage 只是渲染层镜像
+  safeHandle(ipcMain, TREEASE_EDITOR_IPC_CHANNELS.RULES_GET, () => treeaseRulesStore.read())
+
+  safeHandle(ipcMain, TREEASE_EDITOR_IPC_CHANNELS.RULES_SET, (_event, rules: unknown, enabled: unknown) => {
+    return treeaseRulesStore.write(rules, enabled)
   })
 }

@@ -3,10 +3,12 @@
 import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
-import { APP_ROOT_DEV, getDataDirectory, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
+import { APP_ROOT_DEV, isDevEnvironment } from '../../../../backend/utils/data-root.ts'
 
+/** 配置层：工具配置 / 规则 / 证书（证书私钥不可再生） */
 export function getInterceptorDataDirectory(): string {
-  return path.join(getDataDirectory(), 'interceptor')
+  return resolveLayerPath('config', 'interceptor')
 }
 
 export function getCertsDirectory(): string {
@@ -40,8 +42,9 @@ export function getExtensionSourcePath(): string {
  * 原因：安装目录可被用户更改/升级，load unpacked 的路径一旦失效扩展就消失；
  * 数据目录跨版本稳定（扩展 ID 由 manifest.key 固定，不随路径变化）。
  */
+/** 缓存层：运行时扩展（每次启动可从 resources 重新准备，删了无害） */
 export function getRuntimeExtensionPath(): string {
-  return path.join(getInterceptorDataDirectory(), 'extension')
+  return resolveLayerPath('cache', 'interceptor', 'extension')
 }
 
 /** 早期版本把扩展放在 userData；首次准备时迁移 */

@@ -1,9 +1,9 @@
 // MTProto 会话字符串的安全存储：优先 Electron safeStorage（Windows DPAPI / macOS Keychain），
-// 文件放在**应用数据目录**下，内容为 base64 的密文。
+// 文件放在**配置层**（<data>/config/telegram-cache/telegram-session.bin），内容为 base64 的密文。
 //
-// 路径迁移：早期版本把密文放在 userData，首次读取/写入时自动搬到
-// <data-root>/telegram-cache/telegram-session.bin；运行期切换数据目录时，下一次解析
-// 会把旧数据目录里的文件搬到新目录（文件不常驻打开，可安全移动）。
+// 路径迁移：早期版本把密文放在 userData 或 v1 平铺的 <data>/telegram-cache/，首次读取/写入时
+// 自动搬到配置层；运行期切换数据目录时，下一次解析会把旧数据目录里的文件搬到新目录
+// （文件不常驻打开，可安全移动）。
 //
 // 约束：
 // - 任何函数都不打印、不返回会话内容给渲染层（只返回状态）；
@@ -13,7 +13,7 @@ import { Buffer } from 'node:buffer'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { app, safeStorage } from 'electron'
-import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath, resolveLegacyPath } from '../../../../backend/utils/data-layers.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 
 const SESSION_FILE = 'telegram-session.bin'
@@ -21,7 +21,12 @@ const SESSION_FILE = 'telegram-session.bin'
 let lastResolvedPath: string | null = null
 
 function dataDirectorySessionPath(): string {
-  return path.join(getDataDirectory(), 'telegram-cache', SESSION_FILE)
+  return resolveLayerPath('config', 'telegram-cache', SESSION_FILE)
+}
+
+/** v1 平铺位置：<data>/telegram-cache/telegram-session.bin（布局升级失败时回查） */
+function legacyDataDirectorySessionPath(): string {
+  return resolveLegacyPath(`telegram-cache/${SESSION_FILE}`)
 }
 
 function legacyUserDataSessionPath(): string {
@@ -46,7 +51,7 @@ function moveFile(source: string, dest: string): void {
 function resolveSessionFilePath(): string {
   const next = dataDirectorySessionPath()
   if (!existsSync(next)) {
-    const candidates = [lastResolvedPath, legacyUserDataSessionPath()]
+    const candidates = [lastResolvedPath, legacyDataDirectorySessionPath(), legacyUserDataSessionPath()]
     for (const source of candidates) {
       if (!source || source === next || !existsSync(source)) continue
       try {

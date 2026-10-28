@@ -3,6 +3,7 @@
 //   装好 webview 域名导航闸、再挂载 webRequest 观测（都必须在 webview 首次导航前完成）、
 //   清理失效索引、注册 IPC、启动快照推送。
 // - dispose：停推送 → 解绑页面 → 取消任务 → 卸载观测，顺序保证退出时不再产生新事件。
+import { registerCacheIntegrityHandler } from '../../../backend/utils/data-root-scan.ts'
 import { loadDataDirectoryOverride } from '../../../backend/utils/data-root.ts'
 import { logger } from '../../../backend/utils/logger.ts'
 import { registerTelegramCacheHandlers } from './ipc/handlers.ts'
@@ -64,6 +65,11 @@ export const telegramCacheBackend = {
 
     registerTelegramCacheHandlers()
     startTelegramSnapshotPublisher()
+
+    // 清缓存会删掉 objects/：索引必须跟着修剪，否则会把「只剩一条记录」当成可复用内容
+    registerCacheIntegrityHandler(() => {
+      pruneTelegramRegistry()
+    })
   },
 
   async dispose(): Promise<void> {

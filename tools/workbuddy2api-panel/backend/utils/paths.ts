@@ -1,10 +1,19 @@
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { getDataDirectory } from '../../../../backend/utils/data-root.ts'
+import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
 import { WB2API_TOOL_ID } from '../../../../shared/workbuddy2api-panel.ts'
 
+/**
+ * 配置层根：manifest / 面板设置 / 上游 run 目录（cwd、api_key、auths、上游自己的 data）。
+ * 这些不可再生，必须进备份；「打开数据目录」打开的就是这里。
+ */
 export function getWb2apiRootDir(): string {
-  return path.join(getDataDirectory(), WB2API_TOOL_ID)
+  return resolveLayerPath('config', WB2API_TOOL_ID)
+}
+
+/** 缓存层根：下载的二进制与 runtime（current / previous / staging），删掉可重新下载 */
+export function getWb2apiCacheRootDir(): string {
+  return resolveLayerPath('cache', WB2API_TOOL_ID)
 }
 
 export function getWb2apiManifestPath(): string {
@@ -16,11 +25,11 @@ export function getWb2apiSettingsPath(): string {
 }
 
 export function getWb2apiDownloadsDir(): string {
-  return path.join(getWb2apiRootDir(), 'downloads')
+  return path.join(getWb2apiCacheRootDir(), 'downloads')
 }
 
 export function getWb2apiRuntimeDir(): string {
-  return path.join(getWb2apiRootDir(), 'runtime')
+  return path.join(getWb2apiCacheRootDir(), 'runtime')
 }
 
 export function getWb2apiCurrentDir(): string {

@@ -16,7 +16,8 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 - 前端禁止直接 `import backend/**` 或 `import tools/*/backend/**`，必须经 preload 暴露的 IPC API 调用（`renderer/shared/ipc/createIpcHelpers` 工厂）。**每个工具的 `renderer/ipc.ts` 是唯一 helper 实例**，store / 页面不得自行 `createIpcHelpers`；外链统一走 `@renderer/shared/ipc/openExternal`（不得直接摸 `window.edtRuntime`）。
 - `shared/**` 只能放纯类型 / 常量 / 纯函数，不依赖 Electron、Node、文件系统存储。
 - `backend/**` 是**平台级后端基建**（logger / file-ops / 应用数据根目录 data-root / JSON 文档存储 json-store），被多个工具的后端共用；工具域专属逻辑留在各自 `tools/<id>/backend/`，禁止工具间互相 import 对方的 backend。
-- 本地数据一律是应用数据根目录下的 JSON 文件（`backend/utils/json-store.ts`：进程内缓存 + 临时文件 rename 原子写入），**不引入数据库 / 原生依赖**；工具域按 `<工具 id>/xxx.json` 分文件存放。
+- 本地数据一律是 JSON 文件（`backend/utils/json-store.ts`：进程内缓存 + 临时文件 rename 原子写入），**不引入数据库 / 原生依赖**。
+- **数据按层归位**：配置（不可再生）`<data>/config/<工具 id>/`、资产（用户归档）`<assets>/<工具 id>/`、会话（Chromium 拥有）`<data>/session/`、缓存（可再生）`<data>/cache/<工具 id>/`。判据与清单只在 `shared/data-layers.ts`；**路径一律经 `resolveLayerPath`**（`backend/utils/data-layers.ts`），不得自己拼 `getDataDirectory()`——`pnpm data-layers:check` 会拦（连 `const root = getDataDirectory()` 这种别名也拦）。新增落点先往 `DATA_LAYER_ENTRIES` 加一条；确实不能走层的（如用户自备 `<data>/.env`）必须写 `// data-layers:allow <原因>`，原因必填、逐行生效，没有别的豁免通道。详见 [docs/data-layers.md](./docs/data-layers.md)。
 - 高度链必须完整：`flex` 容器 + `flex:1` 子项需配 `min-height:0`，避免内容溢出。
 
 ## UI 规范的落点（工程侧）
@@ -31,7 +32,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 ## 布局与页签机制（工程侧）
 
 - **设置是页签，不是弹窗**：入口在标题栏右端（`.header-settings`），点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 用同一张表常驻挂载。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
-  桌面端专属页面（如设置：数据目录 / 空间占用 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
+  桌面端专属页面（如设置：数据目录 / 分层用量 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
   命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
 - 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
 - 主壳标题栏、首页网格、工具页布局、页签外观与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §7、§8（动效尊重 `prefers-reduced-motion`）。
@@ -40,14 +41,14 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 
 颜色 / alpha / 玻璃的取值与调节方式见 DESIGN §3.1、§7.1.1；**这里是状态归属与平台能力判定的工程约束**：
 
-- 唯一事实来源是主进程（`backend/utils/appearance-store.ts` 持久化到 `<data>/app/window-appearance.json`），渲染层用 `renderer/shared/composables/useAppearance.ts` 只做拉取 + 订阅 + 提交，**不得在 localStorage 留第二份状态**。
+- 唯一事实来源是主进程（`backend/utils/appearance-store.ts` 持久化到 `<data>/config/app/window-appearance.json`），渲染层用 `renderer/shared/composables/useAppearance.ts` 只做拉取 + 订阅 + 提交，**不得在 localStorage 留第二份状态**。
 - 平台能力判定必须走 `shared/appearance.ts` 的纯函数（`resolveAppearanceCapabilities` / `sanitizeWindowAppearance`），禁止在主进程和渲染层各写一份 `process.platform ===` 判断。
 - `transparent` / `vibrancy` / `backgroundMaterial` 只在 `BrowserWindow` 构造时生效：改外观实现时要保证 `loadWindowAppearance()` 先于 `createWindow()` 执行。
 - 模式类由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`；新增窗口模式只加一条模式规则（alpha + glass 两组），组件零改动。
 
 ## 窗口大小与位置（记住上次几何）
 
-- 主进程同样是唯一事实来源（`backend/utils/window-bounds-store.ts` → `<data>/app/window-bounds.json`），渲染层（设置页签 →「窗口大小与位置」）只经 IPC 读取状态、提交开关 / 重置，**不自己记几何**。
+- 主进程同样是唯一事实来源（`backend/utils/window-bounds-store.ts` → `<data>/config/app/window-bounds.json`），渲染层（设置页签 →「窗口大小与位置」）只经 IPC 读取状态、提交开关 / 重置，**不自己记几何**。
 - **恢复判定是纯逻辑**：`shared/window-bounds.ts` 的 `resolveWindowPlacement` 只认「仍落在某块屏工作区内、且可见面积足够拖动」的记录；外接屏拔掉 / 分辨率变小时返回 `null`，主进程改用默认尺寸让 Electron 居中——绝不允许把窗口还原到屏幕外。坐标换算 / 越界收敛都写在这里，主进程只做传参。
 - `enabled` / `maximized` / `bounds` 三个字段：关闭开关即不记录也不恢复；最大化只记标记，几何恒取 `getNormalBounds()`（还原后的尺寸），下次先按普通态建窗再 `maximize()`。
 - 存储走**同步** JSON 存储（`backend/utils/json-store.ts`），不用外观那套异步写：`move` / `resize` 高频触发，关窗时还必须在进程退出前落盘。写入用 400ms debounce + 值不变不写，`close` 时立刻 flush。
@@ -67,7 +68,7 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 ## 常用命令
 
 ```bash
-pnpm install      # 安装依赖（Node 22+ / pnpm 10+，勿用 npm）
+pnpm install      # 安装依赖（Node ≥22.18 / pnpm 10+，勿用 npm）
 pnpm dev          # 开发模式（Electron + Vite），默认不自动打开 DevTools
 EDT_DEVTOOLS=1 pnpm dev   # 同上，但启动时自动打开 DevTools（调试启动问题用）
 pnpm web          # 纯浏览器预览（无 preload / IPC：只列 supportedTargets 含 web 的工具，桌面端专属页面不注册）
@@ -75,6 +76,8 @@ pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm vite build   # 仅构建前端
 pnpm typecheck    # TS 类型检查（前端 + 后端两套 tsconfig）
 pnpm check:ui     # EP 用法断言（el-tag / el-empty / el-progress / el-table 收敛状态）
+pnpm data-layers:check   # 分层断言：清单/搬迁表一致 + 禁止绕过 resolveLayerPath 拼数据根（含别名）
+pnpm data-layout plan    # 预览 v1→v2 数据布局搬迁计划（只读）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
 pnpm build        # 完整构建
@@ -141,7 +144,7 @@ export default defineTool({
 | ---------- | ------ |
 | 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `renderer/App.vue` |
 | **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
-| 设置页（数据目录 / 空间占用 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
+| 设置页（数据目录 / 数据分层用量 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |
@@ -162,6 +165,15 @@ export default defineTool({
 | IPC 发送方 URL 白名单（主进程 + 导航闸共用） | `backend/utils/ipc-sender.ts` |
 | 路径边界守卫（路径包含 / 数据目录合法性） | `backend/utils/path-guard.ts` |
 | **数据目录 / 缓存位置总览与切换迁移** | `docs/data-directory.md` |
+| **数据分层与备份设计（配置 / 资产 / 会话 / 缓存，含资产独立根）** | `docs/data-layers.md` |
+| **数据分层清单（归属 / 备份与清理策略 / v1→v2 搬迁表）** | `shared/data-layers.ts` |
+| 分层路径解析 / 按层用量 / 清缓存 | `backend/utils/data-layers.ts`、`backend/utils/data-root-scan.ts` |
+| 数据布局 v1→v2 升级（幂等 / quarantine） | `backend/utils/data-layout-upgrade.ts`；`pnpm data-layout plan` |
+| 资产根（独立归档位置 / pending 迁移 / 路径守卫） | `backend/utils/assets-root.ts`；`path-guard.ts` 的 `isSafeAssetsDirectory` |
+| **备份包导出 / 预检 / 恢复（.edtbackup）** | `shared/backup.ts`（格式声明）、`backend/utils/backup-format.ts`（容器）、`backend/utils/backup-service.ts`（业务） |
+| 凭据静态加密（safeStorage 信封 `edt-secret:`） | `backend/utils/secret-box.ts` |
+| 应用壳 UI 偏好（收藏的工具） | `backend/utils/ui-preferences-store.ts` |
+| 清理后的状态自愈钩子（索引修剪 / 已安装重算） | `backend/utils/data-root-scan.ts` 的 `registerCacheIntegrityHandler` |
 | **Chromium 会话目录（sessionData）重定向** | `backend/utils/session-data.ts` |
 | 数据目录整体迁移（切换时复制→校验→删除） | `backend/utils/data-migration.ts` |
 | JSON 文档存储（同步缓存 + 原子写入） | `backend/utils/json-store.ts` |
