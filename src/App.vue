@@ -182,8 +182,13 @@ function handleTabClick(toolId: string) {
 }
 
 async function handleTabRemove(toolId: string) {
-  // 工具可注册关闭前守卫（如 workbuddy2api-panel：服务在跑时先确认并 STOP）
-  if (!(await runTabCloseGuard(toolId))) return
+  // 工具可注册关闭前守卫（如 workbuddy2api-panel：服务在跑时先确认并 STOP）。
+  // 守卫本身出错一律放行并留痕：守卫是「额外确认」，不能变成「页签关不掉」。
+  try {
+    if (!(await runTabCloseGuard(toolId))) return
+  } catch (error) {
+    console.warn('[tabs] 关闭前守卫执行失败，按放行处理', error)
+  }
   const wasActive = tabsStore.activeId === toolId
   tabsStore.close(toolId)
   // 关闭正在查看的工具 → 回主页；关后台页签则原地不动

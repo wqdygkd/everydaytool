@@ -296,8 +296,9 @@ onMounted(() => {
       await api.value!.invoke(channels.value!.STOP)
       return true
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : String(error))
-      return false
+      // 查询状态失败不该把页签锁死：提示一下并按放行处理（服务没在跑也就不需要停）
+      ElMessage.warning(`未能确认服务状态，直接关闭：${error instanceof Error ? error.message : String(error)}`)
+      return true
     }
   })
 })
