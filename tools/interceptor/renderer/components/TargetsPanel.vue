@@ -153,7 +153,7 @@ function formatTime(iso: string): string {
 }
 
 .origin-text {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   word-break: break-all;
 }
 </style>

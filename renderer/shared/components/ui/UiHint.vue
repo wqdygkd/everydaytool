@@ -27,7 +27,9 @@ withDefaults(defineProps<{
 .ui-hint {
   margin: 0;
   color: var(--color-text-secondary);
-  line-height: 1.4;
+  /* 1.5 而不是 1.4：11–12px 的中文在 1.4 下行距只有 15–17px，
+     多行说明会糊成一段；拉丁正文本身宽高比小，1.5 也不显松。 */
+  line-height: 1.5;
 
   &.is-xs {
     font-size: var(--font-size-xs);

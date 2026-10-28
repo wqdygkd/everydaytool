@@ -22,7 +22,7 @@ async function pickDirectory() {
 <template>
   <UiPathField
     :model-value="modelValue"
-    placeholder="沙箱与配置文件存储位置"
+    placeholder="数据目录（所有工具共用）"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <template #actions>

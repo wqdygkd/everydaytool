@@ -27,7 +27,11 @@ defineEmits<{
         @click="$emit('select', sandbox.id)"
       />
       <UiEmpty v-if="sandboxes.length === 0" center padding="var(--spacing-lg)">
-        暂无沙箱，点击下方创建
+        <!-- 侧栏只有 252px：标题一句 + 一句「为什么要建」，按钮就在正下方（footer），不重复放 -->
+        <template #title>
+          还没有沙箱
+        </template>
+        每个沙箱是独立指纹的 Chrome：登录态、代理、指纹互不影响。
       </UiEmpty>
     </div>
     <template #footer>

@@ -107,7 +107,9 @@ onBeforeUnmount(() => {
   left: 0;
   height: 40px;
   border-radius: 999px;
-  background: var(--color-primary-soft);
+  /* 选中态用**当前工具的身份色**淡底（--tool-accent 由外壳按工具覆写，默认品牌蓝）：
+     同一个工具在页签、卡片、页内分段菜单上是同一支色，形成可学习的地点感。 */
+  background: color-mix(in srgb, var(--tool-accent) 14%, transparent);
   opacity: 0;
   pointer-events: none;
 }
@@ -146,7 +148,9 @@ onBeforeUnmount(() => {
 }
 
 .ui-menu-horizontal-item.is-active {
-  color: var(--color-primary);
+  /* 选中项文字取中性主文本：身份色只做底与指示条，
+     文字一旦染成工具色就回到「相近蓝互相打架」的老问题 */
+  color: var(--color-text-primary);
 }
 
 .ui-menu-horizontal-item.is-active:hover {
@@ -183,7 +187,8 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 var(--spacing-xs);
   border-radius: 999px;
-  background: var(--color-primary);
+  /* 计数是「系统的注意信号」，不跟工具身份色走：白字压在墨档蓝上 5.05:1 */
+  background: var(--color-primary-strong);
   color: var(--color-on-solid);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);

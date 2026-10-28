@@ -4,11 +4,6 @@ import { createMotionScope, gsap } from '@renderer/shared/composables/useGsap'
 import { chromeSandboxIpcChannels, invokeChromeSandboxIpc, onChromeSandboxIpc } from '../ipc'
 import { useSandboxStore } from '../stores/sandboxStore'
 
-const router = useRouter()
-function goToHome(): void {
-  router.push({ name: 'home' })
-}
-
 const store = useSandboxStore()
 const ready = ref(false)
 const showCreate = ref(false)
@@ -112,7 +107,6 @@ onUnmounted(() => {
     <DataDirectorySetupDialog
       v-model="showSetup"
       @completed="initPage"
-      @cancel="goToHome"
     />
   </div>
 </template>

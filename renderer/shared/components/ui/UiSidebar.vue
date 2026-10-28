@@ -60,13 +60,13 @@ withDefaults(defineProps<{
   .is-title-subdued & {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 
   .is-title-emphasis & {
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 }
 

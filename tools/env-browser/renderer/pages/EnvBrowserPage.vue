@@ -226,7 +226,21 @@ onUnmounted(() => {
       />
       <div v-loading="store.loading" class="env-list">
         <UiEmpty v-if="!filteredEnvs.length" center padding="var(--spacing-lg)">
-          暂无环境
+          <!-- 两种「空」要说两句话：从没建过（教它是什么 + 给入口）／搜不到（教怎么回去） -->
+          <template #title>
+            {{ search ? '没有匹配的环境' : '还没有环境' }}
+          </template>
+          <template v-if="search">
+            换个关键词，或清空搜索看全部 {{ store.envs.length }} 个环境。
+          </template>
+          <template v-else>
+            一个环境 = 一套独立登录态。同一站点开两个环境，就是两个互不串味的账号。
+          </template>
+          <template v-if="!search" #actions>
+            <el-button size="small" @click="onCreate">
+              新增环境
+            </el-button>
+          </template>
         </UiEmpty>
         <EnvCard
           v-for="env in filteredEnvs"

@@ -530,7 +530,7 @@ onUnmounted(() => {
 
 .wb2api-status-label {
   font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .wb2api-actions {
@@ -562,7 +562,8 @@ onUnmounted(() => {
 }
 
 .wb2api-link {
-  color: var(--color-primary);
+  /* 链接是文字：取墨档蓝（5.05:1），亮档只有 3.31:1 */
+  color: var(--color-primary-strong);
   text-decoration: none;
   cursor: pointer;
 

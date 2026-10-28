@@ -146,6 +146,7 @@ export default defineTool({
 | **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
 | 设置页（数据目录 / 数据分层用量 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
+| 顶部工具页签（拖拽排序 / 关闭 / 键盘导航） | `renderer/shared/components/HeaderTabs.vue` |
 | 首页工具排序（创建时间 / 拖拽 / 合并保存顺序） | `renderer/shared/tool/tool-order.ts` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |

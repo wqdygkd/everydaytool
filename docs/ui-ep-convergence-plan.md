@@ -490,7 +490,7 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 
 | 计划 | 实际 | 原因 |
 | --- | --- | --- |
-| `App.vue` 4 处 tabs 迁全局 `.el-tabs--bar` | **保留 exception** | 标题栏 tabs 带 34px 行高、`-webkit-app-region`、关闭图标常驻占位，属 app-shell 细节；迁进主题层会把「应用外壳」写进 EP 绑定文件 |
+| `App.vue` 4 处 tabs 迁全局 `.el-tabs--bar` | **后续改为自研页签** | 标题栏页签需要浏览器式拖拽排序与自定义拖拽浮层，已改为 `HeaderTabs.vue`（不再使用 `el-tabs`），原 exception 失效 |
 | 业务侧 `:deep` 目标 ≤5 | **实测 8** | 其中 7 处在 `RulesPanel`（菜单 / 标题字号 / 置顶行 / 输入底色 / radio 标签字号），都是编辑器内语义；再压只能造一次性工具类，违背「反过度设计」 |
 | `el-progress` / `el-table` 归零 | **各 1 处（封装内部）** | 组件基座本身必须写 EP 标签，断言已限定「业务文件 0」 |
 | `el-tag` 迁移覆盖 36 处 | 36 处全部迁移 | — |

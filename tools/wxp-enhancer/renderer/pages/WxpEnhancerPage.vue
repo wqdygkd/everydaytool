@@ -516,8 +516,20 @@ onUnmounted(() => {
 .wxp-enhancer-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl);
+  /* 区块之间 2xl：状态卡 / 设置面板 / 说明是**同级区块**，
+     要和面板内部的标题→内容（12）与字段间距（8）拉开层级 */
+  gap: var(--spacing-2xl);
+  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
+
+  /* 文档栏：本页是「配置 + 说明」，不是数据网格。不设栏时窗口一宽，
+     「标签 → 输入框」能拉出 1500px，扫读要转头，说明文字还会在半途截断。
+     栏宽取 --column-document，与设置页 / 离线包同宽。 */
+  > * {
+    width: 100%;
+    max-width: var(--column-document);
+    margin-right: auto;
+    margin-left: auto;
+  }
 }
 
 /* 状态卡：UiPanel 根上的左右分栏；窄窗口由媒体查询改成上下 */
@@ -543,7 +555,7 @@ onUnmounted(() => {
 
 .status-name {
   font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 状态详情走正文而不是 tag：错误信息可能很长，tag 会把标题行撑破 */
@@ -551,7 +563,8 @@ onUnmounted(() => {
   margin: var(--spacing-xs) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  line-height: 1.4;
+  /* 错误信息可能好几行：1.5 行距才读得下去（DESIGN §3.2.4 的说明档） */
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -597,7 +610,7 @@ onUnmounted(() => {
 .fav-title {
   margin: 0;
   font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .fav-backup {
@@ -605,7 +618,7 @@ onUnmounted(() => {
 }
 
 .fav-table :deep(.fav-hospital-row) {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 收藏表嵌在玻璃面板里：EP 表格默认把行底铺成 --el-fill-color-blank（本仓库 = --color-input，
@@ -623,7 +636,8 @@ onUnmounted(() => {
 
 @media (max-width: 760px) {
   .wxp-enhancer-page {
-    padding: var(--spacing-md);
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg);
   }
 
   .status-card {

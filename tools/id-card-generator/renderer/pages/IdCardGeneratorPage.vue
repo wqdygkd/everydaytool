@@ -154,7 +154,9 @@ onMounted(handleGenerate)
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: var(--spacing-3xl);
+  /* 与设置页 / 离线包 / WXP 同一套页面留白（2xl 顶部、3xl 其余），
+     切页签时卡片不会上下跳 8px */
+  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
   overflow: auto;
 }
 
@@ -187,7 +189,8 @@ onMounted(handleGenerate)
     cursor: pointer;
 
     &:hover {
-      color: var(--color-primary);
+      /* 可点文字取墨档蓝：亮档 3.31:1 在 12px 上读不清 */
+      color: var(--color-primary-strong);
       text-decoration: underline;
     }
   }

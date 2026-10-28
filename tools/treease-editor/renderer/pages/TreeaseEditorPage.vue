@@ -550,7 +550,7 @@ onUnmounted(() => {
 
 .rule-title-name {
   margin: 0 var(--spacing-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .rule-action-tag {

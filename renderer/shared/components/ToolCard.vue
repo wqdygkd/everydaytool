@@ -13,7 +13,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="tool-card" @click="$emit('click')">
+  <div class="tool-card" :style="{ '--tool-accent': tool.color }" @click="$emit('click')">
     <button
       class="favorite-btn"
       type="button"
@@ -66,7 +66,8 @@ defineEmits<{
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);
 
   &:hover {
-    border-color: var(--color-border);
+    /* 头像用的是工具自己的色，hover 描边同一支色：卡片在「被指向」的瞬间亮出自己的身份 */
+    border-color: color-mix(in srgb, var(--tool-accent) 42%, var(--color-border));
     box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-md);
     transform: translateY(-1px);
   }
@@ -92,11 +93,19 @@ defineEmits<{
     cursor: pointer;
     transition: var(--transition-fast);
 
-    &:hover,
-    &.active {
-      border-color: var(--color-warning);
+    &:hover {
+      /* hover 只是「这个可以点」的预告：琥珀描边 + 淡底 */
+      border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
       background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       color: var(--color-warning);
+    }
+
+    /* 已收藏 = **实底琥珀 + 白星**：与「还在犹豫」的 hover 态拉开层级，
+       白星压琥珀 4.89:1，也是全站唯一用实底琥珀的地方 */
+    &.active {
+      border-color: transparent;
+      background: var(--color-warning);
+      color: var(--color-on-solid);
     }
 
     &:active {
@@ -143,7 +152,8 @@ defineEmits<{
     margin: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    /* 单行截断，行高只决定这一行的高度；仍取 1.5，与全站说明文字同一档 */
+    line-height: 1.5;
   }
 
   /* 元信息行固定高度：有 / 没有「新」徽章时卡片等高，首页拖拽换行不会引起行高重排 */

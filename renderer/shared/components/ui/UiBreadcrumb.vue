@@ -49,7 +49,7 @@ const emit = defineEmits<{
   border-radius: var(--radius-xs);
 
   &:hover {
-    color: var(--color-primary);
+    color: var(--color-primary-strong);
   }
 
   &.is-current {

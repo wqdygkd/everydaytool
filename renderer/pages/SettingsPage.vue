@@ -624,7 +624,7 @@ onMounted(() => {
   padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
 
   > :deep(*) {
-    max-width: 760px;
+    max-width: var(--column-document);
     margin-right: auto;
     margin-left: auto;
   }
@@ -641,9 +641,11 @@ onMounted(() => {
   margin-bottom: var(--spacing-lg);
 }
 
-/* 面板之间留出区块间距（UiPanel 自身不带外边距） */
+/* 面板之间留出区块间距（UiPanel 自身不带外边距）。
+   2xl 而不是 md：这是**同级区块**之间的距离，必须明显大于面板内部
+   标题→内容（12）与行间距（8），否则七个分区会糊成一整条长列表。 */
 .settings-page > :deep(.ui-panel + .ui-panel) {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
 }
 
 .directory-row {
@@ -733,7 +735,8 @@ onMounted(() => {
 .material-desc {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 1.4;
+  /* 材质说明常折两行：11px 中文按 1.5 才不糊（与 .layer-summary 同一档） */
+  line-height: 1.5;
 }
 
 .usage-summary {
@@ -785,7 +788,8 @@ onMounted(() => {
   margin: var(--spacing-xs) 0 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 1.4;
+  /* 多行说明按 1.5 排（DESIGN §3.2.4）：11px 中文在 1.4 下行距只有 15.4px，会糊成一段 */
+  line-height: 1.5;
 }
 
 /* 资产层的独立根路径：可能很长，允许换行而不是横向撑开 */

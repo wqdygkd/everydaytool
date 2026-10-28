@@ -340,7 +340,12 @@ onMounted(() => {
     </section>
 
     <section v-if="favoriteTools.length > 0" class="favorite-section">
-      <UiSectionHeader title="我的收藏" :count="favoriteTools.length" />
+      <UiSectionHeader title="我的收藏" :count="favoriteTools.length">
+        <template #title>
+          <!-- 收藏是全站唯一的琥珀色：星标在卡片上是同一支色，读一眼就知道这一区是「我挑过的」 -->
+          <span class="favorite-mark" aria-hidden="true">★</span>我的收藏
+        </template>
+      </UiSectionHeader>
 
       <div class="tools-grid">
         <ToolCard
@@ -442,6 +447,13 @@ onMounted(() => {
   margin-bottom: var(--spacing-3xl);
 }
 
+/* 收藏记号：与卡片上的星标同一支琥珀（--color-warning 已是可读档，11–16px 都够亮） */
+.favorite-mark {
+  color: var(--color-warning);
+  font-size: var(--font-size-base);
+  line-height: 1;
+}
+
 /* 网格定位上下文：卡片用 offset* 取槽位坐标，滚动 / 动画都不会影响相对位置 */
 .tools-grid-wrap {
   position: relative;
@@ -476,7 +488,7 @@ onMounted(() => {
     z-index: 1;
 
     > .tool-card {
-      border-color: var(--color-primary-light);
+      border-color: color-mix(in srgb, var(--tool-accent) 55%, transparent);
       border-style: dashed;
       opacity: 0.5;
       transform: scale(0.97);

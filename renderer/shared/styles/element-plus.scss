@@ -1,14 +1,29 @@
 // Element Plus 主题层：把 EP 的 --el-* 变量绑定到设计令牌，并覆写 .el-* 组件外观。
 // 必须全局：EP 组件在业务代码中直接使用，且弹层（popper/dropdown/message/dialog）传送至
 // body，只有全局样式能覆盖到它们。
+
+/* 一支色相 = 一整套 EP 阶梯：EP 的 light-3/5/7/8/9 与 dark-2 原本来自它自己的调色板，
+   若只改 --el-color-primary，tag / alert / switch / hover 底仍是 EP 的蓝，会出现「同一支蓝两种蓝」。
+   这里从令牌**推导**整条阶梯（淡出混白、压深混黑），改 tokens.scss 即整条阶梯跟着走。 */
+@mixin ep-tone-ramp($name, $color) {
+  --el-color-#{$name}: #{$color};
+  --el-color-#{$name}-light-3: color-mix(in srgb, #{$color} 70%, #fff);
+  --el-color-#{$name}-light-5: color-mix(in srgb, #{$color} 50%, #fff);
+  --el-color-#{$name}-light-7: color-mix(in srgb, #{$color} 30%, #fff);
+  --el-color-#{$name}-light-8: color-mix(in srgb, #{$color} 20%, #fff);
+  --el-color-#{$name}-light-9: color-mix(in srgb, #{$color} 10%, #fff);
+  --el-color-#{$name}-dark-2: color-mix(in oklab, #{$color} 84%, #000);
+}
+
 :root {
   /* ── Element Plus 绑定 ── */
-  --el-color-primary: var(--color-primary);
-  --el-color-primary-light-3: #70b1f2;
-  --el-color-primary-light-5: #99c7f5;
-  --el-color-primary-light-7: #c8defa;
-  --el-color-primary-light-9: #ebf4fd;
-  --el-color-primary-dark-2: #2f84d9;
+  @include ep-tone-ramp(primary, var(--color-primary));
+  /* 语义色只有一档（见 tokens.scss 的色阶规则），EP 的四个 type 直接接过来 */
+  @include ep-tone-ramp(success, var(--color-success));
+  @include ep-tone-ramp(warning, var(--color-warning));
+  @include ep-tone-ramp(danger, var(--color-error));
+  /* EP 的 info 在本项目里就是品牌蓝：UiChip tone="info" / el-alert type="info" 同色 */
+  @include ep-tone-ramp(info, var(--color-primary-strong));
   --el-border-radius-base: var(--radius-sm);
   --el-border-color: var(--color-border);
   --el-border-color-light: var(--color-border-light);
@@ -41,6 +56,9 @@
   --el-text-color-primary: var(--color-text-primary);
   --el-text-color-regular: var(--color-text-secondary);
   --el-text-color-secondary: var(--color-text-tertiary);
+  /* 占位符是「还没填的内容」，但仍然是给人读的字：EP 默认 #a8abb2（2.3:1）读不出来，
+     收到三级文本（4.99:1）——与已填的黑字仍有明确的轻重差。 */
+  --el-text-color-placeholder: var(--color-text-tertiary);
   --el-box-shadow-light: var(--shadow-md);
   --el-box-shadow: var(--shadow-lg);
   --el-mask-color: rgba(0, 0, 0, 0.25);
@@ -65,14 +83,48 @@
   /* 按钮 = 圆角矩形（非胶囊），圆角取控件档令牌 */
   border-radius: var(--radius-control);
 
+  /* 主按钮实底走**墨档**：白字压 #3390ec 只有 3.31:1，压 #006dc3 是 5.31:1。
+     亮档继续留给品牌标 / 圆点 / 浅底——同一个品牌，两种职责。 */
   &--primary {
-    --el-button-bg-color: var(--color-primary);
-    --el-button-border-color: var(--color-primary);
-    --el-button-hover-bg-color: var(--color-primary-hover);
-    --el-button-hover-border-color: var(--color-primary-hover);
-    --el-button-active-bg-color: color-mix(in srgb, var(--color-primary) 88%, #000);
-    --el-button-active-border-color: color-mix(in srgb, var(--color-primary) 88%, #000);
+    --el-button-bg-color: var(--color-primary-strong);
+    --el-button-border-color: var(--color-primary-strong);
+    --el-button-text-color: var(--color-on-solid);
+    --el-button-hover-bg-color: color-mix(in oklab, var(--color-primary-strong) 86%, #000);
+    --el-button-hover-border-color: color-mix(in oklab, var(--color-primary-strong) 86%, #000);
+    --el-button-hover-text-color: var(--color-on-solid);
+    --el-button-active-bg-color: color-mix(in oklab, var(--color-primary-strong) 74%, #000);
+    --el-button-active-border-color: color-mix(in oklab, var(--color-primary-strong) 74%, #000);
   }
+
+  /* 实底危险钮同理走语义色的**可读档**（#cf1c28 上白字 5.45:1） */
+  &--danger {
+    --el-button-bg-color: var(--color-error);
+    --el-button-border-color: var(--color-error);
+    --el-button-text-color: var(--color-on-solid);
+    --el-button-hover-bg-color: color-mix(in oklab, var(--color-error) 86%, #000);
+    --el-button-hover-border-color: color-mix(in oklab, var(--color-error) 86%, #000);
+    --el-button-hover-text-color: var(--color-on-solid);
+    --el-button-active-bg-color: color-mix(in oklab, var(--color-error) 74%, #000);
+    --el-button-active-border-color: color-mix(in oklab, var(--color-error) 74%, #000);
+  }
+}
+
+/* 文字钮 / 链接钮的颜色是**文字**：一律取墨档。
+   带 html 前缀：EP 组件 CSS 按需注入、晚于本文件，同权会被盖回（DESIGN §4）。 */
+html .el-button--primary.is-text,
+html .el-button--primary.is-link,
+html .el-link.el-link--primary {
+  --el-button-text-color: var(--color-primary-strong);
+  --el-button-hover-text-color: var(--color-primary-strong);
+  color: var(--color-primary-strong);
+}
+
+html .el-button--danger.is-text,
+html .el-button--danger.is-link,
+html .el-link.el-link--danger {
+  --el-button-text-color: var(--color-error);
+  --el-button-hover-text-color: var(--color-error);
+  color: var(--color-error);
 }
 
 .el-table {
@@ -109,6 +161,15 @@ html .el-table th.el-table__cell {
 html .el-table .cell {
   padding-top: var(--spacing-xs);
   padding-bottom: var(--spacing-xs);
+  /* EP 默认给单元格 23px 行高（1.9 倍 @12px），比全站的 --line-height-control 松 3px；
+     行高交给令牌，密度才和输入框 / 按钮同一条基线。 */
+  line-height: var(--line-height-control);
+}
+
+/* 空态文字：EP 用 line-height:60px 做垂直居中，我们用的是 flex 居中（UiEmpty），
+   60px 行高只会在换行时把两行字撑开成一团。 */
+html .el-table__empty-text {
+  line-height: inherit;
 }
 
 /* 通用表单输入框：走独立的 field 角色（不与表格行 / 按钮共用 input 角色），
@@ -218,6 +279,23 @@ html .el-table .cell {
   background: var(--color-primary-soft);
 }
 
+/* 「选中」这一族在 EP 里默认都是把**文字**染成 --el-color-primary（亮档，3.31:1）：
+   下拉选中项、级联选中节点、标签页、分页器、复选 / 开关标签——一律收到可读档。
+   统一出现在这里而不是散落各处：EP 的语义是「选中 = 主色」，我们的语义是
+   「选中 = 浅底标出来，文字保持可读」。带 html 前缀压过懒加载的 EP 规则。 */
+html .el-select__popper .el-select-dropdown__item.is-selected,
+html .el-cascader__dropdown .el-cascader-node.is-active,
+html .el-tabs__item.is-active,
+html .el-pagination .el-pager li.is-active,
+html .el-dropdown__popper .el-dropdown-menu__item:not(.is-disabled):hover {
+  color: var(--color-primary-strong);
+}
+
+html .el-checkbox__input.is-checked + .el-checkbox__label,
+html .el-switch__label.is-active {
+  color: var(--color-text-primary);
+}
+
 /* 消息提示 / 通知：顶层浮层统一走 overlay 角色（颜色 + 玻璃） */
 .el-message,
 .el-notification {
@@ -252,6 +330,13 @@ html .el-alert--info.is-light {
   background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
+/* 提示条标题是文字：成功 / 警告 / 错误已由语义色（墨档）承担，info 在 EP 里是灰，
+   在本项目里是品牌蓝——同样落到墨档，避免「亮蓝图标 + 读不清的亮蓝标题」。 */
+html .el-alert--info.is-light .el-alert__title,
+html .el-alert--info.is-light .el-alert__description {
+  color: var(--color-primary-strong);
+}
+
 /* 确认框是模态：与 dialog 同级，用更大圆角与阴影。
    默认底色取 --el-bg-color（input 角色），需显式改绑 overlay；
    用两级选择器压过 EP 懒加载注入的单类规则（.el-message-box 单类会随注入顺序输掉）。 */
@@ -279,10 +364,10 @@ html .el-alert--info.is-light {
   color: var(--color-text-primary);
 }
 
-/* 占位符 ≈ 次级文本 55% */
+/* 占位符：同样收三级文本（原为次级文本 55%，压在白底上约 2.2:1） */
 .el-input__inner::placeholder,
 .el-textarea__inner::placeholder {
-  color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
+  color: var(--color-text-tertiary);
 }
 
 /* 弹层载入 / 骨架屏动画更柔和：遮罩本身就是「玻璃」，恒带轻微磨砂
@@ -298,7 +383,10 @@ html .el-alert--info.is-light {
   border-color: var(--color-primary);
 }
 
-.el-radio__input.is-checked + .el-radio__label {
+/* 选中项的文字取中性主文本：颜色由圆点 / 底色承载，文字保持可读。
+   带 html 前缀压过 EP 的 `.el-radio__input.is-checked + .el-radio__label`
+   （同权、EP 后注入 → 会把 14px 标签染成 3.31:1 的亮蓝）。 */
+html .el-radio__input.is-checked + .el-radio__label {
   color: var(--color-text-primary);
 }
 
@@ -321,7 +409,19 @@ html .el-switch {
   box-shadow: inset 0 0 0 1px var(--color-highlight);
 }
 
-/* 分段钮(el-radio-button)：品牌浅底选中态，全应用统一（原 interceptor 规则面板局部覆写收敛至此） */
+/* 分段钮(el-radio-button)：选中 = 身份色 14% 浅底 + 中性黑标签 + 身份色描边（与页签 / 分段菜单同一套语言）。
+   走**变量**而不是改选择器：EP 的选中态挂在
+   `.el-radio-button.is-active .el-radio-button__original-radio:not(:disabled) + .el-radio-button__inner`
+   （五个类 + 伪类）上，靠堆选择器压它只是军备竞赛；把它的 checked-* 变量换成令牌，
+   EP 自己算出来的规则就长成我们要的样子。变量挂 `html .el-radio-button`（比 EP 的单类高一级），
+   注入顺序不再重要。文字不染身份色：工具色里一半是相近的蓝，当文字读会互相打架。 */
+html .el-radio-button {
+  --el-radio-button-checked-bg-color: color-mix(in srgb, var(--tool-accent) 14%, transparent);
+  --el-radio-button-checked-border-color: color-mix(in srgb, var(--tool-accent) 70%, var(--color-border));
+  --el-radio-button-checked-text-color: var(--color-text-primary);
+  --el-radio-button-disabled-checked-fill: color-mix(in srgb, var(--tool-accent) 8%, transparent);
+}
+
 .el-radio-button__inner {
   display: inline-flex;
   align-items: center;
@@ -334,10 +434,4 @@ html .el-switch {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-regular);
   box-shadow: none;
-}
-
-.el-radio-button.is-active .el-radio-button__inner {
-  background: var(--color-primary-light);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
 }
