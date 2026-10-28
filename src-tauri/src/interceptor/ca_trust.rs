@@ -243,7 +243,7 @@ fn install(cert_path: &str) -> CaTrustResult {
     CaTrustResult {
         ok: false,
         canceled: false,
-        detail: output.trim(),
+        detail: output.trim().to_string(),
     }
 }
 
