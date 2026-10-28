@@ -410,15 +410,15 @@ onUnmounted(() => {
     <UiToolbar bordered surface gap="sm" padding="8px 12px">
       <span class="muted toolbar-src">{{ SRC }}</span>
       <template #end>
-        <el-tag v-if="attached" size="small" type="success">
+        <UiChip v-if="attached" tone="success" variant="soft">
           拦截中 · {{ ruleCount }} 个接口{{ hits > 0 ? ` · 命中 ${hits} 次` : '' }}
-        </el-tag>
-        <el-tag v-else size="small" type="info">
+        </UiChip>
+        <UiChip v-else tone="info" variant="soft">
           未拦截
-        </el-tag>
-        <el-tag v-if="!isOnline" size="small" type="warning">
+        </UiChip>
+        <UiChip v-if="!isOnline" tone="warning" variant="soft">
           离线 · 缓存模式
-        </el-tag>
+        </UiChip>
         <el-button size="small" :disabled="!isDesktop" @click="showDialog = true">
           拦截设置
         </el-button>
@@ -452,9 +452,9 @@ onUnmounted(() => {
           <template #title>
             <el-switch v-model="form.enabled" size="small" @click.stop />
             <span class="rule-title-name">{{ form.name || '未命名接口' }}</span>
-            <el-tag v-if="form.action === 'block'" size="small" type="danger" class="rule-action-tag">
+            <UiChip v-if="form.action === 'block'" class="rule-action-tag" tone="danger" variant="soft">
               屏蔽
-            </el-tag>
+            </UiChip>
             <span class="rule-title-pattern">{{ form.urlPattern || '未配置匹配' }}</span>
           </template>
           <el-form label-width="90px">
@@ -510,12 +510,12 @@ onUnmounted(() => {
       </UiGroup>
       <UiGroup gap="sm" class="dialog-status">
         <span class="muted">状态：</span>
-        <el-tag v-if="attached" size="small" type="success">
+        <UiChip v-if="attached" tone="success" variant="soft">
           拦截中 · {{ ruleCount }} 个接口{{ hits > 0 ? ` · 已命中 ${hits} 次` : ' · 等待请求' }}
-        </el-tag>
-        <el-tag v-else size="small" type="info">
+        </UiChip>
+        <UiChip v-else tone="info" variant="soft">
           未启动
-        </el-tag>
+        </UiChip>
       </UiGroup>
       <template #footer>
         <el-button v-if="!attached" type="primary" :loading="starting" @click="startIntercept">

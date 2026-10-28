@@ -486,13 +486,12 @@ onUnmounted(() => {
               工具侧备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
             </span>
           </div>
-          <el-table
+          <UiTable
             class="fav-table"
             :data="favTree"
             row-key="id"
             :tree-props="{ children: 'children' }"
             default-expand-all
-            size="small"
             max-height="420"
             :row-class-name="favRowClass"
           >
@@ -500,7 +499,7 @@ onUnmounted(() => {
             <el-table-column prop="sceneformal" label="环境" width="90" />
             <el-table-column prop="accessPoint" label="接入点" min-width="140" show-overflow-tooltip />
             <el-table-column prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
-          </el-table>
+          </UiTable>
         </template>
         <UiHint v-else block>
           暂无收藏数据。

@@ -116,7 +116,7 @@ onMounted(handleGenerate)
         <div class="result-header">
           <span class="muted">共 {{ results.length }} 条</span>
         </div>
-        <el-table :data="results" size="small" class="result-table" max-height="340">
+        <UiTable :data="results" max-height="340" mono>
           <el-table-column label="身份证号" min-width="200">
             <template #default="{ row }">
               <span class="id-cell mono" @click="handleCopyId(row.id)">
@@ -134,7 +134,7 @@ onMounted(handleGenerate)
               </el-button>
             </template>
           </el-table-column>
-        </el-table>
+        </UiTable>
       </UiPanel>
 
       <UiHint size="xs" align="center">
@@ -181,12 +181,6 @@ onMounted(handleGenerate)
   .result-header {
     margin-bottom: var(--spacing-sm);
     font-size: var(--font-size-sm);
-  }
-
-  .result-table {
-    :deep(.el-table__cell) {
-      font-family: var(--font-mono);
-    }
   }
 
   .id-cell {

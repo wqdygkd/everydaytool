@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { EnvConfig } from '../stores/envStore'
-import { openExternal } from '@/desktop/platform'
 import { isTauriEnvironment } from '@/desktop/tauri'
 import { isDesktopEnvironment } from '@/shared/environment'
+import { openExternal } from '../api'
 import EnvDialog from '../components/EnvDialog.vue'
 import { useWebview } from '../composables/useWebview'
 import { useEnvBrowserStore } from '../stores/envStore'

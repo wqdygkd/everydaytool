@@ -1,21 +1,15 @@
 import type { EnvConfig, EnvCreatePayload, EnvUpdatePayload } from '../../../shared/env'
 import { defineStore } from 'pinia'
-import { createCommandHelpers } from '@/shared/commands/createCommandHelpers'
 import { STORAGE_KEYS } from '../../../shared/storage-keys'
+import { getEnvBrowserApi } from '../api'
 
 export type { EnvConfig, EnvCreatePayload, EnvUpdatePayload }
 
 const STORAGE_KEY = STORAGE_KEYS.envBrowserConfigs
 
-const { getApi: getEnvBrowserApi } = createCommandHelpers('envBrowser', '环境浏览器')
-
-// 桌面桥接可用时提供 API；网页预览下返回 undefined，调用方回退 localStorage
+// 桌面桥接可用时提供 API；网页预览下返回 null，调用方回退 localStorage
 function getCommandApi() {
-  try {
-    return getEnvBrowserApi()
-  } catch {
-    return undefined
-  }
+  return getEnvBrowserApi()
 }
 
 function readLocal(): EnvConfig[] {
