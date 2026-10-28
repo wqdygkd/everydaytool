@@ -4,6 +4,7 @@ import { SANDBOX_COMMANDS } from './chrome-sandbox.ts'
 import { ENV_BROWSER_COMMANDS } from './env-browser.ts'
 import { INTERCEPTOR_COMMANDS } from './interceptor.ts'
 import { OFFLINE_PACK_COMMANDS } from './offline-pack.ts'
+import { TELEGRAM_COMMANDS } from './telegram.ts'
 import { TREEASE_COMMANDS } from './treease.ts'
 import { WORKBUDDY_COMMANDS } from './workbuddy.ts'
 import { WXP_COMMANDS } from './wxp.ts'
@@ -24,4 +25,5 @@ export const COMMAND_GROUPS: CommandGroup[] = [
   { domain: 'wxpEnhancer', command: 'wxp_command', commands: WXP_COMMANDS },
   { domain: 'offlinePack', command: 'offline_pack_command', commands: OFFLINE_PACK_COMMANDS },
   { domain: 'workbuddy2apiPanel', command: 'workbuddy_command', commands: WORKBUDDY_COMMANDS },
+  { domain: 'telegramCache', command: 'telegram_command', commands: TELEGRAM_COMMANDS },
 ]

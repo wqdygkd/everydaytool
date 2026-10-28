@@ -20,8 +20,9 @@ export interface WebviewCreateOptions extends WebviewBounds {
    * env-browser：允许关闭同源策略（--disable-web-security）
    * treease：接口拦截运行时注入
    * workbuddy：只允许在本机地址内导航（面板页），其余外链交系统浏览器
+   * telegram：只允许 Telegram 自己的域名，其余外链交系统浏览器
    */
-  preset?: 'env-browser' | 'treease' | 'workbuddy'
+  preset?: 'env-browser' | 'treease' | 'workbuddy' | 'telegram'
 }
 
 export type WebviewEventKind = 'loading-start' | 'loading-stop' | 'navigate' | 'new-window' | 'title'

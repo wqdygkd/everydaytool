@@ -4,12 +4,13 @@ import envBrowser from '@tools/env-browser/index'
 import idCardGenerator from '@tools/id-card-generator/index'
 import interceptor from '@tools/interceptor/index'
 import offlinePack from '@tools/offline-pack/index'
+import telegramCache from '@tools/telegram-cache/index'
 import treeaseEditor from '@tools/treease-editor/index'
 import workbuddy2apiPanel from '@tools/workbuddy2api-panel/index'
 import wxpEnhancer from '@tools/wxp-enhancer/index'
 import { getClientTarget } from '../desktop/platform'
 
-export const allToolRegistry: ToolDefinition[] = [interceptor, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, workbuddy2apiPanel]
+export const allToolRegistry: ToolDefinition[] = [interceptor, chromeSandbox, envBrowser, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, workbuddy2apiPanel, telegramCache]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
   return getClientTarget()

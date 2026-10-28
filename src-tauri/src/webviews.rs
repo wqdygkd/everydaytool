@@ -35,6 +35,21 @@ fn sanitize_id(id: &str) -> Result<String, String> {
     Ok(safe)
 }
 
+/// 对外只读查询：某个 profile 的目录（诊断 / 快照展示用）
+pub fn profile_dir_public(profile: &str) -> Result<PathBuf, String> {
+    profile_dir(profile)
+}
+
+/// Telegram 自己的域名白名单（子 Webview 内允许的导航范围）
+fn is_telegram_host(host: &str) -> bool {
+    let host = host.to_lowercase();
+    matches!(
+        host.as_str(),
+        "web.telegram.org" | "telegram.org" | "www.telegram.org" | "t.me" | "www.t.me"
+    ) || host.ends_with(".telegram.org")
+        || host.ends_with(".t.me")
+}
+
 fn profile_dir(profile: &str) -> Result<PathBuf, String> {
     let safe = sanitize_id(profile)?;
     // 子 Webview profile 与主 WebView2 数据目录同根（即数据根目录下）：
@@ -250,12 +265,14 @@ async fn create_webview(app: AppHandle, map: WebviewMap, args: Value) -> Result<
         .unwrap_or("")
         .to_string();
     // preset 白名单：除内置能力外一律视为「无预设」
-    if !matches!(preset.as_str(), "" | "env-browser" | "treease" | "workbuddy") {
+    if !matches!(preset.as_str(), "" | "env-browser" | "treease" | "workbuddy" | "telegram") {
         return Err(format!("未知的 webview preset：{preset}"));
     }
     let insecure = preset == "env-browser";
     // workbuddy 面板只允许在本机地址内导航：面板里的外链 / OAuth 交系统浏览器
     let local_only = preset == "workbuddy";
+    // telegram：只允许 Telegram 自己的域名（登录 / 聊天主界面），其余交系统浏览器
+    let telegram_only = preset == "telegram";
     let x = number(&args, "x");
     let y = number(&args, "y");
     let width = number(&args, "width").max(0.0);
@@ -318,6 +335,14 @@ async fn create_webview(app: AppHandle, map: WebviewMap, args: Value) -> Result<
         builder = builder.on_navigation(move |url| {
             // 只允许 web 导航；阻止 file: / tauri: / 自定义协议，避免远程页面跳进本地上下文。
             if !matches!(url.scheme(), "http" | "https" | "about") {
+                return false;
+            }
+            if telegram_only && !is_telegram_host(url.host_str().unwrap_or("")) {
+                emit_webview(
+                    &nav_app,
+                    &nav_id,
+                    json!({ "kind": "new-window", "url": url.to_string() }),
+                );
                 return false;
             }
             // 面板类 webview：只在本机地址内跳转，其余按「新窗口」交渲染层开系统浏览器

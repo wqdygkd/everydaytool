@@ -16,6 +16,7 @@ mod interceptor;
 mod iso_time;
 mod offline_pack;
 mod platform;
+mod telegram;
 mod treease;
 mod webviews;
 mod window_geometry;
@@ -189,6 +190,7 @@ pub fn run() {
             commands::wxp_command,
             commands::offline_pack_command,
             commands::workbuddy_command,
+            commands::telegram_command,
             commands::edt_window_state,
             commands::edt_window_action,
             commands::edt_open_external,
@@ -234,6 +236,8 @@ pub fn run() {
             interceptor::setup(app.handle());
             // workbuddy2api-panel：建数据目录 + 启动定时探活推送（默认不启动托管进程）
             workbuddy::setup(app.handle());
+            // telegram-cache：建数据目录 + 载入资源索引（观测由渲染层驱动）
+            telegram::setup();
             Ok(())
         })
         .build(tauri::generate_context!())

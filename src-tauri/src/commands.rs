@@ -164,6 +164,16 @@ async fn run_command(
         .await;
     }
 
+    if domain == "telegramCache" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return dispatch_blocking("telegram-cache 调度失败", move || {
+            crate::telegram::handle(&handle, &command_clone, &args_clone)
+        })
+        .await;
+    }
+
     if domain == "treeaseEditor" {
         let handle = app.clone();
         let map = webviews.map.clone();
@@ -277,6 +287,27 @@ pub async fn workbuddy_command(
         webviews.inner(),
         treease.inner().clone(),
         "workbuddy2apiPanel",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn telegram_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "telegramCache",
         command,
         args,
     )

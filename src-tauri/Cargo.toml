@@ -42,6 +42,26 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 httparse = "1"
 brotli = "7"
 
+# telegram-cache（M3-B）MTProto 客户端：用 grammers 这套成熟的 MTProto 2.0 实现，
+# 自己只写业务胶水（t.me 链接解析 / 断点续传 / 归档清单 / 取消）。
+# 关掉默认的 fs 特性：会话由我们自己加密落盘（grammers-session 的 serde 表示 + 本项目
+# 的 key_guard 加密），不需要 sqlite 存储，也不需要 tokio/fs。
+[dependencies.grammers-client]
+version = "0.11"
+default-features = false
+
+[dependencies.grammers-session]
+version = "0.11"
+default-features = false
+features = ["serde"]
+
+[dependencies.grammers-mtsender]
+version = "0.11"
+
+[dependencies.tokio]
+version = "1"
+features = ["rt-multi-thread", "sync", "time", "macros"]
+
 [target.'cfg(unix)'.dependencies]
 # 进程管理（workbuddy2api-panel 的 START/STOP）：SIGTERM / SIGKILL 与存活探测走 libc，
 # 平台差异统一在桌面壳里，不靠外部 kill(1) 命令。

@@ -4,8 +4,8 @@ import { COMMAND_GROUPS } from './command-groups/index'
 // 渲染层与 Rust 的契约不变量：这里坏掉的后果是跨端 invoke 错位，
 // 在最便宜的纯函数层拦住，不用等到桌面端手点才发现。
 describe('command-groups 契约不变量', () => {
-  it('七个业务域齐全且 domain 唯一', () => {
-    expect(COMMAND_GROUPS).toHaveLength(7)
+  it('九个业务域齐全且 domain 唯一', () => {
+    expect(COMMAND_GROUPS).toHaveLength(9)
     const domains = COMMAND_GROUPS.map(group => group.domain)
     expect(new Set(domains).size).toBe(domains.length)
   })
