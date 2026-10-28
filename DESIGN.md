@@ -52,7 +52,8 @@
 
 每个表面角色拆成「基准色（`--color-<role>-base`）× 透明度（`--alpha-<role>`）」，
 两者在 `translucency.scss` 里用 `color-mix` 合成出 `--color-<role>` 供组件引用。
-**新增角色需同时改三处**：tokens.scss 的 base + alpha，translucency.scss 的合成与各模式取值。
+**新增角色需同时改四处**：`tokens.scss` 的 `--color-<role>-base` + `--alpha-<role>` + `--glass-<role>`，
+以及 `translucency.scss` 的合成与各模式取值。新增模式只加一条模式规则（alpha + glass 两组），组件零改动。
 
 | 角色 | 用途 | 独立调节入口 |
 | ------ | ------ | ------------- |
@@ -111,29 +112,78 @@
   开态只剩一块被轨道染色的圆点；各模式取值见 §7.1.1。
 - 高光与轨道都**不加 `backdrop-filter`**：滑块背后是轨道、轨道背后是卡片，没有「背后的内容」可磨。
 
-### 3.2 字阶与字体
+### 3.2 字体与字阶
 
-| 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--font-size-xs` | `11px` | 徽章、表格辅助、代码 |
-| `--font-size-sm` | `12px` | 说明、键值、表格正文 |
-| `--font-size-base` | `14px` | 正文、面板标题 |
-| `--font-size-lg` | `16px` | 区块标题、状态名 |
-| `--font-size-xl` | `18px` | 大标题（规则编辑器标题） |
-| `--font-weight-regular` | `400` | 正文 |
-| `--font-weight-medium` | `500` | 按钮、页签、标签 |
-| `--font-weight-semibold` | `600` | 卡片名、面板标题、区块标题 |
-| `--font-weight-bold` | `700` | — |
-
-**字体栈**
+#### 3.2.1 字体栈
 
 | 用途 | 字体 |
 | ------ | ------ |
 | 正文 UI | `Roboto`(400/500，自托管) + 系统中文字体（PingFang SC / Microsoft YaHei 等） |
 | 等宽 / 数字 | `--font-mono`：Cascadia Mono / Roboto Mono / SF Mono / Menlo / Consolas |
-| 字母头像 / 品牌标 | `Nunito` ExtraBold 800 |
+| 字母头像 / 品牌标 | `--font-brand`：`Nunito` ExtraBold 800（Roboto / sans-serif 兜底） |
 
-> 数字看板与计数统一用 `--font-mono` + `font-variant-numeric: tabular-nums` 对齐。
+> 等宽只通过 `.mono` 工具类使用（`--font-mono` + `font-variant-numeric: tabular-nums`），
+> **禁止硬编码 `Consolas` / `ui-monospace`**；品牌标与字母头像用 `--font-brand` + `--font-weight-brand`。
+
+#### 3.2.2 字阶：5 档，唯一字号来源
+
+| 令牌 | 值 | 角色 | 典型用法 |
+| ------ | ----- | ------ | ------ |
+| `--font-size-xs` | `11px` | 元信息 | 时间戳、徽章（`UiChip`）、表格辅助列、代码、计数 |
+| `--font-size-sm` | `12px` | 辅助正文 | 说明 / 提示（`UiHint`）、键值、表格正文、次级按钮（`size="small"`）、下拉项 |
+| `--font-size-base` | `14px` | 正文 | 正文、控件文字、面板标题（`UiPanel` 默认）、卡片名、目录树 |
+| `--font-size-lg` | `16px` | 区块标题 | `UiSectionHeader`、`UiPanel titleSize="lg"`、状态名、设置页分区标题 |
+| `--font-size-xl` | `18px` | 页面标题 | 工具页 / 设置页一级标题、规则编辑器标题（**全站上限**） |
+
+**规则**
+
+- 字号**只引用令牌**，禁止 `font-size: 13px` 这类字面量，也不用 `em/rem` 做页面缩放（桌面壳不支持缩放）。
+- **18px 是上限**：本应用没有营销型大标题，不再出现 20 / 24 / 28px 的散值；需要强调时用字重与颜色，不放大字号。
+- Element Plus 的 5 档字号已全部绑到本表（`--el-font-size-extra-small/small/base/medium/large`），
+  改 `tokens.scss` 即按钮 / 输入 / 表格 / 弹层 / 消息同步生效（EP 默认 small 13 / extra-small 12 已统一为 12 / 11）。
+- 数字看板与计数**不放大字号**，靠 `.mono` + `--font-weight-bold` 提升可读性。
+
+#### 3.2.3 字重
+
+| 令牌 | 值 | 用途 |
+| ------ | ----- | ------ |
+| `--font-weight-regular` | 400 | 正文、表格正文、说明 |
+| `--font-weight-medium` | 500 | 按钮、页签、标签、卡片名、面板标题 |
+| `--font-weight-semibold` | 600 | 区块标题、`h1–h6` 默认、强调性小标题 |
+| `--font-weight-bold` | 700 | `<strong>` / `<b>`、数字看板 |
+| `--font-weight-brand` | 800 | 只给 Nunito 品牌标与字母头像 |
+
+> 正文与 UI 禁用 300 / 800（自托管字体没有对应字重，会走合成粗体发虚）；`<strong>` 已全局绑到 `--font-weight-bold`。
+
+#### 3.2.4 行高
+
+| 场景 | 取值 |
+| ------ | ------ |
+| 单行控件 / 表格 / 徽标 | `--line-height-control`（`20px`） |
+| 正文 / 列表项 | `1.5`（`body` 全局默认） |
+| 紧凑说明（11–12px 提示） | `1.4` |
+| 长文段落（步骤、说明块） | `1.6` |
+| 图标 / 纯图形 / 单行窄标签 | `1`（或等值 px，如 mono 徽标 `14px`） |
+
+> 正文行高不得低于 `1.4`，不再出现 `1.7` 以上的散值；表格的实际行高 = `.cell` 上下内边距（§7.5）+ 行高。
+
+#### 3.2.5 字距
+
+- 正文与标题：`0`，**不加字距**。
+- 小号全大写 / 等宽短标签：`0.25–0.5px`（如 interceptor 规则类型标签、品牌标 `0.02em`），仅限短标签。
+- 禁止在长文本 / 段落上使用 `letter-spacing`。
+
+#### 3.2.6 标题标签（`h1–h6`）
+
+- 已全局 reset：`margin: 0` + `font-size: inherit` + `font-weight: var(--font-weight-semibold)` + `text-wrap: balance`。
+- 因此**标题必须显式取令牌字号**（例：`UiSectionHeader` 用 `lg`、工具卡名用 `base`、沙箱名用 `lg`）；
+  禁止依赖浏览器默认的 h1–h6 字号（21 / 18 / 16px，会直接越过 18px 上限）。
+
+#### 3.2.7 数字与等宽
+
+- 数字 / ID / 字节 / 时间 / 代码统一 `.mono`；表格数字列右对齐，计数不放大字号。
+- 等宽字号跟随上下文令牌（表格里 `sm`、徽章里 `xs`），不为等宽单开档位。
+- **唯一例外**：`UiAvatar` 的字母字号按头像直径计算（`size × 0.43`，内联 style），因为它是图形元素而非文本。
 
 ### 3.3 间距
 
@@ -147,6 +197,12 @@
 | `--spacing-lg` | `16px` | | |
 
 > 取值规则：魔法数字就近向上取整到最近阶梯（6→sm、10→md、14→lg、18→xl、22px 行高→`--line-height-control`、28~42→2xl/3xl）。
+>
+> **豁免项**（结构常数，不受阶梯约束）：边框宽度、图标 / svg 尺寸（12–20px）、1–2px 微内边距、999px 胶囊圆角、
+> 表格列宽 / `min-width`、内容栏 `max-width`、组件几何（如 `UiMenuHorizontal` 条高 48 / 项高 40）。
+>
+> **同一模式只写一次**：卡片 / 灰底面版 / 虚线新增钮等同构模式合并为「单一类 + 修饰类」，
+> 宽度一律走 `.ctl-*` 阶梯或 `flex` 填充，不为一点差异新增魔法数字。
 
 ### 3.4 几何外壳
 
@@ -165,11 +221,12 @@
 | ------ | ----- | ------ |
 | `--radius-xs` | `8px` | 小件（图标钮 hover 底、代码块） |
 | `--radius-sm` | `12px` | 控件（输入框、编辑器卡片、弹层菜单） |
+| `--radius-control` | `14px` | 圆角矩形控件（按钮、页签、搜索框） |
 | `--radius-md` | `16px` | 行 / 菜单（弹层、消息） |
 | `--radius-lg` | `20px` | 浮岛（卡片、面板、表格容器） |
 | `--radius-xl` | `28px` | 模态（对话框） |
 
-> 按钮、页签为**圆角矩形**（14px / 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
+> 按钮、页签为**圆角矩形**（`--radius-control` 14px / `--radius-sm` 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
 
 ### 3.6 阴影
 
@@ -210,9 +267,20 @@
 
 **覆写原则**：只在局部覆写几何差异（高度 / 圆角 / 边框宽度），颜色与状态一律交全局绑定；视觉不一致时优先改全局绑定，不要单点堆 `:deep`。
 
+**注入顺序（必踩的坑）**：EP 的组件 CSS 由 `ElementPlusResolver({ importStyle: 'css' })` 懒加载、**晚于** `element-plus.scss` 注入，
+同权声明会被 EP 盖回。需要压过 EP 默认值的规则一律带 `html` / `.el-xxx .el-yyy` 前缀并在注释写明原因
+（现有先例：`html .el-switch`、`html .el-table`、`html .el-alert`）。
+
 ## 5. UI 组件库
 
-平台级组件库（25 个组件 + `icons.ts` 图标名表），由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import）。以下是完整规范。
+平台级组件库（27 个组件 + `icons.ts` 图标名表），源码在 `src/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import；composable 需显式 import）。以下是完整规范。
+
+**使用约定（硬性）**
+
+- **新工具页优先用组件**：卡片 / 分组 / 键值 / 提示 / 空态 / 表格 / 进度 / 徽章 / 对话框等模式一律走本库，禁止在业务文件里重写同类通用样式；组件确不满足时写局部样式并在注释说明原因。
+- **表格与进度条必须走 `UiTable` / `UiProgress`**，不直接写 `el-table` / `el-progress`；状态标签用 `UiChip`，不写 `el-tag`。`pnpm check:ui` 会断言这三类用法归零。
+- EP 类名知识只允许存在于本库组件内部；组件对外只暴露语义 props（`tone` / `variant` / `padding` …），不暴露 EP 类名。
+- `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，**不得恢复**。
 
 ### 5.1 布局
 
@@ -224,7 +292,7 @@
 | `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
-| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge? }[]`）、`update:modelValue` | 横向分段菜单：药丸选中态 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px |
+| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：药丸选中态 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包 / telegram 页签的品牌 logo） |
 
 ### 5.2 数据展示
 
@@ -234,13 +302,15 @@
 | `UiDetailItem` | `label`、`mono`、`wrap`、`size`（sm/xs） | 详情卡片单项（label 上 / value 下，描边卡片） |
 | `UiCodeBlock` | `maxHeight`（200px）、`wrap` | 等宽代码块（app-bg 底 + radius-sm + 滚动） |
 | `UiEmpty` | `text`、`variant`（plain/bordered）、`center`、`icon`、`padding` | 空状态（纯文本 / 虚线框） |
+| `UiTable` | `data`、`loading`、`emptyText`、`height`、`maxHeight`、`rowKey`、`mono`、`rowClickable`、`#empty` 插槽；默认插槽放 `el-table-column` | 表格基座：内部 `el-table size="small"`，统一 loading、空态（渲染 `UiEmpty`）、整表等宽与可点行手型。其余属性 / 事件（`@row-click`、`@sort-change`、`row-class-name`、`:tree-props`、`default-expand-all`、`class`）由单根组件自动透传，树形表格也能直接用 |
+| `UiProgress` | `percentage`、`strokeWidth`（6）、`status`（success/warning/exception）、`showText` | 进度条：百分比自动收敛 0–100；颜色与轨道走全局 EP 绑定（`--el-color-primary` / `--el-border-color-lighter`），两端胶囊圆角；**不要直接写 `el-progress`** |
 | `UiBreadcrumb` | `items`、`navigate` 事件 | 面包屑导航 |
 
 ### 5.3 徽章 / 状态
 
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
-| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`mono` | 小胶囊徽章；`success` 为实底绿白字（未读徽章式） |
+| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`variant`（auto/soft/solid/outline）、`mono` | 小胶囊徽章。`variant="auto"`（默认）按 tone 取历史外观：neutral→描边、success→实底绿白字、其余→浅底彩字；`soft` 浅底彩字（对齐原 `el-tag` 默认样式）、`outline` 透明底彩边（对齐 `effect="plain"`）、`solid` 实底反白（计数徽章） |
 | `UiStatusTag` | `tone`（neutral/success/warning/danger）、`pulsing` | 状态点（10px 圆点）；`pulsing` 呼吸光环 |
 
 ### 5.4 表单与输入
@@ -257,7 +327,7 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiIcon` | `name`、`size`（16）、`strokeWidth` | 线性 stroke 图标（`icons.ts` 统一名表） |
-| `UiIconButton` | `icon`、`size`（32）、`active`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮 |
+| `UiIconButton` | `icon`、`size`（32）、`active`、`disabled`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮，`disabled` 走 EP 原生禁用色 |
 | `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
 | `UiAvatar` | `text`、`color`、`size`（42） | 字母头像（首字符 + 纵向渐变底） |
 
@@ -287,7 +357,15 @@
 | `.ctl-xs/sm/md/lg` | 表单控件定宽阶梯（90/140/200/280px） |
 | `.ctl-fill` | 弹性填充剩余宽度 |
 | `.btn-flush` | 消除 EP 按钮间原生 12px 左边距 |
+| `.radio-flush` | 消除 EP 单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
 | `.full-width` | 占满容器宽度 |
+
+**使用约定**
+
+- 弱化说明文字用 `.muted` 或 `--color-text-secondary`；**排版统一用语义色，不用 `--el-text-color-*`**（那是 EP 内部绑定入口）。
+- 卡片 / 网格 / 键值 / 提示 / 行内组等通用模式一律用组件库（见 §5），不得在 `main.scss` 恢复旧通用类。
+- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉，先用平台组件（`UiTable` / `el-radio-button` / `el-menu` / `el-input` / `el-dropdown`）再谈覆写。
+- 结构性间距 / 宽度 / 圆角见 §3.3–§3.5 的阶梯与豁免项，不要为一点差异新增魔法数字。
 
 ## 7. 布局模式
 
@@ -436,7 +514,7 @@
 ### 7.3 工具页
 
 - **侧栏 + 主区**（chrome-sandbox / env-browser）：`grid-template-columns: <sidebar> 1fr`，窄屏（≤760px）折为上下堆叠。
-- **页签 + 面板**（interceptor）：`tool-page` 容器 + `el-tabs`，子视图由路由驱动。
+- **页签 + 面板**（interceptor / telegram-cache / offline-pack）：`tool-page` 容器 + `UiMenuHorizontal` 页签栏 + `KeepAlive` 包裹的 `<component :is>` 面板，子视图由路由驱动；需要品牌图标时给 `items` 传 `icon`。
 - **顶栏 + 内容**（treease / wxp）：`UiToolbar` 顶栏 + 下方滚动内容。
 - **居中表单**（id-card-generator）：`tool-page` 内居中卡片。
 
@@ -448,8 +526,9 @@
 
 ### 7.5 表格
 
-- 统一用 `el-table`（`size="small"`），表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg` 由全局绑定。
-- 数字列用 `.mono`，时间列用 `.muted`，状态列用 `el-tag` 或 `UiChip`。
+- 统一用 `UiTable`（内部 `el-table size="small"`，几何由全局绑定：表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg`、表体 12px + cell 上下 4px 密度）。
+- 列定义仍写 `el-table-column`；整表等宽传 `mono`（ID / 摘要 / 字节列），行可点击传 `rowClickable`，空态用 `emptyText`（内部渲染 `UiEmpty`）。
+- 数字列用 `.mono`，时间列用 `.muted`，状态列用 `UiChip`（`variant="soft"`）。
 
 ## 8. 交互与动效
 

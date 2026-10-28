@@ -4,10 +4,10 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的开发约
 
 ## 项目概览
 
-Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 7 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator）。
+Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置 9 个工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / workbuddy2api-panel）。
 
 桌面壳在 `src-tauri/`（窗口 / 菜单 / 系统能力 / Tauri commands / 子 Webview）；**全部业务后端均为 Rust 原生实现**（无 Node 运行时），
-按业务域分模块：`app_domain`（数据目录 / 用量 / 缓存）、`env_browser`、`chrome_sandbox`、`offline_pack`、`treease`、`wxp`、`interceptor`。
+按业务域分模块：`app_domain`（数据目录 / 用量 / 缓存）、`env_browser`、`chrome_sandbox`、`offline_pack`、`treease`、`wxp`、`interceptor`、`telegram`（Telegram 网络优化）、`workbuddy`（上游二进制托管）。
 渲染层通过 `src/desktop/` 直接使用 Tauri API（`@tauri-apps/api`）与按命名空间分组的 typed helper。
 **业务组件不得直接调用 Tauri API**，一律经 `createCommandHelpers` / `src/desktop/*`。
 
@@ -22,6 +22,26 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 - 覆写 Element Plus 只写几何差异（高度 / 圆角 / 边框宽度），颜色与状态交给全局绑定；视觉不一致时优先改全局绑定，不要单点堆 `:deep`。
 - 数字 / 等宽一律用 `.mono`（`var(--font-mono)`），禁止硬编码 `Consolas` / `ui-monospace` 等字体栈。
 - 字母头像（工具卡片头像、品牌标）用自托管 Nunito ExtraBold 800。
+
+## UI 硬约束（详见 DESIGN.md §5、§6）
+
+- 表格 / 进度条 / 状态徽章**只能**用 `UiTable` / `UiProgress` / `UiChip`，不写 `el-table` / `el-progress` / `el-tag`；
+  `pnpm check:ui` 是这条约定的可执行断言（改 UI 后跑一次）。
+- 圆角取 `--radius-control`（按钮 / 页签 / 搜索框）或 `--radius-sm`；字号 / 字重只引用令牌，`--font-size-xl`(18px) 是全站上限。
+- 品牌标与字母头像用 `--font-brand` + `--font-weight-brand`，正文禁用 800。
+
+## 数据目录与运行形态
+
+- 数据根目录 `<data>`：开发态 `仓库/data`，安装版 `<userData>/data`；解析唯一入口 `appearance::resolve_data_dir()`。
+- **切换数据目录 = 重启生效**：`edt-app:data-directory:update` 只写 `<userData>/data-root.pending.json`；
+  下次启动 `run()` 的第一件事调用 `appearance::apply_pending_data_migration()`，把旧目录**整体复制**到新目录，
+  全部成功后才删源并改写 `data-root.json`（失败回滚并继续用旧目录，pending 保留）。
+  因此任何「运行期切换目录 / 只搬部分配置」的写法都是回归；新增需要跟随迁移的数据只要放在 `<data>` 下即可。
+- 引导文件（`data-root.json` / `data-root.path` / `data-root.pending.json` / `setup-state.json`）必须留在 userData。
+- **安装版与开发版并存**：userData 按形态分开（安装版 `<appData>/everydaytool`、debug 构建 `<appData>/everydaytool-dev`，
+  见 `appearance::user_data_dir_name`）；两种形态的引导配置互不覆盖。开发态窗口另有 DEV 图标
+  （`src-tauri/src/dev_icon.rs` + `scripts/make-dev-icon.py` 生成的裸 RGBA 素材）。
+  **已知偏离**：macOS Dock 图标没有等价 API（Tauri 2 无 `app.dock.setIcon`），开发态 Dock 沿用宿主默认图标。
 
 ## 窗口与命令（Tauri 2 陷阱）
 
@@ -41,7 +61,7 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
   最大化 / 全屏 / 最小化时只更新 `maximized` 标记，不覆盖正常态尺寸与位置。尺寸与坐标一律逻辑像素。
 - **应用级配置（窗口外观 / 窗口几何）放在数据目录**（`appearance::config_dir()` = `resolve_data_dir()`），
   与工具数据同处；`data-root.json` / `setup-state.json` 这类「数据目录在哪」的引导文件必须留在 `userData`
-  （放进去会形成循环依赖）。换数据目录时由 `appearance::carry_config` 把两份配置带过去，
+  （放进去会形成循环依赖）。换数据目录由启动时的整目录迁移一起搬过去（见「数据目录与运行形态」），
   旧版留在 userData 根目录的副本由 `migrate_legacy_config` 一次性迁入（迁入后删旧副本）。
 - 配置读写统一走 `appearance.rs` 的 `config_read_paths` / `config_write_path` / `write_json_atomic`
   （数据目录优先，不可写时依次回退 userData、app_local_data_dir；临时文件 + rename 原子替换），
@@ -68,7 +88,7 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 
 ### UI 组件库（`src/shared/components/ui/`，新工具优先复用）
 
-平台级 UI 组件库（25 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
+平台级 UI 组件库（27 个组件 + `icons.ts` 图标名表 + `useClipboard` composable），由 `unplugin-vue-components` 自动注册（模板中直接使用无需 import，composable 需显式 import）。**完整组件清单与各组件 props / 状态规范见 [DESIGN.md](./DESIGN.md) §5。**
 
 - **新工具页优先使用组件，不要在业务里重复写通用样式**；组件确不满足时写局部样式并在注释说明原因。
 - `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，不得恢复。
@@ -128,6 +148,7 @@ pnpm typecheck    # TS 类型检查（渲染层）
 pnpm lint         # ESLint（含 tools 内文件）
 pnpm lint:fix     # ESLint 自动修复
 pnpm test         # 前端纯函数冒烟测试（vitest）
+pnpm check:ui     # EP 接触面断言（el-tag / el-empty 归零、el-progress / el-table 仅存在于封装内部）
 pnpm build        # Tauri build（Windows 只出中文 MSI；产物在仓库 target/）
 pnpm dist:installer # 同 pnpm build
 pnpm tauri <args> # 透传任意 Tauri CLI 子命令（如 pnpm tauri icon）
@@ -196,7 +217,7 @@ export default defineTool({
 | 全局样式入口（@use 顺序） | `src/shared/styles/main.scss` |
 | Element Plus `--el-*` 绑定与组件覆写 | `src/shared/styles/element-plus.scss` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `src/shared/styles/translucency.scss` |
-| **UI 组件库（面板/分组/键值/对话框等 25 组件）** | `src/shared/components/ui/` |
+| **UI 组件库（面板/分组/键值/表格/进度/对话框等 27 组件）** | `src/shared/components/ui/` |
 | 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `src/App.vue` |
 | **应用自带页面注册（设置等应用级页签）** | `src/config/app-tabs.ts` |
 | 设置页（数据目录 / 空间占用 / 窗口外观） | `src/pages/SettingsPage.vue` |
@@ -209,6 +230,10 @@ export default defineTool({
 | 应用壳域（数据目录 / 用量扫描 / 缓存清理 / DevTools） | `src-tauri/src/app_domain.rs` |
 | 离线包 / WXP 增强 / 拦截器 | `src-tauri/src/offline_pack/`、`src-tauri/src/wxp/`、`src-tauri/src/interceptor/` |
 | 拦截器 CA 私钥落盘保护（Windows DPAPI / Unix 0600） | `src-tauri/src/interceptor/key_guard.rs` |
+| Telegram 网络优化（观测 / 索引 / 单飞任务 / 归档 / MTProto） | `src-tauri/src/telegram/`，记忆 `docs/telegram-cache.md` |
+| workbuddy2api-panel 上游二进制托管（安装 / 启停 / 更新回滚） | `src-tauri/src/workbuddy/`，记忆 `docs/workbuddy2api-panel.md` |
+| 数据目录切换 / 迁移 | `src-tauri/src/appearance.rs`（`apply_pending_data_migration`）、`src-tauri/src/data_migration.rs`、`docs/data-directory.md` |
+| EP 接触面断言 | `scripts/ui-ep-check.mjs`（`pnpm check:ui`） |
 | 子 Webview 能力白名单（关同源策略按 preset） | `src-tauri/src/webviews.rs`（`preset`） |
 | 日志与 panic 落盘（tauri-plugin-log） | `src-tauri/src/lib.rs`（注册）、`appearance.rs::resolve_log_dir`（目录候选链） |
 | 前端纯函数冒烟测试 | `shared/*.test.ts`、`tools/**/*.test.ts`（vitest.config.ts） |
