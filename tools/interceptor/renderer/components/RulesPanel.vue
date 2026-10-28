@@ -809,7 +809,17 @@ async function remove(rule: InterceptorRule): Promise<void> {
           </template>
         </el-table-column>
         <template #empty>
-          <UiEmpty center text="暂无规则" padding="var(--spacing-2xl)" />
+          <UiEmpty center padding="var(--spacing-2xl)">
+            <template #title>
+              还没有规则
+            </template>
+            规则在代理层改写请求：改请求头 / 改 body / 重定向 / 注入脚本。先选一个类型，剩下的照着填。
+            <template #actions>
+              <el-button size="small" @click="pickerVisible = true">
+                新建规则
+              </el-button>
+            </template>
+          </UiEmpty>
         </template>
       </UiTable>
     </div>
@@ -1279,7 +1289,8 @@ async function remove(rule: InterceptorRule): Promise<void> {
   padding: 0;
   border: none;
   background: none;
-  color: var(--color-primary);
+  /* 规则名是 12px 可点文字：取墨档蓝（5.05:1），亮档只有 3.31:1 */
+  color: var(--color-primary-strong);
   font-family: inherit;
   font-size: var(--font-size-sm);
   line-height: var(--line-height-control);
@@ -1292,7 +1303,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 }
 
 .rule-name:hover {
-  color: var(--color-primary-hover);
+  color: color-mix(in oklab, var(--color-primary-strong) 82%, #000);
 }
 
 .rule-type-tag {
@@ -1455,7 +1466,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   background: none;
   font-family: inherit;
   font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
@@ -1479,7 +1490,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
 .rule-title-input :deep(.el-input__inner) {
   font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .rule-description-row {
@@ -1503,7 +1514,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 }
 
 .rule-description:hover {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
 }
 
 /* 编辑器卡片（If 卡 / 资源类型卡同构）；卡片间距由相邻兄弟规则承担 */
@@ -1640,13 +1651,13 @@ async function remove(rule: InterceptorRule): Promise<void> {
 .dashed-add-btn {
   border-style: dashed;
   border-color: var(--color-border);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
 
   &:hover,
   &:focus {
     border-color: var(--color-primary);
     background: none;
-    color: var(--color-primary);
+    color: var(--color-primary-strong);
   }
 
   &:disabled,
@@ -1684,7 +1695,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   width: var(--param-mod-type-w);
   padding: 0;
   justify-content: flex-start;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
 }
 

@@ -7,7 +7,12 @@ defineProps<{
 
 <template>
   <div class="ui-section-header">
-    <h2>{{ title }}</h2>
+    <h2>
+      <!-- #title 让调用方插一个语义记号（如收藏区的琥珀星）；不传时退化为 title 文本 -->
+      <slot name="title">
+        {{ title }}
+      </slot>
+    </h2>
     <span v-if="count !== undefined" class="ui-section-count">{{ count }}</span>
     <div v-if="$slots.actions" class="ui-section-actions">
       <slot name="actions" />
@@ -23,6 +28,9 @@ defineProps<{
   margin-bottom: var(--spacing-md);
 
   h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
     margin: 0;
     color: var(--color-text-primary);
     font-size: var(--font-size-lg);

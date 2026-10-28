@@ -81,8 +81,10 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     }
 
     const result = await requestDataDirectoryChange(nextDirectory)
+    // 只要是「用户确认过的目录」就记已完成首次配置——即使选的就是默认位置（changed=false）。
+    // 否则「用默认位置继续」永远写不下确认标记，首次引导每次进工具都会弹。
+    await markDataDirectoryConfigured()
     if (result.changed) {
-      await markDataDirectoryConfigured()
       logger.info('Data directory change pending restart', { target: result.pendingDataDirectory })
     }
     return { ...getDataDirectoryInfo(), changed: result.changed }

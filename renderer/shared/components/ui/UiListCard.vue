@@ -23,7 +23,9 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="scss">
-/* 列表卡片：白底细边浮岛，hover / 选中时品牌色高亮（合并 chrome-sandbox 沙箱卡与环境卡两处重复） */
+/* 列表卡片：白底细边浮岛，hover / 选中时用**当前工具的身份色**高亮
+   （合并 chrome-sandbox 沙箱卡与环境卡两处重复）。hover 只提描边、选中才铺浅底：
+   两种状态本来就不等价，颜色上分开之后「鼠标路过」不会再像「已经选中」。 */
 .ui-list-card {
   padding: var(--spacing-md) var(--spacing-lg);
   border: 1px solid var(--color-border-light);
@@ -38,10 +40,14 @@ const emit = defineEmits<{
     background var(--transition-base),
     box-shadow var(--transition-base);
 
-  &:hover,
+  &:hover {
+    border-color: color-mix(in srgb, var(--tool-accent) 45%, var(--color-border-light));
+    box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
+  }
+
   &.is-active {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
+    border-color: color-mix(in srgb, var(--tool-accent) 70%, var(--color-border));
+    background: color-mix(in srgb, var(--tool-accent) 8%, var(--color-raised));
     box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
   }
 }

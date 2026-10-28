@@ -18,23 +18,29 @@ withDefaults(defineProps<{
 
 <style scoped lang="scss">
 .ui-status-dot {
+  /* 状态点读的是「有盏灯在亮」：实心点取语义色的可读档（≥4.5:1），
+     外圈 3px 同色淡晕负责在浅底上把点的边界托起来——只有点、没有晕时，
+     小尺寸圆点会像一粒写错的像素。 */
+  --dot-tone: var(--color-text-tertiary);
+
   display: inline-block;
   width: 10px;
   height: 10px;
   flex-shrink: 0;
-  border-radius: var(--radius-xs);
-  background: var(--color-text-tertiary);
+  border-radius: 999px;
+  background: var(--dot-tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot-tone) 14%, transparent);
 
   &.is-success {
-    background: var(--color-success);
+    --dot-tone: var(--color-success);
   }
 
   &.is-warning {
-    background: var(--color-warning);
+    --dot-tone: var(--color-warning);
   }
 
   &.is-danger {
-    background: var(--color-error);
+    --dot-tone: var(--color-error);
   }
 
   &.is-pulsing {
@@ -45,11 +51,11 @@ withDefaults(defineProps<{
 @keyframes ui-status-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 45%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot-tone) 45%, transparent);
   }
 
   50% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-success) 0%, transparent);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--dot-tone) 0%, transparent);
   }
 }
 

@@ -110,7 +110,7 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
   h2 {
     margin: 0;
     font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 }
 

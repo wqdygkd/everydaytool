@@ -57,7 +57,7 @@ const showLaunchOptions = computed(() => hasLaunchOptions(props.sandbox?.metadat
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   font-size: var(--font-size-base);
 }
 

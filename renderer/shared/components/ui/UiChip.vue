@@ -41,9 +41,11 @@ const resolvedVariant = computed<Exclude<ChipVariant, 'auto'>>(() => {
 <style scoped lang="scss">
 .ui-chip {
   /* tone 只决定「用哪个颜色」，变体决定「怎么用」——避免 tone × variant 的规则爆炸。
-     --chip-tone = 底色/边框基色；--chip-soft-text = 浅底 / 描边时的前景色（实底固定反白）。 */
+     --chip-tone = 图形档（浅底 / 描边，可以亮）；--chip-ink = 可读档（文字 / 实底，≥4.5:1）。
+     两档的分工见 tokens.scss 的色阶规则：状态胶囊是 11px 文字，永远取 ink。
+     neutral 的 ink 取**次级**文本而不是三级：三级压在自己 10% 的灰底上只有 4.4:1。 */
   --chip-tone: var(--color-text-tertiary);
-  --chip-soft-text: var(--color-text-tertiary);
+  --chip-ink: var(--color-text-secondary);
 
   display: inline-flex;
   align-items: center;
@@ -51,7 +53,7 @@ const resolvedVariant = computed<Exclude<ChipVariant, 'auto'>>(() => {
   border: 1px solid var(--color-border-light);
   border-radius: 999px;
   background: var(--color-raised);
-  color: var(--chip-soft-text);
+  color: var(--chip-ink);
   font-size: var(--font-size-xs);
   line-height: 1.5;
   white-space: nowrap;
@@ -64,49 +66,49 @@ const resolvedVariant = computed<Exclude<ChipVariant, 'auto'>>(() => {
   &.is-primary,
   &.is-info {
     --chip-tone: var(--color-primary);
-    --chip-soft-text: var(--color-primary);
+    --chip-ink: var(--color-primary-strong);
   }
 
-  /* 浅底 / 描边时把语义色压深一档保证对比度；实底时前景改取 --color-on-solid */
+  /* 语义色只有一档（本身就是墨档）：图形与文字同色，浅底由它淡出 */
   &.is-success {
     --chip-tone: var(--color-success);
-    --chip-soft-text: color-mix(in srgb, var(--color-success) 85%, #000);
+    --chip-ink: var(--color-success);
   }
 
   &.is-warning {
     --chip-tone: var(--color-warning);
-    --chip-soft-text: color-mix(in srgb, var(--color-warning) 80%, #000);
+    --chip-ink: var(--color-warning);
   }
 
   &.is-danger {
     --chip-tone: var(--color-error);
-    --chip-soft-text: color-mix(in srgb, var(--color-error) 85%, #000);
+    --chip-ink: var(--color-error);
   }
 
   &.is-variant-soft {
-    border-color: color-mix(in srgb, var(--chip-tone) 35%, transparent);
+    border-color: color-mix(in srgb, var(--chip-tone) 30%, transparent);
     background: color-mix(in srgb, var(--chip-tone) 10%, transparent);
-    color: var(--chip-soft-text);
+    color: var(--chip-ink);
   }
 
   &.is-variant-outline {
-    border-color: color-mix(in srgb, var(--chip-tone) 35%, transparent);
+    border-color: color-mix(in srgb, var(--chip-tone) 45%, transparent);
     background: transparent;
-    color: var(--chip-soft-text);
+    color: var(--chip-ink);
   }
 
   /* neutral 的描边态用中性边框色，不拿灰字做 35% 混色（会偏浅到看不出边界） */
   &.is-neutral.is-variant-outline {
     border-color: var(--color-border-light);
     background: var(--color-raised);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
   }
 
-  /* Telegram 未读徽章式实底胶囊 */
+  /* Telegram 未读徽章式实底胶囊：实底取墨档，白字才能达标（绿底白字 4.97:1） */
   &.is-variant-solid {
     padding: 1px var(--spacing-sm);
     border-color: transparent;
-    background: var(--chip-tone);
+    background: var(--chip-ink);
     color: var(--color-on-solid);
     font-weight: var(--font-weight-medium);
   }

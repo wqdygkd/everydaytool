@@ -59,6 +59,7 @@ declare module 'vue' {
     EnvCard: typeof import('./tools/env-browser/renderer/components/EnvCard.vue')['default']
     EnvDialog: typeof import('./tools/env-browser/renderer/components/EnvDialog.vue')['default']
     FingerprintEditor: typeof import('./tools/chrome-sandbox/renderer/components/FingerprintEditor.vue')['default']
+    HeaderTabs: typeof import('./renderer/shared/components/HeaderTabs.vue')['default']
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']
     LaunchOptionsFields: typeof import('./tools/chrome-sandbox/renderer/components/LaunchOptionsFields.vue')['default']

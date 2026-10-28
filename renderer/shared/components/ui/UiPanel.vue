@@ -80,7 +80,7 @@ withDefaults(defineProps<{
 
 .ui-panel-title {
   min-width: 0;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 
   .is-title-sm & {
     font-size: var(--font-size-base);

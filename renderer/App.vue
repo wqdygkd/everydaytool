@@ -3,6 +3,7 @@ import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
 import { findAppTab, getAppTabs } from './config/app-tabs'
 import { getToolRegistry } from './config/tools'
+import HeaderTabs from './shared/components/HeaderTabs.vue'
 import { useAppearance } from './shared/composables/useAppearance'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
 import { runTabCloseGuard } from './shared/composables/useTabCloseGuard'
@@ -139,6 +140,21 @@ onUnmounted(() => {
 })
 
 const currentTool = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null))
+
+// 当前工具的身份色 → 外壳上的 --tool-accent（tokens.scss）：页内的分段菜单、列表卡选中态
+// 都读它，于是「同一个工具」在页签、首页卡片、页内选中态上是同一支色。
+// 没有工具上下文（首页 / 设置）时留空，回落到 :root 的品牌蓝。
+const currentToolColor = computed(() => {
+  const id = currentTool.value
+  if (!id) return null
+  return getToolRegistry().find(t => t.id === id)?.color ?? null
+})
+
+// 页签拖拽只改变显示顺序；常驻挂载顺序按 id 稳定排序。
+// 若直接按页签顺序渲染 tools-host，拖拽重排会让 webview 节点被移动，可能触发 guest 重载。
+const mountedTabs = computed(() =>
+  [...tabsStore.openTabs].sort((a, b) => a.id.localeCompare(b.id)),
+)
 function goHome() {
   router.push({ name: 'home' })
 }
@@ -146,6 +162,10 @@ function goHome() {
 function handleTabClick(toolId: string) {
   const tab = tabsStore.openTabs.find(t => t.id === toolId)
   if (tab) router.push({ name: tab.routeName })
+}
+
+function handleTabReorder(ids: string[]) {
+  tabsStore.reorder(ids)
 }
 
 async function handleTabRemove(toolId: string) {
@@ -169,24 +189,22 @@ function openSettings() {
 </script>
 
 <template>
-  <div ref="shellEl" class="app-shell" :class="[`platform-${platform}`, modeClasses]">
+  <div
+    ref="shellEl"
+    class="app-shell"
+    :class="[`platform-${platform}`, modeClasses]"
+    :style="currentToolColor ? { '--tool-accent': currentToolColor } : undefined"
+  >
     <header class="app-header">
       <span class="brand-mark" role="button" tabindex="0" @click="goHome" @keydown.enter="goHome">edt</span>
       <div v-if="tabsStore.openTabs.length" class="header-tabs">
-        <el-tabs
-          :model-value="tabsStore.activeId"
-          type="card"
-          closable
-          @update:model-value="(v: string) => handleTabClick(v)"
-          @tab-remove="handleTabRemove"
-        >
-          <el-tab-pane
-            v-for="tab in tabsStore.openTabs"
-            :key="tab.id"
-            :name="tab.id"
-            :label="tab.name"
-          />
-        </el-tabs>
+        <HeaderTabs
+          :tabs="tabsStore.openTabs"
+          :active-id="tabsStore.activeId"
+          @select="handleTabClick"
+          @close="handleTabRemove"
+          @reorder="handleTabReorder"
+        />
       </div>
       <!-- 设置入口：固定在标题栏右上角、原生窗口按钮左侧（Windows 上即最小化按钮左边）。
            图标按钮而非文字按钮：标题栏里已有品牌标 + 页签，再加文字会和页签抢视觉重量；
@@ -212,7 +230,7 @@ function openSettings() {
         </Transition>
       </router-view>
       <div v-show="!!currentTool" class="tools-host">
-        <template v-for="tab in tabsStore.openTabs" :key="tab.id">
+        <template v-for="tab in mountedTabs" :key="tab.id">
           <component :is="tabComponents[tab.id]" v-show="tab.id === tabsStore.activeId" />
         </template>
       </div>
@@ -258,13 +276,17 @@ function openSettings() {
     height: 34px;
     padding: 0 13px;
     border-radius: var(--radius-control);
-    /* 品牌标：圆角矩形（primary-light 底 + primary 字） */
-    background: var(--color-primary-light);
-    color: var(--color-primary);
+    /* 品牌标：圆角矩形（10% 品牌浅底 + **墨档**蓝字）。
+       亮档蓝压在同色 20% 浅底上只有 2.66:1——同一个品牌，底色用浅档、字用墨档。
+       浅底只取 10%：20% 的 --color-primary-light 上墨档蓝只有 4.06:1，留给中性黑文字用。 */
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
     font-family: var(--font-brand);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-brand);
-    letter-spacing: 0.02em;
+    /* 全大写的小字号需要额外字距才不挤（DESIGN §3.2.5：短标签 0.25–0.5px）：
+       12px × 0.05em ≈ 0.6px，正好落在区间上半；字标只有三字母，松一点更像标识。 */
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     cursor: pointer;
     user-select: none;
@@ -275,7 +297,8 @@ function openSettings() {
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-primary);
+      /* 焦点环取墨档：亮档蓝对白底 3.31:1 勉强够图形线，墨档更稳 */
+      outline: 2px solid var(--color-primary-strong);
       outline-offset: 2px;
     }
   }
@@ -316,9 +339,10 @@ function openSettings() {
   }
 
   // 设置页签处于激活态时高亮：入口状态与「当前是否在看设置」保持一致
+  // （浅底取 10% 档，图标取墨档——设置是应用级页面，不跟工具身份色走）
   &.is-active {
-    background: var(--color-primary-light);
-    color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
   }
 
   // 标题栏元素不参与全局 el-button 焦点规则，键盘焦点环单独给
@@ -334,64 +358,21 @@ function openSettings() {
   padding-left: 88px;
 }
 
-// 工具页签：内嵌标题栏行（品牌标右侧），圆角高亮
+// 工具页签：内嵌标题栏行（品牌标右侧），由 HeaderTabs 负责页签渲染与拖拽排序。
+// 这一层只做「占满剩余宽度 + 横向滚动」：页签多时浏览器式横向滚动，滚动条隐藏。
 .header-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
+  /* 上下左右留 4px 给页签 focus ring（3px），否则横向滚动容器会把焦点环裁掉 */
+  padding: var(--spacing-xs);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 
-  > :deep(.el-tabs) {
-    min-width: 0;
-    // 页签可点击；标题栏其余空白区域保持可拖拽
-    -webkit-app-region: no-drag;
-    --el-tabs-header-height: 34px;
-  }
-
-  :deep(.el-tabs__header) {
-    margin: 0;
-    border-bottom: none;
-  }
-
-  :deep(.el-tabs__nav) {
-    border: none;
-  }
-
-  :deep(.el-tabs__item) {
-    border: none !important;
-    border-radius: var(--radius-sm);
-    // EP 卡片页签有三套 padding（基础 20 / hover 13 / 激活 20）且 hover 才把关闭图标
-    // 从 0 撑到 14px，任何一项变化都会让页签变宽变窄、邻居左右跳。
-    // 此处全部钉死为常量（需 !important 压过 EP 的 is-active/is-closable:hover 规则），
-    // 页签宽度恒定，关闭按钮常驻占位、仅透明度显隐。
-    padding: 0 13px !important;
-    margin-right: var(--spacing-xs);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    // 页签是导航控件：禁用文本选择，避免双击/拖拽选中文字
-    user-select: none;
-    transition: var(--transition-fast);
-
-    &.is-active {
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-    }
-
-    &:not(.is-active):hover {
-      background: var(--color-fill);
-      color: var(--color-primary);
-    }
-
-    &.is-closable .is-icon-close {
-      width: 14px !important;
-      opacity: 0;
-    }
-
-    &.is-closable:hover .is-icon-close,
-    &.is-active.is-closable .is-icon-close {
-      opacity: 1;
-    }
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
