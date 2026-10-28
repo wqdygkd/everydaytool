@@ -46,6 +46,9 @@ pub struct WindowAppearanceCapabilities {
     pub default_vibrancy: String,
 }
 
+/// Windows 11 22H2 起才有系统材质（mica / acrylic）；只在 Windows 分支用，故按平台门控，
+/// 否则 macOS / Linux 上会以「未使用的常量」告警。
+#[cfg(windows)]
 const WIN32_MATERIAL_MIN_BUILD: u32 = 22_120;
 
 /// userData 目录名：安装版用应用名本身，开发态（`pnpm dev`，即 debug 构建）加 `-dev` 后缀。
