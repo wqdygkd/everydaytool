@@ -197,7 +197,7 @@ mod tests {
 
         let mut body: Vec<u8> = Vec::new();
         let mut central: Vec<u8> = Vec::new();
-        let mut push_entry = |name: &str, data: &[u8], method: u16, body: &mut Vec<u8>, central: &mut Vec<u8>| {
+        let push_entry = |name: &str, data: &[u8], method: u16, body: &mut Vec<u8>, central: &mut Vec<u8>| {
             let offset = body.len() as u32;
             let crc = crc32(data);
             body.extend_from_slice(&0x0403_4B50u32.to_le_bytes());
