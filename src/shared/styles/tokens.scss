@@ -93,6 +93,8 @@
   /* ── shape(阶梯:小件 8 / 控件 12 / 卡片 16 / 浮岛 20 / 模态 28) ── */
   --radius-xs: 8px; /* 小件：图标钮 hover 底 / 代码块 / 键盘提示 */
   --radius-sm: 12px; /* 控件：输入框 / 编辑器卡片 / 弹层菜单 */
+  /* 圆角矩形控件（按钮 / 页签 / 搜索框）：DESIGN §3.5 的既定设计值，偏离主阶梯故单独命名 */
+  --radius-control: 14px;
   --radius-md: 16px; /* 行 / 菜单：弹层 / 消息 */
   --radius-lg: 20px; /* 浮岛：卡片 / 面板 / 表格容器 */
   --radius-xl: 28px; /* 模态：对话框 */
@@ -107,17 +109,23 @@
   --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1); /* 微交互：图标钮 / 页签 / chip */
   --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1); /* 卡片 hover / 边框 / 背景过渡 */
 
-  /* ── 字阶 / 字重 / 间距 ── */
-  --font-size-xs: 11px; /* 徽章 / 表格辅助 / 代码 */
-  --font-size-sm: 12px; /* 说明 / 键值 / 表格正文 */
-  --font-size-base: 14px; /* 正文 / 面板标题 */
-  --font-size-lg: 16px; /* 区块标题 / 状态名 */
-  --font-size-xl: 18px; /* 大标题 */
+  /* ── 字阶 / 字重 / 间距 ──
+     字阶 5 档是全站唯一字号来源（DESIGN §3.2）：11 元信息 / 12 辅助正文 /
+     14 正文与控件 / 16 区块标题 / 18 页面标题。18px 就是上限——本应用没有
+     「营销型大标题」，不要再引入 20/24/28px 的散值。 */
+  --font-size-xs: 11px; /* 元信息：时间戳 / 徽章 / 表格辅助列 / 代码 */
+  --font-size-sm: 12px; /* 辅助正文：说明 / 键值 / 表格正文 / 次级按钮 */
+  --font-size-base: 14px; /* 正文 / 控件文字 / 面板标题 / 卡片名 */
+  --font-size-lg: 16px; /* 区块标题 / 面板大标题 / 状态名 */
+  --font-size-xl: 18px; /* 页面标题 / 编辑器标题（全站上限） */
 
+  /* 字重 4 档 + 品牌档：400 正文 / 500 可交互 / 600 标题 / 700 强调（<strong>）；
+     800 只属于 Nunito 品牌标与字母头像，正文禁用合成粗体 */
   --font-weight-regular: 400; /* 正文 */
   --font-weight-medium: 500; /* 按钮 / 页签 / 标签 */
   --font-weight-semibold: 600; /* 卡片名 / 面板标题 / 区块标题 */
-  --font-weight-bold: 700; /* 强调 / 数字看板 */
+  --font-weight-bold: 700; /* 强调（<strong> / 数字看板） */
+  --font-weight-brand: 800; /* 品牌标 / 字母头像（Nunito ExtraBold） */
 
   --spacing-xs: 4px; /* 最小间隙：图标与文字、紧邻元素 */
   --spacing-sm: 8px; /* 紧凑间距：组内元素、徽章内边距 */
@@ -137,6 +145,7 @@
   /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
   font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif; /* 正文 UI */
   --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace; /* 等宽 / 数字 */
+  --font-brand: "Nunito", "Roboto", sans-serif; /* 品牌标 / 字母头像（Nunito ExtraBold 800 自托管） */
   font-synthesis-weight: none; /* 禁止合成字重，避免自托管字体发虚 */
   /* 不设背景：底色由页面自理（工具页 .tool-page 自带 app-bg，首页透出窗口），
      :root 留白才能让半透明窗口透出桌面 */

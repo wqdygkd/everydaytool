@@ -21,6 +21,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check:ui": "node scripts/ui-ep-check.mjs --strict",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:treease": "node scripts/test-treease.mjs",

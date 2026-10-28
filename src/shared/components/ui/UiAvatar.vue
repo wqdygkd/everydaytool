@@ -43,8 +43,8 @@ const iconSize = computed(() => Math.round(props.size * 0.5))
   flex-shrink: 0;
   border-radius: 999px;
   color: var(--color-on-solid);
-  font-family: "Nunito", "Roboto", sans-serif;
-  font-weight: 800;
+  font-family: var(--font-brand);
+  font-weight: var(--font-weight-brand);
   line-height: 1;
   user-select: none;
 }

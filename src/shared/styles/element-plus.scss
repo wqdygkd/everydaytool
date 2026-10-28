@@ -13,6 +13,20 @@
   --el-border-color: var(--color-border);
   --el-border-color-light: var(--color-border-light);
   --el-border-color-lighter: var(--color-border-light);
+  /* 控件高度阶梯：EP 默认就是 32 / 24 / 40，这里显式绑到 --control-height，
+     让「控件尺寸」只有一处事实来源（改 --control-height 即全站按钮 / 输入 / 选择同步）。
+     小 / 大三档保留 EP 阶梯值，不新增令牌。 */
+  --el-component-size: var(--control-height);
+  --el-component-size-small: 24px;
+  --el-component-size-large: 40px;
+  /* 字号 5 档：EP 的 extra-small / small / base / medium / large 全部接到令牌，
+     组件（按钮 / 输入 / 表格 / 弹层 / 消息）不再各自一套默认值——改 tokens.scss 即全站生效。
+     注意 EP 默认的 small=13px、extra-small=12px，接过来后统一为 12 / 11。 */
+  --el-font-size-extra-small: var(--font-size-xs);
+  --el-font-size-small: var(--font-size-sm);
+  --el-font-size-base: var(--font-size-base);
+  --el-font-size-medium: var(--font-size-lg);
+  --el-font-size-large: var(--font-size-xl);
   --el-bg-color: var(--color-input);
   --el-bg-color-page: var(--color-canvas);
   --el-bg-color-overlay: var(--color-overlay);
@@ -48,8 +62,8 @@
 /* ── Element Plus 定制 ── */
 .el-button {
   font-weight: var(--font-weight-medium);
-  /* 按钮 = 圆角矩形（非胶囊） */
-  border-radius: 14px;
+  /* 按钮 = 圆角矩形（非胶囊），圆角取控件档令牌 */
+  border-radius: var(--radius-control);
 
   &--primary {
     --el-button-bg-color: var(--color-primary);
@@ -65,6 +79,7 @@
   --el-table-border-color: var(--color-border-light);
   --el-table-header-bg-color: var(--color-fill);
   --el-table-row-hover-bg-color: var(--color-fill);
+  --el-table-text-color: var(--color-text-primary);
   /* 表格行走 table 角色：与输入框 / 按钮分开，行背景可单独调透明度。
      原先挂静态 --color-surface（#ffffff），在 acrylic 下会变成唯一一块「死白」。 */
   --el-table-tr-bg-color: var(--color-table);
@@ -76,6 +91,23 @@
 .el-table .el-table__row.is-selected {
   --el-table-tr-bg-color: var(--color-primary-soft);
   --el-table-row-hover-bg-color: var(--color-primary-soft);
+}
+
+/* 表体字阶与纵向密度：DESIGN §3.2 规定表格正文 12px。
+   cell 上下各 4px，让多行单元格（状态 + 说明）在 12px 字号下不贴边。
+   带 html 前缀：EP 组件 CSS 由 resolver 懒加载、晚于本文件注入，同权会被盖回。 */
+html .el-table {
+  font-size: var(--font-size-sm);
+}
+
+html .el-table th.el-table__cell {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+html .el-table .cell {
+  padding-top: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
 }
 
 /* 通用表单输入框：走独立的 field 角色（不与表格行 / 按钮共用 input 角色），
@@ -193,6 +225,30 @@
   box-shadow: var(--shadow-md);
   background: var(--color-overlay);
   backdrop-filter: var(--glass-overlay);
+}
+
+/* 提示条（el-alert）：EP 的 is-light 底色是不透明浅色（--el-color-*-light-9），
+   在半透明窗口下会成为唯一一块「死白」；改用令牌色 + color-mix 与卡片一起透。
+   带 html 前缀的理由同上（EP 懒加载晚于本文件）。 */
+html .el-alert {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+}
+
+html .el-alert--success.is-light {
+  background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+}
+
+html .el-alert--warning.is-light {
+  background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+}
+
+html .el-alert--error.is-light {
+  background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
+}
+
+html .el-alert--info.is-light {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 
 /* 确认框是模态：与 dialog 同级，用更大圆角与阴影。

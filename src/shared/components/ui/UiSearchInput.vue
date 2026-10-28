@@ -67,7 +67,7 @@ function onEsc() {
   :deep(.el-input__wrapper) {
     height: 42px;
     padding: 0 var(--spacing-lg);
-    border-radius: 14px;
+    border-radius: var(--radius-control);
     background: var(--color-input);
     /* 玻璃：搜索框直接浮在画布上（没有卡片兜底），背后就是壁纸，
        故走 input 角色自己的玻璃档，不与卡片共用模糊半径 */

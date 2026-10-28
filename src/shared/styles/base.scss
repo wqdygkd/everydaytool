@@ -25,16 +25,31 @@ body {
   margin: 0;
   min-width: 320px;
   color: var(--color-text-primary);
+  /* 正文字高按 DESIGN §3.2.4：正文 1.5、紧凑说明 1.4、长文 1.6 */
   line-height: 1.5;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
 
+/* 标题 reset：不放任浏览器默认的 h1–h6 字号（21/18/16px… 会直接越过 18px 的全站上限），
+   字号一律由使用处按 DESIGN §3.2.2 的角色表显式取令牌。 */
 h1,
 h2,
-h3 {
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--font-weight-semibold);
   text-wrap: balance;
+}
+
+/* 强调走令牌，避免浏览器默认 700 与自托管字重脱节 */
+b,
+strong {
+  font-weight: var(--font-weight-bold);
 }
 
 #app {

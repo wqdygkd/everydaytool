@@ -320,13 +320,13 @@ function openSettings() {
     flex-shrink: 0;
     height: 34px;
     padding: 0 13px;
-    border-radius: 14px;
+    border-radius: var(--radius-control);
     /* 品牌标：圆角矩形（primary-light 底 + primary 字） */
     background: var(--color-primary-light);
     color: var(--color-primary);
-    font-family: "Nunito", "Roboto", inherit;
+    font-family: var(--font-brand);
     font-size: var(--font-size-sm);
-    font-weight: 800;
+    font-weight: var(--font-weight-brand);
     letter-spacing: 0.02em;
     text-transform: uppercase;
     cursor: pointer;
@@ -367,7 +367,7 @@ function openSettings() {
   height: 34px;
   padding: 0;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -486,7 +486,7 @@ function openSettings() {
 
   :deep(.el-tabs__item) {
     border: none !important;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     // EP 卡片页签有三套 padding（基础 20 / hover 13 / 激活 20）且 hover 才把关闭图标
     // 从 0 撑到 14px，任何一项变化都会让页签变宽变窄、邻居左右跳。
     // 此处全部钉死为常量（需 !important 压过 EP 的 is-active/is-closable:hover 规则），

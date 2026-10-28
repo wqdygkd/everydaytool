@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // 横向菜单（分段按钮组）：复刻 Telegram Web K 的 `.menu-horizontal-div`
-// —— 药丸选中态（滑动指示条）、整条横向滚动、滚动条隐藏、徽章计数。
+// —— 药丸选中态（滑动指示条）、整条横向滚动、滚动条隐藏、徽章计数、可选品牌图标。
 const props = defineProps<{
   modelValue: string
-  items: { value: string, label: string, badge?: number | string }[]
+  items: { value: string, label: string, badge?: number | string, icon?: string }[]
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -74,6 +74,7 @@ onBeforeUnmount(() => {
       :aria-selected="item.value === modelValue"
       @click="emit('update:modelValue', item.value)"
     >
+      <img v-if="item.icon" :src="item.icon" alt="" class="ui-menu-horizontal-icon">
       <span class="ui-menu-horizontal-label">{{ item.label }}</span>
       <span v-if="showBadge(item.badge)" class="ui-menu-horizontal-badge">{{ item.badge }}</span>
     </button>
@@ -91,7 +92,8 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--color-raised);
-  border-radius: var(--radius-sm);
+  /* 与卡片 / 面板同一圆角（--radius-lg），避免并排时观感不一致 */
+  border-radius: var(--radius-lg);
   scrollbar-width: none;
 }
 
@@ -122,6 +124,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  gap: var(--spacing-xs);
   height: 40px;
   margin: 0 var(--spacing-xs);
   padding: 0 var(--spacing-lg);
@@ -161,6 +164,15 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.ui-menu-horizontal-icon {
+  position: relative;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .ui-menu-horizontal-badge {
   position: relative;
   z-index: 2;
@@ -169,7 +181,6 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  margin-inline-start: var(--spacing-xs);
   padding: 0 var(--spacing-xs);
   border-radius: 999px;
   background: var(--color-primary);
