@@ -48,8 +48,22 @@ pub struct WindowAppearanceCapabilities {
 
 const WIN32_MATERIAL_MIN_BUILD: u32 = 22_120;
 
-/// 用户数据目录：不依赖 Tauri 的 identifier 目录，直接用平台环境变量，
-/// dev / 便携 / 安装版得到同一路径。
+/// userData 目录名：安装版用应用名本身，开发态（`pnpm dev`，即 debug 构建）加 `-dev` 后缀。
+///
+/// **安装版与开发版并存**：两者共用同一个 userData 会让引导配置（data-root.json /
+/// setup-state.json）互相覆盖，一改数据目录另一边就跟着走；分开之后两种形态各自记账，
+/// 可以同时运行、各自的「数据目录」选择互不干扰。数据目录本身仍按形态分开
+/// （dev 默认仓库 `data/`，安装版默认 `<userData>/data`）。
+pub fn user_data_dir_name() -> &'static str {
+    if cfg!(dev) {
+        "everydaytool-dev"
+    } else {
+        "everydaytool"
+    }
+}
+
+/// 用户数据目录：不依赖 Tauri 的 identifier 目录，直接用平台环境变量。
+/// `EDT_USER_DATA` 可显式覆盖（测试 / 便携 / 多实例隔离）。
 pub fn default_user_data_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("EDT_USER_DATA") {
         return PathBuf::from(dir);
@@ -60,7 +74,7 @@ pub fn default_user_data_dir() -> PathBuf {
         let appdata = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        appdata.join("everydaytool")
+        appdata.join(user_data_dir_name())
     }
 
     #[cfg(target_os = "macos")]
@@ -70,7 +84,7 @@ pub fn default_user_data_dir() -> PathBuf {
             .unwrap_or_else(|| PathBuf::from("."));
         home.join("Library")
             .join("Application Support")
-            .join("everydaytool")
+            .join(user_data_dir_name())
     }
 
     #[cfg(not(any(windows, target_os = "macos")))]
@@ -79,7 +93,7 @@ pub fn default_user_data_dir() -> PathBuf {
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
             .unwrap_or_else(|| PathBuf::from("."));
-        base.join("everydaytool")
+        base.join(user_data_dir_name())
     }
 }
 
@@ -97,6 +111,19 @@ fn data_root_override() -> Option<PathBuf> {
     }
 }
 
+/// 默认数据根目录（未做用户覆盖时）：
+/// dev 用项目 `data/`，安装版用 `<userData>/data`。
+pub fn default_data_dir() -> PathBuf {
+    if cfg!(dev) {
+        let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        return project_root.join("data");
+    }
+    default_user_data_dir().join("data")
+}
+
 /// 数据根目录：与 Node 侧 getDataDirectory() 保持同一解析顺序——
 /// 覆盖优先；dev 用项目 data/，打包用 <userData>/data。
 pub fn resolve_data_dir() -> PathBuf {
@@ -111,6 +138,102 @@ pub fn resolve_data_dir() -> PathBuf {
         return project_root.join("data");
     }
     default_user_data_dir().join("data")
+}
+
+// ── 数据目录切换（pending → 下次启动整体迁移） ────────────────────────────────
+
+/// 待切换标记：`<userData>/data-root.pending.json`。
+/// 设置页只写这一份，**不立即切换**——运行中的工具已经握着旧目录里的文件句柄，
+/// 中途换目录只能搬一半；因此统一下次启动、任何句柄打开之前整体迁移。
+fn pending_data_dir_file() -> PathBuf {
+    default_user_data_dir().join("data-root.pending.json")
+}
+
+/// 已请求但尚未生效的目标目录（无 pending / 解析失败按无处理）。
+pub fn read_pending_data_dir() -> Option<PathBuf> {
+    let raw = fs::read_to_string(pending_data_dir_file()).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    let dir = value.get("dataDirectory")?.as_str()?.trim();
+    if dir.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(dir))
+    }
+}
+
+/// 记录待切换目标目录（只落盘，不切换）。
+pub fn write_pending_data_dir(dir: &Path) -> Result<(), String> {
+    let file = pending_data_dir_file();
+    let body = serde_json::json!({ "dataDirectory": dir.to_string_lossy() });
+    write_json_atomic(&file, &format!("{body}\n"))
+}
+
+/// 清掉待切换标记（用户改回当前目录 / 迁移完成）。
+pub fn clear_pending_data_dir() {
+    let _ = fs::remove_file(pending_data_dir_file());
+}
+
+/// 写入 / 清除数据目录覆盖（`<userData>/data-root.json` + `data-root.path` 镜像）。
+/// 这两个文件决定「数据目录在哪」，必须留在 userData（放进数据目录会形成循环依赖）。
+pub fn save_data_dir_override(target: Option<&Path>) -> Result<(), String> {
+    let user_data = default_user_data_dir();
+    let bootstrap = user_data.join("data-root.json");
+    let mirror = user_data.join("data-root.path");
+    let _ = fs::create_dir_all(&user_data);
+
+    match target {
+        Some(dir) => {
+            let body = serde_json::json!({ "dataDirectory": dir.to_string_lossy() });
+            write_json_atomic(&bootstrap, &format!("{body}\n"))
+                .map_err(|error| format!("写入数据目录配置失败：{error}"))?;
+            fs::write(&mirror, dir.to_string_lossy().as_bytes())
+                .map_err(|error| format!("写入数据目录镜像失败：{error}"))?;
+        }
+        None => {
+            let _ = fs::remove_file(&bootstrap);
+            let _ = fs::remove_file(&mirror);
+        }
+    }
+    Ok(())
+}
+
+/// **启动期第一件事**：存在 pending 时先把当前数据目录整体迁移到目标目录，
+/// 全部复制成功后才切换并删除源目录；失败则继续使用旧目录（pending 保留，下次重试）。
+///
+/// 必须在任何 `resolve_data_dir()` 使用者之前调用：webview 数据目录、日志目录、
+/// 应用级配置与应用建窗都依赖它，晚一步就会一半读旧目录、一半读新目录。
+pub fn apply_pending_data_migration() {
+    let Some(pending) = read_pending_data_dir() else {
+        return;
+    };
+    let current = resolve_data_dir();
+    if current == pending {
+        clear_pending_data_dir();
+        return;
+    }
+
+    match crate::data_migration::migrate_data_directory(&current, &pending) {
+        Ok(outcome) => {
+            let target = if pending == default_data_dir() {
+                None
+            } else {
+                Some(pending.as_path())
+            };
+            if let Err(error) = save_data_dir_override(target) {
+                log::warn!("[data] 迁移完成但写入数据目录配置失败：{error}");
+                return;
+            }
+            clear_pending_data_dir();
+            invalidate_config_paths();
+            log::info!(
+                "[data] 数据目录切换完成：{}（迁移 {} 项，源目录 {}）",
+                pending.display(),
+                outcome.moved.len(),
+                current.display()
+            );
+        }
+        Err(error) => log::warn!("[data] 待切换的数据目录迁移失败，继续使用当前目录：{error}"),
+    }
 }
 
 /// 主窗口 WebView2 数据目录：跟随数据根目录（设置页改目录后，下次启动生效）。
@@ -285,23 +408,6 @@ pub fn migrate_legacy_config(app: &AppHandle) {
                 Err(error) => log::warn!("[config] 迁移 {file} 失败：{error}"),
             }
         }
-    }
-}
-
-/// 数据目录变更后把应用级配置带到新目录：
-/// 否则换目录等于静默重置窗口外观与窗口大小 / 位置。
-/// 这里以「当前生效的配置」为准覆盖目标，而不是「目标有就不动」——切换后这次会话仍在用
-/// 当前配置，留着新目录里的旧副本会让下次启动莫名其妙回退。
-pub fn carry_config(from_dir: &Path, to_dir: &Path) {
-    if from_dir == to_dir || fs::create_dir_all(to_dir).is_err() {
-        return;
-    }
-    for file in CONFIG_FILES {
-        let source = from_dir.join(file);
-        if !source.is_file() {
-            continue;
-        }
-        let _ = fs::copy(&source, to_dir.join(file));
     }
 }
 
@@ -580,28 +686,5 @@ mod tests {
         assert_eq!(normalized.material, "none");
         assert_eq!(normalized.vibrancy, "hud");
         assert!(normalized.test_wallpaper);
-    }
-
-    #[test]
-    fn carry_config_brings_current_config_to_new_dir() {
-        let root = std::env::temp_dir().join(format!("edt-carry-config-{}", std::process::id()));
-        let from = root.join("old");
-        let to = root.join("new");
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&from).unwrap();
-        std::fs::create_dir_all(&to).unwrap();
-        std::fs::write(from.join("window-appearance.json"), "{\"enabled\":true}").unwrap();
-        std::fs::write(from.join("window-geometry.json"), "{\"width\":1000.0}").unwrap();
-        // 新目录里已有的旧副本应按当前配置覆盖
-        std::fs::write(to.join("window-geometry.json"), "{\"width\":1200.0}").unwrap();
-
-        carry_config(&from, &to);
-
-        assert!(to.join("window-appearance.json").is_file());
-        assert_eq!(
-            std::fs::read_to_string(to.join("window-geometry.json")).unwrap(),
-            "{\"width\":1000.0}"
-        );
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { AppDataDirectoryInfo, CacheCleanResult, DataRootUsage } from '../../shared/app'
+import type {
+  AppDataDirectoryInfo,
+  AppDataDirectoryUpdateResult,
+  CacheCleanResult,
+  DataRootUsage,
+} from '../../shared/app'
 import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
 import { appCommands, invokeAppCommand } from '../shared/commands/useAppCommands'
 import { useAppearance } from '../shared/composables/useAppearance'
@@ -144,14 +149,14 @@ async function selectDirectory() {
 
   changing.value = true
   try {
-    const result = await invokeAppCommand<AppDataDirectoryInfo & { changed: boolean }>(
+    const result = await invokeAppCommand<AppDataDirectoryUpdateResult>(
       appCommands().DATA_DIRECTORY_UPDATE,
       directory,
     )
     info.value = result
     if (result.changed) {
-      ElMessage.success('数据目录已更新')
-      void loadUsage()
+      // 切换只记 pending，重启后才会整体迁移并生效（见 docs/data-directory.md）
+      ElMessage.success('已记录新的数据目录；重启应用后会整体迁移并生效')
     } else {
       ElMessage.info('目录未发生变化')
     }
@@ -224,7 +229,7 @@ onMounted(() => {
     <!-- 不再放「应用设置」大标题：页签本身已经叫「设置」，
          标题会与页签重复一行。这里只留一句总说明，各面板自带小标题。 -->
     <UiHint class="settings-lead">
-      数据目录、空间占用与窗口外观等应用级配置；这里的改动立即生效。
+      数据目录、空间占用与窗口外观等应用级配置；除数据目录需重启生效外，其余改动立即生效。
     </UiHint>
 
     <UiPanel title="数据目录">
@@ -240,9 +245,17 @@ onMounted(() => {
           更改…
         </el-button>
       </UiGroup>
+      <div v-if="info?.pendingDataDirectory" class="directory-row">
+        <span class="muted">待切换</span>
+        <span class="directory-path mono">{{ info.pendingDataDirectory }}</span>
+        <UiChip tone="warning">
+          重启后生效
+        </UiChip>
+      </div>
       <UiHint block>
-        所有工具的数据库、配置与产出，以及窗口外观、窗口大小与位置都存放在此目录；更改后立即生效，
-        工具数据不会自动迁移（窗口外观与窗口大小位置会带过去）。
+        所有工具的配置、缓存与产出（含窗口外观、窗口大小与位置）都存放在此目录。更改需重启：
+        启动时会先把旧目录整体迁移到新目录（含登录缓存），确认全部复制成功后才切换，
+        因此缓存与登录态保持有效；目标目录必须为空。
       </UiHint>
     </UiPanel>
 

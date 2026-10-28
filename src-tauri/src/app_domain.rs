@@ -65,15 +65,7 @@ pub fn invalidate_scan_cache() {
 // —— 数据目录 ——
 
 fn default_data_directory() -> PathBuf {
-    if cfg!(dev) {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("data")
-    } else {
-        appearance::default_user_data_dir().join("data")
-    }
+    appearance::default_data_dir()
 }
 
 fn data_directory_info() -> Value {
@@ -81,10 +73,13 @@ fn data_directory_info() -> Value {
     let default_directory = default_data_directory();
     let is_custom =
         normalize_for_compare(&data_directory) != normalize_for_compare(&default_directory);
+    let pending = appearance::read_pending_data_dir();
     json!({
         "dataDirectory": data_directory.to_string_lossy(),
         "defaultDataDirectory": default_directory.to_string_lossy(),
         "isCustom": is_custom,
+        // 已请求但需重启后迁移生效的目标目录；null 表示没有待切换
+        "pendingDataDirectory": pending.map(|dir| dir.to_string_lossy().to_string()),
     })
 }
 
@@ -145,28 +140,6 @@ fn is_safe_data_directory(candidate: &str) -> Result<(), String> {
         let blocked_cmp = normalize_for_compare(&blocked);
         if resolved_cmp == blocked_cmp || resolved_cmp.starts_with(&format!("{blocked_cmp}\\")) {
             return Err("数据目录不能位于系统目录".into());
-        }
-    }
-    Ok(())
-}
-
-fn save_data_directory_override(target: Option<&Path>) -> Result<(), String> {
-    let user_data = appearance::default_user_data_dir();
-    let bootstrap = user_data.join("data-root.json");
-    let mirror = user_data.join("data-root.path");
-    let _ = std::fs::create_dir_all(&user_data);
-
-    match target {
-        Some(dir) => {
-            let body = json!({ "dataDirectory": dir.to_string_lossy() });
-            std::fs::write(&bootstrap, format!("{body}\n"))
-                .map_err(|error| format!("写入数据目录配置失败：{error}"))?;
-            std::fs::write(&mirror, dir.to_string_lossy().as_bytes())
-                .map_err(|error| format!("写入数据目录镜像失败：{error}"))?;
-        }
-        None => {
-            let _ = std::fs::remove_file(&bootstrap);
-            let _ = std::fs::remove_file(&mirror);
         }
     }
     Ok(())
@@ -395,6 +368,10 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             }
         }
 
+        // 切换数据目录只写 pending 标记，**不立即切换**：运行中的各工具已经握着旧目录里的
+        // 文件句柄（webview 会话 / 资源索引 / 日志），中途换目录只能搬一半。真正生效在下次
+        // 启动最开头（appearance::apply_pending_data_migration）：先把旧目录整体复制到新目录，
+        // 全部成功后才删除源目录并指向新目录，因此缓存与登录态保持有效。
         "edt-app:data-directory:update" => {
             let next = args
                 .first()
@@ -405,19 +382,28 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             let normalized = strip_verbatim(
                 &std::fs::canonicalize(next).unwrap_or_else(|_| PathBuf::from(next)),
             );
-            let _ = std::fs::create_dir_all(&normalized);
             let previous = appearance::resolve_data_dir();
             let changed = normalize_for_compare(&normalized) != normalize_for_compare(&previous);
             if changed {
-                let is_default = normalize_for_compare(&normalized)
-                    == normalize_for_compare(&default_data_directory());
-                save_data_directory_override(if is_default { None } else { Some(&normalized) })?;
-                // 应用级配置（窗口外观 / 几何）跟着数据目录走，换目录不能等于静默重置
-                appearance::carry_config(&previous, &normalized);
-                appearance::invalidate_config_paths();
-                invalidate_scan_cache();
-                // 工具域重载（拦截器代理按新配置重启）
-                crate::interceptor::on_data_directory_changed(app);
+                if normalize_for_compare(&normalized)
+                    .starts_with(&format!("{}\\", normalize_for_compare(&previous)))
+                    || normalize_for_compare(&previous)
+                        .starts_with(&format!("{}\\", normalize_for_compare(&normalized)))
+                {
+                    return Err("新旧数据目录不能互相嵌套".into());
+                }
+                if normalized.exists() {
+                    let occupied = std::fs::read_dir(&normalized)
+                        .map(|mut entries| entries.next().is_some())
+                        .unwrap_or(false);
+                    if occupied {
+                        return Err("目标目录非空，请选择一个空目录（迁移不会覆盖已有文件）".into());
+                    }
+                }
+                appearance::write_pending_data_dir(&normalized)?;
+            } else {
+                // 选中当前目录 = 取消待切换
+                appearance::clear_pending_data_dir();
             }
             // 「已配置」标记必须落在 changed 判断之外：首次引导若选的正是默认目录
             // （dev 下即仓库 data/），changed=false，跳过它会导致弹窗每次启动重现
@@ -425,6 +411,8 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             mark_data_directory_configured()?;
             let mut info = data_directory_info();
             info["changed"] = json!(changed);
+            // 目录要下次启动才迁移生效，渲染层据此提示重启
+            info["restartRequired"] = json!(changed);
             Ok(info)
         }
 

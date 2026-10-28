@@ -4,6 +4,9 @@ mod app_domain;
 mod appearance;
 mod chrome_sandbox;
 mod commands;
+mod data_migration;
+#[cfg(dev)]
+mod dev_icon;
 mod env_browser;
 // 已接线（commands.rs 按 interceptor 域注册），但迁移后仍留有未调用的预留 API
 // （service::shutdown / status_snapshot / extension_dir、store::persist 等 11 项）；
@@ -135,6 +138,12 @@ fn hook_window_events(app: &tauri::AppHandle, window: &WebviewWindow) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // **启动第一件事**：上次在设置页请求切换数据目录时只写了 pending，这里先把它落成真：
+    // 整体复制旧目录 → 成功后删除源目录并指向新目录（失败就继续用旧目录）。
+    // 必须排在下面所有 `resolve_data_dir()` 使用者（webview 数据目录 / 日志目录 / 应用级配置 /
+    // 建窗）之前，否则一半读旧目录、一半读新目录。
+    appearance::apply_pending_data_migration();
+
     // WebView2 数据目录跟随数据根目录（设置页可改），目录绑定在 create_main_window 的 data_directory。
     let _ = std::fs::create_dir_all(appearance::webview_data_dir());
 
@@ -210,6 +219,12 @@ pub fn run() {
                 appearance::apply_effects(&main_window, &current);
             }
             hook_window_events(app.handle(), &window);
+            // 开发态（debug 构建）套 DEV 图标并打一行 profile 日志，与安装版并存时好区分
+            #[cfg(dev)]
+            {
+                dev_icon::apply(&window);
+                dev_icon::log_profile(app.handle());
+            }
             let _ = window.set_focus();
             // 应用壳：注册工具域的缓存跳过路径（运行中沙箱 profile 不参与清理）
             app_domain::register_tool_skip_providers();
