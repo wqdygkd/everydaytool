@@ -9,10 +9,8 @@ export interface AppDataDirectoryInfo {
 }
 
 export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
-  /** 本次是否记录了变更（变更一律在下次启动迁移生效） */
+  /** 本次是否记录了变更（变更一律在下次启动迁移生效，渲染层据此提示重启） */
   changed: boolean
-  /** 需要重启才生效：渲染层据此提示，不必再自己推导 changed */
-  restartRequired: boolean
 }
 
 /** 首次启动引导状态（应用壳与 chrome-sandbox 工具域共用同一份 setup 标记） */

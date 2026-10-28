@@ -410,9 +410,8 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             // ——命令返回成功、无任何报错，但什么都没写盘。
             mark_data_directory_configured()?;
             let mut info = data_directory_info();
+            // 目录要下次启动才迁移生效：渲染层据 changed 提示重启（不额外回恒等字段）
             info["changed"] = json!(changed);
-            // 目录要下次启动才迁移生效，渲染层据此提示重启
-            info["restartRequired"] = json!(changed);
             Ok(info)
         }
 
