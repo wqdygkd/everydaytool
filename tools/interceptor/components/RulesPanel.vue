@@ -726,7 +726,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
         </div>
       </div>
 
-      <el-table
+      <UiTable
         class="rules-table"
         :data="visibleRules"
         :row-class-name="rowClassName"
@@ -809,9 +809,9 @@ async function remove(rule: InterceptorRule): Promise<void> {
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="暂无规则" :image-size="72" />
+          <UiEmpty center text="暂无规则" padding="var(--spacing-2xl)" />
         </template>
-      </el-table>
+      </UiTable>
     </div>
 
     <div v-if="view === 'list' && selectedRules.length" class="rq-bulk-action-bar-container">
@@ -895,7 +895,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
             <span class="panel-header">选择资源类型</span>
           </div>
           <div class="muted-panel">
-            <el-radio-group model-value="rest" class="dest-radio-group">
+            <el-radio-group model-value="rest" class="dest-radio-group radio-flush">
               <el-radio value="rest">
                 REST API
               </el-radio>
@@ -976,7 +976,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 <span>{{ thenSectionLabel }}</span>
                 <el-radio-group
                   v-if="draft.type === 'request' && draft.request"
-                  class="request-body-mode-group"
+                  class="request-body-mode-group radio-flush"
                   :model-value="requestBodyMode"
                   @change="switchRequestBodyMode"
                 >
@@ -1006,7 +1006,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
               <template v-if="draft.type === 'redirect' && draft.redirect">
                 <div class="muted-panel">
-                  <el-radio-group v-model="redirectTargetType" class="dest-radio-group">
+                  <el-radio-group v-model="redirectTargetType" class="dest-radio-group radio-flush">
                     <el-radio value="url">
                       另一个 URL
                     </el-radio>
@@ -1615,22 +1615,16 @@ async function remove(rule: InterceptorRule): Promise<void> {
   gap: var(--spacing-md);
 }
 
-.dest-radio-group :deep(.el-radio) {
-  margin-right: 0;
-  height: auto;
-}
-
+/* 目标输入框贴在 raised 面板上：用卡片底色，避免在面板里出现第二层「输入框色块」 */
 .dest-input :deep(.el-input__wrapper) {
   background: var(--color-raised);
 }
 
 .request-body-mode-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
   margin-left: var(--spacing-md);
-}
-
-.request-body-mode-group :deep(.el-radio) {
-  margin-right: var(--spacing-md);
-  height: auto;
 }
 
 .request-body-mode-group :deep(.el-radio__label) {

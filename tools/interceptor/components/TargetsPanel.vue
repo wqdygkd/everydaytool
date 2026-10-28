@@ -67,9 +67,9 @@ function formatTime(iso: string): string {
 <template>
   <UiPanel title="处理名单">
     <template #actions>
-      <el-tag size="small" type="success">
+      <UiChip tone="success" variant="soft">
         启用 {{ enabledCount }} / {{ store.targets.length }}
-      </el-tag>
+      </UiChip>
     </template>
 
     <UiHint block>
@@ -106,10 +106,9 @@ function formatTime(iso: string): string {
       只支持 http / https 的 origin（不支持通配符、路径、正则——按路径 / 正则筛请在规则里配）。
     </UiHint>
 
-    <el-table
+    <UiTable
       :data="store.targets"
       row-key="id"
-      size="small"
       empty-text="名单为空（全部透传，规则不会跑）"
     >
       <el-table-column label="origin" min-width="260">
@@ -144,7 +143,7 @@ function formatTime(iso: string): string {
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+    </UiTable>
   </UiPanel>
 </template>
 

@@ -38,7 +38,7 @@ export function useOfflinePackDownload() {
   async function start(request: OfflinePackDownloadInput): Promise<boolean> {
     const api = getOfflinePackApi()
     if (!api) {
-      ElMessage.warning('离线包下载 仅在桌面端可用')
+      ElMessage.warning('离线包下载仅在桌面端可用')
       return false
     }
     subscribe()

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { OfflinePackDownloadProgress, OfflinePackHistoryItem } from '@shared/offline-pack'
+import type { OfflinePackTabKey } from '../tabs'
+import { formatBytes, formatDateTime } from '@shared/offline-pack'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { getOfflinePackApi } from '../api'
@@ -9,29 +11,13 @@ const api = getOfflinePackApi()
 const items = ref<OfflinePackHistoryItem[]>([])
 const loading = ref(false)
 
-const KIND_LABELS: Record<string, string> = {
+/** 来源列短标签：以页签 key 为键建表，新增页签时类型检查会强制补齐 */
+const KIND_LABELS: Record<OfflinePackTabKey, string> = {
   vscode: 'VSCode',
   chrome: 'Chrome',
   edge: 'Edge',
   docker: 'Docker',
-  msstore: 'MS商店',
-}
-
-function formatSize(bytes: number): string {
-  if (!bytes) return '—'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = bytes
-  let i = 0
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024
-    i++
-  }
-  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString()
+  msstore: 'MS 商店',
 }
 
 async function load(): Promise<void> {
@@ -114,85 +100,50 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="api" class="history-section">
-    <div class="history-header">
-      <span class="history-title">
-        下载历史（{{ items.length }}）
-      </span>
-      <div class="history-actions">
+  <section v-if="api">
+    <UiSectionHeader title="下载历史" :count="items.length">
+      <template #actions>
         <el-button size="small" @click="openDir">
           打开目录
         </el-button>
         <el-button size="small" type="danger" plain :disabled="!items.length" @click="clear">
           清空
         </el-button>
-      </div>
-    </div>
+      </template>
+    </UiSectionHeader>
 
-    <el-table v-if="items.length" v-loading="loading" :data="items" size="small">
-      <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
-      <el-table-column label="来源" width="90">
-        <template #default="{ row }">
-          {{ KIND_LABELS[row.kind] ?? row.kind }}
-        </template>
-      </el-table-column>
-      <el-table-column label="大小" width="100">
-        <template #default="{ row }">
-          <span class="mono">{{ formatSize(row.size) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="时间" width="170">
-        <template #default="{ row }">
-          <span class="muted">{{ formatDate(row.createdAt) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="80" align="right">
-        <template #default="{ row }">
-          <el-button size="small" type="danger" link @click="remove(row)">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <div v-else class="history-empty muted">
-      暂无下载记录
-    </div>
-  </div>
+    <!-- padding="" ：表格自带 radius-lg 与描边，直接贴住面板边缘，避免「卡片里再套一层圆角」 -->
+    <UiPanel padding="">
+      <UiTable
+        :data="items"
+        :loading="loading"
+        row-key="id"
+        empty-text="暂无下载记录"
+      >
+        <el-table-column prop="filename" label="文件名" min-width="220" show-overflow-tooltip />
+        <el-table-column label="来源" width="90">
+          <template #default="{ row }">
+            {{ KIND_LABELS[row.kind as OfflinePackTabKey] ?? row.kind }}
+          </template>
+        </el-table-column>
+        <el-table-column label="大小" width="100">
+          <template #default="{ row }">
+            <span class="mono">{{ formatBytes(row.size) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="时间" width="170">
+          <template #default="{ row }">
+            <span class="muted">{{ formatDateTime(row.createdAt) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="right">
+          <template #default="{ row }">
+            <el-button size="small" type="danger" link @click="remove(row)">
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </UiTable>
+    </UiPanel>
+  </section>
 </template>
-
-<style scoped>
-.history-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  max-width: 760px;
-  margin: var(--spacing-xl) auto 0;
-}
-
-.history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.history-title {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.history-actions {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.history-empty {
-  padding: var(--spacing-xl);
-  text-align: center;
-  font-size: var(--font-size-sm);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-sm);
-}
-</style>

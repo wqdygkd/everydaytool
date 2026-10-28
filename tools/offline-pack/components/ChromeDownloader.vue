@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { onUnmounted, ref } from 'vue'
 import { getOfflinePackApi, openExternal } from '../api'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
+import DownloaderFrame from './DownloaderFrame.vue'
 import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
@@ -72,7 +73,7 @@ function selectResult(item: OfflinePackChromeSearchItem): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在桌面端可用')
+    ElMessage.warning('离线包下载仅在桌面端可用')
     return
   }
   loading.value = true
@@ -110,60 +111,64 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="offline-pack-downloader">
-    <p class="offline-pack-hint">
+  <DownloaderFrame
+    :model-value="input"
+    placeholder="扩展名称、ID 或商店链接"
+    submit-label="解析扩展信息"
+    :examples="EXAMPLES"
+    :loading="loading"
+    @update:model-value="onInput"
+    @submit="handleSubmit"
+    @example="useExample"
+  >
+    <template #hint>
       输入名称搜索或直接粘贴 ID，或前往
-      <a class="offline-pack-link" href="https://chromewebstore.google.com/category/extensions" @click.prevent="openExternal('https://chromewebstore.google.com/category/extensions')">Chrome 商店</a>
-    </p>
+      <el-link
+        type="primary"
+        :underline="false"
+        @click="openExternal('https://chromewebstore.google.com/category/extensions')"
+      >
+        Chrome 商店
+      </el-link>
+    </template>
 
-    <el-input
-      :model-value="input"
-      class="offline-pack-input" spellcheck="false"
-      placeholder="扩展名称、ID 或商店链接"
-      clearable
-      @update:model-value="onInput"
-      @keyup.enter="handleSubmit"
-    />
+    <template #between>
+      <UiGroup v-if="searchResults.length" direction="column" gap="xs" block>
+        <UiListCard v-for="item in searchResults" :key="item.id" @click="selectResult(item)">
+          <UiGroup justify="between" gap="sm">
+            <span>{{ item.name }}</span>
+            <UiHint size="xs" class="mono">
+              {{ item.id }}
+            </UiHint>
+          </UiGroup>
+        </UiListCard>
+      </UiGroup>
+    </template>
 
-    <div class="offline-pack-examples">
-      <el-button v-for="e in EXAMPLES" :key="e.value" size="small" @click="useExample(e.value)">
-        {{ e.label }}
-      </el-button>
-    </div>
+    <UiPanel v-if="detail" variant="outlined">
+      <UiGroup direction="column" gap="md" align="stretch" block>
+        <UiDetailGrid :columns="1">
+          <UiDetailItem v-if="detail.name" label="名称">
+            {{ detail.name }}
+          </UiDetailItem>
+          <UiDetailItem label="ID" mono>
+            {{ detail.id }}
+          </UiDetailItem>
+          <UiDetailItem v-if="detail.description" label="描述">
+            {{ detail.description }}
+          </UiDetailItem>
+        </UiDetailGrid>
 
-    <div v-if="searchResults.length" class="search-results">
-      <UiListCard v-for="item in searchResults" :key="item.id" @click="selectResult(item)">
-        <span class="search-name">{{ item.name }}</span>
-        <span class="muted mono search-id">{{ item.id }}</span>
-      </UiListCard>
-    </div>
-
-    <el-button type="primary" class="offline-pack-submit" :loading="loading" @click="handleSubmit">
-      {{ loading ? '解析中...' : '解析扩展信息' }}
-    </el-button>
-
-    <div v-if="detail" class="offline-pack-picker">
-      <UiDetailGrid :columns="1">
-        <UiDetailItem v-if="detail.name" label="名称">
-          {{ detail.name }}
-        </UiDetailItem>
-        <UiDetailItem label="ID" mono>
-          {{ detail.id }}
-        </UiDetailItem>
-        <UiDetailItem v-if="detail.description" label="描述">
-          {{ detail.description }}
-        </UiDetailItem>
-      </UiDetailGrid>
-
-      <div class="offline-pack-actions">
-        <el-button type="primary" :disabled="downloading" @click="handleDownload('crx')">
-          下载 CRX
-        </el-button>
-        <el-button :disabled="downloading" @click="handleDownload('zip')">
-          下载 ZIP
-        </el-button>
-      </div>
-    </div>
+        <UiGroup gap="sm" wrap class="btn-flush">
+          <el-button type="primary" :disabled="downloading" @click="handleDownload('crx')">
+            下载 CRX
+          </el-button>
+          <el-button :disabled="downloading" @click="handleDownload('zip')">
+            下载 ZIP
+          </el-button>
+        </UiGroup>
+      </UiGroup>
+    </UiPanel>
 
     <DownloadSection
       :progress="progress"
@@ -172,103 +177,5 @@ onUnmounted(() => {
       @cancel="cancel"
       @open-dir="openDir"
     />
-  </div>
+  </DownloaderFrame>
 </template>
-
-<style scoped>
-.offline-pack-downloader {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.offline-pack-hint {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.offline-pack-link {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.offline-pack-link:hover {
-  text-decoration: underline;
-}
-
-.offline-pack-input :deep(.el-input__wrapper) {
-  height: 48px;
-  padding: 0 16px;
-  border-radius: 12px;
-  background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-border) inset, var(--shadow-sm);
-}
-
-.offline-pack-input :deep(.el-input__wrapper.is-focus) {
-  background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-primary) inset;
-}
-
-.offline-pack-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.offline-pack-examples :deep(.el-button) {
-  height: auto;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-secondary);
-  background: var(--color-raised);
-  border-color: transparent;
-  box-shadow: var(--shadow-sm);
-}
-
-.offline-pack-examples :deep(.el-button:hover) {
-  background: var(--color-raised);
-  color: var(--color-text-primary);
-}
-
-.search-results {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.search-name {
-  margin-right: 8px;
-}
-
-.search-id {
-  font-size: var(--font-size-xs);
-}
-
-.offline-pack-submit {
-  width: 100%;
-  height: 44px;
-  padding: 0 24px;
-  border-radius: 12px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.offline-pack-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--color-border-light);
-  background: var(--color-raised);
-  border-radius: 16px;
-  box-shadow: var(--shadow-sm);
-}
-
-.offline-pack-actions {
-  display: flex;
-  gap: 8px;
-}
-</style>

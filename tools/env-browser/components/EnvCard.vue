@@ -21,9 +21,9 @@ const emit = defineEmits<{
   >
     <div class="card-header">
       <span class="name">{{ env.name }}</span>
-      <el-tag v-if="opened" size="small" type="success">
+      <UiChip v-if="opened" tone="success" variant="soft">
         已打开
-      </el-tag>
+      </UiChip>
     </div>
     <div class="card-url" :title="env.url">
       {{ env.url }}

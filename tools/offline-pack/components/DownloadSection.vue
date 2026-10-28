@@ -7,7 +7,7 @@ defineProps<{
   result: OfflinePackDownloadResult | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   cancel: []
   openDir: []
 }>()
@@ -19,135 +19,74 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
 </script>
 
 <template>
-  <div v-if="downloading || progress || result" class="download-section">
-    <div v-if="downloading" class="download-progress">
-      <div class="download-row">
-        <span class="muted download-msg">
+  <!-- 下载中：说明 + 取消 + 进度条（进度条底色走全局 EP 绑定，不再单点覆写） -->
+  <UiPanel v-if="downloading" variant="outlined" padding="var(--spacing-md)">
+    <UiGroup direction="column" gap="sm" block>
+      <UiGroup justify="between" gap="sm" align="center">
+        <UiHint class="download-progress-message">
           {{ progress?.message ?? '下载中…' }}
           <template v-if="progress?.layerIndex">
             （层 {{ progress.layerIndex }}/{{ progress.totalLayers }}）
           </template>
-        </span>
-        <el-button size="small" @click="$emit('cancel')">
+        </UiHint>
+        <el-button size="small" @click="emit('cancel')">
           取消
         </el-button>
-      </div>
-      <el-progress
+      </UiGroup>
+
+      <UiProgress
         v-if="progress && progress.totalBytes > 0"
         :percentage="percentage(progress)"
-        :show-text="false"
-        class="download-bar"
       />
-    </div>
+    </UiGroup>
+  </UiPanel>
 
-    <div v-if="progress?.status === 'error' && progress.error" class="download-error">
-      <el-tag size="small" type="danger">
-        {{ progress.error }}
-      </el-tag>
-    </div>
+  <el-alert
+    v-if="progress?.status === 'error' && progress.error"
+    type="error"
+    :closable="false"
+    show-icon
+    :title="progress.error"
+  />
 
-    <!-- 结果卡片：DownloadResultCard（primary 边框 + 浅底 + 图标块） -->
-    <div v-if="result" class="result-card">
-      <div class="result-icon">
-        <UiIcon name="offline-pack" :size="16" />
-      </div>
-      <div class="result-meta">
-        <p class="result-name">
-          {{ result.filename }}
-        </p>
-        <p class="result-desc">
+  <!-- 结果：文件名（超长省略）+ 打开目录 -->
+  <UiPanel v-if="result" variant="outlined" padding="var(--spacing-md)">
+    <UiGroup gap="md" align="center">
+      <UiIcon name="offline-pack" :size="18" class="download-result-icon" />
+      <UiGroup direction="column" gap="xs" class="download-result-meta">
+        <span class="mono download-result-name" :title="result.filename">{{ result.filename }}</span>
+        <UiHint size="xs">
           已保存到本地下载目录
-        </p>
-      </div>
-      <el-button type="primary" size="small" @click="$emit('openDir')">
+        </UiHint>
+      </UiGroup>
+      <el-button type="primary" size="small" @click="emit('openDir')">
         打开目录
       </el-button>
-    </div>
-  </div>
+    </UiGroup>
+  </UiPanel>
 </template>
 
 <style scoped>
-.download-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.download-progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-raised);
-}
-
-.download-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.download-msg {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.download-bar :deep(.el-progress-bar__outer) {
-  background: var(--color-raised);
-}
-
-.download-error {
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-
-/* 结果卡片：primary/30 边框 + primary/5 浅底 + 图标块 */
-.result-card {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-}
-
-.result-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* 下载文件名可能很长：占满剩余宽度并单行省略，避免撑破结果面板 */
+.download-result-icon {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
 
-.result-meta {
+/* 进度文案可长可短：占满剩余宽度并允许折行，取消按钮固定右侧 */
+.download-progress-message {
   flex: 1;
   min-width: 0;
 }
 
-.result-name {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+.download-result-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.download-result-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.result-desc {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
 }
 </style>

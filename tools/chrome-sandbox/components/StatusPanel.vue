@@ -34,9 +34,9 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
 
       <UiGroup gap="md" class="panel-header">
         <h2>{{ sandbox.name }}</h2>
-        <el-tag :type="sandbox.status === 'running' ? 'success' : 'info'" size="small">
+        <UiChip :tone="sandbox.status === 'running' ? 'success' : 'info'" variant="soft">
           {{ formatSandboxStatus(sandbox.status) }}
-        </el-tag>
+        </UiChip>
       </UiGroup>
 
       <UiDetailGrid class="detail-grid">
@@ -53,20 +53,20 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
           <div class="config-row">
             <span class="config-label">继承扩展</span>
             <div class="config-value">
-              <el-tag :type="inheritExtensions ? 'success' : 'info'" size="small" effect="plain">
+              <UiChip :tone="inheritExtensions ? 'success' : 'info'" variant="outline">
                 {{ inheritExtensions ? '已开启' : '未开启' }}
-              </el-tag>
+              </UiChip>
             </div>
           </div>
           <div class="config-row">
             <span class="config-label">启动参数</span>
             <div v-if="hasLaunchOptions" class="config-value launch-options-display">
-              <el-tag v-if="sandbox.metadata?.launchOptions?.disableSafetyChecks" size="small" type="danger" effect="plain">
+              <UiChip v-if="sandbox.metadata?.launchOptions?.disableSafetyChecks" tone="danger" variant="outline">
                 禁用安全检查
-              </el-tag>
-              <el-tag v-if="sandbox.metadata?.launchOptions?.disableCors" size="small" type="danger" effect="plain">
+              </UiChip>
+              <UiChip v-if="sandbox.metadata?.launchOptions?.disableCors" tone="danger" variant="outline">
                 禁用 CORS
-              </el-tag>
+              </UiChip>
               <div v-if="sandbox.metadata?.launchOptions?.customArgs" class="custom-args">
                 <span class="label">自定义:</span>
                 <code>{{ sandbox.metadata.launchOptions.customArgs }}</code>
@@ -106,8 +106,11 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
 .panel-header {
   margin-bottom: var(--spacing-xl);
 
+  /* 沙箱名按「区块标题」取字阶：标题标签已全局 reset 为 inherit，这里显式给档 */
   h2 {
     margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
   }
 }
 
@@ -141,11 +144,6 @@ const hasLaunchOptions = computed(() => hasLaunchOptionsEnabled(props.sandbox?.m
   .config-value {
     min-width: 0;
     line-height: var(--line-height-control);
-
-    :deep(.el-tag) {
-      width: fit-content;
-      max-width: 100%;
-    }
   }
 
   .launch-options-display {

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { OfflinePackDockerImageInfo, OfflinePackDockerManifest, OfflinePackDockerPlatform, OfflinePackDockerSearchItem } from '@shared/offline-pack'
-import { extractDockerImageInfo } from '@shared/offline-pack'
+import { extractDockerImageInfo, formatBytes } from '@shared/offline-pack'
 import { STORAGE_KEYS } from '@shared/storage-keys'
 import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { getOfflinePackApi, openExternal } from '../api'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
+import DownloaderFrame from './DownloaderFrame.vue'
 import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
@@ -70,18 +71,6 @@ function formatPlatform(p: OfflinePackDockerPlatform): string {
   return p.variant ? `${p.os}/${p.architecture}/${p.variant}` : `${p.os}/${p.architecture}`
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let value = bytes
-  let i = 0
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024
-    i++
-  }
-  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
-}
-
 const totalSize = computed(() => (manifest.value?.layers ?? []).reduce((sum, layer) => sum + layer.size, 0))
 
 function getRepoUrl(namespace: string, repository: string): string {
@@ -120,7 +109,7 @@ function onMirrorChange(): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在桌面端可用')
+    ElMessage.warning('离线包下载仅在桌面端可用')
     return
   }
   const trimmed = input.value.trim()
@@ -237,162 +226,189 @@ async function handleDownload(): Promise<void> {
 </script>
 
 <template>
-  <div class="offline-pack-downloader">
-    <p class="offline-pack-hint">
+  <DownloaderFrame
+    v-model="input"
+    placeholder="镜像名，如 nginx:latest / library/nginx / docker.io/library/nginx:latest"
+    submit-label="解析镜像信息"
+    :examples="EXAMPLES"
+    :loading="loading"
+    @submit="handleSubmit"
+    @example="useExample"
+  >
+    <template #hint>
       输入完整镜像名或 Docker Hub 仓库链接，或前往
-      <a class="offline-pack-link" href="https://hub.docker.com/search" @click.prevent="openExternal('https://hub.docker.com/search')">Docker Hub</a>
-    </p>
-
-    <div class="mirror-card">
-      <div class="mirror-head">
-        <span class="mirror-title">加速服务</span>
-        <span class="muted mirror-note">docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io</span>
-      </div>
-
-      <el-select
-        v-model="mirror"
-        class="mirror-select"
-        filterable
-        allow-create
-        clearable
-        placeholder="直连（不使用加速）"
-        @change="onMirrorChange"
+      <el-link
+        type="primary"
+        :underline="false"
+        @click="openExternal('https://hub.docker.com/search')"
       >
-        <el-option v-for="m in MIRRORS" :key="m.value" :label="m.label" :value="m.value" />
-      </el-select>
+        Docker Hub
+      </el-link>
+    </template>
 
-      <div v-if="mirrorTarget" class="mirror-examples">
-        <p class="muted mirror-example-title">
-          参考示例
-        </p>
-        <template v-if="mirrorTarget === 'docker'">
-          <p class="mirror-example-group">
-            Docker Hub
-          </p>
-          <p class="mono mirror-example">
-            nginx → docker.io/library/nginx → {{ mirrorHost }}/library/nginx
-          </p>
-          <p class="mono mirror-example">
-            apache/kafka → docker.io/apache/kafka → {{ mirrorHost }}/apache/kafka
-          </p>
-        </template>
-        <template v-else>
-          <p class="mirror-example-group">
-            ghcr.io
-          </p>
-          <p class="mono mirror-example">
-            ghcr.io/immich-app/immich-server → {{ mirrorHost }}/ghcr.io/immich-app/immich-server
-          </p>
-        </template>
-      </div>
-    </div>
+    <!-- 加速服务：高级选项，放在主输入框之前（切换后会自动重新解析已输入的镜像） -->
+    <template #before>
+      <UiPanel variant="outlined" title="加速服务">
+        <UiGroup direction="column" gap="md" align="stretch" block>
+          <UiHint size="xs">
+            docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io
+          </UiHint>
 
-    <el-input
-      v-model="input"
-      class="offline-pack-input" spellcheck="false"
-      placeholder="镜像名，如 nginx:latest / library/nginx / docker.io/library/nginx:latest"
-      clearable
-      @keyup.enter="handleSubmit"
-    />
-
-    <div class="offline-pack-examples">
-      <el-button v-for="e in EXAMPLES" :key="e.value" size="small" @click="useExample(e.value)">
-        {{ e.label }}
-      </el-button>
-    </div>
-
-    <div v-if="imageNotFound && info" class="notfound-card">
-      <p class="notfound-title">
-        未找到对应镜像：{{ info.namespace || 'library' }}/{{ info.repository }}
-      </p>
-      <p class="notfound-desc">
-        Docker 镜像不能按关键词直接解析。当前输入已按
-        <span class="mono">{{ info.namespace || 'library' }}/{{ info.repository }}</span>
-        查找；如果你要找社区镜像，请从候选项选择，或输入类似
-        <span class="mono">apache/kafka</span> 的完整名称。
-      </p>
-      <div class="notfound-links">
-        <a class="offline-pack-link" :href="getSearchUrl(info.repository)" @click.prevent="openExternal(getSearchUrl(info.repository))">前往 DockerHub 搜索</a>
-        <a class="offline-pack-link" :href="getRepoUrl(info.namespace || 'library', info.repository)" @click.prevent="openExternal(getRepoUrl(info.namespace || 'library', info.repository))">预览当前仓库页</a>
-      </div>
-      <div v-if="searchCandidates.length" class="candidates">
-        <p class="candidates-title">
-          候选镜像（Top {{ searchCandidates.length }}）
-        </p>
-        <div v-for="c in searchCandidates" :key="`${c.namespace}/${c.repository}`" class="candidate-card">
-          <div class="candidate-meta">
-            <p class="candidate-name">
-              {{ c.namespace }}/{{ c.repository }}
-            </p>
-            <p v-if="c.shortDescription" class="candidate-desc">
-              {{ c.shortDescription }}
-            </p>
-          </div>
-          <div class="candidate-actions">
-            <el-button size="small" type="primary" @click="selectCandidate(c)">
-              选择
-            </el-button>
-            <el-button size="small" class="candidate-link" title="打开 Docker Hub 页面" @click="openExternal(getRepoUrl(c.namespace, c.repository))">
-              <UiIcon name="external" :size="16" />
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <el-button type="primary" class="offline-pack-submit" :loading="loading" @click="handleSubmit">
-      {{ loading ? '解析中...' : '解析镜像信息' }}
-    </el-button>
-
-    <div v-if="tags.length" class="offline-pack-picker">
-      <div class="picker-row">
-        <div class="picker-field">
-          <p class="offline-pack-picker-title">
-            选择标签
-          </p>
-          <el-select v-model="selectedTag" class="offline-pack-select" placeholder="选择标签" @change="onTagChange">
-            <el-option v-for="t in tags" :key="t" :label="t" :value="t" />
+          <el-select
+            v-model="mirror"
+            class="full-width"
+            filterable
+            allow-create
+            clearable
+            placeholder="直连（不使用加速）"
+            @change="onMirrorChange"
+          >
+            <el-option v-for="m in MIRRORS" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
-        </div>
 
-        <div v-if="platforms.length" class="picker-field picker-arch">
-          <p class="offline-pack-picker-title">
-            选择架构
-          </p>
-          <el-select v-model="selectedPlatform" class="offline-pack-select" placeholder="选择架构" @change="onPlatformChange">
-            <el-option v-for="p in platforms" :key="formatPlatform(p)" :label="formatPlatform(p)" :value="formatPlatform(p)" />
-          </el-select>
-        </div>
-      </div>
+          <UiGroup v-if="mirrorTarget" direction="column" gap="xs" block>
+            <UiHint size="xs">
+              参考示例
+            </UiHint>
+            <template v-if="mirrorTarget === 'docker'">
+              <UiHint size="xs" class="mono">
+                nginx → docker.io/library/nginx → {{ mirrorHost }}/library/nginx
+              </UiHint>
+              <UiHint size="xs" class="mono">
+                apache/kafka → docker.io/apache/kafka → {{ mirrorHost }}/apache/kafka
+              </UiHint>
+            </template>
+            <UiHint v-else size="xs" class="mono">
+              ghcr.io/immich-app/immich-server → {{ mirrorHost }}/ghcr.io/immich-app/immich-server
+            </UiHint>
+          </UiGroup>
+        </UiGroup>
+      </UiPanel>
+    </template>
 
-      <div class="offline-pack-actions">
-        <el-button type="primary" :disabled="downloading" @click="handleDownload">
-          下载并打包 TAR
-        </el-button>
-        <span v-if="selectedPlatform" class="muted mono filename">{{ buildFilename() }}</span>
-      </div>
-    </div>
+    <!-- 未找到镜像：说明 + 外链 + 候选镜像 -->
+    <template #between>
+      <UiPanel v-if="imageNotFound && info" variant="outlined">
+        <UiGroup direction="column" gap="md" align="stretch" block>
+          <UiHint>
+            未找到镜像 <span class="mono">{{ info.namespace || 'library' }}/{{ info.repository }}</span>。Docker 镜像不能按关键词直接解析：请输入完整的
+            <span class="mono">namespace/repository</span>（如 <span class="mono">apache/kafka</span>），或从下方候选镜像中选择。
+          </UiHint>
 
-    <div v-if="manifestLoading" class="manifest-card">
-      <span class="muted">获取层信息...</span>
-    </div>
-    <div v-else-if="manifest && manifest.layers.length" class="manifest-card">
-      <div class="manifest-title">
-        <UiIcon name="layers" :size="16" />
-        <span>镜像层（{{ manifest.layers.length }} 层）</span>
-        <span v-if="manifest.version" class="manifest-version mono">{{ manifest.version }}</span>
-      </div>
-      <div class="manifest-layers">
-        <div v-for="(layer, i) in manifest.layers" :key="layer.digest" class="manifest-row">
-          <span class="mono manifest-digest">{{ i + 1 }}. {{ layer.digest.slice(7, 19) }}...</span>
-          <span class="mono manifest-size">{{ formatBytes(layer.size) }}</span>
-        </div>
-      </div>
-      <div class="manifest-total">
-        <span>总计（压缩）</span>
-        <span class="mono">{{ formatBytes(totalSize) }}</span>
-      </div>
-    </div>
+          <UiGroup gap="md" wrap>
+            <el-link
+              type="primary"
+              :underline="false"
+              @click="openExternal(getSearchUrl(info.repository))"
+            >
+              前往 Docker Hub 搜索
+            </el-link>
+            <el-link
+              type="primary"
+              :underline="false"
+              @click="openExternal(getRepoUrl(info.namespace || 'library', info.repository))"
+            >
+              预览当前仓库页
+            </el-link>
+          </UiGroup>
+
+          <UiGroup v-if="searchCandidates.length" direction="column" gap="sm" block>
+            <UiHint size="xs">
+              候选镜像（Top {{ searchCandidates.length }}）
+            </UiHint>
+            <UiListCard
+              v-for="c in searchCandidates"
+              :key="`${c.namespace}/${c.repository}`"
+              @click="selectCandidate(c)"
+            >
+              <UiGroup justify="between" gap="md">
+                <UiGroup class="ctl-fill" direction="column" gap="xs">
+                  <span class="mono">{{ c.namespace }}/{{ c.repository }}</span>
+                  <UiHint v-if="c.shortDescription" size="xs">
+                    {{ c.shortDescription }}
+                  </UiHint>
+                </UiGroup>
+                <UiIconButton
+                  icon="external"
+                  label="打开 Docker Hub 页面"
+                  @click.stop="openExternal(getRepoUrl(c.namespace, c.repository))"
+                />
+              </UiGroup>
+            </UiListCard>
+          </UiGroup>
+        </UiGroup>
+      </UiPanel>
+    </template>
+
+    <!-- 标签 / 架构选择 + 下载 -->
+    <UiPanel v-if="tags.length" variant="outlined">
+      <UiGroup direction="column" gap="md" align="stretch" block>
+        <UiGroup gap="md" align="end" wrap>
+          <UiGroup class="ctl-fill" direction="column" gap="xs">
+            <UiHint size="xs">
+              选择标签
+            </UiHint>
+            <el-select v-model="selectedTag" class="full-width" placeholder="选择标签" @change="onTagChange">
+              <el-option v-for="t in tags" :key="t" :label="t" :value="t" />
+            </el-select>
+          </UiGroup>
+
+          <UiGroup v-if="platforms.length" class="ctl-sm" direction="column" gap="xs">
+            <UiHint size="xs">
+              选择架构
+            </UiHint>
+            <el-select v-model="selectedPlatform" class="full-width" placeholder="选择架构" @change="onPlatformChange">
+              <el-option v-for="p in platforms" :key="formatPlatform(p)" :label="formatPlatform(p)" :value="formatPlatform(p)" />
+            </el-select>
+          </UiGroup>
+        </UiGroup>
+
+        <UiGroup gap="sm" align="center" wrap class="btn-flush">
+          <el-button type="primary" :disabled="downloading" @click="handleDownload">
+            下载并打包 TAR
+          </el-button>
+          <UiHint v-if="selectedPlatform" size="xs" class="mono">
+            {{ buildFilename() }}
+          </UiHint>
+        </UiGroup>
+      </UiGroup>
+    </UiPanel>
+
+    <!-- 镜像层清单：表格化展示摘要与大小，总压缩大小走键值行 -->
+    <UiPanel v-if="manifestLoading" variant="outlined" padding="var(--spacing-md)">
+      <UiHint>
+        获取层信息…
+      </UiHint>
+    </UiPanel>
+    <UiPanel v-else-if="manifest && manifest.layers.length" variant="outlined" title="镜像层">
+      <template #actions>
+        <UiChip v-if="manifest.version" tone="primary" mono>
+          {{ manifest.version }}
+        </UiChip>
+      </template>
+
+      <UiTable :data="manifest.layers" max-height="240">
+        <el-table-column label="#" width="52" align="right">
+          <template #default="{ $index }">
+            <span class="mono muted">{{ $index + 1 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="层摘要" min-width="200">
+          <template #default="{ row }">
+            <span class="mono" :title="row.digest">{{ row.digest.slice(7, 19) }}…</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="大小" width="100" align="right">
+          <template #default="{ row }">
+            <span class="mono">{{ formatBytes(row.size) }}</span>
+          </template>
+        </el-table-column>
+      </UiTable>
+
+      <UiKeyValue class="manifest-total" label="总计（压缩）" mono>
+        {{ formatBytes(totalSize) }}
+      </UiKeyValue>
+    </UiPanel>
 
     <DownloadSection
       :progress="progress"
@@ -401,349 +417,12 @@ async function handleDownload(): Promise<void> {
       @cancel="cancel"
       @open-dir="openDir"
     />
-  </div>
+  </DownloaderFrame>
 </template>
 
 <style scoped>
-.offline-pack-downloader {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.offline-pack-hint {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.offline-pack-link {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.offline-pack-link:hover {
-  text-decoration: underline;
-}
-
-.mirror-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--color-border-light);
-  background: var(--color-raised);
-  border-radius: 12px;
-}
-
-.mirror-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.mirror-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.mirror-note {
-  font-size: var(--font-size-xs);
-}
-
-.mirror-select {
-  width: 100%;
-}
-
-.mirror-examples {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border-light);
-}
-
-.mirror-example-title {
-  margin: 0 0 2px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
-}
-
-.mirror-example-group {
-  margin: 6px 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.mirror-example {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.7;
-  color: var(--color-text-secondary);
-  word-break: break-all;
-}
-
-.offline-pack-input :deep(.el-input__wrapper) {
-  height: 48px;
-  padding: 0 16px;
-  border-radius: 12px;
-  background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-border) inset, var(--shadow-sm);
-}
-
-.offline-pack-input :deep(.el-input__wrapper.is-focus) {
-  background: var(--color-raised);
-  box-shadow: 0 0 0 1px var(--color-primary) inset;
-}
-
-.offline-pack-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.offline-pack-examples :deep(.el-button) {
-  height: auto;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-regular);
-  color: var(--color-text-secondary);
-  background: var(--color-raised);
-  border-color: transparent;
-  box-shadow: var(--shadow-sm);
-}
-
-.offline-pack-examples :deep(.el-button:hover) {
-  background: var(--color-raised);
-  color: var(--color-text-primary);
-}
-
-/* 未找到镜像：主题色边框 + 浅底提示卡片 */
-.notfound-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  border-radius: 16px;
-}
-
-.notfound-title {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary);
-}
-
-.notfound-desc {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  line-height: 1.6;
-  color: var(--color-text-secondary);
-}
-
-.notfound-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  font-size: var(--font-size-xs);
-}
-
-.candidates {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.candidates-title {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.candidate-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--color-border-light);
-  border-radius: 10px;
-  transition: var(--transition-fast);
-}
-
-.candidate-card:hover {
-  background: var(--color-raised);
-}
-
-.candidate-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.candidate-name {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.candidate-desc {
-  margin: 4px 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.candidate-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.candidate-link {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 8px;
-}
-
-.offline-pack-submit {
-  width: 100%;
-  height: 44px;
-  padding: 0 24px;
-  border-radius: 12px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.offline-pack-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--color-border-light);
-  background: var(--color-raised);
-  border-radius: 16px;
-  box-shadow: var(--shadow-sm);
-}
-
-.offline-pack-picker-title {
-  margin: 0;
-  font-size: 11px;
-  font-weight: var(--font-weight-medium);
-  letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-}
-
-.offline-pack-select {
-  width: 100%;
-}
-
-/* 标签 + 架构一行并排：标签占满剩余，架构固定宽 */
-.picker-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-
-.picker-field {
-  flex: 1;
-  min-width: 0;
-}
-
-.picker-arch {
-  flex: 0 0 192px;
-}
-
-.offline-pack-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filename {
-  font-size: var(--font-size-xs);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 镜像层大小卡片：灰底 + 阴影 + 层列表 + 总计 */
-.manifest-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--color-border-light);
-  background: var(--color-raised);
-  border-radius: 16px;
-  box-shadow: var(--shadow-md);
-}
-
-.manifest-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.manifest-title :deep(.ui-icon) {
-  color: var(--color-primary);
-}
-
-.manifest-version {
-  margin-left: auto;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary);
-}
-
-.manifest-layers {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.manifest-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.manifest-digest {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.manifest-size {
-  flex-shrink: 0;
-}
-
+/* 表格与「总计」之间留一档间距（UiKeyValue 自带顶部边框，正好当汇总分隔线） */
 .manifest-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border-light);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+  margin-top: var(--spacing-sm);
 }
 </style>
