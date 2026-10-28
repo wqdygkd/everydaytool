@@ -80,5 +80,5 @@ cdp-client.ts              CDP 基础：连接/求值/注入；evaluateInPageTar
 - **pnpm dev 运行中锁 `target/`（EBUSY / 拒绝访问）**——重新编译前先关掉正在运行的 everydaytool。
 - fnm 环境：Bash `cd` 进项目先 `eval "$(fnm env)"`。
 - WXP 是用户桌面上的活应用：CDP 测试窗口期不稳定，测试要快、一次会话闭环；CDP 端口 9553 偶发连接被拒（curl 同时正常），实现侧已带重试。
-- 附加模式（WXP 已在运行）无子进程，用 4s 间隔存活看门狗（连续 2 次检测不到 exe 判定退出）；拉起模式走 onExit 回调。
+- 附加模式（WXP 已在运行）无子进程，用 15s 间隔存活看门狗（连续 2 次检测不到 exe 判定退出）；拉起模式走 onExit 回调。
 - 用户并行编辑文件/暂存区：Edit 前重读文件，汇报区分非自己做的改动。

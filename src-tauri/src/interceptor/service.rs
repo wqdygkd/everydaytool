@@ -650,6 +650,109 @@ pub fn dispose() {
 // 命令分发
 // ---------------------------------------------------------------------------
 
+// ── 命令入参结构校验（渲染层传来的规则 / 开关补丁）──────────────────────────────
+//
+// 坏形态落到规则引擎只会静默失效（表现为「规则不生效但没报错」），因此在边界上先拦：
+// 类型枚举 / 必填字段 / 文本长度都有上限，子配置只要求「是普通对象」——
+// 具体字段由规则引擎按类型各自解释，这里不做业务校验。
+
+const RULE_TYPES: [&str; 10] = [
+    "redirect",
+    "replace",
+    "queryParam",
+    "cancel",
+    "delay",
+    "headers",
+    "userAgent",
+    "request",
+    "response",
+    "script",
+];
+const MAX_ID_LENGTH: usize = 200;
+const MAX_NAME_LENGTH: usize = 500;
+const MAX_DESCRIPTION_LENGTH: usize = 2_000;
+
+fn require_object<'a>(value: &'a Value, field: &str) -> Result<&'a serde_json::Map<String, Value>, String> {
+    value
+        .as_object()
+        .ok_or_else(|| format!("参数不合法：{field}"))
+}
+
+fn require_field_string(value: &Value, field: &str, max_len: usize) -> Result<String, String> {
+    let text = value
+        .as_str()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| format!("参数不合法：{field}"))?;
+    if text.chars().count() > max_len {
+        return Err(format!("参数不合法：{field}"));
+    }
+    Ok(text.to_string())
+}
+
+fn assert_rule_payload(rule: &Value) -> Result<(), String> {
+    let object = require_object(rule, "rule")?;
+    let rule_type = require_field_string(
+        object.get("type").unwrap_or(&Value::Null),
+        "rule.type",
+        MAX_ID_LENGTH,
+    )?;
+    if !RULE_TYPES.contains(&rule_type.as_str()) {
+        return Err("参数不合法：rule.type".into());
+    }
+    let _id = require_field_string(
+        object.get("id").unwrap_or(&Value::Null),
+        "rule.id",
+        MAX_ID_LENGTH,
+    )?;
+    let _name = require_field_string(
+        object.get("name").unwrap_or(&Value::Null),
+        "rule.name",
+        MAX_NAME_LENGTH,
+    )?;
+    if let Some(description) = object.get("description").and_then(Value::as_str) {
+        if description.chars().count() > MAX_DESCRIPTION_LENGTH {
+            return Err("参数不合法：rule.description".into());
+        }
+    }
+    if let Some(enabled) = object.get("enabled") {
+        if !enabled.is_boolean() {
+            return Err("参数不合法：rule.enabled".into());
+        }
+    }
+    for key in [
+        "filters",
+        "redirect",
+        "replace",
+        "queryParam",
+        "delay",
+        "headers",
+        "userAgent",
+        "request",
+        "response",
+        "script",
+    ] {
+        if let Some(value) = object.get(key) {
+            if !value.is_null() && !value.is_object() {
+                return Err(format!("参数不合法：rule.{key}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn assert_target_patch(patch: &Value) -> Result<(), String> {
+    let object = require_object(patch, "patch")?;
+    for key in ["enabled", "noCache"] {
+        if let Some(value) = object.get(key) {
+            if !value.is_boolean() {
+                return Err(format!("参数不合法：patch.{key}"));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<Value, String> {
     match command {
         "interceptor:status:get" => Ok(runtime_status()),
@@ -712,6 +815,7 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
                 .and_then(Value::as_str)
                 .ok_or("缺少 targetId 参数")?;
             let patch = args.get(1).cloned().unwrap_or(json!({}));
+            assert_target_patch(&patch)?;
             update_target(id, &patch)?;
             broadcast_targets(app);
             Ok(json!(targets()))
@@ -720,6 +824,7 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
         "interceptor:rules:get" => Ok(json!(store::load_rules())),
         "interceptor:rules:upsert" => {
             let mut rule = args.first().cloned().ok_or("缺少规则内容")?;
+            assert_rule_payload(&rule)?;
             rule["updatedAt"] = json!(crate::iso_time::now_iso());
             let rules = store::upsert_rule(rule)?;
             sync_rules_to_extension();
@@ -822,5 +927,60 @@ fn open_directory(path: &str) -> Result<(), String> {
     {
         let _ = path;
         Err("当前平台暂不支持打开目录".into())
+    }
+}
+
+#[cfg(test)]
+mod payload_validation_tests {
+    use super::{assert_rule_payload, assert_target_patch};
+    use serde_json::json;
+
+    #[test]
+    fn accepts_well_formed_rule() {
+        assert!(assert_rule_payload(&json!({
+            "id": "rule-1",
+            "name": "重定向到本地",
+            "type": "redirect",
+            "enabled": true,
+            "redirect": { "to": "http://127.0.0.1:3000" }
+        }))
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_unknown_type_and_missing_fields() {
+        assert!(assert_rule_payload(&json!({
+            "id": "r", "name": "n", "type": "unknown"
+        }))
+        .is_err());
+        assert!(assert_rule_payload(&json!({ "name": "n", "type": "cancel" })).is_err());
+        assert!(assert_rule_payload(&json!({ "id": "r", "type": "cancel" })).is_err());
+        assert!(assert_rule_payload(&json!("not-an-object")).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_and_mistyped_fields() {
+        let long_name = "x".repeat(501);
+        assert!(assert_rule_payload(&json!({
+            "id": "r", "name": long_name, "type": "cancel"
+        }))
+        .is_err());
+        // 子配置必须是普通对象
+        assert!(assert_rule_payload(&json!({
+            "id": "r", "name": "n", "type": "headers", "headers": "bad"
+        }))
+        .is_err());
+        // 布尔字段类型必须正确
+        assert!(assert_rule_payload(&json!({
+            "id": "r", "name": "n", "type": "cancel", "enabled": "yes"
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn target_patch_only_accepts_known_booleans() {
+        assert!(assert_target_patch(&json!({ "enabled": true, "noCache": false })).is_ok());
+        assert!(assert_target_patch(&json!({ "enabled": 1 })).is_err());
+        assert!(assert_target_patch(&json!([])).is_err());
     }
 }

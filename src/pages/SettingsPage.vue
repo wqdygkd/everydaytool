@@ -220,10 +220,59 @@ function formatBytes(bytes: number): string {
 
 // 页签常驻挂载（切走只是 v-show 隐藏），因此只在首次挂载时拉一次数据；
 // 之后由各操作自己触发刷新（改目录 / 清缓存后各刷一次）。
+// ── 窗口大小与位置 ──
+// 与窗口外观同理：唯一事实来源是桌面壳（<数据目录>/window-geometry.json），
+// 这里只读当前记录、提交开关 / 重置；具体几何由桌面壳在关窗时自己记。
+interface WindowBoundsState {
+  enabled: boolean
+  width: number
+  height: number
+  x: number | null
+  y: number | null
+  maximized: boolean
+}
+
+const bounds = ref<WindowBoundsState | null>(null)
+const boundsBusy = ref(false)
+const rememberBounds = computed(() => bounds.value?.enabled === true)
+const boundsSize = computed(() => (bounds.value ? `${Math.round(bounds.value.width)} × ${Math.round(bounds.value.height)}` : '—'))
+
+async function loadBounds() {
+  try {
+    bounds.value = await invokeAppCommand<WindowBoundsState>(appCommands().WINDOW_BOUNDS_GET)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '读取窗口位置记录失败')
+  }
+}
+
+async function toggleRememberBounds(value: boolean) {
+  boundsBusy.value = true
+  try {
+    bounds.value = await invokeAppCommand<WindowBoundsState>(appCommands().WINDOW_BOUNDS_SET, value)
+  } catch (error) {
+    ElMessage.error((error as Error).message || '切换窗口位置记忆失败')
+  } finally {
+    boundsBusy.value = false
+  }
+}
+
+async function resetBounds() {
+  boundsBusy.value = true
+  try {
+    bounds.value = await invokeAppCommand<WindowBoundsState>(appCommands().WINDOW_BOUNDS_RESET)
+    ElMessage.success('已恢复默认大小并居中')
+  } catch (error) {
+    ElMessage.error((error as Error).message || '重置窗口大小失败')
+  } finally {
+    boundsBusy.value = false
+  }
+}
+
 onMounted(() => {
   void loadInfo()
   void loadUsage()
   void loadAppearance()
+  void loadBounds()
 })
 </script>
 
@@ -332,6 +381,29 @@ onMounted(() => {
           关闭后恢复透出真实桌面。
         </UiHint>
       </div>
+    </UiPanel>
+
+    <UiPanel title="窗口大小与位置">
+      <UiSwitchField :model-value="rememberBounds" :disabled="boundsBusy" align="start" @update:model-value="toggleRememberBounds">
+        记住窗口大小与位置
+      </UiSwitchField>
+      <UiDetailGrid :columns="2">
+        <UiDetailItem label="当前大小" mono>
+          {{ boundsSize }}
+        </UiDetailItem>
+        <UiDetailItem label="上次位置" mono>
+          {{ bounds?.x === null || bounds?.x === undefined ? '居中' : `${Math.round(bounds.x)}, ${Math.round(bounds.y ?? 0)}` }}
+        </UiDetailItem>
+      </UiDetailGrid>
+      <UiGroup>
+        <el-button size="small" :disabled="boundsBusy" @click="resetBounds">
+          恢复默认大小并居中
+        </el-button>
+      </UiGroup>
+      <UiHint block>
+        开启后，关闭窗口时记录大小与位置（最大化 / 全屏 / 最小化不覆盖正常态几何），
+        下次启动按当前显示器校验后还原；拔掉副屏或改分辨率不会把窗口开到屏幕外。
+      </UiHint>
     </UiPanel>
 
     <UiPanel title="清理缓存">

@@ -78,7 +78,7 @@
 
 - 生成：Rust `rcgen`（ECDSA P-256）；根 CA（`edt Interceptor CA`）有效期 10 年，落盘 `data/interceptor/certs/`（`ca.key` / `ca.crt`）；叶证书按 host 现场签发（SAN 含域名与 IP，397 天），内存缓存 6 小时。MITM 服务端用 `rustls`（schannel 只接受 RSA 私钥，无法用 ECDSA 叶证书）；上游连接用 `native-tls`（Windows 走 schannel），回环目标跳过校验。
 - Windows：`certutil -user -addstore Root ca.crt`（当前用户根库、免 UAC，Chrome 读系统库）；检测 / 删除都走 SHA1 指纹。
-- macOS：**登录钥匙串** `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`，经 `osascript … with administrator privileges` 弹原生授权（不用 System.keychain）；检测 `security find-certificate -Z -c 'edt Interceptor CA' <keychain>`，删除按指纹。
+- macOS：**登录钥匙串** `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`，经 `osascript do shell script … with prompt "…"` 由系统弹窗授权（无需管理员 / 不用 System.keychain）；检测 `security find-certificate -Z -c 'edt Interceptor CA' <keychain>`，删除按指纹。
 - UI：证书页显示状态（未生成 / 已生成 / 未信任）、一键安装 / 卸载 / 导出 `.crt`；信任是**每个浏览器 / profile 各一次**——Chrome 走系统库，Firefox 等自带证书库的浏览器需手动导入导出的证书。
 - 重签：会换指纹，系统里的旧证书需重新信任（「遇信任问题就重签 + 重装」是标准处置）。
 

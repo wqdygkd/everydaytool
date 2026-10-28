@@ -7,6 +7,10 @@ export const APP_COMMANDS = {
   DATA_DIRECTORY_OPEN: 'edt-app:data-directory:open',
   DATA_USAGE_GET: 'edt-app:data-usage:get',
   CACHE_CLEAR: 'edt-app:cache:clear',
+  // 窗口大小与位置记忆（唯一事实来源：<数据目录>/window-geometry.json）
+  WINDOW_BOUNDS_GET: 'edt-app:window-bounds:get',
+  WINDOW_BOUNDS_SET: 'edt-app:window-bounds:set',
+  WINDOW_BOUNDS_RESET: 'edt-app:window-bounds:reset',
   // 设置页的「打开调试控制台」：为调用方窗口打开独立 DevTools 窗口
   DEVTOOLS_OPEN: 'edt-app:devtools:open',
   // 主进程 → 渲染层推送：窗口进/出全屏（EVENT_ 开头，前端 on() 白名单要求）

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Monitor, Window};
+use tauri::{AppHandle, Manager, Monitor, Window};
 
 use crate::appearance;
 
@@ -29,6 +29,9 @@ const MIN_VISIBLE: f64 = 96.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct WindowGeometry {
+    /// 是否记忆窗口大小与位置（可在设置页关掉；关掉后不再记录、启动也不再还原）
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default = "default_width")]
     pub width: f64,
     #[serde(default = "default_height")]
@@ -42,6 +45,10 @@ pub struct WindowGeometry {
     pub maximized: bool,
 }
 
+fn default_enabled() -> bool {
+    true
+}
+
 fn default_width() -> f64 {
     DEFAULT_WIDTH
 }
@@ -53,6 +60,7 @@ fn default_height() -> f64 {
 impl Default for WindowGeometry {
     fn default() -> Self {
         Self {
+            enabled: true,
             width: DEFAULT_WIDTH,
             height: DEFAULT_HEIGHT,
             x: None,
@@ -70,6 +78,7 @@ impl WindowGeometry {
 
     fn sanitized(self) -> Self {
         Self {
+            enabled: self.enabled,
             width: finite_or(self.width, DEFAULT_WIDTH).clamp(MIN_WIDTH, MAX_WIDTH),
             height: finite_or(self.height, DEFAULT_HEIGHT).clamp(MIN_HEIGHT, MAX_HEIGHT),
             x: self.x.filter(|value| value.is_finite()),
@@ -237,6 +246,11 @@ fn distance(left: (f64, f64), right: (f64, f64)) -> f64 {
 /// 关窗 / 退出时落盘：正常态记录完整几何，最大化 / 全屏 / 最小化只更新 maximized 标记。
 /// 调用方用 `app.get_window("main")` 取窗口（与创建路径同一套句柄约定）。
 pub fn save_current(app: &AppHandle, window: &Window) {
+    let mut geometry = load(app);
+    if !geometry.enabled {
+        // 记忆被关掉：不再记录（设置页重新开启时会补记当前几何）
+        return;
+    }
     let Ok(scale) = window.scale_factor() else {
         return;
     };
@@ -246,7 +260,6 @@ pub fn save_current(app: &AppHandle, window: &Window) {
     let maximized = window.is_maximized().unwrap_or(false);
     let fullscreen = window.is_fullscreen().unwrap_or(false);
     let minimized = window.is_minimized().unwrap_or(false);
-    let mut geometry = load(app);
     geometry.maximized = maximized;
     if !maximized && !fullscreen && !minimized {
         let (Ok(size), Ok(position)) = (window.inner_size(), window.outer_position()) else {
@@ -255,6 +268,7 @@ pub fn save_current(app: &AppHandle, window: &Window) {
         let size = size.to_logical::<f64>(scale);
         let position = position.to_logical::<f64>(scale);
         geometry = WindowGeometry {
+            enabled: true,
             width: size.width,
             height: size.height,
             x: Some(position.x),
@@ -265,6 +279,48 @@ pub fn save_current(app: &AppHandle, window: &Window) {
     if let Err(error) = save(app, &geometry) {
         log::warn!("[window-geometry] 窗口几何保存失败：{error}");
     }
+}
+
+/// 渲染层可见的状态（设置页用）：唯一事实来源仍是 `<数据目录>/window-geometry.json`。
+pub fn state(app: &AppHandle) -> Value {
+    let geometry = load(app);
+    serde_json::json!({
+        "enabled": geometry.enabled,
+        "width": geometry.width,
+        "height": geometry.height,
+        "x": geometry.x,
+        "y": geometry.y,
+        "maximized": geometry.maximized,
+    })
+}
+
+/// 开关记忆。重新开启时按当前窗口补记一次几何（否则会沿用关闭前的旧位置）。
+pub fn set_enabled(app: &AppHandle, enabled: bool) -> Result<Value, String> {
+    let mut geometry = load(app);
+    geometry.enabled = enabled;
+    save(app, &geometry)?;
+    if enabled {
+        if let Some(window) = app.get_window("main") {
+            save_current(app, &window);
+        }
+    }
+    Ok(state(app))
+}
+
+/// 重置为默认大小并居中：清掉存档几何，并立刻把窗口调回默认尺寸 / 居中。
+pub fn reset(app: &AppHandle) -> Result<Value, String> {
+    let enabled = load(app).enabled;
+    let geometry = WindowGeometry {
+        enabled,
+        ..WindowGeometry::default()
+    };
+    save(app, &geometry)?;
+    if let Some(window) = app.get_window("main") {
+        let _ = window.unmaximize();
+        let _ = window.set_size(tauri::LogicalSize::new(DEFAULT_WIDTH, DEFAULT_HEIGHT));
+        let _ = window.center();
+    }
+    Ok(state(app))
 }
 
 #[cfg(test)]
@@ -282,6 +338,7 @@ mod tests {
 
     fn geometry(x: Option<f64>, y: Option<f64>, width: f64, height: f64) -> WindowGeometry {
         WindowGeometry {
+            enabled: true,
             width,
             height,
             x,

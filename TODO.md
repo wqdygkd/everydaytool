@@ -11,3 +11,10 @@ env 环境管理  提供个接口
 
 Apktool（APK反编译与打包工具）：https://github.com/iBotPeaches/Apktool/releases
 uber-apk-signer（一键对齐与签名工具）：https://github.com/patrickfav/uber-apk-signer/releases
+
+# 迁移后待办（来自同级 everydaytool 的 TODO 归档）
+$env:EDT_NO_SANDBOX=1; pnpm dev
+
+REDIRECT / REPLACE / QUERYPARAM / CANCEL / DELAY / HEADERS / USERAGENT / REQUEST / RESPONSE / SCRIPT
+
+https://github.com/Neet-Nestor/Telegram-Media-Downloader

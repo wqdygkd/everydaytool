@@ -59,6 +59,8 @@ Tauri 2（Rust 桌面壳）+ Vue 3 + Pinia + Element Plus + Vite + SCSS 多工�
 - 主窗口几何（大小 / 位置 / 最大化）由 `src-tauri/src/window_geometry.rs` 记忆，存 `<数据目录>/window-geometry.json`：
   启动时先按当前显示器校验再还原（拔副屏 / 改分辨率不会把窗口开到屏幕外），关窗与 `ExitRequested` 时落盘；
   最大化 / 全屏 / 最小化时只更新 `maximized` 标记，不覆盖正常态尺寸与位置。尺寸与坐标一律逻辑像素。
+  设置页「窗口大小与位置」提供记忆开关与「恢复默认大小并居中」
+  （`edt-app:window-bounds:get|set|reset`）；关掉记忆后 `save_current` 不再写盘，重新开启时补记当前几何。
 - **应用级配置（窗口外观 / 窗口几何）放在数据目录**（`appearance::config_dir()` = `resolve_data_dir()`），
   与工具数据同处；`data-root.json` / `setup-state.json` 这类「数据目录在哪」的引导文件必须留在 `userData`
   （放进去会形成循环依赖）。换数据目录由启动时的整目录迁移一起搬过去（见「数据目录与运行形态」），

@@ -15,7 +15,7 @@
 | 数据 | 位置 | 说明 |
 | --- | --- | --- |
 | 数据目录引导（硬限制） | `userData/data-root.json`、`data-root.path`、`data-root.pending.json`、`setup-state.json` | 必须先知道数据目录在哪，不能放进数据目录；随 userData 按安装版 / 开发版分开 |
-| 应用级配置 | `<data>/window-appearance.json`、`<data>/window-geometry.json` | 窗口外观 + 记住的窗口大小 / 位置；旧版留在 userData 根目录的副本由 `migrate_legacy_config` 一次性迁入 |
+| 应用级配置 | `<data>/window-appearance.json`、`<data>/window-geometry.json` | 窗口外观 + 记住的窗口大小 / 位置（`enabled` 字段是设置页那个记忆开关）；旧版留在 userData 根目录的副本由 `migrate_legacy_config` 一次性迁入 |
 | 日志 | `<data>/logs` | `appearance::resolve_log_dir` 候选链的首选；不可写时回退 `%LOCALAPPDATA%\com.edt.everydaytool\logs`，仍不可写则只留 stdout |
 | 主窗口 WebView2 | `<data>/webview2` | 主界面浏览器数据（界面存储 / 着色器缓存）；`EDT_WEBVIEW_DATA_DIR` 可显式覆盖 |
 | 子 Webview profiles | `<data>/webview-profiles/<profile>` | env-browser（`env-<id>`）/ treease（`treease`）/ telegram-cache / workbuddy2api-panel 各自的独立浏览数据与登录态 |

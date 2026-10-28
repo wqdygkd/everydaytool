@@ -1,6 +1,10 @@
 node_modules/
 dist/
 data/
+
+# 本地凭据（telegram-cache 的 TG_API_ID / TG_API_HASH）：只提交 .env.example
+.env
+.env.local
 .pnpm-store
 .agents
 .workbuddy

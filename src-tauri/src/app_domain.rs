@@ -416,6 +416,18 @@ pub fn handle(app: &tauri::AppHandle, command: &str, args: &[Value]) -> Result<V
             Ok(info)
         }
 
+        "edt-app:window-bounds:get" => Ok(crate::window_geometry::state(app)),
+
+        "edt-app:window-bounds:set" => {
+            let enabled = args
+                .first()
+                .and_then(Value::as_bool)
+                .ok_or("缺少 enabled 参数")?;
+            crate::window_geometry::set_enabled(app, enabled)
+        }
+
+        "edt-app:window-bounds:reset" => crate::window_geometry::reset(app),
+
         "edt-app:data-directory:open" => {
             let dir = appearance::resolve_data_dir();
             open_directory(&dir.to_string_lossy())?;
