@@ -1,4 +1,4 @@
-// 环境浏览器域共享类型（UI ↔ Node server）。
+// 环境浏览器域共享类型（UI ↔ Rust 桌面壳）。
 
 export interface EnvConfig {
   id: string

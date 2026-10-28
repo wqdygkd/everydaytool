@@ -1,4 +1,4 @@
-// WXP 增强域共享类型与默认设置（UI ↔ Node server）。
+// WXP 增强域共享类型与默认设置（UI ↔ Rust 桌面壳）。
 
 export type WxpRunningStatus = 'launching' | 'waiting' | 'connecting' | 'running' | 'error' | 'stopped'
 

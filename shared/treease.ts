@@ -1,4 +1,4 @@
-// Treease 编辑器接口拦截域共享类型（UI ↔ Node server）。
+// Treease 编辑器接口拦截域共享类型（UI ↔ Rust 桌面壳）。
 
 export interface TreeaseInterceptPatch {
   path: string
