@@ -33,8 +33,7 @@ defineEmits<{
     <p class="tool-desc">
       {{ tool.description }}
     </p>
-    <UiGroup wrap gap="xs">
-      <span class="tool-category">{{ tool.category.name }}</span>
+    <UiGroup class="tool-meta" wrap gap="xs">
       <UiChip v-if="tool.isNew" tone="success">
         新
       </UiChip>
@@ -64,7 +63,7 @@ defineEmits<{
   backdrop-filter: var(--glass-raised);
   box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
   cursor: pointer;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);
 
   &:hover {
     border-color: var(--color-border);
@@ -147,16 +146,13 @@ defineEmits<{
     line-height: 1.4;
   }
 
-  .tool-category,
+  /* 元信息行固定高度：有 / 没有「新」徽章时卡片等高，首页拖拽换行不会引起行高重排 */
+  .tool-meta {
+    min-height: 24px;
+  }
+
   .tool-version {
     font-size: var(--font-size-xs);
-  }
-
-  .tool-category {
-    color: var(--color-text-secondary);
-  }
-
-  .tool-version {
     margin-left: auto;
     color: var(--color-text-tertiary);
   }

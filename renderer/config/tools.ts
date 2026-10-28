@@ -1,4 +1,4 @@
-import type { ToolCategoryGroup, ToolClientTarget, ToolDefinition } from '../shared/types/tool'
+import type { ToolClientTarget, ToolDefinition } from '../shared/types/tool'
 import chromeSandbox from '@tools/chrome-sandbox/index'
 import envBrowser from '@tools/env-browser/index'
 import idCardGenerator from '@tools/id-card-generator/index'
@@ -36,23 +36,4 @@ export function getToolRegistry(): ToolDefinition[] {
 
 export function getToolById(id: string): ToolDefinition | undefined {
   return getToolRegistry().find(tool => tool.id === id)
-}
-
-export function groupToolsByCategory(tools: ToolDefinition[]): ToolCategoryGroup[] {
-  const groups = new Map<string, ToolCategoryGroup>()
-
-  for (const tool of tools) {
-    const group = groups.get(tool.category.key)
-    if (group) {
-      group.tools.push(tool)
-      continue
-    }
-
-    groups.set(tool.category.key, {
-      category: tool.category,
-      tools: [tool],
-    })
-  }
-
-  return Array.from(groups.values())
 }

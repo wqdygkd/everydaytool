@@ -6,7 +6,7 @@ export const EDT_APP_IPC_CHANNELS = {
   DATA_DIRECTORY_UPDATE: 'edt-app:data-directory:update',
   DATA_DIRECTORY_OPEN: 'edt-app:data-directory:open',
   DATA_USAGE_GET: 'edt-app:data-usage:get',
-  // 应用壳 UI 偏好（收藏的工具）：落配置层 app/ui-preferences.json，LocalStorage 只做镜像
+  // 应用壳 UI 偏好（收藏的工具 / 首页工具顺序）：落配置层 app/ui-preferences.json，LocalStorage 只做镜像
   UI_PREFERENCES_GET: 'edt-app:ui-preferences:get',
   UI_PREFERENCES_SET: 'edt-app:ui-preferences:set',
   // 备份包（.edtbackup）：导出 / 预检 / 恢复。缓存层永不进包，资产默认只出清单

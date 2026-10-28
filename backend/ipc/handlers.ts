@@ -127,12 +127,12 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     return true
   })
 
-  // ── 应用壳 UI 偏好（收藏的工具）：配置层文件为事实来源 ──
+  // ── 应用壳 UI 偏好（收藏的工具 / 首页工具顺序）：配置层文件为事实来源 ──
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.UI_PREFERENCES_GET, (): UiPreferences => getUiPreferences())
 
-  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.UI_PREFERENCES_SET, (_event, patch: { favoriteToolIds?: unknown }): UiPreferences => {
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.UI_PREFERENCES_SET, (_event, patch: { favoriteToolIds?: unknown, toolOrder?: unknown }): UiPreferences => {
     if (!patch || typeof patch !== 'object') throw new Error('偏好参数不合法')
-    return setUiPreferences({ favoriteToolIds: patch.favoriteToolIds })
+    return setUiPreferences({ favoriteToolIds: patch.favoriteToolIds, toolOrder: patch.toolOrder })
   })
 
   // ── 备份包：导出 / 预检 / 恢复 ──

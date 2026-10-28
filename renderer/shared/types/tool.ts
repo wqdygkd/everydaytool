@@ -51,8 +51,3 @@ export interface ToolSubRoute {
   name: string
   meta?: { toolId?: string, title?: string }
 }
-
-export interface ToolCategoryGroup {
-  category: ToolCategory
-  tools: ToolDefinition[]
-}

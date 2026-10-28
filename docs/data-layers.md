@@ -140,7 +140,7 @@
 | `data/.env` | 原地不动（`DATA_ROOT_KEEP_NAMES`） | —（不属任何层） | — | — | 用户自备凭据：隔离它等于删凭据 |
 
 **留在 Local Storage 的**：打开的页签（会话性）、offline-pack 镜像地址（偏好）、env-browser 网页预览回退。
-**迁到 `config/app/ui-preferences.json` 的**：收藏工具（用户数据，要能带走）。
+**迁到 `config/app/ui-preferences.json` 的**：收藏的工具、首页工具排序（用户数据，要能带走）。
 
 ## 5. 基建 API
 
@@ -345,7 +345,7 @@ P2（备份导出/恢复）追加验证：
 - **LocalStorage 上台面**：
   - treease 拦截规则与开关 → `config/treease-editor/rules.json`（`rules-store.ts`，白名单字段校验），
     LocalStorage 降级为镜像；首次挂载时若配置层为空则把镜像迁上去；
-  - 收藏的工具 → `config/app/ui-preferences.json`（`ui-preferences-store.ts`，去重限量），同样镜像兜底网页预览。
+  - 收藏的工具 / 首页工具排序 → `config/app/ui-preferences.json`（`ui-preferences-store.ts`，去重限量），同样镜像兜底网页预览。
 - **清理自愈钩子**（`data-root-scan.ts` 的 `registerCacheIntegrityHandler`，对应条目上的 `integrity` 字段）：
   - telegram：清掉 `objects/` 后立即 `pruneTelegramRegistry()`（不必等重启）；
   - workbuddy：清掉 `runtime/` 后立即 `publishStateNow()`，「已安装」按二进制是否真的存在重算

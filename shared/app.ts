@@ -43,9 +43,14 @@ export interface DataUsage {
   layers: DataLayerUsageInfo[]
 }
 
-/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：目前只有收藏的工具 */
+/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：收藏的工具 + 首页工具顺序 */
 export interface UiPreferences {
   favoriteToolIds: string[]
+  /**
+   * 首页工具的自定义顺序（工具 id 数组，拖拽卡片产生）。
+   * 空数组 = 未自定义：首页按工具创建时间倒序（最新在前）。
+   */
+  toolOrder: string[]
 }
 
 /** 资产根信息（独立根，默认 `<data>/assets`，可改到任意盘） */

@@ -146,6 +146,7 @@ export default defineTool({
 | **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
 | 设置页（数据目录 / 数据分层用量 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
+| 首页工具排序（创建时间 / 拖拽 / 合并保存顺序） | `renderer/shared/tool/tool-order.ts` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |
 | 路由配置 | `renderer/router/routes.ts` |
@@ -172,7 +173,7 @@ export default defineTool({
 | 资产根（独立归档位置 / pending 迁移 / 路径守卫） | `backend/utils/assets-root.ts`；`path-guard.ts` 的 `isSafeAssetsDirectory` |
 | **备份包导出 / 预检 / 恢复（.edtbackup）** | `shared/backup.ts`（格式声明）、`backend/utils/backup-format.ts`（容器）、`backend/utils/backup-service.ts`（业务） |
 | 凭据静态加密（safeStorage 信封 `edt-secret:`） | `backend/utils/secret-box.ts` |
-| 应用壳 UI 偏好（收藏的工具） | `backend/utils/ui-preferences-store.ts` |
+| 应用壳 UI 偏好（收藏的工具 / 首页排序） | `backend/utils/ui-preferences-store.ts` |
 | 清理后的状态自愈钩子（索引修剪 / 已安装重算） | `backend/utils/data-root-scan.ts` 的 `registerCacheIntegrityHandler` |
 | **Chromium 会话目录（sessionData）重定向** | `backend/utils/session-data.ts` |
 | 数据目录整体迁移（切换时复制→校验→删除） | `backend/utils/data-migration.ts` |

@@ -112,7 +112,7 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   // ── 配置层 ──
   { id: 'app.window-appearance', toolId: 'app', layer: 'config', relativePath: 'app/window-appearance.json', label: '窗口外观', backup: 'include', clean: 'never' },
   { id: 'app.window-bounds', toolId: 'app', layer: 'config', relativePath: 'app/window-bounds.json', label: '窗口大小与位置', backup: 'include', clean: 'never' },
-  { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '收藏的工具', backup: 'include', clean: 'never' },
+  { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '收藏的工具与首页排序', backup: 'include', clean: 'never' },
   { id: 'chrome-sandbox.stores', toolId: 'chrome-sandbox', layer: 'config', relativePath: 'chrome-sandbox', label: '沙箱列表 / 指纹 / 配置', backup: 'include', clean: 'never' },
   { id: 'env-browser.envs', toolId: 'env-browser', layer: 'config', relativePath: 'env-browser/envs.json', label: '环境账号', backup: 'include', clean: 'never', sensitive: true },
   { id: 'interceptor.config', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/config.json', label: '拦截配置', backup: 'include', clean: 'never' },
