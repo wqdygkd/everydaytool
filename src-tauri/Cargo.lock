@@ -1092,6 +1092,7 @@ dependencies = [
  "flate2",
  "http",
  "httparse",
+ "libc",
  "log",
  "native-tls",
  "rand",

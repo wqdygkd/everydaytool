@@ -181,7 +181,9 @@ function handleTabClick(toolId: string) {
   if (tab) router.push({ name: tab.routeName })
 }
 
-function handleTabRemove(toolId: string) {
+async function handleTabRemove(toolId: string) {
+  // 工具可注册关闭前守卫（如 workbuddy2api-panel：服务在跑时先确认并 STOP）
+  if (!(await runTabCloseGuard(toolId))) return
   const wasActive = tabsStore.activeId === toolId
   tabsStore.close(toolId)
   // 关闭正在查看的工具 → 回主页；关后台页签则原地不动

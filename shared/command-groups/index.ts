@@ -5,6 +5,7 @@ import { ENV_BROWSER_COMMANDS } from './env-browser.ts'
 import { INTERCEPTOR_COMMANDS } from './interceptor.ts'
 import { OFFLINE_PACK_COMMANDS } from './offline-pack.ts'
 import { TREEASE_COMMANDS } from './treease.ts'
+import { WORKBUDDY_COMMANDS } from './workbuddy.ts'
 import { WXP_COMMANDS } from './wxp.ts'
 
 export interface CommandGroup {
@@ -22,4 +23,5 @@ export const COMMAND_GROUPS: CommandGroup[] = [
   { domain: 'treeaseEditor', command: 'treease_command', commands: TREEASE_COMMANDS },
   { domain: 'wxpEnhancer', command: 'wxp_command', commands: WXP_COMMANDS },
   { domain: 'offlinePack', command: 'offline_pack_command', commands: OFFLINE_PACK_COMMANDS },
+  { domain: 'workbuddy2apiPanel', command: 'workbuddy_command', commands: WORKBUDDY_COMMANDS },
 ]

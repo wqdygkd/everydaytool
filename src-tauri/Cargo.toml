@@ -42,6 +42,11 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 httparse = "1"
 brotli = "7"
 
+[target.'cfg(unix)'.dependencies]
+# 进程管理（workbuddy2api-panel 的 START/STOP）：SIGTERM / SIGKILL 与存活探测走 libc，
+# 平台差异统一在桌面壳里，不靠外部 kill(1) 命令。
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = [
     "Win32_Foundation",

@@ -154,6 +154,16 @@ async fn run_command(
         .await;
     }
 
+    if domain == "workbuddy2apiPanel" {
+        let handle = app.clone();
+        let command_clone = command.clone();
+        let args_clone = args.clone();
+        return dispatch_blocking("workbuddy2api-panel 调度失败", move || {
+            crate::workbuddy::handle(&handle, &command_clone, &args_clone)
+        })
+        .await;
+    }
+
     if domain == "treeaseEditor" {
         let handle = app.clone();
         let map = webviews.map.clone();
@@ -246,6 +256,27 @@ pub async fn env_browser_command(
         webviews.inner(),
         treease.inner().clone(),
         "envBrowser",
+        command,
+        args,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn workbuddy_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    webviews: State<'_, WebviewState>,
+    treease: State<'_, Arc<TreeaseState>>,
+    command: String,
+    args: Vec<Value>,
+) -> Result<Value, String> {
+    run_command(
+        app,
+        state.inner(),
+        webviews.inner(),
+        treease.inner().clone(),
+        "workbuddy2apiPanel",
         command,
         args,
     )

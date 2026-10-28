@@ -19,6 +19,7 @@ mod platform;
 mod treease;
 mod webviews;
 mod window_geometry;
+mod workbuddy;
 mod wxp;
 
 pub use interceptor::origin;
@@ -187,6 +188,7 @@ pub fn run() {
             commands::treease_command,
             commands::wxp_command,
             commands::offline_pack_command,
+            commands::workbuddy_command,
             commands::edt_window_state,
             commands::edt_window_action,
             commands::edt_open_external,
@@ -230,6 +232,8 @@ pub fn run() {
             app_domain::register_tool_skip_providers();
             // 拦截器：代理 / WS 桥 / 证书在后台线程初始化（不阻塞首帧）
             interceptor::setup(app.handle());
+            // workbuddy2api-panel：建数据目录 + 启动定时探活推送（默认不启动托管进程）
+            workbuddy::setup(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -258,6 +262,8 @@ pub fn run() {
             std::thread::spawn(move || {
                 // 拦截器代理 / WS 桥收尾
                 interceptor::dispose();
+                // 托管的上游服务进程收尾（与关页签共用 STOP 语义）
+                workbuddy::dispose();
                 finished.store(true, Ordering::SeqCst);
                 handle.exit(code.unwrap_or(0));
             });

@@ -150,6 +150,14 @@ fn open_path(app: &AppHandle, args: &Value) -> Result<Value, String> {
     }
 }
 
+/// 用系统默认程序打开一个本地路径（目录 / 文件）。业务域打开数据目录走这里。
+pub fn open_local_path(app: &AppHandle, path: &str) -> Result<(), String> {
+    match app.opener().open_path(path.to_string(), None::<&str>) {
+        Ok(()) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 pub fn open_external(app: &AppHandle, raw_url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(raw_url.trim()).map_err(|_| "外链格式不正确".to_string())?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {

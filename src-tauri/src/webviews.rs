@@ -249,7 +249,13 @@ async fn create_webview(app: AppHandle, map: WebviewMap, args: Value) -> Result<
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    // preset 白名单：除内置能力外一律视为「无预设」
+    if !matches!(preset.as_str(), "" | "env-browser" | "treease" | "workbuddy") {
+        return Err(format!("未知的 webview preset：{preset}"));
+    }
     let insecure = preset == "env-browser";
+    // workbuddy 面板只允许在本机地址内导航：面板里的外链 / OAuth 交系统浏览器
+    let local_only = preset == "workbuddy";
     let x = number(&args, "x");
     let y = number(&args, "y");
     let width = number(&args, "width").max(0.0);
@@ -312,6 +318,17 @@ async fn create_webview(app: AppHandle, map: WebviewMap, args: Value) -> Result<
         builder = builder.on_navigation(move |url| {
             // 只允许 web 导航；阻止 file: / tauri: / 自定义协议，避免远程页面跳进本地上下文。
             if !matches!(url.scheme(), "http" | "https" | "about") {
+                return false;
+            }
+            // 面板类 webview：只在本机地址内跳转，其余按「新窗口」交渲染层开系统浏览器
+            if local_only
+                && !matches!(url.host_str(), Some("127.0.0.1") | Some("localhost"))
+            {
+                emit_webview(
+                    &nav_app,
+                    &nav_id,
+                    json!({ "kind": "new-window", "url": url.to_string() }),
+                );
                 return false;
             }
             emit_webview(

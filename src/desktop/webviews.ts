@@ -19,8 +19,9 @@ export interface WebviewCreateOptions extends WebviewBounds {
    * 内置注入预设，同时是能力白名单——
    * env-browser：允许关闭同源策略（--disable-web-security）
    * treease：接口拦截运行时注入
+   * workbuddy：只允许在本机地址内导航（面板页），其余外链交系统浏览器
    */
-  preset?: 'env-browser' | 'treease'
+  preset?: 'env-browser' | 'treease' | 'workbuddy'
 }
 
 export type WebviewEventKind = 'loading-start' | 'loading-stop' | 'navigate' | 'new-window' | 'title'
