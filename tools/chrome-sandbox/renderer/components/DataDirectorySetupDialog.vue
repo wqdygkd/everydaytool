@@ -44,7 +44,8 @@ async function accept(target: string): Promise<void> {
   loading.value = true
   try {
     await invokeAppIpc(appIpcChannels().DATA_DIRECTORY_UPDATE, dir)
-    visible.value = false
+    // 关闭动作等价于 useDialogVisible 的 setter：直接通知父级改 modelValue
+    emit('update:modelValue', false)
     emit('completed', { dataDirectory: dir })
   } catch (error) {
     ElMessage.error((error as Error).message || '保存失败')

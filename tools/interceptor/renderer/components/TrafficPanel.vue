@@ -32,6 +32,11 @@ function formatTime(at: number): string {
   return `${date.toLocaleTimeString()}.${String(date.getMilliseconds()).padStart(3, '0')}`
 }
 
+/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回流量条目类型 */
+function entryOf(row: unknown): TrafficEntry {
+  return row as TrafficEntry
+}
+
 function openDetail(entry: TrafficEntry): void {
   detail.value = entry
   detailVisible.value = true
@@ -143,7 +148,7 @@ function headersText(headers?: Record<string, string>): string {
       </el-table-column>
       <el-table-column width="120" align="right">
         <template #default="{ row }">
-          <el-button size="small" text type="primary" @click.stop="createRule(row)">
+          <el-button size="small" text type="primary" @click.stop="createRule(entryOf(row))">
             建规则
           </el-button>
         </template>

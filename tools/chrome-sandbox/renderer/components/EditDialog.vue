@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Sandbox } from '../../../../shared/sandbox'
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
 import {
   buildLaunchOptionsPayload,
@@ -32,7 +33,9 @@ function reset() {
   Object.assign(form, INITIAL_FORM)
 }
 
-function loadForm(sandbox) {
+// props.sandbox 运行期声明为 Object（类型即 Record<string, any>），参数类型随之放宽到
+// Partial<Sandbox>：既接受父级传入的宽松对象，又保留字段名与字段类型的校验
+function loadForm(sandbox: Partial<Sandbox>) {
   reset()
   form.name = sandbox.name || ''
   syncLaunchOptionsForm(form, sandbox.metadata?.launchOptions)
@@ -57,10 +60,11 @@ async function save() {
       },
     })
     ElMessage.success('设置已保存')
-    visible.value = false
+    // 关闭动作等价于 useDialogVisible 的 setter：直接通知父级改 modelValue
+    emit('update:modelValue', false)
     reset()
   } catch (error) {
-    ElMessage.error(error.message || '保存失败')
+    ElMessage.error((error as Error).message || '保存失败')
   } finally {
     loading.value = false
   }
@@ -78,7 +82,7 @@ async function save() {
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">
+      <el-button @click="$emit('update:modelValue', false)">
         取消
       </el-button>
       <el-button type="primary" :loading="loading" @click="save">

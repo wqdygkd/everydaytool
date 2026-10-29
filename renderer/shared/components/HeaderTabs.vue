@@ -2,6 +2,8 @@
 interface HeaderTab {
   id: string
   name: string
+  /** 页签强调色（工具品牌色），透传给 --tab-accent；应用页签可缺省 */
+  color?: string
 }
 
 interface TabSlot {

@@ -4,7 +4,9 @@
 // row-class-name / :tree-props / default-expand-all / class …）由单根组件自动透传给 el-table，
 // 因此树形表格、自定义排序、双击开编辑器都不用在这里逐个转发。
 withDefaults(defineProps<{
-  data: unknown[]
+  /** 行对象数组：EP 的 data 要求 DefaultRow（Record<PropertyKey, any>），
+   *  这里声明成同形放宽型，业务侧的接口数组可以直接传入 */
+  data: Record<PropertyKey, any>[]
   loading?: boolean
   /** 空态文案（内部渲染 UiEmpty） */
   emptyText?: string

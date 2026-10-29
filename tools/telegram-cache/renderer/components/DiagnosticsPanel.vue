@@ -214,7 +214,10 @@ async function applyConfig(patch: Partial<TelegramCacheConfig>, message: string)
   }
 }
 
-async function toggleLocalResponse(value: boolean): Promise<void> {
+// 下面三个开关的入参按 EP 声明放宽成 string | number | boolean，再收敛回布尔：
+// 未配 active-value / inactive-value 时 EP 恒发布尔，行为与原来一致。
+async function toggleLocalResponse(raw: string | number | boolean): Promise<void> {
+  const value = Boolean(raw)
   if (value) {
     try {
       await ElMessageBox.confirm(
@@ -229,7 +232,8 @@ async function toggleLocalResponse(value: boolean): Promise<void> {
   await applyConfig({ localResponseEnabled: value }, value ? '图片本地复用已开启' : '图片本地复用已关闭')
 }
 
-async function toggleLocalMediaRange(value: boolean): Promise<void> {
+async function toggleLocalMediaRange(raw: string | number | boolean): Promise<void> {
+  const value = Boolean(raw)
   if (value) {
     try {
       await ElMessageBox.confirm(
@@ -244,7 +248,8 @@ async function toggleLocalMediaRange(value: boolean): Promise<void> {
   await applyConfig({ localMediaRangeEnabled: value }, value ? '媒体 Range 本地响应已开启' : '媒体 Range 本地响应已关闭')
 }
 
-async function togglePageCapture(value: boolean): Promise<void> {
+async function togglePageCapture(raw: string | number | boolean): Promise<void> {
+  const value = Boolean(raw)
   if (value) {
     try {
       await ElMessageBox.confirm(

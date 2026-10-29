@@ -37,10 +37,11 @@ async function submit() {
       launchOptions: buildLaunchOptionsPayload(form),
     })
     ElMessage.success('沙箱创建成功')
-    visible.value = false
+    // 关闭动作等价于 useDialogVisible 的 setter：直接通知父级改 modelValue
+    emit('update:modelValue', false)
     reset()
   } catch (error) {
-    ElMessage.error(error.message || '创建失败')
+    ElMessage.error((error as Error).message || '创建失败')
   } finally {
     loading.value = false
   }
@@ -64,7 +65,7 @@ async function submit() {
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">
+      <el-button @click="$emit('update:modelValue', false)">
         取消
       </el-button>
       <el-button type="primary" :loading="loading" @click="submit">

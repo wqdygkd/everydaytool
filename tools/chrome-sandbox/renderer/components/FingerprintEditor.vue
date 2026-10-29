@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Fingerprint } from '../../../../shared/sandbox'
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
 import { chromeSandboxIpcChannels, invokeChromeSandboxIpc } from '../ipc'
 
@@ -10,7 +11,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'saved'])
 
 const loading = ref(false)
-const local = ref(null)
+const local = ref<Fingerprint | null>(null)
 const visible = useDialogVisible(props, emit)
 const channels = chromeSandboxIpcChannels()
 
@@ -23,7 +24,7 @@ watch(
 )
 
 async function randomize() {
-  local.value = await invokeChromeSandboxIpc(channels.FINGERPRINT_GENERATE_RANDOM)
+  local.value = await invokeChromeSandboxIpc<Fingerprint>(channels.FINGERPRINT_GENERATE_RANDOM)
 }
 
 async function save() {
@@ -32,10 +33,11 @@ async function save() {
   try {
     await invokeChromeSandboxIpc(channels.FINGERPRINT_UPDATE, props.sandboxId, local.value)
     ElMessage.success('指纹已更新')
-    visible.value = false
+    // 关闭动作等价于 useDialogVisible 的 setter：直接通知父级改 modelValue
+    emit('update:modelValue', false)
     emit('saved')
   } catch (error) {
-    ElMessage.error(error.message || '保存失败')
+    ElMessage.error((error as Error).message || '保存失败')
   } finally {
     loading.value = false
   }

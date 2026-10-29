@@ -4,6 +4,19 @@ import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
 import { GENDER, generateIdCards } from '../shared/generator'
 
+/**
+ * el-cascader 的 CascaderOption 带索引签名（Record<string, unknown>），本地的 AreaNode 结构等价但少了这一层，
+ * 直接把 AREA_TREE 传给 :options 会报类型不兼容。这里只在类型层补上索引签名——运行期仍是同一份 AREA_TREE
+ * 数据，不复制、不改写任何节点。
+ */
+interface AreaCascaderOption extends Record<string, unknown> {
+  value: string
+  label: string
+  children?: AreaCascaderOption[]
+}
+
+const areaOptions = AREA_TREE as AreaCascaderOption[]
+
 const birthMode = ref<'age' | 'date'>('age')
 const gender = ref(GENDER.RANDOM)
 const ageRange = ref([18, 60])
@@ -91,7 +104,7 @@ onMounted(handleGenerate)
           <el-cascader
             v-model="areaPath"
             class="form-fill"
-            :options="AREA_TREE"
+            :options="areaOptions"
             :props="{ expandTrigger: 'hover' }"
             clearable
             placeholder="随机全国"

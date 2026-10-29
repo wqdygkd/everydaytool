@@ -34,6 +34,9 @@ const {
 
 const activeEnv = computed(() => store.envs.find(e => e.id === store.activeId))
 
+// el-tabs 的 model-value 只接受 string | number：activeId 为 null（没有打开的页签）时用空串表示「无选中」
+const activeTabName = computed(() => store.activeId ?? '')
+
 const filteredEnvs = computed(() => {
   const kw = search.value.trim().toLowerCase()
   if (!kw) return store.envs
@@ -73,8 +76,9 @@ function handleOpen(env: EnvConfig) {
   store.open(env.id)
 }
 
-function onTabRemove(id: string) {
-  store.closeTab(id)
+// 页签名由 el-tabs 发布（TabPaneName = string | number）；环境 id 恒为字符串，这里收敛回 string
+function onTabRemove(name: string | number) {
+  store.closeTab(String(name))
 }
 
 async function inspectStorage(id: string) {
@@ -195,8 +199,9 @@ function onAddressInput(v: string) {
   if (id && webviewStatus[id]) webviewStatus[id].url = v
 }
 
-function onAddressKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter') handleAddressGo()
+// el-input 的 keydown 声明为 Event | KeyboardEvent（实际恒为 KeyboardEvent）
+function onAddressKeydown(e: Event | KeyboardEvent) {
+  if (e instanceof KeyboardEvent && e.key === 'Enter') handleAddressGo()
 }
 
 onMounted(async () => {
@@ -258,10 +263,10 @@ onUnmounted(() => {
     <div class="main">
       <div v-if="store.openIds.length" class="tab-bar">
         <el-tabs
-          :model-value="store.activeId"
+          :model-value="activeTabName"
           type="card"
           closable
-          @update:model-value="(v: string) => store.switchTab(v)"
+          @update:model-value="(v: string | number) => store.switchTab(String(v))"
           @tab-remove="onTabRemove"
         >
           <el-tab-pane

@@ -46,13 +46,19 @@ async function applyPatch(target: InterceptorTarget, patch: { enabled?: boolean,
   }
 }
 
-async function toggleEnabled(target: InterceptorTarget, enabled: boolean): Promise<void> {
-  await applyPatch(target, { enabled })
+/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回名单条目类型 */
+function targetOf(row: unknown): InterceptorTarget {
+  return row as InterceptorTarget
+}
+
+/** 开关入口：EP 的 change 参数是 string | number | boolean，这里按开关语义取布尔 */
+async function toggleEnabled(target: InterceptorTarget, enabled: string | number | boolean): Promise<void> {
+  await applyPatch(target, { enabled: enabled === true })
 }
 
 /** 强制回源（条目级）：该 origin 的响应去掉缓存控制，保证重复访问也能在流量页看到 */
-async function toggleNoCache(target: InterceptorTarget, noCache: boolean): Promise<void> {
-  await applyPatch(target, { noCache })
+async function toggleNoCache(target: InterceptorTarget, noCache: string | number | boolean): Promise<void> {
+  await applyPatch(target, { noCache: noCache === true })
 }
 
 async function remove(target: InterceptorTarget): Promise<void> {
@@ -112,13 +118,13 @@ function formatTime(iso: string): string {
       empty-text="名单为空（全部透传，规则不会跑）"
     >
       <el-table-column label="origin" min-width="260">
-        <template #default="{ row }: { row: InterceptorTarget }">
+        <template #default="{ row }">
           <span class="mono origin-text">{{ row.origin }}</span>
         </template>
       </el-table-column>
       <el-table-column label="启用" width="82">
-        <template #default="{ row }: { row: InterceptorTarget }">
-          <el-switch :model-value="row.enabled !== false" size="small" @change="(value: boolean) => toggleEnabled(row, value)" />
+        <template #default="{ row }">
+          <el-switch :model-value="row.enabled !== false" size="small" @change="(value: string | number | boolean) => toggleEnabled(targetOf(row), value)" />
         </template>
       </el-table-column>
       <el-table-column width="104">
@@ -127,18 +133,18 @@ function formatTime(iso: string): string {
             <span>强制回源</span>
           </el-tooltip>
         </template>
-        <template #default="{ row }: { row: InterceptorTarget }">
-          <el-switch :model-value="row.noCache !== false" size="small" @change="(value: boolean) => toggleNoCache(row, value)" />
+        <template #default="{ row }">
+          <el-switch :model-value="row.noCache !== false" size="small" @change="(value: string | number | boolean) => toggleNoCache(targetOf(row), value)" />
         </template>
       </el-table-column>
       <el-table-column label="加入时间" width="180">
-        <template #default="{ row }: { row: InterceptorTarget }">
+        <template #default="{ row }">
           <span class="muted">{{ formatTime(row.createdAt) }}</span>
         </template>
       </el-table-column>
       <el-table-column width="82" align="right">
-        <template #default="{ row }: { row: InterceptorTarget }">
-          <el-button size="small" text type="danger" @click="remove(row)">
+        <template #default="{ row }">
+          <el-button size="small" text type="danger" @click="remove(targetOf(row))">
             移出
           </el-button>
         </template>

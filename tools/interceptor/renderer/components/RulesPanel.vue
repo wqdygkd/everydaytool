@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { IconName } from '../../../../shared/components/ui/icons'
-import type { HeaderAction, HeaderOperation, InterceptorRule, QueryParamAction, QueryParamModification, RequestBodyMode, RequestRuleConfig, RuleFilters, RuleOperator, RuleSourceKey, RuleType, ScriptRunAt, ScriptWorld } from '../../../../shared/interceptor'
+import type { IconName } from '../../../../renderer/shared/components/ui/icons'
+import type { DelayRuleConfig, HeaderAction, HeaderOperation, HeadersRuleConfig, InterceptorRule, QueryParamAction, QueryParamModification, QueryParamRuleConfig, RedirectRuleConfig, ReplaceRuleConfig, RequestBodyMode, RequestRuleConfig, ResponseRuleConfig, RuleFilters, RuleOperator, RuleSourceKey, RuleType, ScriptRuleConfig, ScriptRunAt, ScriptWorld, UserAgentRuleConfig } from '../../../../shared/interceptor'
 import { REQUEST_METHODS, RESOURCE_TYPE_LABELS, RULE_DELAY_MAX_MS, RULE_TYPE_LABELS } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
 import { RULE_TYPES, ruleTypeFromPath, ruleTypeRouteName } from '../tabs'
@@ -278,6 +278,35 @@ const payloadEnabled = computed({
   },
 })
 
+/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回规则类型 */
+function ruleOf(row: unknown): InterceptorRule {
+  return row as InterceptorRule
+}
+
+/** el-option 的 value 声明不接受 null：「全部类型」一项运行期仍是 null，这里只放宽类型 */
+function ruleTypeOptionValue(value: RuleType | null): RuleType {
+  return value as RuleType
+}
+
+// ─────────────────────────────────────────────────────────────
+// 编辑器模板的非空视图
+// 动作配置在 ensureDefaults 后一定存在；但模板里靠 v-if 收窄在这个分支规模下会被类型推断丢掉
+// （v-model 生成的回调里尤其明显），所以每种配置给一份非空视图兜底：渲染时草稿里一定有该配置，
+// 读到的就是同一个对象，v-model 的写回不受影响。兜底值与本文件 ensureDefaults 的默认值保持一致。
+// ─────────────────────────────────────────────────────────────
+
+const redirectForm = computed<RedirectRuleConfig>(() => draft.value?.redirect ?? { destination: '', statusCode: 302, preserveQueryParams: false })
+const replaceForm = computed<ReplaceRuleConfig>(() => draft.value?.replace ?? { from: '', to: '' })
+const queryParamForm = computed<QueryParamRuleConfig>(() => draft.value?.queryParam ?? { modifications: [] })
+const delayForm = computed<DelayRuleConfig>(() => draft.value?.delay ?? { delayMs: 1000 })
+const headersForm = computed<HeadersRuleConfig>(() => draft.value?.headers ?? { request: [], response: [] })
+const userAgentForm = computed<UserAgentRuleConfig>(() => draft.value?.userAgent ?? { userAgent: '' })
+const responseForm = computed<ResponseRuleConfig>(() => draft.value?.response ?? { mock: false })
+const scriptForm = computed<ScriptRuleConfig>(() => draft.value?.script ?? { code: '', world: 'MAIN', runAt: 'document_start' })
+
+/** 草稿类型（模板分支条件用）：条件只决定渲染哪一段，段内读的是各自的非空视图 */
+const draftType = computed<RuleType | null>(() => draft.value?.type ?? null)
+
 function keyLabel(key: RuleSourceKey): string {
   return keyOptions.find(option => option.value === key)?.label ?? key
 }
@@ -370,7 +399,13 @@ const REQUEST_BODY_CODE_TEMPLATE = `async function modifyRequestBody(args) {
 
 const requestBodyStash = ref<{ static: string, code: string }>({ static: '', code: '' })
 const requestBodyMode = computed<RequestBodyMode>(() => (draft.value?.request?.type === 'code' ? 'code' : 'static'))
-const requestBodyValue = computed(() => draft.value?.request?.value ?? '')
+const requestBodyValue = computed({
+  get: () => draft.value?.request?.value ?? '',
+  // 写入仍落在草稿的 request 上（请求体归一化后 value 一定存在，这里只做类型兜底）
+  set: (value: string) => {
+    if (draft.value?.request) draft.value.request.value = value
+  },
+})
 
 function switchRequestBodyMode(value: unknown): void {
   const mode: RequestBodyMode = value === 'code' ? 'code' : 'static'
@@ -683,7 +718,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
             class="ctl-sm"
             @change="selectRuleType"
           >
-            <el-option v-for="option in ruleTypeFilterOptions" :key="option.label" :label="option.label" :value="option.value" />
+            <el-option v-for="option in ruleTypeFilterOptions" :key="option.label" :label="option.label" :value="ruleTypeOptionValue(option.value)" />
           </el-select>
         </div>
         <div class="rq-content-list-header-actions">
@@ -743,7 +778,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
             />
           </template>
           <template #default="{ row }">
-            <el-checkbox :model-value="isSelected(row)" @change="toggleSelect(row)" />
+            <el-checkbox :model-value="isSelected(ruleOf(row))" @change="toggleSelect(ruleOf(row))" />
           </template>
         </el-table-column>
         <el-table-column width="64" align="center">
@@ -752,28 +787,28 @@ async function remove(rule: InterceptorRule): Promise<void> {
               icon="pin"
               :active="row.pinned"
               :label="row.pinned ? '取消固定' : '固定到列表'"
-              @click="togglePin(row)"
+              @click="togglePin(ruleOf(row))"
             />
           </template>
         </el-table-column>
         <el-table-column prop="name" label="规则" sortable="custom" min-width="220">
           <template #default="{ row }">
-            <button type="button" class="rule-name" :title="row.name" @click="openEditor(row)">
+            <button type="button" class="rule-name" :title="row.name" @click="openEditor(ruleOf(row))">
               {{ row.name }}
             </button>
           </template>
         </el-table-column>
         <el-table-column prop="type" label="类型" sortable="custom" width="200">
           <template #default="{ row }">
-            <span class="rule-type-tag" :title="RULE_TYPE_LABELS[row.type]">
+            <span class="rule-type-tag" :title="RULE_TYPE_LABELS[ruleOf(row).type]">
               <UiIcon :name="row.type" />
-              <span class="rule-type-tag-name">{{ RULE_TYPE_LABELS[row.type] }}</span>
+              <span class="rule-type-tag-name">{{ RULE_TYPE_LABELS[ruleOf(row).type] }}</span>
             </span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="130">
           <template #default="{ row }">
-            <el-switch :model-value="row.enabled" size="small" @change="toggleEnabled(row)" />
+            <el-switch :model-value="row.enabled" size="small" @change="() => toggleEnabled(ruleOf(row))" />
           </template>
         </el-table-column>
         <el-table-column prop="updatedAt" label="更新时间" sortable="custom" width="150">
@@ -784,7 +819,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
         <el-table-column width="110" align="right">
           <template #default="{ row }">
             <div class="rules-actions-container">
-              <el-dropdown trigger="click" popper-class="rule-more-actions-dropdown" @command="(command: string) => handleRuleAction(command, row)">
+              <el-dropdown trigger="click" popper-class="rule-more-actions-dropdown" @command="(command: string) => handleRuleAction(command, ruleOf(row))">
                 <el-button text class="icon-btn" aria-label="更多操作">
                   <UiIcon name="more" />
                 </el-button>
@@ -1014,7 +1049,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </el-tooltip>
               </div>
 
-              <template v-if="draft.type === 'redirect' && draft.redirect">
+              <template v-if="draftType === 'redirect'">
                 <div class="muted-panel">
                   <el-radio-group v-model="redirectTargetType" class="dest-radio-group radio-flush">
                     <el-radio value="url">
@@ -1030,15 +1065,15 @@ async function remove(rule: InterceptorRule): Promise<void> {
                   <UiHint>
                     「本机文件 / 文件服务器」后续版本支持，当前仅支持重定向到 URL。
                   </UiHint>
-                  <el-input v-model="draft.redirect.destination" placeholder="例如 https://new-example.com（支持 $1 捕获组）" class="dest-input" />
+                  <el-input v-model="redirectForm.destination" placeholder="例如 https://new-example.com（支持 $1 捕获组）" class="dest-input" />
                   <UiGroup wrap gap="sm">
-                    <el-select v-model="draft.redirect.statusCode" class="ctl-md">
+                    <el-select v-model="redirectForm.statusCode" class="ctl-md">
                       <el-option :value="302" label="302 临时" />
                       <el-option :value="301" label="301 永久" />
                       <el-option :value="307" label="307 保留方法" />
                       <el-option :value="308" label="308 永久 + 保留方法" />
                     </el-select>
-                    <el-checkbox v-model="draft.redirect.preserveQueryParams">
+                    <el-checkbox v-model="redirectForm.preserveQueryParams">
                       目标未带查询串时保留原查询参数
                     </el-checkbox>
                   </UiGroup>
@@ -1048,19 +1083,19 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </div>
               </template>
 
-              <template v-else-if="draft.type === 'replace' && draft.replace">
+              <template v-else-if="draftType === 'replace'">
                 <UiGroup wrap gap="sm">
-                  <el-input v-model="draft.replace.from" placeholder="原片段（在完整 URL 中把…）" class="ctl-fill" />
+                  <el-input v-model="replaceForm.from" placeholder="原片段（在完整 URL 中把…）" class="ctl-fill" />
                   <span class="muted">→</span>
-                  <el-input v-model="draft.replace.to" placeholder="替换为" class="ctl-fill" />
+                  <el-input v-model="replaceForm.to" placeholder="替换为" class="ctl-fill" />
                 </UiGroup>
                 <UiHint block>
                   只替换 URL 中第一处匹配；替换后的 URL 直接作为新请求目标（浏览器不可见，比重定向更透明）。
                 </UiHint>
               </template>
 
-              <template v-else-if="draft.type === 'queryParam' && draft.queryParam">
-                <div v-for="mod in draft.queryParam.modifications" :key="mod.id" class="param-mod-row">
+              <template v-else-if="draftType === 'queryParam'">
+                <div v-for="mod in queryParamForm.modifications" :key="mod.id" class="param-mod-row">
                   <el-dropdown trigger="click" popper-class="rule-more-actions-dropdown" @command="(action: QueryParamAction) => setQueryModAction(mod, action)">
                     <el-button text class="param-mod-type">
                       {{ queryParamRowLabels[mod.action] }}
@@ -1100,24 +1135,24 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </el-button>
               </template>
 
-              <template v-else-if="draft.type === 'cancel'">
+              <template v-else-if="draftType === 'cancel'">
                 <UiHint>
                   命中后直接断开连接，浏览器表现为请求失败（类似网络异常，页面无法拿到 4xx 状态）。
                 </UiHint>
               </template>
 
-              <template v-else-if="draft.type === 'delay' && draft.delay">
+              <template v-else-if="draftType === 'delay'">
                 <UiGroup wrap gap="sm">
-                  <el-input-number v-model="draft.delay.delayMs" :min="1" :max="RULE_DELAY_MAX_MS" :step="500" />
+                  <el-input-number v-model="delayForm.delayMs" :min="1" :max="RULE_DELAY_MAX_MS" :step="500" />
                   <span class="muted">毫秒（上限 {{ RULE_DELAY_MAX_MS / 1000 }}s），延迟后照常请求上游</span>
                 </UiGroup>
               </template>
 
-              <template v-else-if="draft.type === 'headers' && draft.headers">
+              <template v-else-if="draftType === 'headers'">
                 <div class="muted op-section-title">
                   请求头操作
                 </div>
-                <UiGroup v-for="op in draft.headers.request ?? []" :key="op.id" wrap gap="sm" class="op-row">
+                <UiGroup v-for="op in headersForm.request ?? []" :key="op.id" wrap gap="sm" class="op-row">
                   <el-select v-model="op.action" class="ctl-sm">
                     <el-option v-for="option in headerActionOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
@@ -1133,7 +1168,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 <div class="muted op-section-title">
                   响应头操作
                 </div>
-                <UiGroup v-for="op in draft.headers.response ?? []" :key="op.id" wrap gap="sm" class="op-row">
+                <UiGroup v-for="op in headersForm.response ?? []" :key="op.id" wrap gap="sm" class="op-row">
                   <el-select v-model="op.action" class="ctl-sm">
                     <el-option v-for="option in headerActionOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
@@ -1148,18 +1183,18 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </el-button>
               </template>
 
-              <template v-else-if="draft.type === 'userAgent' && draft.userAgent">
+              <template v-else-if="draftType === 'userAgent'">
                 <UiGroup wrap gap="sm">
-                  <el-input v-model="draft.userAgent.userAgent" placeholder="自定义 UA 字符串" class="ctl-fill" />
+                  <el-input v-model="userAgentForm.userAgent" placeholder="自定义 UA 字符串" class="ctl-fill" />
                   <el-select placeholder="常用预设" class="ctl-md" @change="applyUaPreset">
                     <el-option v-for="preset in uaPresets" :key="preset.label" :label="preset.label" :value="preset.value" />
                   </el-select>
                 </UiGroup>
               </template>
 
-              <template v-else-if="draft.type === 'request' && draft.request">
+              <template v-else-if="draftType === 'request'">
                 <UiCodeArea
-                  v-model="draft.request.value"
+                  v-model="requestBodyValue"
                   :rows="requestBodyMode === 'code' ? 12 : 8"
                   :placeholder="requestBodyMode === 'code' ? 'async function modifyRequestBody(args) { … }' : '填写要发送的静态 JSON 请求体'"
                   :meta="`${requestBodyValue.length} 字符`"
@@ -1170,17 +1205,17 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </UiHint>
               </template>
 
-              <template v-else-if="draft.type === 'response' && draft.response">
+              <template v-else-if="draftType === 'response'">
                 <UiGroup wrap gap="sm">
                   <span class="muted">状态码</span>
-                  <el-input-number v-model="draft.response.statusCode" :min="100" :max="599" :controls="false" placeholder="原始" class="ctl-xs" />
-                  <el-input v-model="draft.response.statusText" placeholder="状态文案（如 Teapot）" class="ctl-md" />
-                  <el-checkbox v-model="draft.response.mock">
+                  <el-input-number v-model="responseForm.statusCode" :min="100" :max="599" :controls="false" placeholder="原始" class="ctl-xs" />
+                  <el-input v-model="responseForm.statusText" placeholder="状态文案（如 Teapot）" class="ctl-md" />
+                  <el-checkbox v-model="responseForm.mock">
                     Mock（不调服务器直接返回）
                   </el-checkbox>
                 </UiGroup>
                 <el-input
-                  v-model="draft.response.bodyReplace"
+                  v-model="responseForm.bodyReplace"
                   type="textarea"
                   :rows="5"
                   placeholder="静态替换响应体 / Mock 返回体（留空 = 不改体；Mock 时返回空体）"
@@ -1188,20 +1223,20 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 />
               </template>
 
-              <template v-else-if="draft.type === 'script' && draft.script">
+              <template v-else-if="draftType === 'script'">
                 <UiGroup wrap gap="sm">
-                  <el-select v-model="draft.script.world" class="ctl-lg">
+                  <el-select v-model="scriptForm.world" class="ctl-lg">
                     <el-option v-for="option in worldOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
-                  <el-select v-model="draft.script.runAt" class="ctl-lg">
+                  <el-select v-model="scriptForm.runAt" class="ctl-lg">
                     <el-option v-for="option in runAtOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
                 </UiGroup>
                 <UiCodeArea
-                  v-model="draft.script.code"
+                  v-model="scriptForm.code"
                   :rows="12"
                   placeholder="// 脚本正文（JS），在匹配页面注入执行"
-                  :meta="`${draft.script.code.length} 字符`"
+                  :meta="`${scriptForm.code.length} 字符`"
                   class="body-input"
                 />
                 <UiHint block>
