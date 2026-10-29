@@ -113,7 +113,8 @@ function collectRootAliases(source) {
 
 let allowMarkedLines = 0
 for (const file of backendFiles) {
-  const relative = path.relative(rootDir, file)
+  // ALLOW_FILES 用 POSIX 分隔符书写；Windows 的 path.relative 会带反斜杠，先归一化再比较
+  const relative = path.relative(rootDir, file).split(path.sep).join('/')
   if (ALLOW_FILES.has(relative)) continue
   const source = readFileSync(file, 'utf8')
   const aliases = collectRootAliases(source)

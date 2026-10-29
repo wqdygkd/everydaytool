@@ -1,11 +1,10 @@
 // telegram-cache 渲染层状态：主进程快照 + 增量事件（快照 700ms 节流；每个请求一条 traffic；
 // 任务状态逐次推送）。所有失败都向上抛，由面板决定如何提示（与 interceptor / offline-pack 一致）。
 import type {
-  TelegramArchiveEntry,
   TelegramBenchmarkStatus,
   TelegramCacheConfig,
   TelegramDiagnosticsExport,
-  TelegramFeasibilityReport,
+  TelegramLibraryEntry,
   TelegramMtprotoStatus,
   TelegramPageProbe,
   TelegramResourceKind,
@@ -13,6 +12,7 @@ import type {
   TelegramSnapshot,
   TelegramTaskSnapshot,
   TelegramTrafficEntry,
+  TelegramTrashEntry,
 } from '../../../../shared/telegram-cache'
 import { defineStore } from 'pinia'
 import { TELEGRAM_TRAFFIC_LIMIT } from '../../../../shared/telegram-cache'
@@ -21,7 +21,6 @@ import { invokeTelegramCacheIpc as invoke, onTelegramCacheIpc as on, telegramCac
 export interface AcquireOutcome {
   reused: boolean
   joined: boolean
-  archiveRelativePath?: string
   taskId?: string
   record: {
     resourceKey: string
@@ -34,29 +33,45 @@ export interface AcquireOutcome {
   }
 }
 
+export interface LibraryMediaItem {
+  mediaKey: string
+  mimeType?: string
+  fileName?: string
+  size: number
+  relativePath: string
+  url: string
+}
+
 export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
   const snapshot = ref<TelegramSnapshot | null>(null)
   const traffic = ref<TelegramTrafficEntry[]>([])
   const tasks = ref<TelegramTaskSnapshot[]>([])
-  const archives = ref<TelegramArchiveEntry[]>([])
+  const library = ref<TelegramLibraryEntry[]>([])
+  const trash = ref<TelegramTrashEntry[]>([])
+  const libraryMedia = ref<LibraryMediaItem[]>([])
   const probe = ref<TelegramPageProbe | null>(null)
   const selfTest = ref<TelegramSelfTestResult | null>(null)
-  const m3Report = ref<TelegramFeasibilityReport | null>(null)
   const mtproto = ref<TelegramMtprotoStatus | null>(null)
   const benchmark = ref<TelegramBenchmarkStatus | null>(null)
   const diagnostics = ref<TelegramDiagnosticsExport | null>(null)
   const pageWebContentsId = ref<number | null>(null)
   const ready = ref(false)
-  const busy = reactive({ probe: false, selfTest: false, diagnostics: false, archives: false, cache: false, m3: false })
+  const busy = reactive({
+    probe: false,
+    selfTest: false,
+    diagnostics: false,
+    cache: false,
+    library: false,
+  })
 
   const config = computed<TelegramCacheConfig | null>(() => snapshot.value?.config ?? null)
   const observationEnabled = computed(() => snapshot.value?.config.observationEnabled === true)
   const capabilities = computed(() => snapshot.value?.capabilities ?? null)
   const stats = computed(() => snapshot.value?.stats ?? null)
   const cache = computed(() => snapshot.value?.cache ?? null)
+  const site = computed(() => snapshot.value?.site ?? null)
   const resources = computed(() => snapshot.value?.resources ?? [])
   const activeTasks = computed(() => tasks.value.filter(task => task.status === 'queued' || task.status === 'running'))
-  const archiveCount = computed(() => snapshot.value?.archiveCount ?? archives.value.length)
 
   let disposers: Array<() => void> = []
   let initialized = false
@@ -105,16 +120,14 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
       benchmark.value = payload as TelegramBenchmarkStatus
     }))
 
-    const [initialSnapshot, initialTraffic, initialArchives, initialMtproto, initialBenchmark] = await Promise.all([
+    const [initialSnapshot, initialTraffic, initialMtproto, initialBenchmark] = await Promise.all([
       invoke<TelegramSnapshot>(ch.SNAPSHOT_GET),
       invoke<TelegramTrafficEntry[]>(ch.TRAFFIC_GET),
-      invoke<TelegramArchiveEntry[]>(ch.ARCHIVE_LIST),
       invoke<TelegramMtprotoStatus>(ch.MT_STATUS),
       invoke<TelegramBenchmarkStatus>(ch.BENCHMARK_STATUS),
     ])
     applySnapshot(initialSnapshot)
     traffic.value = initialTraffic
-    archives.value = initialArchives
     mtproto.value = initialMtproto
     benchmark.value = initialBenchmark
     ready.value = true
@@ -179,17 +192,46 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     return invoke<boolean>(channels().TASK_CANCEL, taskId)
   }
 
-  async function loadArchives(): Promise<void> {
-    busy.archives = true
+  async function loadLibrary(): Promise<void> {
+    busy.library = true
     try {
-      archives.value = await invoke<TelegramArchiveEntry[]>(channels().ARCHIVE_LIST)
+      library.value = await invoke<TelegramLibraryEntry[]>(channels().MSG_LIBRARY_LIST)
     } finally {
-      busy.archives = false
+      busy.library = false
     }
   }
 
-  async function openArchiveDir(): Promise<void> {
-    await invoke(channels().ARCHIVE_OPEN_DIR)
+  async function loadTrash(): Promise<void> {
+    trash.value = await invoke<TelegramTrashEntry[]>(channels().TRASH_LIST)
+  }
+
+  async function loadLibraryMedia(peerId: string, messageId: number): Promise<LibraryMediaItem[]> {
+    const result = await invoke<{ origin: string, items: LibraryMediaItem[] }>(channels().MSG_LIBRARY_MEDIA, {
+      peerId,
+      messageId,
+    })
+    libraryMedia.value = result.items
+    return result.items
+  }
+
+  async function deleteLibraryMessage(peerId: string, messageId: number): Promise<void> {
+    await invoke(channels().MSG_LIBRARY_DELETE, { peerId, messageId })
+    await Promise.all([loadLibrary(), loadTrash()])
+  }
+
+  async function openLibraryDir(peerId: string, messageId: number): Promise<void> {
+    await invoke(channels().MSG_LIBRARY_OPEN_DIR, { peerId, messageId })
+  }
+
+  async function restoreTrash(trashId: string): Promise<void> {
+    await invoke(channels().TRASH_RESTORE, trashId)
+    await Promise.all([loadLibrary(), loadTrash()])
+  }
+
+  async function emptyTrash(olderThanDays?: number): Promise<number> {
+    const removed = await invoke<number>(channels().TRASH_EMPTY, olderThanDays)
+    await loadTrash()
+    return removed
   }
 
   async function openDataDir(): Promise<void> {
@@ -204,17 +246,6 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
       return result
     } finally {
       busy.selfTest = false
-    }
-  }
-
-  async function runFeasibilityReport(): Promise<TelegramFeasibilityReport> {
-    busy.m3 = true
-    try {
-      const result = await invoke<TelegramFeasibilityReport>(channels().M3_REPORT)
-      m3Report.value = result
-      return result
-    } finally {
-      busy.m3 = false
     }
   }
 
@@ -266,10 +297,11 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     snapshot,
     traffic,
     tasks,
-    archives,
+    library,
+    trash,
+    libraryMedia,
     probe,
     selfTest,
-    m3Report,
     mtproto,
     benchmark,
     diagnostics,
@@ -281,9 +313,9 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     capabilities,
     stats,
     cache,
+    site,
     resources,
     activeTasks,
-    archiveCount,
     init,
     dispose,
     setObservationEnabled,
@@ -294,11 +326,15 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     probePage,
     acquire,
     cancelTask,
-    loadArchives,
-    openArchiveDir,
+    loadLibrary,
+    loadTrash,
+    loadLibraryMedia,
+    deleteLibraryMessage,
+    openLibraryDir,
+    restoreTrash,
+    emptyTrash,
     openDataDir,
     runSelfTest,
-    runFeasibilityReport,
     refreshMtprotoStatus,
     startMtprotoDownload,
     cancelMtprotoDownload,

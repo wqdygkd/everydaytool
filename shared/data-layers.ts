@@ -123,7 +123,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态与收藏备份', backup: 'include', clean: 'never', sensitive: true },
   { id: 'telegram-cache.config', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/config.json', label: '观测与缓存配置', backup: 'include', clean: 'never' },
   { id: 'telegram-cache.registry', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/registry.json', label: '资源索引', backup: 'include', clean: 'never', integrity: 'index-prune' },
-  { id: 'telegram-cache.archive-index', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/archive-index.json', label: '归档索引', backup: 'include', clean: 'never', integrity: 'index-prune' },
   { id: 'telegram-cache.benchmarks', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/benchmarks.json', label: '测速基准', backup: 'include', clean: 'never' },
   { id: 'telegram-cache.session', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/telegram-session.bin', label: 'MTProto 会话密文', backup: 'include', clean: 'never', sensitive: true },
   { id: 'workbuddy2api-panel.manifest', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/manifest.json', label: '托管二进制清单', backup: 'include', clean: 'never', integrity: 'reinstall-required' },
@@ -135,7 +134,8 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'app.quarantine', toolId: 'app', layer: 'config', relativePath: 'quarantine', label: '旧布局隔离区（未登记遗留项）', backup: 'never', clean: 'never' },
 
   // ── 资产层（独立根 <assets>）──
-  { id: 'telegram-cache.archive', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/archive', label: '归档资源副本', backup: 'manifest-only', clean: 'never' },
+  { id: 'telegram-cache.messages', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/messages', label: '消息级缓存（manifest + text.md + 媒体）', backup: 'manifest-only', clean: 'never' },
+  { id: 'telegram-cache.trash', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/trash', label: '回收站（默认保留 30 天）', backup: 'manifest-only', clean: 'never' },
 
   // ── 会话层（Chromium 拥有；relativePath '.' 表示层根本身）──
   { id: 'session.chromium', toolId: 'app', layer: 'session', relativePath: '.', label: 'Cookies / LocalStorage / 页面缓存', backup: 'optional', clean: 'internal-chromium-cache' },
@@ -249,10 +249,8 @@ export const DATA_LAYOUT_V1_TO_V2: readonly DataLayoutMigrationRule[] = [
   // telegram-cache：配置 / 资产 / 缓存三拆
   { id: 'telegram-cache.config-json', layer: 'config', from: 'telegram-cache/config.json', to: 'telegram-cache/config.json', kind: 'file' },
   { id: 'telegram-cache.registry-json', layer: 'config', from: 'telegram-cache/registry.json', to: 'telegram-cache/registry.json', kind: 'file' },
-  { id: 'telegram-cache.archive-index-json', layer: 'config', from: 'telegram-cache/archive-index.json', to: 'telegram-cache/archive-index.json', kind: 'file' },
   { id: 'telegram-cache.benchmarks-json', layer: 'config', from: 'telegram-cache/benchmarks.json', to: 'telegram-cache/benchmarks.json', kind: 'file' },
   { id: 'telegram-cache.session-bin', layer: 'config', from: 'telegram-cache/telegram-session.bin', to: 'telegram-cache/telegram-session.bin', kind: 'file', note: '敏感：safeStorage 密文' },
-  { id: 'telegram-cache.archive', layer: 'assets', from: 'telegram-cache/archive', to: 'telegram-cache/archive', kind: 'dir', note: '资产层：源可能已被删，不可再生' },
   { id: 'telegram-cache.objects', layer: 'cache', from: 'telegram-cache/objects', to: 'telegram-cache/objects', kind: 'dir' },
   { id: 'telegram-cache.tmp', layer: 'cache', from: 'telegram-cache/tmp', to: 'telegram-cache/tmp', kind: 'dir' },
   { id: 'telegram-cache.diagnostics', layer: 'cache', from: 'telegram-cache/diagnostics', to: 'telegram-cache/diagnostics', kind: 'dir' },

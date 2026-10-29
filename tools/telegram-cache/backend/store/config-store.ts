@@ -48,15 +48,6 @@ function sanitize(input: unknown): TelegramCacheConfig {
       TELEGRAM_MAX_CACHE_BYTES,
       TELEGRAM_DEFAULT_CONFIG.cacheMaxBytes,
     ),
-    localResponseEnabled: typeof record.localResponseEnabled === 'boolean'
-      ? record.localResponseEnabled
-      : TELEGRAM_DEFAULT_CONFIG.localResponseEnabled,
-    localMediaRangeEnabled: typeof record.localMediaRangeEnabled === 'boolean'
-      ? record.localMediaRangeEnabled
-      : TELEGRAM_DEFAULT_CONFIG.localMediaRangeEnabled,
-    enablePageCapture: typeof record.enablePageCapture === 'boolean'
-      ? record.enablePageCapture
-      : TELEGRAM_DEFAULT_CONFIG.enablePageCapture,
   }
 }
 

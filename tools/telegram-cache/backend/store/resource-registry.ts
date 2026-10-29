@@ -22,7 +22,6 @@ export interface TelegramResourceRecord {
   completeness: TelegramCompleteness
   verification: TelegramVerification
   cacheRefs: number
-  archiveRefs: number
   lastAccessedAt?: number
   createdAt: number
   updatedAt: number
@@ -98,7 +97,6 @@ function readDocument(): RegistryDocument {
         completeness: value.completeness === 'complete' || value.completeness === 'partial' ? value.completeness : 'unknown',
         verification: value.verification === 'verified' ? 'verified' : 'unverified',
         cacheRefs: Number.isFinite(value.cacheRefs) ? Math.max(0, Math.floor(value.cacheRefs)) : 0,
-        archiveRefs: Number.isFinite(value.archiveRefs) ? Math.max(0, Math.floor(value.archiveRefs)) : 0,
       }
     }
   }
@@ -108,9 +106,7 @@ function readDocument(): RegistryDocument {
 function writeDocument(doc: RegistryDocument): void {
   const entries = Object.entries(doc.resources)
   if (entries.length > MAX_REGISTRY_RECORDS) {
-    // 归档引用的条目必须保留（方案文档 hard requirement：缓存淘汰不得影响归档）
     const removable = entries
-      .filter(([, rec]) => rec.archiveRefs === 0)
       .sort((a, b) => (a[1].lastAccessedAt ?? a[1].updatedAt) - (b[1].lastAccessedAt ?? b[1].updatedAt))
     const excess = entries.length - MAX_REGISTRY_RECORDS
     for (const [key] of removable.slice(0, excess)) {
@@ -189,7 +185,6 @@ export function recordTelegramContent(input: {
     completeness: 'complete',
     verification: 'verified',
     cacheRefs: (existing?.cacheRefs ?? 0) + 1,
-    archiveRefs: existing?.archiveRefs ?? 0,
     lastAccessedAt: now,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -237,18 +232,6 @@ export function touchTelegramResource(resourceKey: string, kind: 'cache' | 'arch
   const now = Date.now()
   record.lastAccessedAt = now
   if (kind === 'cache') record.cacheRefs += 1
-  writeDocument(doc)
-  return record
-}
-
-export function incrementTelegramArchiveRef(resourceKey: string): TelegramResourceRecord | undefined {
-  const doc = readDocument()
-  const record = doc.resources[resourceKey]
-  if (!record) return undefined
-  const now = Date.now()
-  record.archiveRefs += 1
-  record.lastAccessedAt = now
-  record.updatedAt = now
   writeDocument(doc)
   return record
 }

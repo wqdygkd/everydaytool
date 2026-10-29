@@ -68,7 +68,8 @@
     import-rollback/<ts>/   ← 备份恢复前的配置层快照（回滚点，可随时清）
 
 <assets>/                              # L2 独立根，默认 <data>/assets，可设到任意盘
-  telegram-cache/archive/resources/…
+  telegram-cache/messages/…           # 消息级缓存（manifest + text.md + 媒体）
+  telegram-cache/trash/…              # 回收站
 ```
 
 收益：`Cache` 类目录只可能出现在 `cache/` 与 `session/` 内部两处，清理逻辑不再需要猜；可再生数据与不可再生数据在磁盘上物理隔离。
@@ -87,7 +88,7 @@
 
 ### 3.2 索引不写死绝对路径
 
-`<data>/config/telegram-cache/archive-index.json` 内的资源路径一律存**相对 `<assets>` 根**的路径（沿用 `toTelegramRelativePath` 的做法）。资产根搬家后只需重算根前缀，索引零改动。
+`<data>/config/telegram-cache/registry.json`（及消息媒体索引）内的资源路径一律存**相对所属层根**的路径（沿用 `toTelegramRelativePath` 的做法）。资产根搬家后只需重算根前缀，索引零改动。
 
 ### 3.3 与数据目录迁移的关系
 
@@ -128,8 +129,8 @@
 | `offline-pack/downloads/` | `cache/offline-pack/downloads` | cache | never | always | 可重下 |
 | `wxp-enhancer/config.json` | `config/wxp-enhancer/` | config | include | never | — |
 | `wxp-enhancer/data-cache.json` | `config/wxp-enhancer/` | config | include | never | `sensitive`（我们写的登录态 → 按判据归 config，不塞进 `session/`） |
-| `telegram-cache/{config,registry,archive-index,benchmarks}.json`、`telegram-session.bin` | `config/telegram-cache/` | config | include | never | — |
-| `telegram-cache/archive/` | `<assets>/telegram-cache/archive/` | **assets** | manifest-only | never | 源可能已被删，不可再生 |
+| `telegram-cache/{config,registry,benchmarks}.json`、`telegram-session.bin` | `config/telegram-cache/` | config | include | never | — |
+| `telegram-cache/{messages,trash}` | `<assets>/telegram-cache/` | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
 | `telegram-cache/{objects,tmp,mtproto,diagnostics}` | `cache/telegram-cache/` | cache | never | always | 清后须 `pruneMissingObjects()` 修剪索引 |
 | `workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `config/workbuddy2api-panel/` | config | include | never | `run/` 是上游 cwd，含 api_key 与上游数据 |
 | `workbuddy2api-panel/{downloads,runtime}` | `cache/workbuddy2api-panel/` | cache | never | always | 清后须校验 `runtime/current/<bin>`，否则显示「需重新下载」 |
@@ -153,7 +154,7 @@ export interface DataLayerEntry {
   id: string                  // 'telegram-cache.objects'
   toolId: string | 'app'
   layer: DataLayer
-  relativePath: string        // **相对所属层根**：'telegram-cache/objects'、'telegram-cache/archive'
+  relativePath: string        // **相对所属层根**：'telegram-cache/objects'、'telegram-cache/messages'
   label: string
   backup: 'include' | 'optional' | 'manifest-only' | 'never'
   clean: 'never' | 'always' | 'internal-chromium-cache'

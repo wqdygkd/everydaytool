@@ -29,7 +29,6 @@ import {
   touchTelegramResource,
 } from '../store/resource-registry.ts'
 import { getTelegramObjectsDir, getTelegramTmpDir, toTelegramRelativePath } from '../utils/paths.ts'
-import { archiveTelegramResource } from './archive-service.ts'
 import { enforceTelegramCacheQuota, setTelegramActiveCacheKeysProvider } from './cache-manager.ts'
 import { evaluateResponseCaching } from './http-semantics.ts'
 import { getObservedResource } from './observation-service.ts'
@@ -42,8 +41,6 @@ export interface AcquireResult {
   reused: boolean
   /** true = 合并进了某个正在进行的任务 */
   joined: boolean
-  /** 已归档副本的相对路径（仅 kind=archive 时有值） */
-  archiveRelativePath?: string
   taskId?: string
 }
 
@@ -299,7 +296,6 @@ export async function storeCapturedContent(input: {
 
 /**
  * 取得资源：命中资源库直接复用；否则进入单飞任务。
- * kind 只影响消费者优先级与完成后的动作（归档多一步复制），下载本身始终共享。
  */
 export async function acquireTelegramResource(resourceKey: string, kind: TelegramResourceKind): Promise<AcquireResult> {
   const cached = getTelegramResourceRecord(resourceKey)
@@ -307,10 +303,6 @@ export async function acquireTelegramResource(resourceKey: string, kind: Telegra
     const objectPath = resolveTelegramObjectPath(cached)
     if (objectPath && existsSync(objectPath)) {
       touchTelegramResource(resourceKey, kind)
-      if (kind === 'archive') {
-        const entry = await archiveTelegramResource(cached)
-        return { record: cached, reused: true, joined: false, archiveRelativePath: entry.relativePath }
-      }
       return { record: cached, reused: true, joined: false }
     }
   }
@@ -328,16 +320,12 @@ export async function acquireTelegramResource(resourceKey: string, kind: Telegra
     taskId: `tg-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`,
     displayUrl: observed.identity.displayUrl,
     host: observed.identity.host,
-    priority: kind === 'archive' ? 1 : 2,
+    priority: 2,
     maxAttempts: TELEGRAM_TASK_MAX_ATTEMPTS,
     runner: context => downloadObservedResource(observed, context),
   }, { id: `${kind}-${randomUUID()}`, kind })
 
   const record = await handle.promise
-  if (kind === 'archive') {
-    const entry = await archiveTelegramResource(record)
-    return { record, reused: false, joined: handle.joined, archiveRelativePath: entry.relativePath, taskId: handle.taskId }
-  }
   return { record, reused: false, joined: handle.joined, taskId: handle.taskId }
 }
 

@@ -185,10 +185,6 @@ export class SingleFlightTaskManager<T> {
     })
     task.kinds.add(consumer.kind)
     task.joinedConsumers += 1
-    // 合并进来的消费者优先级更高且任务还在排队时，提升任务优先级（更贴近用户当前意图）
-    if (consumer.kind === 'archive' && task.status === 'queued') {
-      task.priority = Math.min(task.priority, 1)
-    }
     this.emit(task)
     this.pump()
 

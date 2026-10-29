@@ -11,12 +11,9 @@ const recentTraffic = computed(() => [...store.traffic].reverse().slice(0, 120))
 const capabilityRows = computed(() => {
   const caps = store.capabilities
   if (!caps) return []
-  const localEnabled = store.config?.localResponseEnabled === true
-  const mediaEnabled = store.config?.localMediaRangeEnabled === true
   return [
     { label: 'HTTP 被动观测', tone: caps.httpObservation ? 'success' : 'neutral', text: caps.httpObservation ? '已挂载' : '未挂载', detail: '只读，非阻塞回调' },
     { label: '响应头大小', tone: caps.httpHeaderBytes ? 'success' : 'neutral', text: caps.httpHeaderBytes ? '可用' : '不可用', detail: 'content-length，非真实计量' },
-    { label: '页面媒体捕获', tone: 'neutral', text: '未实现', detail: 'blob / 播放中数据不捕获' },
     {
       label: 'MTProto 下载器',
       tone: caps.telegramDownloader
@@ -30,24 +27,6 @@ const capabilityRows = computed(() => {
       detail: '按消息链接下载媒体（可选）',
     },
     { label: '页面只读探测', tone: caps.guestProbe ? 'success' : 'neutral', text: caps.guestProbe ? '可用' : '不可用', detail: '诊断页可执行' },
-    {
-      label: '页面数据捕获',
-      tone: caps.pageMediaCapture ? (store.config?.enablePageCapture ? 'success' : 'primary') : 'neutral',
-      text: caps.pageMediaCapture ? (store.config?.enablePageCapture ? '已开启' : '默认关闭') : '未实现',
-      detail: 'CDP：仅已完成下载的图片',
-    },
-    {
-      label: '本地响应复用',
-      tone: localEnabled || mediaEnabled ? 'success' : (caps.localResponseReplacement ? 'primary' : 'neutral'),
-      text: localEnabled && mediaEnabled
-        ? '图片 + 媒体'
-        : localEnabled
-          ? '仅图片'
-          : mediaEnabled
-            ? '仅媒体 Range'
-            : (caps.localResponseReplacement ? '默认关闭' : '不可用'),
-      detail: '图片整份 / 媒体单区间 206',
-    },
   ] as const
 })
 
@@ -126,8 +105,8 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
         <UiDetailItem label="合并消费者（去重）" size="xs" mono>
           {{ mergedConsumers }}
         </UiDetailItem>
-        <UiDetailItem label="资源库 / 归档" size="xs" mono>
-          {{ storedCount }} / {{ store.archiveCount }}
+        <UiDetailItem label="资源库条目" size="xs" mono>
+          {{ storedCount }}
         </UiDetailItem>
       </UiDetailGrid>
 
@@ -149,17 +128,12 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
         </UiKeyValue>
       </div>
       <UiHint block>
-        观测模式不改变原页面行为：不注入脚本、不改请求头。本地响应复用默认关闭，开启后只对已校验的图片在有新鲜期时生效。
+        观测模式不改变原页面行为：不注入脚本、不改请求头。
       </UiHint>
     </UiPanel>
 
     <UiPanel title="缓存（M2）">
       <template #actions>
-        <UiChip :tone="cache?.localResponseEnabled || cache?.localMediaRangeEnabled ? 'success' : 'neutral'">
-          {{ cache?.handlerInstalled
-            ? `本地复用：${cache?.localResponseEnabled ? '图片' : ''}${cache?.localResponseEnabled && cache?.localMediaRangeEnabled ? ' + ' : ''}${cache?.localMediaRangeEnabled ? '媒体 Range' : ''}`
-            : '本地复用：关' }}
-        </UiChip>
         <el-button size="small" :loading="store.busy.cache" @click="clearCache">
           清理缓存
         </el-button>
@@ -171,21 +145,6 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
         </UiDetailItem>
         <UiDetailItem label="索引条目" size="xs" mono>
           {{ cache?.entryCount ?? 0 }}
-        </UiDetailItem>
-        <UiDetailItem label="本地复用字节" size="xs" mono>
-          {{ formatBytes(cache?.servedBytes) }}
-        </UiDetailItem>
-        <UiDetailItem label="本地命中 / 回源" size="xs" mono>
-          {{ cache?.localHits ?? 0 }} / {{ cache?.localMisses ?? 0 }}
-        </UiDetailItem>
-        <UiDetailItem label="条件验证 / 304" size="xs" mono>
-          {{ cache?.revalidations ?? 0 }} / {{ cache?.revalidationHits ?? 0 }}
-        </UiDetailItem>
-        <UiDetailItem label="页面捕获字节 / 命中" size="xs" mono>
-          {{ formatBytes(cache?.pageCapturedBytes) }} / {{ cache?.pageCaptureHits ?? 0 }}
-        </UiDetailItem>
-        <UiDetailItem label="页面捕获失败" size="xs" mono>
-          {{ cache?.pageCaptureMisses ?? 0 }}
         </UiDetailItem>
         <UiDetailItem label="累计淘汰" size="xs" mono>
           {{ formatBytes(cache?.evictedBytes) }}（{{ cache?.evictions ?? 0 }} 项）
@@ -200,8 +159,6 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
 
       <UiHint block>
         缓存对象按 SHA-256 去重，配额淘汰从最久未访问的条目开始；归档副本是独立文件，不受淘汰影响。
-        过期条目在开启本地复用时做条件验证（304 则续期，200 则失效旧条目并回源）。
-        「本地复用字节」是本地返回的响应体大小，<strong>不等于</strong>节省的网络字节（还需基准对比）。
       </UiHint>
     </UiPanel>
 

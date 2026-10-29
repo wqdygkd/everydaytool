@@ -17,7 +17,6 @@ import {
   removeTelegramResourceRecord,
   resolveTelegramObjectPath,
 } from '../store/resource-registry.ts'
-import { hasTelegramArchiveCopy } from './archive-service.ts'
 
 export interface TelegramCacheUsage {
   sizeBytes: number
@@ -98,7 +97,6 @@ export function getTelegramCacheUsage(): TelegramCacheUsage {
 function canEvict(record: TelegramResourceRecord, activeKeys: Set<string>): string | null {
   if (activeKeys.has(record.resourceKey)) return '任务进行中'
   if (record.cache?.quotaManaged === false) return 'no-store（用户主动保存，不占配额）'
-  if (record.archiveRefs > 0 && !hasTelegramArchiveCopy(record)) return '唯一副本被归档引用'
   return null
 }
 

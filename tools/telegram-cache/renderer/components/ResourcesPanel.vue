@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { TelegramResourceKind, TelegramResourceSummary } from '../../../../shared/telegram-cache'
+import type { TelegramResourceSummary } from '../../../../shared/telegram-cache'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
-import { formatBytes, formatDateTime } from '../utils/format'
+import { formatBytes } from '../utils/format'
 
 const store = useTelegramCacheStore()
 const filter = ref('')
 const filterKind = ref<'all' | 'downloadable' | 'stored'>('all')
-const config = computed(() => store.config)
 
 const activeByKey = computed(() => new Map(store.activeTasks.map(task => [task.resourceKey, task])))
 
@@ -30,36 +29,26 @@ function toResource(row: unknown): TelegramResourceSummary {
 
 function statusOf(row: unknown): { label: string, tone: 'neutral' | 'primary' | 'success' | 'warning' } {
   const item = toResource(row)
-  if (item.stored?.archived) return { label: '已归档', tone: 'success' }
   if (activeByKey.value.has(item.resourceKey)) return { label: '任务中', tone: 'warning' }
   if (item.stored) return { label: '资源库', tone: 'primary' }
   return { label: '仅观测', tone: 'neutral' }
 }
 
-/** M2 缓存语义：只有「HTTP 允许 + 对应模式开启 + 新鲜」才显示可本地命中 */
+/** 缓存语义：内容是否已校验可复用 */
 function cacheLabel(row: unknown): string {
   const item = toResource(row)
   const stored = item.stored
   if (!stored) return ''
-  if (!stored.cacheable || stored.serveClass === 'none') return '不本地复用'
-  if (stored.serveClass === 'image' && config.value?.localResponseEnabled !== true) return '图片复用未开'
-  if (stored.serveClass === 'media' && config.value?.localMediaRangeEnabled !== true) return '媒体 Range 未开'
-  if (stored.freshUntil && stored.freshUntil > Date.now()) return '可本地命中'
-  return '已过期 · 条件验证'
+  if (!stored.cacheable || stored.serveClass === 'none') return '不可本地复用'
+  if (stored.freshUntil && stored.freshUntil > Date.now()) return '内容已校验'
+  return '内容已校验 · 已过期'
 }
 
 function cacheTone(row: unknown): 'neutral' | 'success' | 'warning' {
   const label = cacheLabel(row)
-  if (label === '可本地命中') return 'success'
-  if (label === '已过期 · 条件验证') return 'warning'
+  if (label === '内容已校验') return 'success'
+  if (label === '内容已校验 · 已过期') return 'warning'
   return 'neutral'
-}
-
-function canArchive(row: unknown): boolean {
-  const item = toResource(row)
-  if (item.stored?.archived) return false
-  if (activeByKey.value.has(item.resourceKey)) return false
-  return item.downloadable || Boolean(item.stored)
 }
 
 function canStore(row: unknown): boolean {
@@ -69,33 +58,15 @@ function canStore(row: unknown): boolean {
   return item.downloadable
 }
 
-async function run(row: unknown, kind: TelegramResourceKind): Promise<void> {
+async function run(row: unknown): Promise<void> {
   const item = toResource(row)
   try {
-    const result = await store.acquire(item.resourceKey, kind)
-    const action = kind === 'archive' ? '归档' : '存入资源库'
-    if (result.reused) ElMessage.success(`${action}完成：直接复用资源库内容，未重新下载`)
-    else if (result.joined) ElMessage.success(`${action}完成：已合并进正在进行的下载任务（single-flight）`)
-    else ElMessage.success(`${action}完成`)
-    if (kind === 'archive') await store.loadArchives()
+    const result = await store.acquire(item.resourceKey, 'cache')
+    if (result.reused) ElMessage.success('存入资源库完成：直接复用资源库内容，未重新下载')
+    else if (result.joined) ElMessage.success('存入资源库完成：已合并进正在进行的下载任务（single-flight）')
+    else ElMessage.success('存入资源库完成')
   } catch (error) {
-    ElMessage.error((error as Error).message || `${kind === 'archive' ? '归档' : '存入资源库'}失败`)
-  }
-}
-
-async function openArchiveDir(): Promise<void> {
-  try {
-    await store.openArchiveDir()
-  } catch (error) {
-    ElMessage.error((error as Error).message || '打开归档目录失败')
-  }
-}
-
-async function refreshArchives(): Promise<void> {
-  try {
-    await store.loadArchives()
-  } catch (error) {
-    ElMessage.error((error as Error).message || '读取归档失败')
+    ElMessage.error((error as Error).message || '存入资源库失败')
   }
 }
 </script>
@@ -154,7 +125,7 @@ async function refreshArchives(): Promise<void> {
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="118" align="right">
+        <el-table-column label="操作" width="96" align="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button
@@ -163,18 +134,9 @@ async function refreshArchives(): Promise<void> {
                 text
                 type="primary"
                 :disabled="!canStore(row)"
-                @click="run(row, 'cache')"
+                @click="run(row)"
               >
                 存库
-              </el-button>
-              <el-button
-                size="small"
-                text
-                type="primary"
-                :disabled="!canArchive(row)"
-                @click="run(row, 'archive')"
-              >
-                归档
               </el-button>
             </div>
           </template>
@@ -183,48 +145,7 @@ async function refreshArchives(): Promise<void> {
 
       <UiHint block>
         资源地址来自<strong>本次会话</strong>的 webRequest 观测，完整 URL（含签名参数）只留在主进程内存，表格里查询参数值统一为
-        <span class="mono">***</span>。重启后资源库条目仍可再次归档（复制本地对象，不产生网络请求），但不能再按地址重新下载。
-      </UiHint>
-    </UiPanel>
-
-    <UiPanel title="归档">
-      <template #actions>
-        <el-button size="small" :loading="store.busy.archives" @click="refreshArchives">
-          刷新
-        </el-button>
-        <el-button size="small" @click="openArchiveDir">
-          打开目录
-        </el-button>
-      </template>
-
-      <UiTable :data="store.archives.slice(0, 30)" height="240" empty-text="还没有归档：在资源行点「归档」">
-        <el-table-column label="归档时间" width="132">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatDateTime(row.savedAt) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="资源" min-width="190" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="mono archive-url">{{ row.displayUrl }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="大小" width="82" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatBytes(row.size) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="校验" width="70" align="center">
-          <template #default="{ row }">
-            <UiChip v-if="row.sha256" tone="success">
-              SHA
-            </UiChip>
-            <span v-else class="muted">—</span>
-          </template>
-        </el-table-column>
-      </UiTable>
-
-      <UiHint block>
-        归档按内容哈希（SHA-256）去重，副本独立于资源库；缓存清理不会删除归档。同一内容只保留一份。
+        <span class="mono">***</span>。重启后资源库条目仍可查看内容对象（不产生网络请求），但不能再按地址重新下载。
       </UiHint>
     </UiPanel>
   </div>

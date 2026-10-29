@@ -10,15 +10,21 @@ export const TELEGRAM_CACHE_IPC_CHANNELS = {
   // 页面
   PAGE_ATTACH: 'telegram-cache:page:attach',
   PAGE_PROBE: 'telegram-cache:page:probe',
+  SITE_INFO: 'telegram-cache:site:info',
   // 资源 / 任务
   ACQUIRE: 'telegram-cache:resource:acquire',
   TASK_CANCEL: 'telegram-cache:task:cancel',
-  ARCHIVE_LIST: 'telegram-cache:archive:list',
-  ARCHIVE_OPEN_DIR: 'telegram-cache:archive:open-dir',
   CACHE_CLEAR: 'telegram-cache:cache:clear',
+  // 影库 / 回收站（v4）
+  MSG_LIBRARY_LIST: 'telegram-cache:library:list',
+  MSG_LIBRARY_MEDIA: 'telegram-cache:library:media',
+  MSG_LIBRARY_DELETE: 'telegram-cache:library:delete',
+  MSG_LIBRARY_OPEN_DIR: 'telegram-cache:library:open-dir',
+  TRASH_LIST: 'telegram-cache:trash:list',
+  TRASH_RESTORE: 'telegram-cache:trash:restore',
+  TRASH_EMPTY: 'telegram-cache:trash:empty',
   // 自检 / 诊断 / 目录
   SELF_TEST: 'telegram-cache:self-test',
-  M3_REPORT: 'telegram-cache:m3:report',
   DIAGNOSTICS_EXPORT: 'telegram-cache:diagnostics:export',
   OPEN_DATA_DIR: 'telegram-cache:open-data-dir',
   // M3-B：MTProto 消息媒体下载（凭据只在主进程读取 .env）

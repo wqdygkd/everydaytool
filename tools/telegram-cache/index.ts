@@ -22,6 +22,7 @@ const tool = defineTool({
     { path: 'resources', name: 'tool-telegram-cache-resources', meta: { title: '资源' } },
     { path: 'tasks', name: 'tool-telegram-cache-tasks', meta: { title: '任务' } },
     { path: 'diagnostics', name: 'tool-telegram-cache-diagnostics', meta: { title: '诊断' } },
+    { path: 'library', name: 'tool-telegram-cache-library', meta: { title: '影库' } },
   ],
 })
 

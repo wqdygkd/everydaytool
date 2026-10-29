@@ -95,7 +95,7 @@ export async function runTelegramSelfTest(): Promise<TelegramSelfTestResult> {
       return 'payload'
     }
     const first = manager.acquire(spec('k1', 't1', runner), { id: 'c1', kind: 'cache' })
-    const second = manager.acquire(spec('k1', 't2', runner), { id: 'c2', kind: 'archive' })
+    const second = manager.acquire(spec('k1', 't2', runner), { id: 'c2', kind: 'cache' })
     const [a, b] = await Promise.all([first.promise, second.promise])
     if (runs !== 1) return `底层任务跑了 ${runs} 次，期望 1 次`
     if (a !== 'payload' || b !== 'payload') return '消费者拿到的结果不一致'
@@ -127,7 +127,7 @@ export async function runTelegramSelfTest(): Promise<TelegramSelfTestResult> {
       return 'kept'
     }
     const first = manager.acquire(spec('k', 't1', runner), { id: 'c1', kind: 'cache' })
-    const second = manager.acquire(spec('k', 't2', runner), { id: 'c2', kind: 'archive' })
+    const second = manager.acquire(spec('k', 't2', runner), { id: 'c2', kind: 'cache' })
     const cancelled = first.promise.then(() => false).catch(error => error instanceof TaskCancelledError)
     manager.cancelConsumer('k', 'c1')
     const result = await second.promise

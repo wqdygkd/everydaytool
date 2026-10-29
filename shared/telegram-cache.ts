@@ -52,8 +52,8 @@ export type TelegramResourceType
 
 export type TelegramTaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
 
-/** 消费者意图：cache = 存入资源库；archive = 归档（先复用资源库，再复制为独立副本） */
-export type TelegramResourceKind = 'cache' | 'archive'
+/** 消费者意图：cache = 存入资源库 */
+export type TelegramResourceKind = 'cache'
 
 export type TelegramCompleteness = 'unknown' | 'partial' | 'complete'
 export type TelegramVerification = 'unverified' | 'verified'
@@ -68,24 +68,6 @@ export interface TelegramCacheConfig {
   maxResourceBytes: number
   /** 缓存配额：超过后按 LRU 淘汰（归档副本不受影响） */
   cacheMaxBytes: number
-  /**
-   * 图片本地响应开关（默认 false）。
-   * 打开后会在 Telegram 分区注册 http/https 协议处理器，对「已校验、新鲜、图片、
-   * 无 Range」的资源用本地文件响应；其余请求原样回源。关闭即卸载处理器。
-   */
-  localResponseEnabled: boolean
-  /**
-   * 音视频 Range 本地响应开关（默认 false，与图片开关独立）。
-   * 只处理单区间 Range（206 + Content-Range）；多区间 / 非法区间一律回源。
-   * 方案要求音视频单独验收，因此默认关闭。
-   */
-  localMediaRangeEnabled: boolean
-  /**
-   * 页面数据捕获开关（默认 false，M3 路径 A）。
-   * 通过 CDP Network 域读取页面**已经下载完成**的图片响应体，直接落库（不再下载一次）。
-   * 会占用页面调试通道：与开发者工具互斥；只抓图片、有大小上限。关闭即 detach。
-   */
-  enablePageCapture: boolean
 }
 
 export const TELEGRAM_DEFAULT_CONFIG: TelegramCacheConfig = {
@@ -93,9 +75,6 @@ export const TELEGRAM_DEFAULT_CONFIG: TelegramCacheConfig = {
   maxHttpConcurrency: TELEGRAM_DEFAULT_HTTP_CONCURRENCY,
   maxResourceBytes: TELEGRAM_DEFAULT_RESOURCE_BYTES,
   cacheMaxBytes: TELEGRAM_DEFAULT_CACHE_BYTES,
-  localResponseEnabled: false,
-  localMediaRangeEnabled: false,
-  enablePageCapture: false,
 }
 
 /**
@@ -108,14 +87,10 @@ export interface TelegramCapabilities {
   httpObservation: boolean
   /** 响应大小只能从 content-length 等响应头推导，不是真实计量 */
   httpHeaderBytes: boolean
-  /** 能否捕获页面已下载完成的 HTTP 响应体（CDP；blob / MTProto 明文仍不可得） */
-  pageMediaCapture: boolean
   /** 独立 MTProto 下载器（已实现，但需要 .env 凭据与会话；见 status） */
   telegramDownloader: boolean
   /** 能否在 guest 页面里执行只读探测脚本 */
   guestProbe: boolean
-  /** 是否具备「本地响应替换」能力（能力具备 ≠ 已开启，开关见 config） */
-  localResponseReplacement: boolean
   /** 存储形态：只保存校验过的内容文件 + 按 HTTP 语义判定能否本地响应 */
   persistence: 'verified-content-store'
   notes: string[]
@@ -171,7 +146,6 @@ export interface TelegramStoredInfo {
   sha256: string
   completeness: TelegramCompleteness
   verification: TelegramVerification
-  archived: boolean
   relativePath: string
   updatedAt: number
   /** 允许作为本地响应复用（图片 / 音视频 + 新鲜 + 未声明 no-store/private/no-cache + Vary 可接受） */
@@ -260,7 +234,6 @@ export type TelegramMtprotoPhase
     | 'resolving'
     | 'downloading'
     | 'verifying'
-    | 'archiving'
     | 'completed'
     | 'failed'
     | 'cancelled'
@@ -283,7 +256,6 @@ export interface TelegramMtprotoTask {
   /** 本次从已提交偏移继续的字节数（0 = 从头下载） */
   resumedFrom: number
   sha256?: string
-  archiveRelativePath?: string
   error?: string
   startedAt: number
   updatedAt: number
@@ -309,73 +281,6 @@ export interface TelegramMtprotoStatus {
 
 /** MTProto 路径的进度 / 状态推送（EVENT_MTPROTO） */
 export type TelegramMtprotoEvent = TelegramMtprotoStatus
-
-export type TelegramFeasibilityCheckStatus = 'pass' | 'fail' | 'blocked' | 'manual'
-
-export interface TelegramFeasibilityCheck {
-  id: string
-  title: string
-  status: TelegramFeasibilityCheckStatus
-  detail: string
-}
-
-export interface TelegramFeasibilityEnvironment {
-  electron: string | null
-  chrome: string | null
-  node: string | null
-  platform: string
-  userAgent: string | null
-  pageUrl: string | null
-  serviceWorkerActive: boolean | null
-  blobUrlCount: number | null
-  mediaElementCount: number | null
-  websocketObserved: boolean
-}
-
-export interface TelegramFeasibilityDependencies {
-  teleproto: {
-    packageName: string
-    installed: boolean
-    version: string | null
-  }
-}
-
-export interface TelegramFeasibilityReport {
-  checkedAt: number
-  environment: TelegramFeasibilityEnvironment
-  dependencies: TelegramFeasibilityDependencies
-  checks: TelegramFeasibilityCheck[]
-  observation: {
-    requests: number
-    websocketRequests: number
-    imageRequests: number
-    mediaRequests: number
-    blobClues: number | null
-    byType: TelegramResourceTypeStat[]
-    topHosts: TelegramHostStat[]
-    note: string
-  }
-  capture: {
-    available: boolean
-    enabled: boolean
-    attached: boolean
-    hits: number
-    misses: number
-    capturedBytes: number
-    supported: string[]
-    limitations: string[]
-  }
-  mtproto: {
-    available: boolean
-    prerequisites: string[]
-    notes: string[]
-  }
-  decision: {
-    /** true = 目前观察到的主要媒体路径是普通 HTTP；false = 大部分线索指向非 HTTP；null = 数据不足 */
-    httpMediaMajority: boolean | null
-    summary: string
-  }
-}
 
 export interface TelegramResourceSummary {
   resourceKey: string
@@ -454,29 +359,15 @@ export interface TelegramPageProbe {
   error?: string
 }
 
-export interface TelegramArchiveEntry {
-  archiveId: string
-  resourceKey: string
-  displayUrl: string
-  host: string
-  /** 相对数据根目录 `telegram-cache/` 的路径，渲染层不得把它当本地写路径使用 */
-  relativePath: string
-  size: number
-  sha256: string
-  mimeType?: string
-  savedAt: number
-}
-
 export interface TelegramDiagnosticsExport {
   relativePath: string
   bytes: number
   exportedAt: number
-  /** 诊断包内包含的条目数（资源 / 请求 / 任务 / 归档） */
+  /** 诊断包内包含的条目数（资源 / 请求 / 任务） */
   counts: {
     resources: number
     traffic: number
     tasks: number
-    archives: number
   }
 }
 
@@ -489,6 +380,139 @@ export interface TelegramWebSessionInfo {
   error?: string
 }
 
+/** 自托管 telegram-tt 的站点状态（v4）：页面与 /api、/media 同源 */
+export interface TelegramSiteInfo {
+  ready: boolean
+  /** 形如 http://127.0.0.1:<port>/；未就绪时 null */
+  url: string | null
+  error: string | null
+}
+
+// ---------------------------------------------------------------------------
+// 消息级缓存（v4）：messages/<acc>/<peer>/<mid>/ + manifest + text.md
+// ---------------------------------------------------------------------------
+
+export type TelegramMessageState = 'missing' | 'queued' | 'downloading' | 'partial' | 'complete' | 'failed'
+export type TelegramAttachmentState = 'pending' | 'partial' | 'complete' | 'failed'
+export type TelegramMediaLinkMode = 'hardlink' | 'copy' | 'object'
+
+export interface TelegramMessagePeerSnapshot {
+  id: string
+  username?: string
+  titleSnapshot?: string
+  type?: string
+}
+
+export interface TelegramMessageAttachment {
+  index: number
+  mediaKey: string
+  kind: string
+  mimeType?: string
+  fileName?: string
+  expectedSize?: number
+  actualSize?: number
+  sha256?: string
+  /** 相对工具命名空间（assets 层）的路径，如 `messages/acc-default/peer-1/…` */
+  relativePath?: string
+  linkMode?: TelegramMediaLinkMode
+  status: TelegramAttachmentState
+}
+
+export interface TelegramMessageManifest {
+  schemaVersion: 1
+  messageKey: string
+  peer: TelegramMessagePeerSnapshot
+  messageId: number
+  groupedId?: string
+  date?: string
+  editDate?: string
+  senderSnapshot?: { id?: string, name?: string }
+  text?: { saved: boolean, chars: number, truncated?: boolean, file?: string }
+  status: TelegramMessageState
+  attachments: TelegramMessageAttachment[]
+  origin?: { reachable?: boolean, lastCheckedAt?: number }
+  savedAt: number
+  updatedAt: number
+}
+
+export interface TelegramArchivePrepareAttachment {
+  index: number
+  mediaKey: string
+  kind: string
+  mimeType?: string
+  fileName?: string
+  expectedSize?: number
+}
+
+export interface TelegramArchivePrepareRequest {
+  peer: TelegramMessagePeerSnapshot
+  messageId: number
+  groupedId?: string
+  date?: string
+  editDate?: string
+  sender?: { id?: string, name?: string }
+  attachments: TelegramArchivePrepareAttachment[]
+}
+
+export interface TelegramArchiveAttachmentProgress {
+  index: number
+  mediaKey: string
+  received: number
+  expected: number
+  complete: boolean
+}
+
+export interface TelegramArchivePrepareResponse {
+  state: TelegramMessageState
+  attachments: TelegramArchiveAttachmentProgress[]
+}
+
+export interface TelegramArchiveAppendResponse {
+  received: number
+  expected: number
+  complete: boolean
+}
+
+export interface TelegramArchiveCommitRequest {
+  peer: TelegramMessagePeerSnapshot
+  messageId: number
+  text?: string
+  textTruncated?: boolean
+}
+
+export interface TelegramMessageStatusEntry {
+  state: TelegramMessageState
+  received?: number
+  expected?: number
+  progress?: number
+  attachments?: number
+  savedAt?: number
+  error?: string
+}
+
+export interface TelegramLibraryEntry {
+  peerId: string
+  messageId: number
+  state: TelegramMessageState
+  peerTitle?: string
+  groupedId?: string
+  savedAt?: number
+  size: number
+  attachmentCount: number
+  textPreview?: string
+  /** 相对 assets 根的消息目录 */
+  relativeDir: string
+}
+
+export interface TelegramTrashEntry {
+  trashId: string
+  deletedAt: number
+  expiresAt: number
+  originalPath: string
+  peerId: string
+  messageId: number
+}
+
 export interface TelegramSnapshot {
   stats: TelegramObservationStats
   cache: TelegramCacheRuntimeStats
@@ -496,9 +520,9 @@ export interface TelegramSnapshot {
   tasks: TelegramTaskSnapshot[]
   capabilities: TelegramCapabilities
   config: TelegramCacheConfig
-  archiveCount: number
   dataDirectory: string
   /** Telegram Web A 登录缓存（Chromium 分区）位置 */
   webSession: TelegramWebSessionInfo
+  site: TelegramSiteInfo
   generatedAt: number
 }

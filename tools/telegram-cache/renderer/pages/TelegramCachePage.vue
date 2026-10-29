@@ -2,9 +2,9 @@
 import type { WebviewTag } from '../webview'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
-import { TELEGRAM_DEFAULT_URL } from '../../../../shared/telegram-cache'
 import { TELEGRAM_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
+import LibraryPanel from '../components/LibraryPanel.vue'
 import OverviewPanel from '../components/OverviewPanel.vue'
 import ResourcesPanel from '../components/ResourcesPanel.vue'
 import TasksPanel from '../components/TasksPanel.vue'
@@ -19,7 +19,7 @@ const isElectron = isElectronEnvironment()
 
 const webviewRef = shallowRef<WebviewTag | null>(null)
 const boundElements = new WeakSet<object>()
-const pageUrl = ref(TELEGRAM_DEFAULT_URL)
+const pageUrl = ref('')
 const loading = ref(true)
 const loadError = ref('')
 const initError = ref('')
@@ -27,16 +27,21 @@ const canGoBack = ref(false)
 const canGoForward = ref(false)
 const devtoolsOpen = ref(false)
 
+const site = computed(() => store.site)
+const pageSrc = computed(() => site.value?.url ?? '')
+const siteError = computed(() => site.value?.error ?? '')
+
 const activeTab = computed(() => tabKeyFromPath(route.path))
 const PANELS = {
   overview: OverviewPanel,
   resources: ResourcesPanel,
   tasks: TasksPanel,
   diagnostics: DiagnosticsPanel,
+  library: LibraryPanel,
 } as const
 const activePanel = computed(() => PANELS[activeTab.value])
 
-const displayUrl = computed(() => sanitizePageUrl(pageUrl.value) || TELEGRAM_DEFAULT_URL)
+const displayUrl = computed(() => sanitizePageUrl(pageUrl.value) || pageSrc.value)
 
 const menuItems = computed(() => TELEGRAM_CACHE_TABS.map(tab => ({
   value: tab.key as string,
@@ -45,7 +50,9 @@ const menuItems = computed(() => TELEGRAM_CACHE_TABS.map(tab => ({
     ? store.resources.length
     : tab.key === 'tasks'
       ? store.activeTasks.length
-      : undefined,
+      : tab.key === 'library'
+        ? store.library.length
+        : undefined,
 })))
 
 function safeCall<T>(fn: () => T, fallback: T): T {
@@ -142,7 +149,7 @@ function toggleDevTools(): void {
 }
 
 function openInBrowser(): void {
-  const url = pageUrl.value || TELEGRAM_DEFAULT_URL
+  const url = pageUrl.value || pageSrc.value
   if (!url) return
   openExternal(url)
 }
@@ -217,16 +224,26 @@ onUnmounted(() => {
           description="请使用 everydaytool 桌面端打开本工具。"
         />
 
+        <el-alert
+          v-else-if="!pageSrc"
+          class="pane-alert"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="本地 Telegram 客户端未就绪"
+          :description="siteError || '正在启动本地站点…'"
+        />
+
         <webview
-          v-if="isElectron"
+          v-if="isElectron && pageSrc"
           :ref="bindWebview"
           :partition="TELEGRAM_WEBVIEW_PARTITION"
-          :src="TELEGRAM_DEFAULT_URL"
+          :src="pageSrc"
           class="telegram-webview"
         />
 
-        <div v-if="loading && !loadError" class="browser-overlay">
-          <span class="muted">正在加载 Telegram Web A…</span>
+        <div v-if="loading && pageSrc && !loadError" class="browser-overlay">
+          <span class="muted">正在加载 Telegram…</span>
         </div>
 
         <div v-if="loadError" class="browser-overlay is-error">

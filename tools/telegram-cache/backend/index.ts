@@ -10,18 +10,14 @@ import { registerTelegramCacheHandlers } from './ipc/handlers.ts'
 import { disposeBenchmark } from './services/benchmark-service.ts'
 import { enforceTelegramCacheQuota } from './services/cache-manager.ts'
 import { disposeTelegramTasks } from './services/download-service.ts'
-import {
-  disposeTelegramLocalResponse,
-  syncTelegramLocalResponseWithConfig,
-} from './services/local-response-service.ts'
 import { disposeMtproto } from './services/mtproto-service.ts'
 import {
   attachTelegramObservation,
   detachTelegramObservation,
   setTelegramObservationEnabled,
 } from './services/observation-service.ts'
-import { disposePageCapture, syncPageCaptureWithConfig } from './services/page-capture-service.ts'
 import { detachTelegramPage, installTelegramGuestGuards } from './services/probe-service.ts'
+import { disposeTelegramSite, initializeTelegramSite } from './services/site-service.ts'
 import {
   startTelegramSnapshotPublisher,
   stopTelegramSnapshotPublisher,
@@ -44,6 +40,9 @@ export const telegramCacheBackend = {
     // 域名级导航 allowlist 在 webview 创建时装好（不等渲染层 dom-ready 后调 PAGE_ATTACH）
     installTelegramGuestGuards()
 
+    // v4：托管本地 telegram-tt 构建（同源 /api 与 /media）；dist 缺失时只记录状态，不回退远程站点
+    await initializeTelegramSite()
+
     attachTelegramObservation()
     setTelegramObservationEnabled(getTelegramCacheConfig().observationEnabled)
 
@@ -58,11 +57,6 @@ export const telegramCacheBackend = {
       logger.warn('Telegram cache quota enforcement failed', { error: (error as Error).message })
     })
 
-    // 本地响应开关默认关闭：只有用户在配置里显式打开才会安装协议处理器
-    syncTelegramLocalResponseWithConfig()
-    // 页面捕获默认关闭；真正 attach 要等 PAGE_ATTACH 之后
-    syncPageCaptureWithConfig()
-
     registerTelegramCacheHandlers()
     startTelegramSnapshotPublisher()
 
@@ -75,11 +69,10 @@ export const telegramCacheBackend = {
   async dispose(): Promise<void> {
     stopTelegramSnapshotPublisher()
     disposeBenchmark()
-    disposePageCapture()
+    disposeTelegramSite()
     disposeMtproto()
     detachTelegramPage()
     disposeTelegramTasks()
-    disposeTelegramLocalResponse()
     detachTelegramObservation()
   },
 }
