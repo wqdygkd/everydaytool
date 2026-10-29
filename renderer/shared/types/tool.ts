@@ -17,7 +17,6 @@ export interface ToolDefinition {
   name: string
   description: string
   version: string
-  color: string
   /** 工具 logo 图标（icons.ts 图标名，展示在主页卡片头像内） */
   icon: IconName
   category: ToolCategory

@@ -5,7 +5,6 @@ const tool = defineTool({
   name: '身份证号生成器',
   description: '随机生成中国大陆18位身份证号',
   version: '1.0.0',
-  color: '#d95574',
   icon: 'idCard',
   category: { key: 'generator', name: '生成器' },
   keywords: ['id', 'identity', 'generator', '身份证', '证件号码', '随机生成'],

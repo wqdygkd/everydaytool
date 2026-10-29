@@ -2,8 +2,6 @@
 interface HeaderTab {
   id: string
   name: string
-  /** 页签强调色（工具品牌色），透传给 --tab-accent；应用页签可缺省 */
-  color?: string
 }
 
 interface TabSlot {
@@ -531,14 +529,12 @@ onBeforeUnmount(() => {
         'is-active': tab.id === activeId,
         'is-drag-source': tab.id === draggingId || tab.id === settlingId,
       }"
-      :style="tab.color ? { '--tab-accent': tab.color } : undefined"
       role="tab"
       :aria-selected="tab.id === activeId"
       tabindex="0"
       @click="selectTab(tab.id)"
       @keydown="onTabKeydown($event, index)"
     >
-      <span class="tool-tab-dot" aria-hidden="true" />
       <span class="tool-tab-label">{{ tab.name }}</span>
       <button
         type="button"
@@ -557,10 +553,9 @@ onBeforeUnmount(() => {
       v-if="ghost.visible && ghost.tab"
       class="tab-drag-ghost"
       :class="{ 'is-active': ghost.active, 'is-settling': ghost.settling }"
-      :style="[ghostStyle, ghost.tab.color ? { '--tab-accent': ghost.tab.color } : undefined]"
+      :style="ghostStyle"
       aria-hidden="true"
     >
-      <span class="tool-tab-dot" aria-hidden="true" />
       <span class="tool-tab-label">{{ ghost.tab.name }}</span>
     </div>
   </Teleport>
@@ -590,23 +585,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 页签前的身份圆点：6px，未选中降到 .65——名字是主线索，颜色只负责
-   「这个页签和首页那张卡是同一个工具」的呼应（同一支色在卡片、页签、页内分段菜单上复用）。 */
-.tool-tab-dot {
-  width: 6px;
-  height: 6px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  background: var(--tab-accent, var(--color-primary));
-  opacity: 0.65;
-  transition: opacity var(--transition-fast);
-}
-
 .tool-tab {
-  /* 每个页签自己的身份色：工具页签取工具色，应用自带页面（设置）退化为品牌蓝。
-     注意默认值不能写 var(--tool-accent)——那是**当前**工具色，会让设置页签跟着变脸。 */
-  --tab-accent: var(--color-primary);
-
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -626,10 +605,10 @@ onBeforeUnmount(() => {
     background-color var(--transition-fast),
     color var(--transition-fast);
 
-  /* 选中 = 工具色淡底 + 中性黑标签：亮档蓝当 12px 文字只有 3.31:1，
-     所以身份色只负责「哪一格」，可读性交给中性文本 */
+  /* 选中 = 品牌色淡底 + 中性黑标签：亮档蓝当 12px 文字只有 3.31:1，
+     所以强调色只负责「哪一格」，可读性交给中性文本 */
   &.is-active {
-    background: color-mix(in srgb, var(--tab-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     color: var(--color-text-primary);
   }
 
@@ -641,11 +620,6 @@ onBeforeUnmount(() => {
   &:focus-visible {
     outline: none;
     box-shadow: var(--shadow-focus);
-  }
-
-  /* 选中态把圆点点亮：身份色在静息时安静，在「我正在这里」时明确 */
-  &.is-active .tool-tab-dot {
-    opacity: 1;
   }
 
   // 拖拽源由页面上的浮层（ghost）代替，原位置只留占位
@@ -690,8 +664,6 @@ onBeforeUnmount(() => {
 
 /* 拖拽浮层：Teleport 到 body，样式自包含（不依赖页签条祖先） */
 .tab-drag-ghost {
-  --tab-accent: var(--color-primary);
-
   position: fixed;
   z-index: 2000;
   display: inline-flex;
@@ -712,7 +684,7 @@ onBeforeUnmount(() => {
   will-change: transform;
 
   &.is-active {
-    background: color-mix(in srgb, var(--tab-accent) 14%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
     color: var(--color-text-primary);
   }
 

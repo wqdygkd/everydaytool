@@ -5,7 +5,6 @@ const tool = defineTool({
   name: 'Telegram 网络优化',
   description: '内嵌 Telegram Web A：被动观测、资源复用、合并重复下载；可选本地响应、页面图片捕获与 MTProto 消息媒体下载',
   version: '1.7.2',
-  color: '#2aabee',
   icon: 'telegram',
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['telegram', 'tg', 'telegram web', '网络', '缓存', '观测', '资源', '去重', 'single-flight', 'mtproto', '诊断', 'lru'],

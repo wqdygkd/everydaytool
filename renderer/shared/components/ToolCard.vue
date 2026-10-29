@@ -13,7 +13,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="tool-card" :style="{ '--tool-accent': tool.color }" @click="$emit('click')">
+  <div class="tool-card" @click="$emit('click')">
     <button
       class="favorite-btn"
       type="button"
@@ -25,7 +25,7 @@ defineEmits<{
       <span aria-hidden="true">★</span>
     </button>
     <div class="tool-head">
-      <UiAvatar :text="tool.name" :color="tool.color" :size="42" :icon="tool.icon" />
+      <UiAvatar :text="tool.name" :size="42" :icon="tool.icon" />
       <h3 class="tool-name">
         {{ tool.name }}
       </h3>
@@ -66,8 +66,9 @@ defineEmits<{
   transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base), opacity var(--transition-base);
 
   &:hover {
-    /* 头像用的是工具自己的色，hover 描边同一支色：卡片在「被指向」的瞬间亮出自己的身份 */
-    border-color: color-mix(in srgb, var(--tool-accent) 42%, var(--color-border));
+    /* 头像与 hover 描边同取品牌色（全站唯一的强调色）：卡片被指向时提亮描边，
+       不再按工具换色——工具之间的区分交给图标与名称。 */
+    border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
     box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-md);
     transform: translateY(-1px);
   }
@@ -123,7 +124,7 @@ defineEmits<{
     }
   }
 
-  /* Telegram 字母头像：近白 → 工具色的纵向渐变（见 UiAvatar） */
+  /* Telegram 字母头像：近白 → 品牌色的纵向渐变（见 UiAvatar） */
   .tool-head {
     display: flex;
     align-items: center;

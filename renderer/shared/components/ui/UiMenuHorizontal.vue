@@ -107,9 +107,9 @@ onBeforeUnmount(() => {
   left: 0;
   height: 40px;
   border-radius: 999px;
-  /* 选中态用**当前工具的身份色**淡底（--tool-accent 由外壳按工具覆写，默认品牌蓝）：
-     同一个工具在页签、卡片、页内分段菜单上是同一支色，形成可学习的地点感。 */
-  background: color-mix(in srgb, var(--tool-accent) 14%, transparent);
+  /* 选中态用**品牌色**淡底：与页签、列表卡、分段钮共用同一支强调色，
+     同一个界面里只有一套「选中 = 浅底 + 中性黑文字」的语言。 */
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
   opacity: 0;
   pointer-events: none;
 }
@@ -148,8 +148,8 @@ onBeforeUnmount(() => {
 }
 
 .ui-menu-horizontal-item.is-active {
-  /* 选中项文字取中性主文本：身份色只做底与指示条，
-     文字一旦染成工具色就回到「相近蓝互相打架」的老问题 */
+  /* 选中项文字取中性主文本：品牌色只做底与指示条，
+     文字染成亮档蓝只有 3.31:1，读起来像「被禁用」 */
   color: var(--color-text-primary);
 }
 
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 var(--spacing-xs);
   border-radius: 999px;
-  /* 计数是「系统的注意信号」，不跟工具身份色走：白字压在墨档蓝上 5.05:1 */
+  /* 计数是「系统的注意信号」：白字压在墨档蓝上 5.05:1（与选中态浅底分档，不抢同一层） */
   background: var(--color-primary-strong);
   color: var(--color-on-solid);
   font-size: var(--font-size-xs);

@@ -5,7 +5,6 @@ const tool = defineTool({
   name: 'Chrome沙箱',
   description: '多沙箱浏览器管理',
   version: '1.0.0',
-  color: '#408acf',
   icon: 'sandbox',
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['chrome', 'sandbox', 'browser', 'profile', '指纹', '沙箱'],

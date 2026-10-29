@@ -377,7 +377,7 @@ onUnmounted(() => {
             align="start"
             :disabled="settingsLocked"
           >
-            在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效
+            在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯
           </UiSwitchField>
         </el-form-item>
         <el-form-item label="缓存登录状态">
@@ -386,7 +386,7 @@ onUnmounted(() => {
             align="start"
             :disabled="settingsLocked"
           >
-            登录一次后整体缓存会话（14 天有效），启动时自动还原并补跑登录后初始化（租户列表 / NameNode / iframe SSO）；超期需重新登录
+            登录一次后整体缓存会话
           </UiSwitchField>
         </el-form-item>
         <el-form-item label="额外启动参数" class="form-item--last">
