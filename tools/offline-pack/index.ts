@@ -6,7 +6,6 @@ const tool = defineTool({
   name: '离线包下载',
   description: '一站式下载 VSCode 插件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包',
   version: '1.0.0',
-  color: '#3390ec',
   icon: 'offline-pack',
   category: { key: 'dev', name: '开发工具' },
   keywords: ['offline-pack', 'offlinepack', '离线', '下载', 'vscode', 'chrome', 'edge', 'docker', 'msstore', '离线包'],

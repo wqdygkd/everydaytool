@@ -7,12 +7,6 @@ export interface ToolTab {
   id: string
   name: string
   routeName: string
-  /**
-   * 工具身份色（应用自带页面没有）：页签圆点与选中浅底取它。
-   * 与首页卡片头像同一支色——「同色 = 同一个工具」是这套配色的地点感来源，
-   * 见 tokens.scss 的 --tool-accent。
-   */
-  color?: string
 }
 
 const STORAGE_KEY = STORAGE_KEYS.toolTabs
@@ -20,7 +14,7 @@ const STORAGE_KEY = STORAGE_KEYS.toolTabs
 /** 页签可能来自工具注册表，也可能是应用自带页面（设置等）：两者共用同一套打开 / 高亮逻辑 */
 function resolveTab(id: string): ToolTab | null {
   const tool = getToolRegistry().find(t => t.id === id)
-  if (tool) return { id: tool.id, name: tool.name, routeName: `tool-${tool.id}`, color: tool.color }
+  if (tool) return { id: tool.id, name: tool.name, routeName: `tool-${tool.id}` }
   const appTab = findAppTab(id)
   return appTab ? { id: appTab.id, name: appTab.name, routeName: appTab.routeName } : null
 }

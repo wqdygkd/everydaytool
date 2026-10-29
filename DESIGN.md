@@ -4,8 +4,8 @@
 
 ## 1. 设计原则与视觉语言
 
-- **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为唯一的**动作色**；
-  工具身份色只做图形（圆点 / 浅底 / 描边），语义色只讲状态。
+- **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为**唯一**的强调色
+  （动作与选中同色、不同档：图形用亮档、文字用墨档），语义色只讲状态。
 - **固定浅色**：无主题切换，颜色一律走语义令牌，禁止硬编码。
 - **令牌优先**：所有组件通过 `var(--token)` 引用设计令牌，禁止硬编码颜色 / 圆角 / 阴影。
 - **颜色先分档再分色**：每支色相先确定「它是图形（亮档，≥3:1）还是文字（墨档，≥4.5:1）」，
@@ -51,13 +51,12 @@
   每个值都验算过「白底 + 自身浅底」两个落点——只验白底会漏掉整类提示条 / 徽章的不可读。
 - **浅底两档**：`--color-primary-soft`（10%）可以压墨档蓝文字；`--color-primary-light`（20%）
   只能配中性黑文字或图形（墨档蓝压 20% 浅底只有 4.06:1）。
-- **工具身份色**（`--tool-accent`）：`App.vue` 按当前工具的 `color` 覆写，页签按各自工具色覆写。
-  它独占**选中 / 地点**这一族——页签选中态、页内分段菜单（`UiMenuHorizontal`）、分段钮
-  （`el-radio-button`）、列表卡选中态；只做**图形**（14% 浅底、6px 圆点、描边），
-  文字一律留中性黑：工具色里一半是相近的蓝，当文字读会互相打架。
+- **不按工具换色**：工具定义里没有 `color`，页签选中浅底、首页卡片头像与 hover 描边、
+  页内分段菜单（`UiMenuHorizontal`）与分段钮（`el-radio-button`）、列表卡选中态一律取 `--color-primary`。
+  强调色只做**图形**（14% 浅底、描边、指示条），文字一律留中性黑或墨档蓝。
 - **三种色各管一件事**，同一个界面里不会有两只色抢同一个含义：
-  **动作 / 注意 = 品牌蓝**（主按钮、链接、计数徽章）、**选中 / 地点 = 工具身份色**、
-  **状态 = 语义色**。表格行选中与下拉项 hover 属过渡态，仍取品牌浅底。
+  **动作 / 注意 = 品牌蓝**（主按钮、链接、计数徽章）、**选中 = 品牌蓝浅底 + 中性黑文字**、
+  **状态 = 语义色**。表格行选中与下拉项 hover 同属品牌浅底。
 - **数值在 OKLCH 里反解**（保持色相，压亮度 / 收彩度），不要肉眼调；改色先在白底 + 自身 10% 浅底上验算。
 
 | 令牌 | 值 | 用途 |
@@ -69,7 +68,6 @@
 | `--color-success` | `#007b54` | 成功 / 运行态 |
 | `--color-warning` | `#975f00` | 警告 / 固定标记 / 收藏星 |
 | `--color-error` | `#cf1c28` | 错误 / 危险操作 |
-| `--tool-accent` | `var(--color-primary)` | 工具身份色（外壳按当前工具覆写） |
 | `--color-app-bg` | `#f4f4f5` | 画布兜底色（实际画布为透明，见 7.1.1） |
 | `--color-on-solid` | `#ffffff` | 实底上的前景白（绿底徽章白字 / 头像字母 / 白分隔线），不随透明度变 |
 | `--color-border-light` | `#e4e4e5` | 细分隔线、卡片描边 |
@@ -336,20 +334,27 @@
 
 ## 4. Element Plus 绑定
 
-`--el-*` 变量在 `element-plus.scss` 的 `:root` 中绑定到设计令牌，使 Element Plus 组件（按钮、输入框、表格、弹层、消息等）自动继承主题：
+`--el-*` 变量在 `element-plus.scss` 中绑定到设计令牌，使 Element Plus 组件（按钮、输入框、表格、弹层、消息等）自动继承主题。**颜色与状态只写变量绑定**，属性覆写只留给 EP 没有变量可用的地方（玻璃 / 几何 / 少数写死颜色的选中态文字）。
 
-- `--el-color-primary` → `--color-primary`，及其 light/dark 阶梯派生色。
-- `--el-border-color` / `-light` / `-lighter` → 边框令牌。
-- `--el-bg-color` / `--el-fill-color-blank` → `--color-input`（EP 内部 tree / upload / calendar 等共用此入口）。
-- `--el-fill-color-light` / `-lighter` → `--color-fill`（灰调填充）。
-- `--el-bg-color-overlay` → `--color-overlay`（弹层）；下拉类浮层另行覆盖为 `--color-pop`。
+`:root`（全局阶梯）：
+
+- 语义色：`--el-color-primary` → `--color-primary`，`success` / `warning` → 同名令牌，`danger` **与** `error` → `--color-error`，`info` → `--color-primary-strong`；各自再派生 light-3/5/7/8/9 与 dark-2。
+  EP 的按钮 / 标签走 `danger`、alert / message 走 `error`，两支都要绑，否则同一语义会出现两种红。
+- 中性阶梯：边框 `-color` / `-light` / `-lighter` / `-extra-light` → 边框令牌，`-hover` / `-dark` / `-darker` 由边框压深派生；
+  填充 `-fill-color` 六档 → `--color-fill`（`-dark` / `-darker` 由 fill 压深）；文本 `primary` / `regular` / `secondary` / `placeholder` / `disabled` → 文本令牌。
+  这一层的意义是让 **EP 自己算出来的状态**（hover 边框、disabled 底、填充、弹层阴影）跟着令牌走，界面上不再冒出第二套 EP 灰。
+- 底色：`--el-bg-color` / `--el-fill-color-blank` → `--color-input`（EP 内部 tree / upload / calendar 等共用此入口）；`--el-bg-color-overlay` → `--color-overlay`；`--el-color-white` → `--color-on-solid`。
+- 阴影 `--el-box-shadow` / `-light` / `-lighter` / `-dark` → `--shadow-lg` / `-md` / `-sm` / `-lg`；`--el-mask-color` → `rgba(0,0,0,.25)`。
+
+组件级（`html .el-<组件>`，压过 EP 组件 CSS 里的同名默认值）：
+
+- 按钮：`--el-button-bg-color` / `-border-color` / `-text-color` / `-hover-*` / `-active-*` → `--color-button` 与文本令牌（玻璃钮）；primary / danger 实心钮改用 `--color-primary-strong` / `--color-error` 的**可读档**实底；文字钮 / 链接钮 → `--el-button-text-color` / `--el-link-text-color` 取墨档。
+- 输入框：`--el-input-bg-color` → `--color-field`，`--el-input-border-color` → 边框令牌，`--el-input-hover-border-color` → `--el-border-color-hover`，`--el-input-focus-border-color` → `--color-primary`，`--el-input-text-color` → `--color-text-primary`。
 - 表格：`--el-table-tr-bg-color` → `--color-table`，表头 / 行 hover → `--color-fill`。
-- 输入框：`.el-input__wrapper` / `.el-textarea__inner` / `.el-select__wrapper` 的 `background` → `--color-field`
-  （`.el-input__inner` 本身是 `background: none`，底色只由 wrapper 提供）。
-- 按钮：`--el-button-bg-color` / `-hover-bg-color` → `--color-button`（primary/danger 实心钮单独覆盖为品牌色）。
-- `--el-text-color-primary/regular/secondary` → 文本令牌。
-- `--el-box-shadow` / `-light` → 阴影令牌。
-- `--el-mask-color` → `rgba(0,0,0,.25)`（弹层遮罩）。
+- 弹层：`--el-dialog-bg-color` / `-border-radius` / `-box-shadow`、`--el-messagebox-*`、`--el-message-*`、`--el-notification-*`、`--el-alert-bg-color`、`--el-popper-border-radius` 各自接令牌；下拉类浮层作用域内把 `--el-bg-color-overlay` 改绑为 `--color-pop`。
+- 选择控件：`--el-checkbox-checked-text-color`、`--el-radio-button-checked-*`（品牌色）、`--el-switch-on-color` / `-off-color`。
+
+只能写选择器的三类（EP 把颜色写死在规则里，没有变量）：「选中 = 墨档文字」（下拉项 / 级联节点 / 页签 / 分页器 / 单选与开关标签）、开关轨道高光与滑块、以及 `el-input-number` 加减钮的透明底。
 
 > **不要写死静态色**：`--color-*` 合成变量之外的实色（如 `#fff`）会在半透明窗口下变成「死白」，
 > 与周围半透明表面脱节。新增 EP 覆写时务必接到对应角色上。
@@ -359,6 +364,8 @@
 **注入顺序（必踩的坑）**：EP 的组件 CSS 由 `ElementPlusResolver({ importStyle: 'css' })` 懒加载、**晚于** `element-plus.scss` 注入，
 同权声明会被 EP 盖回。需要压过 EP 默认值的规则一律带 `html` / `.el-xxx .el-yyy` 前缀并在注释写明原因
 （现有先例：`html .el-switch`、`html .el-table`、`html .el-alert`）。
+同样地，`--el-button-*` / `--el-input-*` / `--el-dialog-*` 这类**定义在组件根节点上**的变量也必须带 `html` 前缀——
+只写在单类选择器里会是死代码（EP 后注入、同权覆盖）。`:root` 上的全局变量不受此限制。
 
 ## 5. UI 组件库
 
@@ -381,7 +388,7 @@
 | `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
-| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：选中胶囊 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo）。**选中胶囊取当前工具的 `--tool-accent` 14% 浅底 + 中性黑标签**，计数徽章仍是墨档蓝（系统的注意信号不跟工具走） |
+| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：选中胶囊 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo）。**选中胶囊取品牌色 `--color-primary` 14% 浅底 + 中性黑标签**，计数徽章仍是墨档蓝（同一支蓝，两个职责：图形用亮档、文字用墨档） |
 
 ### 5.2 数据展示
 
@@ -407,7 +414,7 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiPathField` | `modelValue`、`placeholder`、`disabled`、`mono`、`#actions` 插槽 | 路径输入（等宽 + 右侧动作） |
-| `UiSwitchField` | `modelValue`、`disabled`、`align` | 开关 + 说明文字的组合 |
+| `UiSwitchField` | `modelValue`、`disabled`、`align`（`center` 单行 / `start` 多行） | 开关 + 说明文字的组合。两种模式都把**轨道中线对到说明文字首行中线**（EP 的开关根节点比一行说明高，不做补偿文字会高出半个控制框）；`center`（默认）整块居中——单行说明用；`start` 从首行起排、后续行向下——多行说明用，否则开关会漂到段落中间 |
 | `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 圆角（42px 大搜索），`box` 方形（32px 面板内搜索） |
 | `UiCodeArea` | `modelValue`、`rows`（8）、`placeholder`、`disabled`、`meta` | 等宽多行输入 + 右下角元信息 |
 
@@ -425,14 +432,14 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiDialog` | `modelValue`、`title`、`width`（560px）、`destroyOnClose`、`closeOnClickModal`、`#footer` 插槽 | 模态框（radius-xl + shadow-lg）；footer 保留 EP 原生按钮间距 |
-| `UiListCard` | `active` | 可点列表卡片。hover 只提描边（身份色 45%），`active` 才铺浅底（身份色 8% + 70% 描边）——鼠标路过与真正选中不再同一种视觉 |
+| `UiListCard` | `active` | 可点列表卡片。hover 只提描边（品牌色 45%），`active` 才铺浅底（品牌色 8% + 70% 描边）——鼠标路过与真正选中不再同一种视觉 |
 
 ### 5.7 通用状态约定
 
 | 状态 | 表现 |
 | ------ | ------ |
-| hover | 卡片浮岛 hover 变浅底或抬描边（工具卡描边取**工具身份色** 42%）；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
-| active / 选中 | 身份色浅底（14%）+ 中性黑文字 + 身份色描边（页签 / 分段菜单 / 分段钮 / 列表卡同一套）；收藏星为**实底琥珀 + 白星**（与 hover 的浅底琥珀区分） |
+| hover | 卡片浮岛 hover 变浅底或抬描边（工具卡描边取**品牌色** 42%）；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
+| active / 选中 | 品牌色浅底（14%）+ 中性黑文字 + 品牌色描边（页签 / 分段菜单 / 分段钮 / 列表卡同一套）；收藏星为**实底琥珀 + 白星**（与 hover 的浅底琥珀区分） |
 | focus | `--shadow-focus` 蓝色内环（亮档蓝，3.31:1 ≥ 图形 3:1；输入框为蓝边框 + 无外发光） |
 | disabled | EP 默认禁用灰（走全局绑定），图标/文字按钮降低透明度——**不**调容器 opacity |
 
@@ -463,10 +470,11 @@
 ### 7.1 应用外壳
 
 - 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，10% 品牌浅底 + 墨档蓝字）+ 工具页签。
-- **页签带工具身份色**：每个工具页签前有一枚 6px 圆点（取该工具的 `color`，静息 65% 不透明、选中 100%），
-  选中态是「身份色 14% 浅底 + 中性黑标签」。同一支色在首页卡片头像、卡片 hover 描边、
-  页内 `UiMenuHorizontal` 选中胶囊上复用——**同色 = 同一个工具**；应用自带页面（设置）没有工具色，退化为品牌蓝。
-  身份色只做图形，标签文字永远是中性黑：亮档蓝压浅底当 12px 文字只有 2.66:1。
+- **页签只靠「选中浅底」区分**（品牌色 14% + 中性黑标签），不再带身份圆点：
+  名称本身就是主线索，多一枚点只会把 34px 高的页签切碎。
+  同一套「选中 = 浅底 + 中性黑」语言在首页卡片头像与 hover 描边、页内 `UiMenuHorizontal` 选中胶囊上复用——
+  全站只有一个强调色，工具之间的区分交给图标与名称（工具定义里没有 `color`）。
+  强调色只做图形，标签文字永远是中性黑：亮档蓝压浅底当 12px 文字只有 2.66:1。
 - 无打开页签时仅显示品牌标。
 - **设置入口固定在标题栏右端**（`.header-settings`，34px 方形图标钮，齿轮图标）：Windows / Linux 上正好落在原生「最小化」按钮左侧（右侧 148px 原生按钮区之外），mac 上落在标题栏右端、红绿灯在另一侧。点击**打开一个「设置」页签**（不是弹窗），与工具页签同构：可关闭、可切换、常驻挂载；设置页签处于激活态时入口同步高亮（primary-light 底 + primary 字）。**首页不再有右下角悬浮设置按钮**。
 - **工具页签支持浏览器式拖拽排序**：拖拽中实时重排并用 FLIP 过渡，顺序随 `edt:tool-tabs` 持久化；拖拽浮层始终被钳在页签条可视区内（拖出边缘只停在首 / 尾槽，不会飞出页签区），`Esc` 取消；触屏保留横向滚动，不触发拖拽（指针类型不是鼠标 / 触笔时只滚动）。
@@ -606,7 +614,8 @@
 - 拖拽排序用「固定槽位 + transform 实时预览」：拖拽中 DOM 顺序不动，卡片用 CSS `transform`
   滑入目标槽位，松开后再一次性提交顺序；避免过渡动画与原生拖拽互相打断。
 - 工具卡片：白底浮岛 + 字母头像行，hover 浅底提示；收藏星标为绝对定位浮层。
-- **卡片用工具自己的色**：头像渐变、hover 描边（身份色 42%）、拖拽源虚线都取 `--tool-accent`；
+- **全站唯一强调色**：头像渐变、hover 描边（品牌色 42%）、拖拽源虚线都取 `--color-primary`
+  ——工具之间的区分交给图标与名称，不再按工具配色。
   收藏星是全站唯一的琥珀：静息灰描边星 → hover 浅底琥珀星 → 已收藏实底琥珀 + 白星（4.89:1）。
   「我的收藏」区块标题前用同一支琥珀星，让这一区一眼可认。
 

@@ -488,7 +488,7 @@ onMounted(() => {
     z-index: 1;
 
     > .tool-card {
-      border-color: color-mix(in srgb, var(--tool-accent) 55%, transparent);
+      border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
       border-style: dashed;
       opacity: 0.5;
       transform: scale(0.97);

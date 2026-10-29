@@ -193,7 +193,7 @@ function formatTime(at: number): string {
       <ol class="steps">
         <li>在 Chrome 打开 <span class="mono">chrome://extensions</span>，开启右上角「开发者模式」。</li>
         <li>点「加载已解压的扩展程序」，选择下面的扩展目录。</li>
-        <li>点浏览器工具栏的扩展图标，打开「挂载代理」开关即可 —— <strong>无需配对码或任何配置</strong>。</li>
+        <li>点浏览器工具栏的扩展图标，打开「挂载代理」开关即可。</li>
       </ol>
       <UiKeyValue label="扩展目录">
         <span class="mono path">{{ store.status?.extensionDir ?? '—' }}</span>

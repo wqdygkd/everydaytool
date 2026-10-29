@@ -141,15 +141,6 @@ onUnmounted(() => {
 
 const currentTool = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null))
 
-// 当前工具的身份色 → 外壳上的 --tool-accent（tokens.scss）：页内的分段菜单、列表卡选中态
-// 都读它，于是「同一个工具」在页签、首页卡片、页内选中态上是同一支色。
-// 没有工具上下文（首页 / 设置）时留空，回落到 :root 的品牌蓝。
-const currentToolColor = computed(() => {
-  const id = currentTool.value
-  if (!id) return null
-  return getToolRegistry().find(t => t.id === id)?.color ?? null
-})
-
 // 页签拖拽只改变显示顺序；常驻挂载顺序按 id 稳定排序。
 // 若直接按页签顺序渲染 tools-host，拖拽重排会让 webview 节点被移动，可能触发 guest 重载。
 const mountedTabs = computed(() =>
@@ -193,7 +184,6 @@ function openSettings() {
     ref="shellEl"
     class="app-shell"
     :class="[`platform-${platform}`, modeClasses]"
-    :style="currentToolColor ? { '--tool-accent': currentToolColor } : undefined"
   >
     <header class="app-header">
       <span class="brand-mark" role="button" tabindex="0" @click="goHome" @keydown.enter="goHome">edt</span>
@@ -339,7 +329,7 @@ function openSettings() {
   }
 
   // 设置页签处于激活态时高亮：入口状态与「当前是否在看设置」保持一致
-  // （浅底取 10% 档，图标取墨档——设置是应用级页面，不跟工具身份色走）
+  // （浅底取 10% 档，图标取墨档——与工具页签的「品牌色 14% 浅底 + 中性黑」同一套选中语言）
   &.is-active {
     background: var(--color-primary-soft);
     color: var(--color-primary-strong);

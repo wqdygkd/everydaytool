@@ -104,7 +104,6 @@ export default defineTool({
   name: '工具名称',
   description: '工具描述',
   version: '1.0.0',
-  color: '#3390ec',
   icon: 'toolbox',
   category: { key: 'general', name: '通用工具' },
   keywords: ['tool-name'],

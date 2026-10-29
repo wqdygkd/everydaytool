@@ -5,13 +5,14 @@ import { computed } from 'vue'
 const props = withDefaults(defineProps<{
   /** 头像文字（取首字符）；提供 icon 时忽略 */
   text: string
-  /** 主题色（渐变底色） */
-  color: string
+  /** 主题色（渐变底色）；默认取品牌色——全站不再按工具换色 */
+  color?: string
   size?: number
   /** 工具 logo 图标（提供后替代首字符） */
   icon?: IconName
 }>(), {
   size: 42,
+  color: 'var(--color-primary)',
 })
 
 const initial = computed(() => (props.text ?? '').trim().charAt(0).toUpperCase())
