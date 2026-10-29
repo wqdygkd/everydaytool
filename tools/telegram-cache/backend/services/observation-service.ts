@@ -193,6 +193,13 @@ function shouldRecord(details: WebRequestLikeDetails): boolean {
   if (!enabled) return false
   // 主进程发起的请求（含本工具自己的下载）没有 webContentsId，不计入页面流量
   if (details.webContentsId == null) return false
+  // v4：本地站点（/api、/media、静态资源）不是"网络流量"，不计入观测统计
+  try {
+    const host = new URL(details.url).hostname
+    if (host === '127.0.0.1' || host === 'localhost') return false
+  } catch {
+    // 非法 URL 交给后续 identity 解析处理
+  }
   // 只观测本分区内的 webContents：理论上分区独占，这里再做一次归属校验
   const guest = webContents.fromId(details.webContentsId)
   if (!guest || guest.isDestroyed()) return false
@@ -382,17 +389,11 @@ export function getTelegramCapabilities(): TelegramCapabilities {
   notes.push('响应大小来自 content-length 等响应头，缺失该头的响应记为「大小未知」，不计入网络字节。')
   notes.push('只记录有 webContents 归属的请求；主进程自身请求（含本工具下载）不计入页面流量。')
   notes.push('只注册非阻塞回调（onResponseStarted / onCompleted / onErrorOccurred），不存在漏调用回调导致请求挂起的路径。')
-  notes.push('本地响应复用（M2）分图片 / 音视频单区间两个开关，默认关闭；过期条目先做条件验证（304 续期，200 失效旧条目）。开启后页面请求可能不再出现在观测里。')
-  notes.push('页面数据捕获（M3）通过 CDP 读取页面已完成的图片响应体，默认关闭，与开发者工具互斥。')
-  notes.push('页面媒体捕获不覆盖 blob / 播放中数据 / MTProto 明文；独立 MTProto 下载器仍为 false。')
   return {
     httpObservation: attached,
     httpHeaderBytes: true,
-    pageMediaCapture: true,
     telegramDownloader: true,
     guestProbe: true,
-    // 能力已实现（受配置开关控制）；是否开启见 snapshot.config.localResponseEnabled
-    localResponseReplacement: true,
     persistence: 'verified-content-store',
     notes,
   }

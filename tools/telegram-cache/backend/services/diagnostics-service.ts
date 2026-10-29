@@ -9,9 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { shell } from 'electron'
 import { getTelegramCacheRoot, getTelegramDiagnosticsDir, toTelegramRelativePath } from '../utils/paths.ts'
-import { listTelegramArchives } from './archive-service.ts'
 import { listBenchmarkRecords } from './benchmark-service.ts'
-import { buildTelegramFeasibilityReport } from './feasibility-service.ts'
 import { getTelegramTraffic } from './observation-service.ts'
 import { buildTelegramSnapshot } from './snapshot-service.ts'
 
@@ -23,7 +21,6 @@ function timestampForFileName(date: Date): string {
 export async function exportTelegramDiagnostics(): Promise<TelegramDiagnosticsExport> {
   const snapshot = buildTelegramSnapshot()
   const traffic = getTelegramTraffic()
-  const archives = listTelegramArchives()
   const exportedAt = Date.now()
   const dir = getTelegramDiagnosticsDir()
   await mkdir(dir, { recursive: true })
@@ -46,7 +43,6 @@ export async function exportTelegramDiagnostics(): Promise<TelegramDiagnosticsEx
     config: snapshot.config,
     capabilities: snapshot.capabilities,
     cache: snapshot.cache,
-    m3: buildTelegramFeasibilityReport(),
     benchmarks: listBenchmarkRecords(),
     observation: {
       stats: snapshot.stats,
@@ -54,12 +50,10 @@ export async function exportTelegramDiagnostics(): Promise<TelegramDiagnosticsEx
     },
     resources: snapshot.resources,
     tasks: snapshot.tasks,
-    archives,
     limits: {
       trafficEntries: traffic.length,
       resourceEntries: snapshot.resources.length,
       taskEntries: snapshot.tasks.length,
-      archiveEntries: archives.length,
     },
   }
 
@@ -75,7 +69,6 @@ export async function exportTelegramDiagnostics(): Promise<TelegramDiagnosticsEx
       resources: snapshot.resources.length,
       traffic: traffic.length,
       tasks: snapshot.tasks.length,
-      archives: archives.length,
     },
   }
 }

@@ -2,7 +2,6 @@
 // 推送按 700ms 节流（观测期间每个请求都可能触发变化，逐条推送会淹没 IPC）；
 // 用户主动操作（清空 / 改配置 / 归档完成）走立即推送。
 import type {
-  TelegramArchiveEntry,
   TelegramResourceSummary,
   TelegramResourceType,
   TelegramSnapshot,
@@ -17,17 +16,15 @@ import { TELEGRAM_RESOURCE_LIMIT } from '../../../../shared/telegram-cache.ts'
 import { TELEGRAM_CACHE_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getTelegramCacheConfig } from '../store/config-store.ts'
 import { isVerifiedCompleteRecord, listTelegramResourceRecords } from '../store/resource-registry.ts'
-import { getTelegramArchiveCount, listTelegramArchives } from './archive-service.ts'
 import { getTelegramCacheMeters, getTelegramCacheUsage } from './cache-manager.ts'
 import { listTelegramTaskSnapshots } from './download-service.ts'
-import { isTelegramLocalResponseInstalled } from './local-response-service.ts'
 import {
   getTelegramCapabilities,
   getTelegramObservationStats,
   listObservedResources,
   setTelegramObservationChangeHandler,
 } from './observation-service.ts'
-import { getPageCaptureStats, setPageCaptureChangeHandler } from './page-capture-service.ts'
+import { getTelegramSiteStatus } from './site-service.ts'
 
 const SNAPSHOT_THROTTLE_MS = 700
 
@@ -41,17 +38,12 @@ function resourceTypeFromMime(mimeType?: string): TelegramResourceType {
   return 'other'
 }
 
-function archivedKeys(entries: TelegramArchiveEntry[]): Set<string> {
-  return new Set(entries.map(entry => entry.resourceKey))
-}
-
-function toStoredInfo(record: TelegramResourceRecord, archived: Set<string>): TelegramStoredInfo {
+function toStoredInfo(record: TelegramResourceRecord): TelegramStoredInfo {
   return {
     size: record.actualSize ?? 0,
     sha256: record.sha256 ?? '',
     completeness: record.completeness,
     verification: record.verification,
-    archived: archived.has(record.resourceKey),
     relativePath: record.relativePath ?? '',
     updatedAt: record.updatedAt,
     cacheable: record.cache?.cacheable === true,
@@ -64,7 +56,6 @@ function toStoredInfo(record: TelegramResourceRecord, archived: Set<string>): Te
 }
 
 export function buildTelegramResourceSummaries(): TelegramResourceSummary[] {
-  const archived = archivedKeys(listTelegramArchives())
   const records = new Map(listTelegramResourceRecords().map(record => [record.resourceKey, record]))
   const summaries = new Map<string, TelegramResourceSummary>()
 
@@ -85,7 +76,7 @@ export function buildTelegramResourceSummaries(): TelegramResourceSummary[] {
       statusCode: observed.statusCode,
       lastSeenAt: observed.lastSeenAt,
       downloadable: observed.identity.downloadable,
-      stored: record && isVerifiedCompleteRecord(record) ? toStoredInfo(record, archived) : undefined,
+      stored: record && isVerifiedCompleteRecord(record) ? toStoredInfo(record) : undefined,
     })
   }
 
@@ -105,7 +96,7 @@ export function buildTelegramResourceSummaries(): TelegramResourceSummary[] {
       fromCache: false,
       lastSeenAt: record.lastAccessedAt ?? record.updatedAt,
       downloadable: false,
-      stored: toStoredInfo(record, archived),
+      stored: toStoredInfo(record),
     })
   }
 
@@ -118,41 +109,40 @@ export function buildTelegramSnapshot(): TelegramSnapshot {
   const config = getTelegramCacheConfig()
   const usage = getTelegramCacheUsage()
   const meters = getTelegramCacheMeters()
-  const capture = getPageCaptureStats()
   return {
     stats: getTelegramObservationStats(),
     cache: {
       sizeBytes: usage.sizeBytes,
       entryCount: usage.entryCount,
       maxBytes: config.cacheMaxBytes,
-      servedBytes: meters.servedBytes,
-      localHits: meters.localHits,
-      localMisses: meters.localMisses,
-      revalidations: meters.revalidations,
-      revalidationHits: meters.revalidationHits,
+      servedBytes: 0,
+      localHits: 0,
+      localMisses: 0,
+      revalidations: 0,
+      revalidationHits: 0,
       evictedBytes: meters.evictedBytes,
       evictions: meters.evictions,
       lastEvictionAt: meters.lastEvictionAt,
-      localResponseEnabled: config.localResponseEnabled,
-      localMediaRangeEnabled: config.localMediaRangeEnabled,
-      handlerInstalled: isTelegramLocalResponseInstalled(),
-      pageCaptureEnabled: capture.enabled,
-      pageCaptureAttached: capture.attached,
-      pageCapturedBytes: capture.bytes,
-      pageCaptureHits: capture.hits,
-      pageCaptureMisses: capture.misses,
+      localResponseEnabled: false,
+      localMediaRangeEnabled: false,
+      handlerInstalled: false,
+      pageCaptureEnabled: false,
+      pageCaptureAttached: false,
+      pageCapturedBytes: 0,
+      pageCaptureHits: 0,
+      pageCaptureMisses: 0,
     },
     resources: buildTelegramResourceSummaries(),
     tasks: listTelegramTaskSnapshots(),
     capabilities: getTelegramCapabilities(),
     config,
-    archiveCount: getTelegramArchiveCount(),
     dataDirectory: getDataDirectory(),
     webSession: {
       directory: getPartitionStoragePath('telegram-cache'),
       inDataDirectory: isSessionDataInDataDirectory(),
       restartRequired: !isSessionDataInDataDirectory(),
     },
+    site: getTelegramSiteStatus(),
     generatedAt: Date.now(),
   }
 }
@@ -179,16 +169,14 @@ export function broadcastTelegramSnapshotNow(): void {
   pushSnapshot()
 }
 
-/** 后端 initialize 时调用：把观测 / 捕获变化接到节流推送，并推一次初始快照 */
+/** 后端 initialize 时调用：把观测变化接到节流推送，并推一次初始快照 */
 export function startTelegramSnapshotPublisher(): void {
   setTelegramObservationChangeHandler(scheduleTelegramSnapshotBroadcast)
-  setPageCaptureChangeHandler(scheduleTelegramSnapshotBroadcast)
   scheduleTelegramSnapshotBroadcast()
 }
 
 export function stopTelegramSnapshotPublisher(): void {
   setTelegramObservationChangeHandler(null)
-  setPageCaptureChangeHandler(null)
   if (snapshotTimer) {
     clearTimeout(snapshotTimer)
     snapshotTimer = null

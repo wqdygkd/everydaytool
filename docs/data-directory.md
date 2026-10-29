@@ -71,7 +71,8 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
     import-rollback/<时间戳>/       # 备份恢复前的配置层快照（回滚点，可随时清）
 
 <assets>/                           # 资产层：默认 <data>/assets
-  telegram-cache/archive/resources/…
+  telegram-cache/messages/…
+  telegram-cache/trash/…
 ```
 
 各工具的落点与清理策略逐条登记在 `shared/data-layers.ts` 的 `DATA_LAYER_ENTRIES`；
@@ -121,7 +122,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 | env-browser | `config/env-browser/envs.json`（密码经 safeStorage 加密） | `session/Partitions/env-<id>/` | — | — |
 | interceptor | `config/interceptor/{config,rules}.json`、`certs/` | —（系统 CA 信任在外部） | `cache/interceptor/extension/` | — |
 | offline-pack | `config/offline-pack/history.json` | — | `cache/offline-pack/downloads/` | 用户另存位置（外部） |
-| telegram-cache | `config/telegram-cache/*.json`、`telegram-session.bin` | `session/Partitions/telegram-cache/` | `cache/telegram-cache/{objects,tmp,mtproto,diagnostics}` | `<assets>/telegram-cache/archive/` |
+| telegram-cache | `config/telegram-cache/*.json`、`telegram-session.bin` | `session/Partitions/telegram-cache/` | `cache/telegram-cache/{objects,tmp,mtproto,diagnostics}` | `<assets>/telegram-cache/{messages,trash}` |
 | treease-editor | `config/treease-editor/rules.json` | `session/Partitions/treease-editor/` | — | — |
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |

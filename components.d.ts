@@ -63,6 +63,7 @@ declare module 'vue' {
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']
     LaunchOptionsFields: typeof import('./tools/chrome-sandbox/renderer/components/LaunchOptionsFields.vue')['default']
+    LibraryPanel: typeof import('./tools/telegram-cache/renderer/components/LibraryPanel.vue')['default']
     MSStoreDownloader: typeof import('./tools/offline-pack/renderer/components/MSStoreDownloader.vue')['default']
     OverviewPanel: typeof import('./tools/telegram-cache/renderer/components/OverviewPanel.vue')['default']
     ResourcesPanel: typeof import('./tools/telegram-cache/renderer/components/ResourcesPanel.vue')['default']

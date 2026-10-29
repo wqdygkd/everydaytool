@@ -16,6 +16,20 @@ let attachedPageId: number | null = null
 let releaseAttachedWindowOpen: (() => void) | null = null
 /** guest.id → 释放该 guest 导航 allowlist 的函数（创建时安装，页面销毁时自清） */
 const guardedGuests = new Map<number, () => void>()
+/** 自托管站点（v4）的 origin host：只放行这一个 loopback 主机 */
+let allowedLocalHost: string | null = null
+
+export function setTelegramLocalOrigin(origin: string | null): void {
+  if (!origin) {
+    allowedLocalHost = null
+    return
+  }
+  try {
+    allowedLocalHost = new URL(origin).host
+  } catch {
+    allowedLocalHost = null
+  }
+}
 
 function isAllowedTelegramHost(host: string): boolean {
   const normalized = host.toLowerCase()
@@ -140,6 +154,7 @@ function isAllowedNavigation(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+    if (allowedLocalHost && url.host === allowedLocalHost) return true
     return isAllowedTelegramHost(url.host)
   } catch {
     return false

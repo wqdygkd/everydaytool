@@ -32,8 +32,8 @@ function statusInfo(status: string): { label: string, type: 'success' | 'info' |
   return statusMeta[status as TelegramTaskSnapshot['status']] ?? statusMeta.failed
 }
 
-function kindLabel(kind: string): string {
-  return kind === 'archive' ? '归档' : '存库'
+function kindLabel(_kind: string): string {
+  return '存库'
 }
 
 async function cancelTask(row: unknown): Promise<void> {

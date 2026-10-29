@@ -12,7 +12,6 @@
 // - 完成后校验总大小并计算 SHA-256，再原子提交到 objects/，最后复制为归档副本；
 // - 文件引用过期（FILE_REFERENCE_EXPIRED）时重新拉取消息并重试一次。
 import type { TelegramMtprotoAccount, TelegramMtprotoStatus, TelegramMtprotoTask } from '../../../../shared/telegram-cache.ts'
-import type { TelegramResourceRecord } from '../store/resource-registry.ts'
 import type { ParsedMessageLink } from './mtproto-link.ts'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
@@ -31,14 +30,12 @@ import {
 } from '../store/resource-registry.ts'
 import { readMtprotoConfig } from '../utils/env.ts'
 import {
-  getTelegramArchiveRoot,
   getTelegramCacheRoot,
   getTelegramObjectsDir,
   getTelegramTmpDir,
   toTelegramRelativePath,
 } from '../utils/paths.ts'
 import { clearSecureSession, isSessionEncryptionAvailable, writeSecureSession } from '../utils/session-store.ts'
-import { archiveTelegramResource } from './archive-service.ts'
 import { hashFilePrefix, runChunkedDownload } from './mtproto-download-core.ts'
 import { parseMessageLink } from './mtproto-link.ts'
 
@@ -46,7 +43,6 @@ const require = createRequire(import.meta.url)
 
 const PARTIAL_SCHEMA = 1
 const REQUEST_SIZE = 256 * 1024
-const MAX_TEXT_CHARS = 20_000
 const EMIT_THROTTLE_MS = 400
 
 export class MtprotoError extends Error {
@@ -387,39 +383,6 @@ async function savePartial(filePath: string, state: PartialState): Promise<void>
   await rename(tmp, filePath)
 }
 
-async function writeMessageManifest(entryPath: string, input: {
-  link: string
-  peerKey: string
-  message: TgMessageLike
-  media: MediaInfo
-  sha256: string
-  savedAt: number
-}): Promise<void> {
-  const archiveId = `res-${input.sha256.slice(0, 16)}`
-  const dir = path.join(getTelegramArchiveRoot(), 'resources', archiveId)
-  await mkdir(dir, { recursive: true })
-  const text = (input.message.message ?? '').slice(0, MAX_TEXT_CHARS)
-  const payload = {
-    schemaVersion: 1,
-    archiveId,
-    source: 'telegram-mtproto',
-    link: input.link,
-    peer: input.peerKey,
-    messageId: input.message.id,
-    date: input.message.date ? new Date(input.message.date * 1000).toISOString() : null,
-    editDate: input.message.editDate ? new Date(input.message.editDate * 1000).toISOString() : null,
-    text,
-    textTruncated: (input.message.message ?? '').length > MAX_TEXT_CHARS,
-    fileName: input.media.fileName,
-    mimeType: input.media.mimeType,
-    size: input.media.size,
-    sha256: input.sha256,
-    savedAt: new Date(input.savedAt).toISOString(),
-    relativeContentPath: toTelegramRelativePath(entryPath),
-  }
-  await writeFile(path.join(dir, 'message.json'), `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
-}
-
 function objectPathForDigest(digest: string): string {
   return path.join(getTelegramObjectsDir(), digest.slice(0, 2), digest)
 }
@@ -458,20 +421,8 @@ async function runDownload(task: TelegramMtprotoTask, parsed: ParsedMessageLink,
       && existing.sha256) {
       const objectPath = resolveTelegramObjectPath(existing)
       if (objectPath && existsSync(objectPath)) {
-        task.phase = 'archiving'
-        emitStatus(true)
-        const entry = await archiveTelegramResource(existing)
-        await writeMessageManifest(objectPath, {
-          link: task.link,
-          peerKey,
-          message,
-          media,
-          sha256: existing.sha256,
-          savedAt: Date.now(),
-        })
         task.bytes = existing.actualSize ?? media.size
         task.sha256 = existing.sha256
-        task.archiveRelativePath = entry.relativePath
         task.phase = 'completed'
         task.updatedAt = Date.now()
         emitStatus(true)
@@ -597,7 +548,7 @@ async function runDownload(task: TelegramMtprotoTask, parsed: ParsedMessageLink,
     if (existsSync(finalPath)) await rm(tmpPath, { force: true })
     else await rename(tmpPath, finalPath)
 
-    const record: TelegramResourceRecord = recordTelegramContent({
+    recordTelegramContent({
       resourceKey: key,
       sourceType: 'telegram-mtproto',
       displayUrl,
@@ -610,23 +561,10 @@ async function runDownload(task: TelegramMtprotoTask, parsed: ParsedMessageLink,
       sourceMeta: { mtprotoFingerprint: media.fingerprint },
     })
 
-    task.phase = 'archiving'
-    task.sha256 = digest
-    task.updatedAt = Date.now()
-    emitStatus(true)
-    const entry = await archiveTelegramResource(record)
-    await writeMessageManifest(finalPath, {
-      link: task.link,
-      peerKey,
-      message,
-      media,
-      sha256: digest,
-      savedAt: Date.now(),
-    })
     await rm(statePath, { force: true }).catch(() => {})
 
     task.bytes = total
-    task.archiveRelativePath = entry.relativePath
+    task.sha256 = digest
     task.phase = 'completed'
     task.error = undefined
     task.updatedAt = Date.now()

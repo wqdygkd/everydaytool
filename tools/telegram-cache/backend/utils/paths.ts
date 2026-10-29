@@ -2,19 +2,18 @@
 //
 //   <data>/config/telegram-cache/     config.json（观测 / 并发 / 上限）
 //                                    registry.json（资源索引）
-//                                    archive-index.json（归档索引）
 //                                    benchmarks.json（测速基准）
 //                                    telegram-session.bin（MTProto 会话密文）
-//   <assets>/telegram-cache/archive/  归档副本（资产层：源可能已被删，不可再生，可独立设盘）
+//   <assets>/telegram-cache/messages/ 消息级缓存（manifest + text.md + 媒体）
+//   <assets>/telegram-cache/trash/    回收站
 //   <data>/cache/telegram-cache/      objects/<ab>/<sha256>（按哈希去重的内容对象）
 //                                    tmp/<task>.part（下载中临时文件）
 //                                    mtproto/partial（MTProto 分段临时文件）
 //                                    diagnostics/（脱敏诊断包）
 //
-// 索引兼容：registry / archive-index 里的 `relativePath` 一律相对「工具命名空间」
-// （即 telegram-cache/ 这一级，如 `objects/ab/hash`、`archive/resources/…`），
+// 索引兼容：registry / media-index 里的 `relativePath` 一律相对「工具命名空间」
+// （即 telegram-cache/ 这一级，如 `objects/ab/hash`、`messages/…`），
 // 由本文件的 resolveTelegramRelativePath / toTelegramRelativePath 按首段路由到对应层。
-// 这样归档从数据目录搬到独立资产根后，**索引内容无需改写**，v1 的旧索引照样能命中。
 import type { DataLayer } from '../../../../shared/data-layers.ts'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -24,7 +23,7 @@ const TOOL_ID = 'telegram-cache'
 /** 归缓存层的首段（其余一律按配置层处理） */
 const CACHE_HEADS = new Set(['objects', 'tmp', 'mtproto', 'diagnostics'])
 /** 归资产层的首段 */
-const ASSET_HEADS = new Set(['archive'])
+const ASSET_HEADS = new Set(['messages', 'trash'])
 
 /** 某层的工具命名空间根：`<layer>/telegram-cache` */
 export function getTelegramToolRoot(layer: DataLayer): string {
@@ -41,9 +40,23 @@ export function getTelegramConfigRoot(): string {
   return getTelegramToolRoot('config')
 }
 
-/** 资产层：归档副本（不可再生，落独立资产根） */
-export function getTelegramArchiveRoot(): string {
-  return resolveLayerPath('assets', TOOL_ID, 'archive')
+/** 资产层：消息级缓存目录（v4） */
+export function getTelegramMessagesRoot(): string {
+  return resolveLayerPath('assets', TOOL_ID, 'messages')
+}
+
+/** 资产层：回收站（v4） */
+export function getTelegramTrashRoot(): string {
+  return resolveLayerPath('assets', TOOL_ID, 'trash')
+}
+
+/** 配置层：消息索引（按 peer 分片）与媒体索引 */
+export function getTelegramMessageIndexRoot(): string {
+  return path.join(getTelegramConfigRoot(), 'messages-index')
+}
+
+export function getTelegramMediaIndexPath(): string {
+  return path.join(getTelegramConfigRoot(), 'media-index.json')
 }
 
 export function getTelegramConfigPath(): string {
@@ -52,10 +65,6 @@ export function getTelegramConfigPath(): string {
 
 export function getTelegramRegistryPath(): string {
   return path.join(getTelegramConfigRoot(), 'registry.json')
-}
-
-export function getTelegramArchiveIndexPath(): string {
-  return path.join(getTelegramConfigRoot(), 'archive-index.json')
 }
 
 export function getTelegramBenchmarkPath(): string {

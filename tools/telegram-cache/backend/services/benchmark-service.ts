@@ -14,7 +14,6 @@ import { getTelegramBenchmarkPath } from '../utils/paths.ts'
 import { diffBenchmarkCounters } from './benchmark-core.ts'
 import { getTelegramCacheMeters } from './cache-manager.ts'
 import { getTelegramObservationStats } from './observation-service.ts'
-import { getPageCaptureStats } from './page-capture-service.ts'
 
 const MAX_RECORDS = 50
 
@@ -52,7 +51,6 @@ function writeDocument(doc: BenchmarkDocument): void {
 function snapshotCounters(): TelegramBenchmarkCounters {
   const stats = getTelegramObservationStats()
   const cache = getTelegramCacheMeters()
-  const capture = getPageCaptureStats()
   return {
     requests: stats.requests,
     completed: stats.completed,
@@ -65,7 +63,7 @@ function snapshotCounters(): TelegramBenchmarkCounters {
     localMisses: cache.localMisses,
     revalidations: cache.revalidations,
     revalidationHits: cache.revalidationHits,
-    pageCapturedBytes: capture.bytes,
+    pageCapturedBytes: 0,
   }
 }
 

@@ -22,10 +22,6 @@ const currentCacheMb = computed(() => {
   const mb = Math.round(bytes / MB)
   return CACHE_OPTIONS.reduce((best, item) => (Math.abs(item - mb) < Math.abs(best - mb) ? item : best), CACHE_OPTIONS[0])
 })
-const localResponseEnabled = computed(() => store.config?.localResponseEnabled === true)
-const localMediaRangeEnabled = computed(() => store.config?.localMediaRangeEnabled === true)
-const pageCaptureEnabled = computed(() => store.config?.enablePageCapture === true)
-const m3Report = computed(() => store.m3Report)
 const benchmark = computed(() => store.benchmark)
 const benchmarkLabel = ref('')
 const benchmarkActive = computed(() => benchmark.value?.active ?? null)
@@ -99,7 +95,6 @@ const MT_PHASE_LABELS: Record<string, string> = {
   resolving: '解析消息',
   downloading: '下载中',
   verifying: '校验完整性',
-  archiving: '写入归档',
   completed: '完成',
   failed: '失败',
   cancelled: '已取消',
@@ -113,7 +108,7 @@ function mtPhaseTone(phase?: string): 'success' | 'danger' | 'warning' | 'neutra
   if (phase === 'completed') return 'success'
   if (phase === 'failed') return 'danger'
   if (phase === 'cancelled') return 'info'
-  if (phase === 'downloading' || phase === 'resolving' || phase === 'verifying' || phase === 'archiving') return 'warning'
+  if (phase === 'downloading' || phase === 'resolving' || phase === 'verifying') return 'warning'
   return 'neutral'
 }
 
@@ -212,79 +207,6 @@ async function applyConfig(patch: Partial<TelegramCacheConfig>, message: string)
   } catch (error) {
     ElMessage.error((error as Error).message || '保存配置失败')
   }
-}
-
-// 下面三个开关的入参按 EP 声明放宽成 string | number | boolean，再收敛回布尔：
-// 未配 active-value / inactive-value 时 EP 恒发布尔，行为与原来一致。
-async function toggleLocalResponse(raw: string | number | boolean): Promise<void> {
-  const value = Boolean(raw)
-  if (value) {
-    try {
-      await ElMessageBox.confirm(
-        '开启后，命中缓存的图片请求将由本地文件响应。副作用：页面请求可能不再出现在观测里（取决于 Electron 版本），且只对「图片 + 无 Range + 仍在新鲜期」生效；过期条目会先做条件验证。可随时关闭。',
-        '开启图片本地复用',
-        { type: 'warning', confirmButtonText: '开启' },
-      )
-    } catch {
-      return
-    }
-  }
-  await applyConfig({ localResponseEnabled: value }, value ? '图片本地复用已开启' : '图片本地复用已关闭')
-}
-
-async function toggleLocalMediaRange(raw: string | number | boolean): Promise<void> {
-  const value = Boolean(raw)
-  if (value) {
-    try {
-      await ElMessageBox.confirm(
-        '实验能力：音视频请求按单区间（206 + Content-Range）由本地文件响应。多区间 / 非法区间 / 带 If-Range 不匹配时一律回源。若播放器出现卡顿或黑屏，请立即关闭并反馈。',
-        '开启媒体 Range 本地响应',
-        { type: 'warning', confirmButtonText: '开启' },
-      )
-    } catch {
-      return
-    }
-  }
-  await applyConfig({ localMediaRangeEnabled: value }, value ? '媒体 Range 本地响应已开启' : '媒体 Range 本地响应已关闭')
-}
-
-async function togglePageCapture(raw: string | number | boolean): Promise<void> {
-  const value = Boolean(raw)
-  if (value) {
-    try {
-      await ElMessageBox.confirm(
-        '开启后会用 CDP 读取页面已经下载完成的图片响应体并直接落库（不再下载一次）。副作用：占用页面调试通道，与开发者工具互斥；只抓图片、单文件上限 16MB；拿不到 blob / MTProto 明文。',
-        '开启页面数据捕获',
-        { type: 'warning', confirmButtonText: '开启' },
-      )
-    } catch {
-      return
-    }
-  }
-  await applyConfig({ enablePageCapture: value }, value ? '页面数据捕获已开启' : '页面数据捕获已关闭')
-}
-
-async function runM3Report(): Promise<void> {
-  try {
-    const report = await store.runFeasibilityReport()
-    ElMessage.success(`检查完成：${report.decision.summary}`)
-  } catch (error) {
-    ElMessage.error((error as Error).message || 'M3 检查失败')
-  }
-}
-
-function checkTone(status: string): 'success' | 'danger' | 'warning' | 'neutral' {
-  if (status === 'pass') return 'success'
-  if (status === 'fail') return 'danger'
-  if (status === 'blocked') return 'warning'
-  return 'neutral'
-}
-
-function checkLabel(status: string): string {
-  if (status === 'pass') return '通过'
-  if (status === 'fail') return '不通过'
-  if (status === 'blocked') return '受阻'
-  return '待人工验证'
 }
 
 async function clearCache(): Promise<void> {
@@ -417,119 +339,6 @@ async function openDataDir(): Promise<void> {
       </div>
     </UiPanel>
 
-    <UiPanel title="M3 可行性（页面数据捕获）">
-      <template #actions>
-        <el-button size="small" type="primary" :loading="store.busy.m3" @click="runM3Report">
-          运行检查
-        </el-button>
-      </template>
-
-      <div class="kv-stack">
-        <UiKeyValue label="页面数据捕获" label-width="120px">
-          <UiGroup gap="sm" justify="end">
-            <UiChip :tone="pageCaptureEnabled ? (cache?.pageCaptureAttached ? 'success' : 'danger') : 'neutral'">
-              {{ pageCaptureEnabled ? (cache?.pageCaptureAttached ? 'CDP 已附加' : '未附加（可能被 DevTools 占用）') : '关闭' }}
-            </UiChip>
-            <el-switch :model-value="pageCaptureEnabled" @update:model-value="togglePageCapture" />
-          </UiGroup>
-        </UiKeyValue>
-        <UiKeyValue label="捕获字节 / 命中 / 失败" label-width="150px" mono>
-          {{ formatBytes(cache?.pageCapturedBytes) }} / {{ cache?.pageCaptureHits ?? 0 }} / {{ cache?.pageCaptureMisses ?? 0 }}
-        </UiKeyValue>
-      </div>
-
-      <UiHint block>
-        页面捕获只读取<strong>开启之后新发生</strong>且已下载完成的图片请求（重新加载页面或滚动聊天触发）；
-        与开发者工具互斥，DevTools 打开会分离调试器并停止捕获。不捕获 blob / 播放中数据 / MTProto 明文。
-      </UiHint>
-
-      <UiEmpty v-if="!m3Report" text="尚未运行。检查只汇总已观测的流量分类与捕获能力，不发起下载、不附加调试器。" variant="bordered" />
-      <template v-else>
-        <UiDetailGrid :columns="2">
-          <UiDetailItem label="图片 / 媒体请求" size="xs" mono>
-            {{ m3Report.observation.imageRequests }} / {{ m3Report.observation.mediaRequests }}
-          </UiDetailItem>
-          <UiDetailItem label="WebSocket 请求" size="xs" mono>
-            {{ m3Report.observation.websocketRequests }}
-          </UiDetailItem>
-          <UiDetailItem label="blob 线索（最近探测）" size="xs" mono>
-            {{ m3Report.observation.blobClues ?? '未探测' }}
-          </UiDetailItem>
-          <UiDetailItem label="检查时间" size="xs" mono>
-            {{ formatDateTime(m3Report.checkedAt) }}
-          </UiDetailItem>
-        </UiDetailGrid>
-
-        <UiHint block>
-          <strong>判定：</strong>{{ m3Report.decision.summary }}
-        </UiHint>
-
-        <div class="report-block">
-          <div class="report-title">
-            §19 检查清单
-          </div>
-          <div class="check-list">
-            <div v-for="check in m3Report.checks" :key="check.id" class="check-row">
-              <UiChip :tone="checkTone(check.status)">
-                {{ checkLabel(check.status) }}
-              </UiChip>
-              <div class="check-body">
-                <span class="step-name">{{ check.title }}</span>
-                <span class="muted step-detail">{{ check.detail }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="report-block">
-          <div class="report-title">
-            运行环境与依赖
-          </div>
-          <UiDetailGrid :columns="2">
-            <UiDetailItem label="Electron / Chromium" size="xs" wrap>
-              {{ m3Report.environment.electron || '?' }} / {{ m3Report.environment.chrome || '?' }}
-            </UiDetailItem>
-            <UiDetailItem label="teleproto" size="xs" wrap>
-              {{ m3Report.dependencies.teleproto.installed
-                ? `teleproto@${m3Report.dependencies.teleproto.version || 'unknown'}`
-                : '未安装' }}
-            </UiDetailItem>
-            <UiDetailItem label="页面地址" size="xs" wrap>
-              {{ m3Report.environment.pageUrl || '未探测' }}
-            </UiDetailItem>
-            <UiDetailItem label="页面 UA" size="xs" wrap>
-              {{ m3Report.environment.userAgent || '未探测' }}
-            </UiDetailItem>
-          </UiDetailGrid>
-        </div>
-
-        <div class="report-block">
-          <div class="report-title">
-            页面捕获限制
-          </div>
-          <ul class="finding-list">
-            <li v-for="item in m3Report.capture.limitations" :key="item">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-
-        <div class="report-block">
-          <div class="report-title">
-            MTProto 下载器（{{ m3Report.mtproto.available ? '凭据已配置' : '未配置' }}）
-          </div>
-          <ul class="finding-list">
-            <li v-for="item in m3Report.mtproto.prerequisites" :key="item">
-              {{ item }}
-            </li>
-            <li v-for="item in m3Report.mtproto.notes" :key="item">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-      </template>
-    </UiPanel>
-
     <UiPanel title="MTProto 消息下载（实验）">
       <template #actions>
         <el-button size="small" @click="refreshMtproto">
@@ -629,9 +438,6 @@ async function openDataDir(): Promise<void> {
         <div v-if="mtLast.sha256" class="report-block">
           <UiKeyValue label="SHA-256" label-width="88px" mono wrap>
             <span class="mono mt-sha">{{ mtLast.sha256 }}</span>
-          </UiKeyValue>
-          <UiKeyValue label="归档" label-width="88px" wrap>
-            <span class="mono">{{ mtLast.archiveRelativePath || '—' }}</span>
           </UiKeyValue>
         </div>
       </template>
@@ -747,22 +553,6 @@ async function openDataDir(): Promise<void> {
           <el-select :model-value="currentCacheMb" size="small" class="ctl-sm" @change="updateCacheQuota">
             <el-option v-for="option in cacheOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
-        </UiKeyValue>
-        <UiKeyValue label="图片本地复用" label-width="112px">
-          <UiGroup gap="sm" justify="end">
-            <UiChip :tone="localResponseEnabled ? (cache?.handlerInstalled ? 'success' : 'danger') : 'neutral'">
-              {{ localResponseEnabled ? (cache?.handlerInstalled ? '已开启' : '处理器安装失败') : '关闭' }}
-            </UiChip>
-            <el-switch :model-value="localResponseEnabled" @update:model-value="toggleLocalResponse" />
-          </UiGroup>
-        </UiKeyValue>
-        <UiKeyValue label="媒体 Range" label-width="112px">
-          <UiGroup gap="sm" justify="end">
-            <UiChip :tone="localMediaRangeEnabled ? (cache?.handlerInstalled ? 'success' : 'danger') : 'neutral'">
-              {{ localMediaRangeEnabled ? (cache?.handlerInstalled ? '已开启（单区间）' : '处理器安装失败') : '关闭' }}
-            </UiChip>
-            <el-switch :model-value="localMediaRangeEnabled" @update:model-value="toggleLocalMediaRange" />
-          </UiGroup>
         </UiKeyValue>
         <UiKeyValue label="Web 登录缓存" label-width="112px" wrap>
           <div class="data-dir">
