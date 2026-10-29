@@ -165,7 +165,7 @@ export const wxpService = {
         message: `发现 WXP 已在运行，附加调试端口 ${settings.debugPort}…`,
         targetCount: 0,
       })
-      const attachedState = await this.startSession(settings, '已附加到运行中的 WXP，脚本注入生效')
+      const attachedState = await this.startSession(settings)
       startAttachWatchdog(settings)
       return attachedState
     }
@@ -209,7 +209,7 @@ export const wxpService = {
 
       await waitForCdpPort(settings.debugPort, CDP_TIMEOUT_MS)
 
-      const state = await this.startSession(settings, '注入运行中，新页面将自动应用')
+      const state = await this.startSession(settings)
       logger.info('wxp:launch success', { port: settings.debugPort, pid })
       return state
     } catch (error) {
@@ -241,7 +241,7 @@ export const wxpService = {
     }
   },
 
-  async startSession(settings: WxpSettings, message: string): Promise<WxpRunningState> {
+  async startSession(settings: WxpSettings): Promise<WxpRunningState> {
     // 登记了「待清除登录缓存」时，首轮注入的脚本带清除块（先于还原执行）
     const clearPending = await wxpConfigStore.getLoginCacheClearPending()
     const nextSession = new CdpInjectionSession({
@@ -250,9 +250,10 @@ export const wxpService = {
       scriptRev: WXP_INJECTION_REV,
       pollIntervalMs: POLL_INTERVAL_MS,
       onTargetsInjected: ({ total }) => {
+        // 运行中不挂说明文案：状态行只留「运行中 + PID / 端口 / 页面」
         setState({
           status: 'running',
-          message: '注入运行中，新页面将自动应用',
+          message: '',
           targetCount: total,
         })
       },
@@ -275,7 +276,7 @@ export const wxpService = {
 
     return setState({
       status: 'running',
-      message,
+      message: '',
       targetCount: nextSession.injectedTargetCount,
     })
   },
@@ -311,7 +312,7 @@ export const wxpService = {
     const count = await session.scanAndInject(true)
     setState({
       status: 'running',
-      message: `已重新注入（${count} 个页面）`,
+      message: '',
       targetCount: session.injectedTargetCount,
     })
     return count

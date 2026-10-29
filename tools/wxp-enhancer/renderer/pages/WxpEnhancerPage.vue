@@ -25,7 +25,6 @@ const settingsDirty = ref(false)
 const loading = ref(true)
 const launching = ref(false)
 const stopping = ref(false)
-const reinjecting = ref(false)
 const saving = ref(false)
 const clearing = ref(false)
 
@@ -44,12 +43,21 @@ watch(settingsForm, () => {
 })
 
 const isRunning = computed(() => Boolean(store.running && ACTIVE_STATUSES.includes(store.running.status)))
-/** 已连上 CDP 并完成首轮注入：重新应用 / 采集数据只在这个状态下可用 */
+/** 已连上 CDP 并完成首轮注入：数据采集 / 清除登录缓存只在这个状态下真正作用到页面 */
 const isConnected = computed(() => store.running?.status === 'running')
+/** 启动设置区（字段 + 浏览 / 自动检测 / 保存）的锁定判据：点下启动起、到停止完成为止全程只读，
+ *  回到「已停止」才放开。错误态不锁——那正是要改路径 / 端口再重试的时候，锁住就无路可走。 */
+const settingsLocked = computed(() => isRunning.value || launching.value || stopping.value)
 const statusLabel = computed(() => {
   if (loading.value && !store.running) return '读取中…'
   if (!store.running) return '未运行'
   return STATUS_LABELS[store.running.status] ?? store.running.status
+})
+/** 状态行尾的过程 / 错误说明：运行中恒为空，状态卡在「启动 → 运行中」全程只有一行，高度不跳 */
+const statusDetail = computed(() => {
+  const running = store.running
+  if (!running || running.status === 'running') return ''
+  return running.message ?? ''
 })
 /** 状态点色板：运行绿 / 过渡态黄 / 失败红 / 未运行与已停止灰（UiStatusTag 没有 info 档，用 neutral） */
 const statusTone = computed<'success' | 'warning' | 'danger' | 'neutral'>(() => {
@@ -89,18 +97,6 @@ async function handleStop(): Promise<void> {
     ElMessage.error((error as Error).message || '停止失败')
   } finally {
     stopping.value = false
-  }
-}
-
-async function handleReinject(): Promise<void> {
-  reinjecting.value = true
-  try {
-    const count = await store.reinject()
-    ElMessage.success(`已重新注入（${count} 个页面）`)
-  } catch (error) {
-    ElMessage.error((error as Error).message || '重新应用失败')
-  } finally {
-    reinjecting.value = false
   }
 }
 
@@ -275,47 +271,58 @@ onUnmounted(() => {
     <!-- 运行状态 -->
     <UiPanel class="status-card">
       <div class="status-info">
-        <div class="status-line" role="status" aria-live="polite">
-          <UiStatusTag :tone="statusTone" :pulsing="statusTone === 'success'" />
-          <span class="status-name">{{ statusLabel }}</span>
+        <!-- 状态卡只有这一行：状态点 + 状态名 / 运行事实 / 过程说明 / 待清除提示都排在同行，
+             任何状态都不额外增行，避免启动过程中卡片高度跳动。 -->
+        <div class="status-line">
+          <!-- aria-live 只包状态文字：PID / 端口 / 页面随轮询变动，不该被反复朗读 -->
+          <div class="status-head" role="status" aria-live="polite">
+            <UiStatusTag :tone="statusTone" :pulsing="statusTone === 'success'" />
+            <span class="status-name">{{ statusLabel }}</span>
+          </div>
+          <!-- 运行事实（已连上 CDP 才给）：PID / 端口 / 页面 -->
+          <UiGroup v-if="isConnected" gap="xs" wrap>
+            <UiChip mono>
+              PID {{ store.running?.pid ?? '-' }}
+            </UiChip>
+            <UiChip mono>
+              端口 {{ store.running?.port }}
+            </UiChip>
+            <UiChip mono>
+              页面 {{ store.running?.targetCount ?? 0 }}
+            </UiChip>
+          </UiGroup>
+          <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" wrap>
+            <UiChip tone="warning">
+              登录缓存待清除：下次启动时自动执行
+            </UiChip>
+          </UiGroup>
+          <span v-if="statusDetail" class="status-detail">{{ statusDetail }}</span>
         </div>
-        <p v-if="store.running?.message" class="status-message">
-          {{ store.running.message }}
-        </p>
-        <UiGroup v-if="isRunning" gap="xs" wrap class="status-meta">
-          <UiChip mono>
-            PID {{ store.running?.pid ?? '-' }}
-          </UiChip>
-          <UiChip mono>
-            端口 {{ store.running?.port }}
-          </UiChip>
-          <UiChip mono>
-            页面 {{ store.running?.targetCount ?? 0 }}
-          </UiChip>
-        </UiGroup>
-        <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" wrap class="status-meta">
-          <UiChip tone="warning">
-            登录缓存待清除：下次启动时自动执行
-          </UiChip>
-        </UiGroup>
       </div>
       <UiGroup gap="sm" wrap class="status-actions">
-        <el-button v-if="isConnected" :loading="reinjecting" @click="handleReinject">
-          重新应用
-        </el-button>
+        <!-- 启动 / 停止互斥：同一时刻只露出一个（未启动只有启动，运行中只有停止）。
+             两个按钮都是两字 + 同尺寸，「!」跟着启动钮一起出现，切换时按钮不跳动。 -->
+        <UiGroup v-if="!isRunning" gap="xs">
+          <el-button
+            type="primary"
+            :loading="launching"
+            :disabled="loading"
+            @click="handleLaunch"
+          >
+            启动
+          </el-button>
+          <!-- 单实例约束紧贴启动钮：原正文里的那句说明收在这里，只在 hover / 聚焦时展开 -->
+          <el-tooltip content="启动前请先退出已打开的 WXP" placement="top">
+            <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP">
+              <UiIcon name="alert" :size="16" />
+            </span>
+          </el-tooltip>
+        </UiGroup>
         <el-button
-          type="primary"
-          :loading="launching"
-          :disabled="isRunning || loading"
-          @click="handleLaunch"
-        >
-          启动
-        </el-button>
-        <el-button
+          v-else
           type="warning"
           plain
           :loading="stopping"
-          :disabled="!isRunning"
           @click="handleStop"
         >
           停止
@@ -331,7 +338,7 @@ onUnmounted(() => {
           type="primary"
           plain
           :loading="saving"
-          :disabled="!settingsDirty || saving"
+          :disabled="settingsLocked || !settingsDirty || saving"
           @click="saveSettings"
         >
           保存设置
@@ -342,56 +349,56 @@ onUnmounted(() => {
           <UiPathField
             v-model="settingsForm.executablePath"
             placeholder="选择 WxP Client 可执行文件（如 WxP Client.exe）"
-            :disabled="isRunning"
+            :disabled="settingsLocked"
             class="path-row"
             mono
           >
             <template #actions>
-              <el-button :disabled="isRunning" @click="pickExecutable">
+              <el-button :disabled="settingsLocked" @click="pickExecutable">
                 浏览
               </el-button>
-              <el-button :disabled="isRunning" @click="detectExecutable">
+              <el-button :disabled="settingsLocked" @click="detectExecutable">
                 自动检测
               </el-button>
             </template>
           </UiPathField>
-          <UiHint block>
-            使用 WXP 自身数据启动：登录一次后保持登录，再次启动直接进入应用主页；
-            启动前请先退出已打开的 WXP（单实例应用）。
-          </UiHint>
         </el-form-item>
         <el-form-item label="调试端口">
           <el-input-number
             v-model="settingsForm.debugPort"
             :min="1024"
             :max="65535"
-            :disabled="isRunning"
+            :disabled="settingsLocked"
           />
         </el-form-item>
         <el-form-item label="状态角标">
-          <UiSwitchField v-model="settingsForm.showStatusBadge" align="start">
+          <UiSwitchField
+            v-model="settingsForm.showStatusBadge"
+            align="start"
+            :disabled="settingsLocked"
+          >
             在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯，保存后立即生效
           </UiSwitchField>
         </el-form-item>
         <el-form-item label="缓存登录状态">
-          <UiSwitchField v-model="settingsForm.cacheLogin" align="start">
+          <UiSwitchField
+            v-model="settingsForm.cacheLogin"
+            align="start"
+            :disabled="settingsLocked"
+          >
             登录一次后整体缓存会话（14 天有效），启动时自动还原并补跑登录后初始化（租户列表 / NameNode / iframe SSO）；超期需重新登录
           </UiSwitchField>
         </el-form-item>
-        <el-form-item label="额外启动参数">
+        <el-form-item label="额外启动参数" class="form-item--last">
           <el-input
             v-model="settingsForm.extraArgs"
             placeholder="可选，空格分隔，如 --lang=zh-CN；调试端口会自动附加"
-            :disabled="isRunning"
+            :disabled="settingsLocked"
             class="mono"
             spellcheck="false"
           />
         </el-form-item>
       </el-form>
-      <UiHint block>
-        路径 / 端口 / 额外参数在下次启动时生效；角标与缓存开关保存后立即生效（运行中会用新脚本重新注入）。
-        调试端口会作为 <span class="mono">--remote-debugging-port</span> 附加，被其他程序占用时启动会失败并提示更换。
-      </UiHint>
     </UiPanel>
 
     <!-- 数据缓存（来自 WXP） -->
@@ -513,6 +520,9 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="scss">
+/* 全宽铺满窗口，不设 760 内容栏：本页的 WXP 路径、启动参数、登录信息键值与收藏表格
+   都吃宽度，居中窄栏在宽窗口下两侧空一大片。面板宽度跟随窗口，面板内部的呼吸仍由
+   各面板自己的 16 内边距负责（DESIGN §7.3 的「文档型全宽变体」）。 */
 .wxp-enhancer-page {
   display: flex;
   flex-direction: column;
@@ -520,16 +530,6 @@ onUnmounted(() => {
      要和面板内部的标题→内容（12）与字段间距（8）拉开层级 */
   gap: var(--spacing-2xl);
   padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
-
-  /* 文档栏：本页是「配置 + 说明」，不是数据网格。不设栏时窗口一宽，
-     「标签 → 输入框」能拉出 1500px，扫读要转头，说明文字还会在半途截断。
-     栏宽取 --column-document，与设置页 / 离线包同宽。 */
-  > * {
-    width: 100%;
-    max-width: var(--column-document);
-    margin-right: auto;
-    margin-left: auto;
-  }
 }
 
 /* 状态卡：UiPanel 根上的左右分栏；窄窗口由媒体查询改成上下 */
@@ -546,10 +546,23 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+/* 面板里最后一个表单项清掉 EP 默认的 18px 底 margin：它会叠在 UiPanel 的 16px
+   内边距上，底部比顶部多空出一块（表单本身没有收尾间隔的需要） */
+.form-item--last {
+  margin-bottom: 0;
+}
+
 .status-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+/* 状态点 + 文案作为一个整体（aria-live 作用域），与后面的 PID / 端口 / 页面同行 */
+.status-head {
+  display: inline-flex;
+  align-items: center;
   gap: var(--spacing-sm);
 }
 
@@ -558,22 +571,40 @@ onUnmounted(() => {
   font-weight: var(--font-weight-medium);
 }
 
-/* 状态详情走正文而不是 tag：错误信息可能很长，tag 会把标题行撑破 */
-.status-message {
-  margin: var(--spacing-xs) 0 0;
+/* 状态行尾的过程 / 错误说明：跟在状态文字后面同行，过长时在本行内折行，
+   不再单独占一行（错误信息可能好几行：1.5 行距才读得下去，DESIGN §3.2.4 的说明档） */
+.status-detail {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  /* 错误信息可能好几行：1.5 行距才读得下去（DESIGN §3.2.4 的说明档） */
   line-height: 1.5;
   word-break: break-word;
 }
 
-.status-meta {
-  margin-top: var(--spacing-sm);
-}
-
 .status-actions {
   flex-shrink: 0;
+}
+
+/* 启动钮后的「!」：只做可 hover / 可聚焦的提示标记，不抢主按钮的注意力。
+   图标是 16px 的线性 SVG，色取 warning（白底 5.28，达标）；聚焦时给同款焦点环。 */
+.launch-warn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-warning);
+  cursor: help;
+  border-radius: 50%;
+  transition: color var(--transition-fast);
+}
+
+.launch-warn:hover {
+  color: var(--color-text-primary);
+}
+
+.launch-warn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 .section-hint {

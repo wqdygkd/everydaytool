@@ -57,10 +57,6 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     running.value = null
   }
 
-  async function reinject(): Promise<number> {
-    return invokeWxpIpc<number>(channels.REINJECT)
-  }
-
   async function clearLoginCache(): Promise<WxpClearLoginCacheResult> {
     const result = await invokeWxpIpc<WxpClearLoginCacheResult>(channels.CLEAR_LOGIN_CACHE)
     loginCacheClearPending.value = result.pending === true
@@ -95,7 +91,6 @@ export const useWxpEnhancerStore = defineStore('wxp-enhancer/store', () => {
     saveSettings,
     launch,
     stop,
-    reinject,
     clearLoginCache,
     collectData,
     detectExecutable,

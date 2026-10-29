@@ -12,8 +12,13 @@ export interface WxpSettings {
   extraArgs?: string
 }
 
-/** 唯一的 WXP 默认设置来源（后端 config-store 与渲染层 store/表单共用） */
-export const DEFAULT_WXP_SETTINGS: WxpSettings = {
+/**
+ * 唯一的 WXP 默认设置来源（后端 config-store 与渲染层 store/表单共用）。
+ * 标成 Required：默认值本来就是完整配置；若沿用 WxpSettings 的可选字段，
+ * 渲染层 `reactive({ ...DEFAULT_WXP_SETTINGS })` 会把 cacheLogin / showStatusBadge /
+ * extraArgs 推成 `boolean | undefined`，绑到 UiSwitchField / el-input 的必填 v-model 就会报 2322。
+ */
+export const DEFAULT_WXP_SETTINGS: Required<WxpSettings> = {
   executablePath: '',
   debugPort: 9553,
   cacheLogin: true,
