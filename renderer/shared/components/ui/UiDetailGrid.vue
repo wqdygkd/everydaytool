@@ -9,7 +9,7 @@ withDefaults(defineProps<{
 <template>
   <div
     class="ui-detail-grid"
-    :style="{ '--ui-detail-cols': columns } as Record<string, string>"
+    :style="{ '--ui-detail-cols': columns }"
   >
     <slot />
   </div>

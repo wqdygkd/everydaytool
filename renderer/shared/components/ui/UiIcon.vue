@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { IconName } from './icons'
+import type { IconDef, IconName } from './icons'
 import { icons } from './icons'
 
 withDefaults(defineProps<{
@@ -10,7 +10,8 @@ withDefaults(defineProps<{
   size: 16,
 })
 
-function def(name: IconName) {
+/** 显式标注返回类型：icons 的字面量并集会抹掉可选字段（sw / circles / rects），导致模板取值报 TS2339 */
+function def(name: IconName): IconDef {
   return icons[name]
 }
 </script>

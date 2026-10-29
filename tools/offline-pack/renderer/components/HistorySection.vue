@@ -32,7 +32,9 @@ async function load(): Promise<void> {
   }
 }
 
-async function remove(item: OfflinePackHistoryItem): Promise<void> {
+/** el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`）：按 unknown 收参后收敛回历史记录类型，运行期原样使用。 */
+async function remove(row: unknown): Promise<void> {
+  const item = row as OfflinePackHistoryItem
   if (!api) return
   try {
     await ElMessageBox.confirm(`删除「${item.filename}」及其磁盘文件？`, '删除记录', {

@@ -20,7 +20,16 @@ const filteredResources = computed(() => {
   })
 })
 
-function statusOf(item: TelegramResourceSummary): { label: string, tone: 'neutral' | 'primary' | 'success' | 'warning' } {
+/**
+ * el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`），不保证具体字段真的存在；
+ * 行处理函数统一按 unknown 收参、进来先收敛到业务类型。运行期就是表格里的同一份对象，不做任何转换。
+ */
+function toResource(row: unknown): TelegramResourceSummary {
+  return row as TelegramResourceSummary
+}
+
+function statusOf(row: unknown): { label: string, tone: 'neutral' | 'primary' | 'success' | 'warning' } {
+  const item = toResource(row)
   if (item.stored?.archived) return { label: '已归档', tone: 'success' }
   if (activeByKey.value.has(item.resourceKey)) return { label: '任务中', tone: 'warning' }
   if (item.stored) return { label: '资源库', tone: 'primary' }
@@ -28,7 +37,8 @@ function statusOf(item: TelegramResourceSummary): { label: string, tone: 'neutra
 }
 
 /** M2 缓存语义：只有「HTTP 允许 + 对应模式开启 + 新鲜」才显示可本地命中 */
-function cacheLabel(item: TelegramResourceSummary): string {
+function cacheLabel(row: unknown): string {
+  const item = toResource(row)
   const stored = item.stored
   if (!stored) return ''
   if (!stored.cacheable || stored.serveClass === 'none') return '不本地复用'
@@ -38,26 +48,29 @@ function cacheLabel(item: TelegramResourceSummary): string {
   return '已过期 · 条件验证'
 }
 
-function cacheTone(item: TelegramResourceSummary): 'neutral' | 'success' | 'warning' {
-  const label = cacheLabel(item)
+function cacheTone(row: unknown): 'neutral' | 'success' | 'warning' {
+  const label = cacheLabel(row)
   if (label === '可本地命中') return 'success'
   if (label === '已过期 · 条件验证') return 'warning'
   return 'neutral'
 }
 
-function canArchive(item: TelegramResourceSummary): boolean {
+function canArchive(row: unknown): boolean {
+  const item = toResource(row)
   if (item.stored?.archived) return false
   if (activeByKey.value.has(item.resourceKey)) return false
   return item.downloadable || Boolean(item.stored)
 }
 
-function canStore(item: TelegramResourceSummary): boolean {
+function canStore(row: unknown): boolean {
+  const item = toResource(row)
   if (item.stored) return false
   if (activeByKey.value.has(item.resourceKey)) return false
   return item.downloadable
 }
 
-async function run(item: TelegramResourceSummary, kind: TelegramResourceKind): Promise<void> {
+async function run(row: unknown, kind: TelegramResourceKind): Promise<void> {
+  const item = toResource(row)
   try {
     const result = await store.acquire(item.resourceKey, kind)
     const action = kind === 'archive' ? '归档' : '存入资源库'

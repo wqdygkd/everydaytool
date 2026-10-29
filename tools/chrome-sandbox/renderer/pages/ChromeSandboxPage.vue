@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MotionScope } from '@renderer/shared/composables/useGsap'
+import type { SetupState } from '../../../../shared/sandbox'
 import { createMotionScope, gsap } from '@renderer/shared/composables/useGsap'
 import { chromeSandboxIpcChannels, invokeChromeSandboxIpc, onChromeSandboxIpc } from '../ipc'
 import { useSandboxStore } from '../stores/sandboxStore'
@@ -19,7 +20,7 @@ async function deleteSandbox() {
   try {
     await store.remove(store.selectedId)
   } catch (error) {
-    ElMessage.error(error.message || '删除失败')
+    ElMessage.error((error as Error).message || '删除失败')
   }
 }
 
@@ -42,7 +43,7 @@ watch(ready, async (r) => {
   }, el)
 })
 
-const unsubscribers = []
+const unsubscribers: Array<() => void> = []
 
 async function initPage() {
   await store.loadAll()
@@ -53,14 +54,14 @@ async function initPage() {
   ready.value = true
 }
 
-async function onSettingsSaved(result) {
+async function onSettingsSaved(result: SetupState) {
   if (result.dataDirectoryChanged) {
     await store.loadAll()
   }
 }
 
 onMounted(async () => {
-  const config = await invokeChromeSandboxIpc(channels.CONFIG_GET)
+  const config = await invokeChromeSandboxIpc<SetupState>(channels.CONFIG_GET)
   if (!config.dataDirectoryConfigured) {
     showSetup.value = true
     return
@@ -86,8 +87,8 @@ onUnmounted(() => {
       />
 
       <StatusPanel
-        :sandbox="store.selectedSandbox"
-        :fingerprint="store.fingerprint"
+        :sandbox="store.selectedSandbox ?? undefined"
+        :fingerprint="store.fingerprint ?? undefined"
         @activate="store.activate(store.selectedId)"
         @close="store.close(store.selectedId)"
         @delete="deleteSandbox"
@@ -98,8 +99,8 @@ onUnmounted(() => {
       <SettingsDialog v-model="showSettings" @saved="onSettingsSaved" />
       <FingerprintEditor
         v-model="showFingerprint"
-        :fingerprint="store.fingerprint"
-        :sandbox-id="store.selectedId"
+        :fingerprint="store.fingerprint ?? undefined"
+        :sandbox-id="store.selectedId ?? undefined"
         @saved="store.loadFingerprint(store.selectedId)"
       />
     </template>

@@ -13,7 +13,16 @@ const statusMeta: Record<TelegramTaskSnapshot['status'], { label: string, type: 
   cancelled: { label: '已取消', type: 'info' },
 }
 
-function progressOf(task: TelegramTaskSnapshot): number {
+/**
+ * el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`），不保证具体字段真的存在；
+ * 行处理函数统一按 unknown 收参、进来先收敛到任务快照类型。运行期就是表格里的同一份对象，不做转换。
+ */
+function toTask(row: unknown): TelegramTaskSnapshot {
+  return row as TelegramTaskSnapshot
+}
+
+function progressOf(row: unknown): number {
+  const task = toTask(row)
   if (task.status === 'completed') return 100
   if (!task.totalBytes || task.totalBytes <= 0) return 0
   return Math.min(99, Math.round((task.bytes / task.totalBytes) * 100))
@@ -27,7 +36,8 @@ function kindLabel(kind: string): string {
   return kind === 'archive' ? '归档' : '存库'
 }
 
-async function cancelTask(task: TelegramTaskSnapshot): Promise<void> {
+async function cancelTask(row: unknown): Promise<void> {
+  const task = toTask(row)
   try {
     const accepted = await store.cancelTask(task.taskId)
     if (accepted) ElMessage.success('已请求取消任务')

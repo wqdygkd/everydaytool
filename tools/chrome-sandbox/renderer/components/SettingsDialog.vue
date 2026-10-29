@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SetupState } from '../../../../shared/sandbox'
 import { useDialogVisible } from '@renderer/shared/composables/useDialogVisible'
 import { appIpcChannels, invokeAppIpc } from '@renderer/shared/ipc/useAppIpc'
 import { chromeSandboxIpcChannels, invokeChromeSandboxIpc } from '../ipc'
@@ -21,19 +22,19 @@ let initialDataDirectory = ''
 
 watch(visible, async (open) => {
   if (!open) return
-  const config = await invokeChromeSandboxIpc(channels.CONFIG_GET)
+  const config = await invokeChromeSandboxIpc<SetupState>(channels.CONFIG_GET)
   Object.assign(form, config)
   initialDataDirectory = form.dataDirectory
 })
 
 async function detectChrome() {
   try {
-    const chromePath = await invokeChromeSandboxIpc(channels.CHROME_DETECT_PATH)
+    const chromePath = await invokeChromeSandboxIpc<string>(channels.CHROME_DETECT_PATH)
     if (!chromePath) return
     form.chromePath = chromePath
     ElMessage.success('已检测到 Chrome')
   } catch (error) {
-    ElMessage.error(error.message || '检测失败')
+    ElMessage.error((error as Error).message || '检测失败')
   }
 }
 
@@ -56,12 +57,13 @@ async function save() {
     }
 
     const { dataDirectory: _ignored, ...rest } = form
-    const result = await invokeChromeSandboxIpc(channels.CONFIG_UPDATE, { ...rest })
+    const result = await invokeChromeSandboxIpc<SetupState>(channels.CONFIG_UPDATE, { ...rest })
     ElMessage.success('设置已保存')
-    visible.value = false
+    // 关闭动作等价于 useDialogVisible 的 setter：直接通知父级改 modelValue
+    emit('update:modelValue', false)
     emit('saved', { ...result, dataDirectoryChanged })
   } catch (error) {
-    ElMessage.error(error.message || '保存失败')
+    ElMessage.error((error as Error).message || '保存失败')
   } finally {
     loading.value = false
   }
