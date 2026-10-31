@@ -10,12 +10,22 @@ import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
 import { logger } from '../../../../backend/utils/logger.ts'
+import { TELEGRAM_SITE_PORT_BASE, TELEGRAM_SITE_PORT_RANGE } from '../../../../shared/telegram-cache.ts'
+import { getTelegramCacheConfig, updateTelegramCacheConfig } from '../store/config-store.ts'
 import { handleTelegramArchiveApi } from './archive-api.ts'
 import { getTelegramMediaStatuses, resolveTelegramMedia } from './media-resolver.ts'
 import { setTelegramLocalOrigin } from './probe-service.ts'
 import { getTelegramSiteServerInfo, startTelegramSiteServer, stopTelegramSiteServer } from './site-server.ts'
 
-const EMPTY_SITE: TelegramSiteInfo = { ready: false, url: null, error: null }
+const EMPTY_SITE: TelegramSiteInfo = {
+  ready: false,
+  url: null,
+  port: null,
+  previousPort: null,
+  originChanged: false,
+  portNote: null,
+  error: null,
+}
 
 let siteStatus: TelegramSiteInfo = { ...EMPTY_SITE }
 
@@ -26,7 +36,7 @@ function resolveSiteRoot(): string {
 
 export function getTelegramSiteStatus(): TelegramSiteInfo {
   const info = getTelegramSiteServerInfo()
-  if (info) return { ready: true, url: info.url, error: null }
+  if (info) return { ...siteStatus, ready: true, url: info.url, port: info.port, error: null }
   return { ...siteStatus }
 }
 
@@ -35,28 +45,55 @@ export async function initializeTelegramSite(): Promise<void> {
   const indexPath = path.join(rootDir, 'index.html')
   if (!existsSync(indexPath)) {
     siteStatus = {
-      ready: false,
-      url: null,
+      ...EMPTY_SITE,
       error: `未找到 telegram-tt 构建产物（${path.relative(process.cwd(), indexPath)}）：先运行 pnpm telegram:build`,
     }
     logger.warn('Telegram site server not started: dist missing', { rootDir })
     return
   }
 
+  // 端口必须确定：origin 一变，页面侧的登录态（localStorage）、IndexedDB、Cache Storage 与
+  // Service Worker 注册就全部作废，用户等于重新登录 + 缓存全丢（见 TelegramSiteInfo.originChanged）。
+  const configuredPort = getTelegramCacheConfig().sitePort
+  const basePort = configuredPort ?? TELEGRAM_SITE_PORT_BASE
+
   try {
     const info = await startTelegramSiteServer({
       rootDir,
       apiVersion: app.getVersion(),
+      port: basePort,
+      portRange: TELEGRAM_SITE_PORT_RANGE,
       resolveMedia: resolveTelegramMedia,
       getMediaStatus: getTelegramMediaStatuses,
       handleApi: handleTelegramArchiveApi,
     })
-    siteStatus = { ready: true, url: info.url, error: null }
+    // 落盘实际端口：下次启动从它起步，正常路径下 origin 再不变化（首次分配不提示 origin 变化）。
+    if (info.port !== configuredPort) {
+      updateTelegramCacheConfig({ sitePort: info.port })
+      logger.info('Telegram site port persisted', { port: info.port, previousPort: configuredPort })
+    }
+    const originChanged = configuredPort !== null && configuredPort !== info.port
+    siteStatus = {
+      ready: true,
+      url: info.url,
+      port: info.port,
+      previousPort: configuredPort,
+      originChanged,
+      portNote: originChanged
+        ? `端口 ${configuredPort} 被占用，已改用 ${info.port}：origin 变化会清空页面登录态与本地缓存，请重新登录`
+        : null,
+      error: null,
+    }
     setTelegramLocalOrigin(info.url)
     logger.info('Telegram site server ready', { url: info.url })
   } catch (error) {
-    siteStatus = { ready: false, url: null, error: (error as Error).message }
-    logger.warn('Telegram site server failed to start', { error: (error as Error).message })
+    const message = (error as Error).message
+    siteStatus = { ...EMPTY_SITE, previousPort: configuredPort, error: message }
+    logger.warn('Telegram site server failed to start', {
+      error: message,
+      basePort,
+      range: TELEGRAM_SITE_PORT_RANGE,
+    })
   }
 }
 

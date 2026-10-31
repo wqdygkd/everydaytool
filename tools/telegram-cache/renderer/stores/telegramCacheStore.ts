@@ -1,37 +1,16 @@
-// telegram-cache 渲染层状态：主进程快照 + 增量事件（快照 700ms 节流；每个请求一条 traffic；
-// 任务状态逐次推送）。所有失败都向上抛，由面板决定如何提示（与 interceptor / offline-pack 一致）。
+// telegram-cache 渲染层状态：主进程快照 + 增量事件（快照 700ms 节流；任务与归档进度逐次推送）。
+// 所有失败都向上抛，由面板决定如何提示（与 interceptor / offline-pack 一致）。
 import type {
-  TelegramBenchmarkStatus,
   TelegramCacheConfig,
   TelegramDiagnosticsExport,
   TelegramLibraryEntry,
+  TelegramLibraryEvent,
   TelegramMtprotoStatus,
-  TelegramPageProbe,
-  TelegramResourceKind,
-  TelegramSelfTestResult,
   TelegramSnapshot,
-  TelegramTaskSnapshot,
-  TelegramTrafficEntry,
   TelegramTrashEntry,
 } from '../../../../shared/telegram-cache'
 import { defineStore } from 'pinia'
-import { TELEGRAM_TRAFFIC_LIMIT } from '../../../../shared/telegram-cache'
 import { invokeTelegramCacheIpc as invoke, onTelegramCacheIpc as on, telegramCacheIpcChannels } from '../ipc'
-
-export interface AcquireOutcome {
-  reused: boolean
-  joined: boolean
-  taskId?: string
-  record: {
-    resourceKey: string
-    displayUrl: string
-    size: number
-    sha256: string
-    relativePath: string
-    mimeType: string
-    verification: string
-  }
-}
 
 export interface LibraryMediaItem {
   mediaKey: string
@@ -44,34 +23,25 @@ export interface LibraryMediaItem {
 
 export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
   const snapshot = ref<TelegramSnapshot | null>(null)
-  const traffic = ref<TelegramTrafficEntry[]>([])
-  const tasks = ref<TelegramTaskSnapshot[]>([])
   const library = ref<TelegramLibraryEntry[]>([])
   const trash = ref<TelegramTrashEntry[]>([])
   const libraryMedia = ref<LibraryMediaItem[]>([])
-  const probe = ref<TelegramPageProbe | null>(null)
-  const selfTest = ref<TelegramSelfTestResult | null>(null)
   const mtproto = ref<TelegramMtprotoStatus | null>(null)
-  const benchmark = ref<TelegramBenchmarkStatus | null>(null)
   const diagnostics = ref<TelegramDiagnosticsExport | null>(null)
   const pageWebContentsId = ref<number | null>(null)
+  /** 影库 → 内嵌页面的一次性跳转请求（由 TelegramCachePage 消费） */
+  const pendingJump = ref<{ peerId: string, messageId: number } | null>(null)
   const ready = ref(false)
+  let libraryRefreshTimer: number | undefined
   const busy = reactive({
-    probe: false,
-    selfTest: false,
     diagnostics: false,
     cache: false,
     library: false,
   })
 
   const config = computed<TelegramCacheConfig | null>(() => snapshot.value?.config ?? null)
-  const observationEnabled = computed(() => snapshot.value?.config.observationEnabled === true)
-  const capabilities = computed(() => snapshot.value?.capabilities ?? null)
-  const stats = computed(() => snapshot.value?.stats ?? null)
   const cache = computed(() => snapshot.value?.cache ?? null)
   const site = computed(() => snapshot.value?.site ?? null)
-  const resources = computed(() => snapshot.value?.resources ?? [])
-  const activeTasks = computed(() => tasks.value.filter(task => task.status === 'queued' || task.status === 'running'))
 
   let disposers: Array<() => void> = []
   let initialized = false
@@ -82,18 +52,34 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
 
   function applySnapshot(next: TelegramSnapshot): void {
     snapshot.value = next
-    tasks.value = [...next.tasks]
   }
 
-  function applyTask(next: TelegramTaskSnapshot): void {
-    const index = tasks.value.findIndex(task => task.taskId === next.taskId)
-    if (index >= 0) tasks.value[index] = next
-    else tasks.value.unshift(next)
-    tasks.value.sort((a, b) => {
-      const rank = (task: TelegramTaskSnapshot): number => (task.status === 'queued' || task.status === 'running' ? 0 : 1)
-      return rank(a) - rank(b) || (b.finishedAt ?? b.queuedAt) - (a.finishedAt ?? a.queuedAt)
-    })
-    if (tasks.value.length > 80) tasks.value = tasks.value.slice(0, 80)
+  /** 归档进度推送：已在列表里的条目就地更新；新条目（首次缓存）延迟拉一次列表 */
+  function applyLibraryEvent(next: TelegramLibraryEvent): void {
+    const index = library.value.findIndex(
+      entry => entry.peerId === next.peerId && entry.messageId === next.messageId,
+    )
+    if (index < 0) {
+      scheduleLibraryRefresh()
+      return
+    }
+    const entry = library.value[index]
+    library.value[index] = {
+      ...entry,
+      state: next.state,
+      progress: next.state === 'complete' ? 1 : (next.progress ?? entry.progress),
+      size: next.received ?? entry.size,
+      savedAt: next.state === 'complete' ? (entry.savedAt ?? Date.now()) : entry.savedAt,
+    }
+  }
+
+  /** 新目录刚出现时合并多次推送，只重扫一次（扫描是读盘操作） */
+  function scheduleLibraryRefresh(): void {
+    if (libraryRefreshTimer !== undefined) return
+    libraryRefreshTimer = window.setTimeout(() => {
+      libraryRefreshTimer = undefined
+      void loadLibrary()
+    }, 400)
   }
 
   async function init(): Promise<void> {
@@ -104,54 +90,36 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     disposers.push(on(ch.EVENT_SNAPSHOT, (payload) => {
       applySnapshot(payload as TelegramSnapshot)
     }))
-    disposers.push(on(ch.EVENT_TRAFFIC, (payload) => {
-      traffic.value.push(payload as TelegramTrafficEntry)
-      if (traffic.value.length > TELEGRAM_TRAFFIC_LIMIT) {
-        traffic.value.splice(0, traffic.value.length - TELEGRAM_TRAFFIC_LIMIT)
-      }
-    }))
-    disposers.push(on(ch.EVENT_TASK, (payload) => {
-      applyTask(payload as TelegramTaskSnapshot)
-    }))
     disposers.push(on(ch.EVENT_MTPROTO, (payload) => {
       mtproto.value = payload as TelegramMtprotoStatus
     }))
-    disposers.push(on(ch.EVENT_BENCHMARK, (payload) => {
-      benchmark.value = payload as TelegramBenchmarkStatus
+    disposers.push(on(ch.EVENT_LIBRARY, (payload) => {
+      applyLibraryEvent(payload as TelegramLibraryEvent)
     }))
 
-    const [initialSnapshot, initialTraffic, initialMtproto, initialBenchmark] = await Promise.all([
+    const [initialSnapshot, initialMtproto] = await Promise.all([
       invoke<TelegramSnapshot>(ch.SNAPSHOT_GET),
-      invoke<TelegramTrafficEntry[]>(ch.TRAFFIC_GET),
       invoke<TelegramMtprotoStatus>(ch.MT_STATUS),
-      invoke<TelegramBenchmarkStatus>(ch.BENCHMARK_STATUS),
     ])
     applySnapshot(initialSnapshot)
-    traffic.value = initialTraffic
     mtproto.value = initialMtproto
-    benchmark.value = initialBenchmark
     ready.value = true
   }
 
   function dispose(): void {
     for (const off of disposers) off()
     disposers = []
+    if (libraryRefreshTimer !== undefined) {
+      window.clearTimeout(libraryRefreshTimer)
+      libraryRefreshTimer = undefined
+    }
     initialized = false
     ready.value = false
-  }
-
-  async function setObservationEnabled(enabled: boolean): Promise<void> {
-    applySnapshot(await invoke<TelegramSnapshot>(channels().OBSERVATION_SET_ENABLED, enabled))
   }
 
   async function updateConfig(patch: Partial<TelegramCacheConfig>): Promise<void> {
     const result = await invoke<{ config: TelegramCacheConfig, snapshot: TelegramSnapshot }>(channels().CONFIG_SET, patch)
     applySnapshot(result.snapshot)
-  }
-
-  async function clearObservation(): Promise<void> {
-    applySnapshot(await invoke<TelegramSnapshot>(channels().OBSERVATION_CLEAR))
-    traffic.value = []
   }
 
   async function clearCache(): Promise<{ evictedBytes: number, evictions: number }> {
@@ -172,26 +140,6 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     await invoke(channels().PAGE_ATTACH, webContentsId)
   }
 
-  async function probePage(): Promise<TelegramPageProbe> {
-    if (!pageWebContentsId.value) throw new Error('页面尚未就绪')
-    busy.probe = true
-    try {
-      const result = await invoke<TelegramPageProbe>(channels().PAGE_PROBE, pageWebContentsId.value)
-      probe.value = result
-      return result
-    } finally {
-      busy.probe = false
-    }
-  }
-
-  async function acquire(resourceKey: string, kind: TelegramResourceKind): Promise<AcquireOutcome> {
-    return invoke<AcquireOutcome>(channels().ACQUIRE, { resourceKey, kind })
-  }
-
-  async function cancelTask(taskId: string): Promise<boolean> {
-    return invoke<boolean>(channels().TASK_CANCEL, taskId)
-  }
-
   async function loadLibrary(): Promise<void> {
     busy.library = true
     try {
@@ -199,6 +147,15 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     } finally {
       busy.library = false
     }
+  }
+
+  /** 旧目录正名（幂等）：`001.jpg` / `text.md` → `media/<mediaKey>.<ext>` / `message.md`，并迁走旧的 acc 层 */
+  async function normalizeLibrary(): Promise<{ messages: number, changed: number, migrated: number }> {
+    const summary = await invoke<{ messages: number, changed: number, migrated: number }>(
+      channels().MSG_LIBRARY_NORMALIZE,
+    )
+    if (summary.changed > 0 || summary.migrated > 0) await loadLibrary()
+    return summary
   }
 
   async function loadTrash(): Promise<void> {
@@ -223,6 +180,17 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     await invoke(channels().MSG_LIBRARY_OPEN_DIR, { peerId, messageId })
   }
 
+  /** 请求内嵌页面跳到某条消息（页面侧消费 pendingJump 后调 consumeJump 清空） */
+  function requestJump(peerId: string, messageId: number): void {
+    pendingJump.value = { peerId, messageId }
+  }
+
+  function consumeJump(): { peerId: string, messageId: number } | null {
+    const jump = pendingJump.value
+    pendingJump.value = null
+    return jump
+  }
+
   async function restoreTrash(trashId: string): Promise<void> {
     await invoke(channels().TRASH_RESTORE, trashId)
     await Promise.all([loadLibrary(), loadTrash()])
@@ -236,17 +204,6 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
 
   async function openDataDir(): Promise<void> {
     await invoke(channels().OPEN_DATA_DIR)
-  }
-
-  async function runSelfTest(): Promise<TelegramSelfTestResult> {
-    busy.selfTest = true
-    try {
-      const result = await invoke<TelegramSelfTestResult>(channels().SELF_TEST)
-      selfTest.value = result
-      return result
-    } finally {
-      busy.selfTest = false
-    }
   }
 
   async function refreshMtprotoStatus(): Promise<void> {
@@ -269,19 +226,6 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     mtproto.value = await invoke<TelegramMtprotoStatus>(channels().MT_SESSION_CLEAR)
   }
 
-  async function startBenchmark(label: string): Promise<void> {
-    benchmark.value = await invoke<TelegramBenchmarkStatus>(channels().BENCHMARK_START, label)
-  }
-
-  async function stopBenchmark(): Promise<void> {
-    await invoke(channels().BENCHMARK_STOP)
-    benchmark.value = await invoke<TelegramBenchmarkStatus>(channels().BENCHMARK_STATUS)
-  }
-
-  async function clearBenchmarks(): Promise<void> {
-    benchmark.value = await invoke<TelegramBenchmarkStatus>(channels().BENCHMARK_CLEAR)
-  }
-
   async function exportDiagnostics(): Promise<TelegramDiagnosticsExport> {
     busy.diagnostics = true
     try {
@@ -295,54 +239,39 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
 
   return {
     snapshot,
-    traffic,
-    tasks,
     library,
     trash,
     libraryMedia,
-    probe,
-    selfTest,
     mtproto,
-    benchmark,
     diagnostics,
     pageWebContentsId,
+    pendingJump,
     ready,
     busy,
     config,
-    observationEnabled,
-    capabilities,
-    stats,
     cache,
     site,
-    resources,
-    activeTasks,
     init,
     dispose,
-    setObservationEnabled,
     updateConfig,
-    clearObservation,
     clearCache,
     attachPage,
-    probePage,
-    acquire,
-    cancelTask,
     loadLibrary,
+    normalizeLibrary,
     loadTrash,
     loadLibraryMedia,
     deleteLibraryMessage,
     openLibraryDir,
+    requestJump,
+    consumeJump,
     restoreTrash,
     emptyTrash,
     openDataDir,
-    runSelfTest,
     refreshMtprotoStatus,
     startMtprotoDownload,
     cancelMtprotoDownload,
     migrateMtprotoSession,
     clearMtprotoSecureSession,
-    startBenchmark,
-    stopBenchmark,
-    clearBenchmarks,
     exportDiagnostics,
   }
 })

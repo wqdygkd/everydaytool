@@ -6,7 +6,7 @@
 // - webview 的 preload 被平台剥离，页面不能走 IPC，只能走同源 HTTP。
 //
 // 关键点：
-// - 只绑 127.0.0.1 + 随机端口 + 一次性 token（写进 /edt-bootstrap.js，页面启动时读取）；
+// - 只绑 127.0.0.1 + 确定性端口（被占用才顺延）+ 一次性 token（写进 /edt-bootstrap.js，页面启动时读取）；
 // - 静态路径必须留在 dist 内；媒体只接受索引内的 key（由 resolveMedia 决定）；
 // - Range/206/416 用于视频拖动；index.html 与 API 一律 no-store；
 // - Service Worker 脚本额外带 `Service-Worker-Allowed: /`（即使当前构建把 SW 放在根目录，也不依赖默认作用域）。
@@ -14,7 +14,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { Buffer } from 'node:buffer'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import path from 'node:path'
@@ -64,6 +64,8 @@ export interface SiteApiContext {
   res: ServerResponse
   url: URL
   origin: string
+  /** 当前站点实例的 SSE 广播（多实例时不能用全局单例） */
+  broadcast: (event: string, payload: unknown) => void
   sendJson: (status: number, payload: unknown) => void
   readJson: <T>() => Promise<T>
   /** 二进制 body（归档分片），上限与 JSON 相同 */
@@ -73,6 +75,19 @@ export interface SiteApiContext {
 export interface SiteServerOptions {
   /** telegram-tt 的 dist 目录（必须含 index.html） */
   rootDir: string
+  /**
+   * 次要静态根（可选）：rootDir 里找不到的请求再来这里找。
+   * tweb 的构建产物把 dist 与 public 分开（dist 只有 chunk，public 才是 assets/wasm/字体），
+   * 托管时必须两层都认。
+   */
+  extraRootDir?: string
+  /**
+   * 首选端口：origin 必须是稳定值（页面 login 凭据、IndexedDB、Cache Storage、SW 注册都按 origin 隔离），
+   * 所以生产路径一定传固定端口。不传才退回内核随机分配（仅测试/特殊场景）。
+   */
+  port?: number
+  /** 从 port 开始最多尝试几个端口（默认 1 = 只试首选端口，不静默漂移） */
+  portRange?: number
   /** 不传则每次启动随机生成 */
   token?: string
   /** 诊断用版本号 */
@@ -143,7 +158,20 @@ export class TelegramSiteServer {
     const rawIndex = await readFile(indexPath, 'utf8')
     this.indexHtml = this.injectBootstrap(rawIndex)
 
-    const server = createServer((req, res) => {
+    const { server, port } = await this.listen()
+    this.server = server
+    this.info = {
+      url: `http://127.0.0.1:${port}/`,
+      port,
+      token: this.token,
+      rootDir: this.options.rootDir,
+    }
+    logger.info('Telegram site server listening', { url: this.info.url })
+    return this.info
+  }
+
+  private createHttpServer(): ReturnType<typeof createServer> {
+    return createServer((req, res) => {
       void this.handleRequest(req, res).catch((error: unknown) => {
         logger.warn('Telegram site server request failed', { error: (error as Error).message })
         if (res.headersSent) {
@@ -153,23 +181,48 @@ export class TelegramSiteServer {
         this.sendJson(res, 500, { error: 'internal error' })
       })
     })
-    await new Promise<void>((resolve, reject) => {
+  }
+
+  /**
+   * 端口分配：在首选端口上**直接 bind**（「先探测空闲再绑定」有 TOCTOU 窗口：
+   * 探测和绑定之间端口可能被别人抢走，于是 origin 又变了）；只有 EADDRINUSE 才顺延，
+   * 其它错误（权限、端口越界）立即抛出，不把 bug 掩盖成「换了个端口」。
+   */
+  private async listen(): Promise<{ server: ReturnType<typeof createServer>, port: number }> {
+    const preferred = this.options.port
+    if (preferred === undefined) {
+      const server = this.createHttpServer()
+      return { server, port: await this.bindOnce(server, 0) }
+    }
+
+    const attempts = Math.max(1, this.options.portRange ?? 1)
+    let lastError: unknown = null
+    for (let offset = 0; offset < attempts; offset += 1) {
+      const candidate = preferred + offset
+      const server = this.createHttpServer()
+      try {
+        const port = await this.bindOnce(server, candidate)
+        if (offset > 0) logger.warn('Telegram site port in use, shifted to a free one', { preferred, actual: port })
+        return { server, port }
+      } catch (error) {
+        lastError = error
+        server.close()
+        if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error
+      }
+    }
+    if (lastError) throw lastError
+    throw new Error(`site server cannot bind ports ${preferred}-${preferred + attempts - 1}`)
+  }
+
+  private bindOnce(server: ReturnType<typeof createServer>, port: number): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
       server.once('error', reject)
-      server.listen(0, '127.0.0.1', () => {
+      server.listen(port, '127.0.0.1', () => {
         server.off('error', reject)
-        resolve()
+        const address = server.address() as AddressInfo
+        resolve(address.port)
       })
     })
-    const address = server.address() as AddressInfo
-    this.server = server
-    this.info = {
-      url: `http://127.0.0.1:${address.port}/`,
-      port: address.port,
-      token: this.token,
-      rootDir: this.options.rootDir,
-    }
-    logger.info('Telegram site server listening', { url: this.info.url })
-    return this.info
   }
 
   stop(): void {
@@ -348,6 +401,7 @@ export class TelegramSiteServer {
         res,
         url,
         origin: info.url,
+        broadcast: (event, payload) => this.broadcast(event, payload),
         sendJson: (status, payload) => this.sendJson(res, status, payload),
         readJson: <T>() => this.readJsonBody<T>(req),
         readBuffer: () => this.readBody(req),
@@ -412,6 +466,20 @@ export class TelegramSiteServer {
     } catch {
       isFile = false
     }
+    // 次要静态根（tweb 的 public/）：dist 里没有的 assets / wasm / 字体到这里找
+    if (!isFile && this.options.extraRootDir) {
+      const fallback = resolveInside(this.options.extraRootDir, relativePath)
+      if (fallback) {
+        try {
+          if (existsSync(fallback) && statSync(fallback).isFile()) {
+            filePath = fallback
+            isFile = true
+          }
+        } catch {
+          isFile = false
+        }
+      }
+    }
     if (isFile) {
       isIndex = path.basename(filePath).toLowerCase() === 'index.html'
     } else {
@@ -425,6 +493,14 @@ export class TelegramSiteServer {
     }
 
     if (isIndex) {
+      // 每次请求都重新读盘 + 注入 bootstrap：前端重建后无需重启 app 即可生效
+      // （此前只在 start() 读一次缓存于内存，tweb/telegram-tt 重建后页面永远拿到旧包）
+      try {
+        const rawIndex = readFileSync(path.join(info.rootDir, 'index.html'), 'utf8')
+        this.indexHtml = this.injectBootstrap(rawIndex)
+      } catch (error: unknown) {
+        logger.warn('Telegram site server failed to re-read index.html', { error: (error as Error).message })
+      }
       if (!this.indexHtml) {
         this.sendJson(res, 500, { error: 'index.html is missing' })
         return
@@ -576,8 +652,4 @@ export function stopTelegramSiteServer(): void {
 
 export function getTelegramSiteServerInfo(): SiteServerInfo | null {
   return current?.getInfo() ?? null
-}
-
-export function broadcastTelegramSiteEvent(event: string, payload: unknown): void {
-  current?.broadcast(event, payload)
 }

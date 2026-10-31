@@ -39,19 +39,39 @@ const filteredLibrary = computed(() => {
   ))
 })
 
-function stateMeta(state: TelegramLibraryEntry['state']): { label: string, tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' } {
-  switch (state) {
+function stateMeta(entry: TelegramLibraryEntry): { label: string, tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' } {
+  const percent = Math.round((entry.progress ?? 0) * 100)
+  switch (entry.state) {
     case 'complete':
       return { label: '已缓存', tone: 'success' }
     case 'partial':
     case 'downloading':
-      return { label: '部分', tone: 'warning' }
+      return { label: percent > 0 ? `缓存中 ${percent}%` : '缓存中', tone: 'warning' }
     case 'queued':
-      return { label: '排队', tone: 'primary' }
+      return { label: '排队中', tone: 'primary' }
     case 'failed':
       return { label: '失败', tone: 'danger' }
     default:
       return { label: '缺失', tone: 'neutral' }
+  }
+}
+
+/** 链接按钮文案：t.me 链接显示尾部，tg:// 链接显示源；完整地址放 title */
+function linkLabel(entry: TelegramLibraryEntry): string {
+  const link = entry.messageLink
+  return link.startsWith('https://t.me/') ? link.slice('https://t.me/'.length) : link
+}
+
+function jumpToMessage(entry: TelegramLibraryEntry): void {
+  store.requestJump(entry.peerId, entry.messageId)
+}
+
+async function copyLink(entry: TelegramLibraryEntry): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(entry.messageLink)
+    ElMessage.success('消息链接已复制')
+  } catch {
+    ElMessage.error(`复制失败：${entry.messageLink}`)
   }
 }
 
@@ -133,6 +153,13 @@ async function emptyExpired(): Promise<void> {
 
 onMounted(() => {
   void refresh()
+  // 旧目录一次性正名：001.jpg → media/<mediaKey>.<ext>、text.md → message.md、acc-default/ 上移（幂等，无需用户操作）
+  void store.normalizeLibrary()
+    .then((summary) => {
+      if (summary.migrated > 0) ElMessage.success(`已把 ${summary.migrated} 条缓存迁到 messages/<群id>/<消息id>/`)
+      if (summary.changed > 0) void refresh()
+    })
+    .catch(() => undefined)
 })
 </script>
 
@@ -158,20 +185,35 @@ onMounted(() => {
             <span class="mono muted">{{ formatDateTime(row.savedAt) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="会话" width="140" show-overflow-tooltip>
+        <el-table-column label="会话" width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="mono">{{ row.peerTitle || row.peerId }}</span>
+            <div class="cell-stack">
+              <span class="mono">{{ row.peerTitle || row.peerId }}</span>
+              <span v-if="row.senderName" class="muted small">{{ row.senderName }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="消息" width="86" align="right">
+        <el-table-column label="消息 / 链接" width="210" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="mono">{{ row.messageId }}</span>
+            <div class="cell-stack">
+              <span class="mono">{{ row.messageId }}</span>
+              <el-button
+                size="small"
+                text
+                type="primary"
+                class="link-button"
+                :title="row.messageLink"
+                @click="jumpToMessage(toEntry(row))"
+              >
+                {{ linkLabel(toEntry(row)) }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="86">
+        <el-table-column label="状态" width="112">
           <template #default="{ row }">
-            <UiChip :tone="stateMeta(row.state).tone">
-              {{ stateMeta(row.state).label }}
+            <UiChip :tone="stateMeta(toEntry(row)).tone">
+              {{ stateMeta(toEntry(row)).label }}
             </UiChip>
           </template>
         </el-table-column>
@@ -190,14 +232,31 @@ onMounted(() => {
             <span class="muted">{{ row.textPreview || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="210" align="right">
+        <el-table-column label="本地目录" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              text
+              type="primary"
+              class="link-button mono"
+              :title="row.localDir"
+              @click="openDir(toEntry(row))"
+            >
+              {{ row.relativeDir }}
+            </el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="212" align="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button size="small" text type="primary" @click="play(toEntry(row))">
                 播放
               </el-button>
-              <el-button size="small" text type="primary" @click="openDir(toEntry(row))">
-                打开目录
+              <el-button size="small" text type="primary" :title="row.localDir" @click="openDir(toEntry(row))">
+                打开文件夹
+              </el-button>
+              <el-button size="small" text type="primary" @click="copyLink(toEntry(row))">
+                复制链接
               </el-button>
               <el-button size="small" text type="danger" @click="removeEntry(toEntry(row))">
                 删除
@@ -300,6 +359,26 @@ onMounted(() => {
   align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-xs);
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.small {
+  font-size: var(--font-size-xs);
+}
+
+.link-button {
+  padding: 0;
+  height: auto;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .player {

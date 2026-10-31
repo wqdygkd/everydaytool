@@ -101,7 +101,10 @@
 ```
 
 - `archive/resources/` **删除**（当前无内容，不兼容、不迁移）。
-- 索引：`<config>/telegram-cache/messages-index/<acc>/<peerId>.json`（按 peer 分片，避免全量写放大）。
+- **实现偏差（2026-10 落地后回填）**：`acc-<sha8>` 那一级最终没有接线（`/api/archive/bind` 一直是 501，页面从不告知账号），
+  实际路径是 `messages/peer-<群 id>/<消息 id 补零 15 位>/`；`text.md` 也扩展成带抬头的 `message.md`，
+  媒体名用 `media/<mediaKey>.<ext>`。旧 `acc-default/` 目录由 `migrateTelegramAccountLayout()` 幂等上移一级。
+- 索引：`<config>/telegram-cache/messages-index/<peerId>.json`（按 peer 分片，避免全量写放大）。
 - 配额：消息目录独立 `messageCacheMaxBytes`，按 `mediaKey`/`sha256` 去重计量（硬链不重复计费）。
 
 ## 3. 需求 → 方案对照

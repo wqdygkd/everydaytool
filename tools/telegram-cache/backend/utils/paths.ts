@@ -17,9 +17,18 @@
 import type { DataLayer } from '../../../../shared/data-layers.ts'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { currentArchiveToolId } from '../../../../backend/telegram-archive/scope.ts'
 import { resolveLayerPath, resolveLegacyPath } from '../../../../backend/utils/data-layers.ts'
 
-const TOOL_ID = 'telegram-cache'
+/**
+ * 当前归档作用域的工具 id。
+ * 默认 `telegram-cache`；tweb-cache 的调用会被包在它自己的作用域里（backend/telegram-archive/scope.ts），
+ * 于是同一套存储代码分别落到 `<layer>/telegram-cache/…` 与 `<layer>/tweb-cache/…`。
+ */
+function toolId(): string {
+  return currentArchiveToolId()
+}
+
 /** 归缓存层的首段（其余一律按配置层处理） */
 const CACHE_HEADS = new Set(['objects', 'tmp', 'mtproto', 'diagnostics'])
 /** 归资产层的首段 */
@@ -27,7 +36,7 @@ const ASSET_HEADS = new Set(['messages', 'trash'])
 
 /** 某层的工具命名空间根：`<layer>/telegram-cache` */
 export function getTelegramToolRoot(layer: DataLayer): string {
-  return resolveLayerPath(layer, TOOL_ID)
+  return resolveLayerPath(layer, toolId())
 }
 
 /** 缓存层：内容对象 / 临时文件 / 诊断包（可再生） */
@@ -42,12 +51,12 @@ export function getTelegramConfigRoot(): string {
 
 /** 资产层：消息级缓存目录（v4） */
 export function getTelegramMessagesRoot(): string {
-  return resolveLayerPath('assets', TOOL_ID, 'messages')
+  return resolveLayerPath('assets', toolId(), 'messages')
 }
 
 /** 资产层：回收站（v4） */
 export function getTelegramTrashRoot(): string {
-  return resolveLayerPath('assets', TOOL_ID, 'trash')
+  return resolveLayerPath('assets', toolId(), 'trash')
 }
 
 /** 配置层：消息索引（按 peer 分片）与媒体索引 */
@@ -98,7 +107,7 @@ export function resolveTelegramRelativeRoot(relativePath: string): string {
 export function resolveTelegramRelativePath(relativePath: string): string {
   const primary = path.join(resolveTelegramRelativeRoot(relativePath), ...relativePath.split('/').filter(Boolean))
   if (existsSync(primary)) return primary
-  const legacy = path.join(resolveLegacyPath(TOOL_ID), ...relativePath.split('/').filter(Boolean))
+  const legacy = path.join(resolveLegacyPath(toolId()), ...relativePath.split('/').filter(Boolean))
   return existsSync(legacy) ? legacy : primary
 }
 
@@ -113,5 +122,5 @@ export function toTelegramRelativePath(absolutePath: string): string {
     }
   }
   // 兜底：v1 平铺布局（升级失败时仍可能往旧位置写）
-  return path.relative(resolveLegacyPath(TOOL_ID), absolutePath).split(path.sep).join('/')
+  return path.relative(resolveLegacyPath(toolId()), absolutePath).split(path.sep).join('/')
 }

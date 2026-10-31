@@ -1,4 +1,4 @@
-// telegram-cache（Telegram Web A 网络资源优化）共享类型与常量：
+// telegram-cache / tweb-cache 共享的归档契约、类型与常量：
 // 纯类型 / 常量 / 纯函数，前端与 Electron 主进程共用。
 // 覆盖方案文档 M0（被动观测）+ M1（资源索引 / 任务去重）+ M2（HTTP 缓存语义 / 配额淘汰 /
 // 受控的本地响应复用，默认关闭）+ M3（页面捕获）+ 可选 M3-B（MTProto 下载，需 .env 凭据）。
@@ -11,6 +11,10 @@ export const TELEGRAM_DEFAULT_URL = 'https://web.telegram.org/a/'
 export const TELEGRAM_RESOURCE_LIMIT = 300
 export const TELEGRAM_TRAFFIC_LIMIT = 300
 export const TELEGRAM_TASK_HISTORY_LIMIT = 50
+
+/** 归档状态推送通道：按工具 scope 分流，避免两个影库互相收到对方的事件 */
+export const TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL = 'telegram-cache:event:library'
+export const TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL = 'tweb-cache:event:library'
 
 /** 单资源大小上限的允许区间（配置层做 clamp，避免误填 4GB / 0） */
 export const TELEGRAM_MIN_RESOURCE_BYTES = 1024 * 1024
@@ -30,6 +34,15 @@ export const TELEGRAM_TASK_MAX_ATTEMPTS = 3
 export const TELEGRAM_MIN_CACHE_BYTES = 256 * 1024 * 1024
 export const TELEGRAM_MAX_CACHE_BYTES = 20 * 1024 * 1024 * 1024
 export const TELEGRAM_DEFAULT_CACHE_BYTES = 3 * 1024 * 1024 * 1024
+
+// 站点端口必须**确定性**：页面 origin 含端口，而登录凭据（localStorage 里的 GramJS auth key）、
+// IndexedDB、Cache Storage、Service Worker 注册都按 origin 隔离 —— 每次启动换端口等于每次重新登录 + 缓存归零。
+// 从 BASE 起在 RANGE 内直接 bind，撞上占用才顺延；实际端口由主进程落盘到配置的 sitePort。
+// 选 34100 起：避开 5173 / 8080 等常用端口，也避开 Windows 的 49152+ 临时端口段。
+export const TELEGRAM_SITE_PORT_BASE = 34100
+export const TELEGRAM_SITE_PORT_RANGE = 16
+export const TELEGRAM_SITE_PORT_MIN = 1024
+export const TELEGRAM_SITE_PORT_MAX = 65535
 
 /** 图片类资源的 MIME 前缀（本地响应默认只做图片；音视频走单区间 Range，见 localMediaRangeEnabled） */
 export const TELEGRAM_LOCAL_RESPONSE_MIME_PREFIX = 'image/'
@@ -68,6 +81,8 @@ export interface TelegramCacheConfig {
   maxResourceBytes: number
   /** 缓存配额：超过后按 LRU 淘汰（归档副本不受影响） */
   cacheMaxBytes: number
+  /** 站点端口：落盘后固定，保证 origin 不随重启变化；null = 还没分配过 */
+  sitePort: number | null
 }
 
 export const TELEGRAM_DEFAULT_CONFIG: TelegramCacheConfig = {
@@ -75,6 +90,7 @@ export const TELEGRAM_DEFAULT_CONFIG: TelegramCacheConfig = {
   maxHttpConcurrency: TELEGRAM_DEFAULT_HTTP_CONCURRENCY,
   maxResourceBytes: TELEGRAM_DEFAULT_RESOURCE_BYTES,
   cacheMaxBytes: TELEGRAM_DEFAULT_CACHE_BYTES,
+  sitePort: null,
 }
 
 /**
@@ -385,11 +401,22 @@ export interface TelegramSiteInfo {
   ready: boolean
   /** 形如 http://127.0.0.1:<port>/；未就绪时 null */
   url: string | null
+  /** 当前实际端口；未就绪时 null */
+  port: number | null
+  /** 上次落盘的端口（诊断 origin 是否变化用） */
+  previousPort: number | null
+  /**
+   * 上次落盘端口与实际端口不一致 → origin 已变，页面侧的登录态 / IndexedDB / Cache Storage /
+   * Service Worker 注册全部作废（都需要重新登录），UI 必须明确提示。
+   */
+  originChanged: boolean
+  /** origin 变化时给出的说明（写入失败/端口被占用等），否则 null */
+  portNote: string | null
   error: string | null
 }
 
 // ---------------------------------------------------------------------------
-// 消息级缓存（v4）：messages/<acc>/<peer>/<mid>/ + manifest + text.md
+// 消息级缓存（v4）：messages/peer-<群 id>/<消息 id>/message.md + media/<mediaKey>.<ext>
 // ---------------------------------------------------------------------------
 
 export type TelegramMessageState = 'missing' | 'queued' | 'downloading' | 'partial' | 'complete' | 'failed'
@@ -403,6 +430,23 @@ export interface TelegramMessagePeerSnapshot {
   type?: string
 }
 
+export interface TelegramForwardSourceSnapshot {
+  id?: string
+  titleSnapshot?: string
+  username?: string
+  name?: string
+  messageId?: number
+  date?: string
+}
+
+export interface TelegramThumbnailSnapshot {
+  mediaKey: string
+  mimeType: string
+  size: number
+  relativePath: string
+  savedAt: number
+}
+
 export interface TelegramMessageAttachment {
   index: number
   mediaKey: string
@@ -412,7 +456,7 @@ export interface TelegramMessageAttachment {
   expectedSize?: number
   actualSize?: number
   sha256?: string
-  /** 相对工具命名空间（assets 层）的路径，如 `messages/acc-default/peer-1/…` */
+  /** 相对工具命名空间（assets 层）的路径，如 `messages/peer-<peerId>/<mid>/media/<mediaKey>.jpg` */
   relativePath?: string
   linkMode?: TelegramMediaLinkMode
   status: TelegramAttachmentState
@@ -427,6 +471,8 @@ export interface TelegramMessageManifest {
   date?: string
   editDate?: string
   senderSnapshot?: { id?: string, name?: string }
+  forwardSource?: TelegramForwardSourceSnapshot
+  thumbnail?: TelegramThumbnailSnapshot
   text?: { saved: boolean, chars: number, truncated?: boolean, file?: string }
   status: TelegramMessageState
   attachments: TelegramMessageAttachment[]
@@ -451,6 +497,10 @@ export interface TelegramArchivePrepareRequest {
   date?: string
   editDate?: string
   sender?: { id?: string, name?: string }
+  forwardSource?: TelegramForwardSourceSnapshot
+  /** 正文（提前送来，进行中的目录也能读出内容） */
+  text?: string
+  textTruncated?: boolean
   attachments: TelegramArchivePrepareAttachment[]
 }
 
@@ -465,6 +515,7 @@ export interface TelegramArchiveAttachmentProgress {
 export interface TelegramArchivePrepareResponse {
   state: TelegramMessageState
   attachments: TelegramArchiveAttachmentProgress[]
+  thumbnailSaved?: boolean
 }
 
 export interface TelegramArchiveAppendResponse {
@@ -495,13 +546,33 @@ export interface TelegramLibraryEntry {
   messageId: number
   state: TelegramMessageState
   peerTitle?: string
+  senderName?: string
+  forwardSource?: TelegramForwardSourceSnapshot
   groupedId?: string
+  thumbnailMediaKey?: string
+  thumbnailUrl?: string
   savedAt?: number
   size: number
   attachmentCount: number
+  /** 0..1；进行中（partial/queued）才有意义 */
+  progress?: number
   textPreview?: string
+  /** 可在 Telegram 里定位该消息的链接（展示/复制用；点击走内嵌页面跳转） */
+  messageLink: string
+  /** 消息目录的绝对路径（「打开文件夹」与提示用） */
+  localDir: string
   /** 相对 assets 根的消息目录 */
   relativeDir: string
+}
+
+/** 主进程 → 渲染层的影库状态推送（一次一条消息，进度变化会连续推送） */
+export interface TelegramLibraryEvent {
+  peerId: string
+  messageId: number
+  state: TelegramMessageState
+  received?: number
+  expected?: number
+  progress?: number
 }
 
 export interface TelegramTrashEntry {
