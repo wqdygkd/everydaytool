@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { INTERCEPTOR_PROXY_PORT_MAX, INTERCEPTOR_PROXY_PORT_MIN } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
@@ -38,8 +39,8 @@ async function installCertificate(): Promise<void> {
   caBusy.value = true
   try {
     const result = await store.installCa()
-    if (result.ok) ElMessage.success('已安装到系统信任库，重启浏览器后生效')
-    else ElMessage.error(result.detail ?? '安装失败')
+    if (result.ok) toast.success('已安装到系统信任库，重启浏览器后生效')
+    else toast.error(result.detail ?? '安装失败')
   } finally {
     caBusy.value = false
   }
@@ -49,8 +50,8 @@ async function uninstallCertificate(): Promise<void> {
   caBusy.value = true
   try {
     const result = await store.uninstallCa()
-    if (result.ok) ElMessage.success('已从系统信任库移除')
-    else ElMessage.error(result.detail ?? '卸载失败')
+    if (result.ok) toast.success('已从系统信任库移除')
+    else toast.error(result.detail ?? '卸载失败')
   } finally {
     caBusy.value = false
   }
@@ -58,7 +59,7 @@ async function uninstallCertificate(): Promise<void> {
 
 async function exportCertificate(): Promise<void> {
   const saved = await store.exportCa()
-  if (saved) ElMessage.success(`已导出：${saved}`)
+  if (saved) toast.success(`已导出：${saved}`)
 }
 
 async function refreshCertificate(): Promise<void> {
@@ -83,29 +84,29 @@ function openPortDialog(): void {
 async function submitPort(): Promise<void> {
   const port = Number(portDraft.value.trim())
   if (!Number.isInteger(port) || port < INTERCEPTOR_PROXY_PORT_MIN || port > INTERCEPTOR_PROXY_PORT_MAX) {
-    ElMessage.warning(`端口需在 ${INTERCEPTOR_PROXY_PORT_MIN}–${INTERCEPTOR_PROXY_PORT_MAX} 之间`)
+    toast.warning(`端口需在 ${INTERCEPTOR_PROXY_PORT_MIN}–${INTERCEPTOR_PROXY_PORT_MAX} 之间`)
     return
   }
   portSaving.value = true
   const result = await store.setProxyPort(port)
   portSaving.value = false
   if (!result.ok) {
-    ElMessage.error(result.error ?? '修改端口失败')
+    toast.error(result.error ?? '修改端口失败')
     return
   }
   portDialogVisible.value = false
-  ElMessage.success(`代理端口已改为 ${port}`)
+  toast.success(`代理端口已改为 ${port}`)
 }
 
 async function applyDesired(enabled: boolean): Promise<void> {
   const applied = await store.setProxyDesired(enabled)
-  if (!applied) ElMessage.warning('没有已连接的浏览器（先在 Chrome 中打开扩展）')
-  else ElMessage.success(enabled ? '已通知浏览器挂载代理' : '已通知浏览器恢复直连')
+  if (!applied) toast.warning('没有已连接的浏览器（先在 Chrome 中打开扩展）')
+  else toast.success(enabled ? '已通知浏览器挂载代理' : '已通知浏览器恢复直连')
 }
 
 async function openExtensionDir(): Promise<void> {
   const ok = await store.openExtensionDir()
-  if (!ok) ElMessage.error('打开扩展目录失败')
+  if (!ok) toast.error('打开扩展目录失败')
 }
 
 function formatTime(at: number): string {
@@ -127,12 +128,12 @@ function formatTime(at: number): string {
       <UiKeyValue label="代理端口" mono>
         {{ store.status?.proxyPort ?? '—' }}
         <template #actions>
-          <el-button size="small" text type="primary" :disabled="!proxyEndpoint" @click="useCopy(proxyEndpoint, '代理地址')">
+          <UiButton size="small" text type="primary" :disabled="!proxyEndpoint" @click="useCopy(proxyEndpoint, '代理地址')">
             复制地址
-          </el-button>
-          <el-button size="small" text type="primary" @click="openPortDialog">
+          </UiButton>
+          <UiButton size="small" text type="primary" @click="openPortDialog">
             修改
-          </el-button>
+          </UiButton>
         </template>
       </UiKeyValue>
       <UiKeyValue label="控制端口">
@@ -142,7 +143,7 @@ function formatTime(at: number): string {
       <UiKeyValue label="已连接浏览器">
         {{ connections.length }}
       </UiKeyValue>
-      <el-alert
+      <UiAlert
         v-if="store.status?.proxyPortNote"
         class="port-note"
         type="warning"
@@ -177,12 +178,12 @@ function formatTime(at: number): string {
       </div>
 
       <UiGroup class="actions" gap="sm">
-        <el-button size="small" :disabled="!connections.length" @click="applyDesired(true)">
+        <UiButton size="small" :disabled="!connections.length" @click="applyDesired(true)">
           让浏览器挂载代理
-        </el-button>
-        <el-button size="small" :disabled="!connections.length || !proxyEnabled" @click="applyDesired(false)">
+        </UiButton>
+        <UiButton size="small" :disabled="!connections.length || !proxyEnabled" @click="applyDesired(false)">
           恢复直连
-        </el-button>
+        </UiButton>
       </UiGroup>
       <UiHint block>
         代理挂载由浏览器扩展控制；edt 断开时代理会自动撤销（fail-open，不阻断日常上网）。
@@ -198,12 +199,12 @@ function formatTime(at: number): string {
       <UiKeyValue label="扩展目录">
         <span class="mono path">{{ store.status?.extensionDir ?? '—' }}</span>
         <template #actions>
-          <el-button size="small" text type="primary" @click="useCopy(store.status?.extensionDir ?? '', '路径')">
+          <UiButton size="small" text type="primary" @click="useCopy(store.status?.extensionDir ?? '', '路径')">
             复制
-          </el-button>
-          <el-button size="small" text type="primary" @click="openExtensionDir">
+          </UiButton>
+          <UiButton size="small" text type="primary" @click="openExtensionDir">
             打开
-          </el-button>
+          </UiButton>
         </template>
       </UiKeyValue>
       <UiHint block>
@@ -223,7 +224,7 @@ function formatTime(at: number): string {
       <UiKeyValue label="指纹" mono>
         <span class="mono path">{{ store.ca?.fingerprint || '—' }}</span>
       </UiKeyValue>
-      <el-alert
+      <UiAlert
         v-if="store.ca?.detail"
         class="diag-alert"
         type="info"
@@ -237,7 +238,7 @@ function formatTime(at: number): string {
         Firefox 等自带证书库的浏览器请「导出 .crt」后手动导入。
       </UiHint>
       <UiGroup class="actions" gap="sm" wrap>
-        <el-button
+        <UiButton
           size="small"
           type="primary"
           :loading="caBusy"
@@ -245,14 +246,14 @@ function formatTime(at: number): string {
           @click="installCertificate"
         >
           安装到系统信任库
-        </el-button>
-        <el-button size="small" @click="exportCertificate">
+        </UiButton>
+        <UiButton size="small" @click="exportCertificate">
           导出 .crt
-        </el-button>
-        <el-button size="small" text :loading="caBusy" @click="refreshCertificate">
+        </UiButton>
+        <UiButton size="small" text :loading="caBusy" @click="refreshCertificate">
           刷新状态
-        </el-button>
-        <el-button
+        </UiButton>
+        <UiButton
           size="small"
           text
           type="danger"
@@ -260,7 +261,7 @@ function formatTime(at: number): string {
           @click="uninstallCertificate"
         >
           卸载
-        </el-button>
+        </UiButton>
       </UiGroup>
       <UiHint v-if="store.ca?.platform === 'unsupported'" block>
         当前平台不支持自动写入系统信任库，请用「导出 .crt」手动导入浏览器。
@@ -271,21 +272,21 @@ function formatTime(at: number): string {
     </UiPanel>
 
     <UiDialog v-model="portDialogVisible" title="修改代理端口" width="440px">
-      <el-form label-width="80px" @submit.prevent>
-        <el-form-item label="代理端口">
-          <el-input v-model="portDraft" :placeholder="`${INTERCEPTOR_PROXY_PORT_MIN} - ${INTERCEPTOR_PROXY_PORT_MAX}`" inputmode="numeric" />
-        </el-form-item>
-      </el-form>
+      <div class="port-form" @submit.prevent>
+        <UiFormField label-width="80px" label="代理端口">
+          <UiInput v-model="portDraft" :placeholder="`${INTERCEPTOR_PROXY_PORT_MIN} - ${INTERCEPTOR_PROXY_PORT_MAX}`" inputmode="numeric" />
+        </UiFormField>
+      </div>
       <UiHint block>
         改端口会重启代理，已挂载代理的浏览器会自动改用新端口；正在进行的请求会中断。
       </UiHint>
       <template #footer>
-        <el-button @click="portDialogVisible = false">
+        <UiButton @click="portDialogVisible = false">
           取消
-        </el-button>
-        <el-button type="primary" :loading="portSaving" @click="submitPort">
+        </UiButton>
+        <UiButton type="primary" :loading="portSaving" @click="submitPort">
           保存
-        </el-button>
+        </UiButton>
       </template>
     </UiDialog>
   </div>

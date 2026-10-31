@@ -1,0 +1,80 @@
+/* Tailwind v4 入口(见 docs/ui-shadcn-roadmap.md Phase 1)。
+   分层说明:tailwind 的 preflight / theme / utilities 全部在 @layer 内,
+   main.scss 等既有未分层样式的优先级天然高于它——EP 并存期零视觉回归。 */
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+
+/* 类扫描范围:显式收敛到源码三目录(排除 telegram-tt / tweb / dist / pnpm-store 等) */
+@source "../../renderer";
+@source "../../tools";
+@source "../../shared";
+
+/* 夜色玻璃(Phase 2)接入点:模式类由 App.vue 挂到 html 与 .app-shell */
+/* 夜色轴:html 挂 .is-night 时生成物的 dark: 前缀生效(同时保留标准 .dark 兼容) */
+@custom-variant dark (&:is(.dark *, .is-night *));
+
+/* ── shadcn 语义变量(只读生成组件消费的唯一主题面) ──
+   取值全部桥接现有设计令牌(DESIGN.md §2),改主题只改这里,
+   永不改 renderer/shared/components/shadcn/ 内的生成组件。 */
+:root {
+  --background: #f4f4f5;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #006dc3;        /* 墨档蓝:实底主钮(白字 ≥4.5:1) */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;      /* 灰调填充 */
+  --secondary-foreground: #000000;
+  --muted: #f4f4f5;
+  --muted-foreground: #5f646b;
+  --accent: #f4f4f5;         /* 下拉项 / 菜单 hover 底 */
+  --accent-foreground: #000000;
+  --destructive: #cf1c28;
+  --destructive-foreground: #ffffff;
+  --border: #dadce0;
+  --input: #dadce0;
+  --ring: #3390ec;           /* 亮档蓝:焦点环 */
+  --radius: 0.75rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* 字阶与几何桥接 DESIGN §3.2 / §3.5,生成的组件跟随全站令牌 */
+  --font-sans: Roboto, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+@theme static {
+  /* ── 语义令牌别名(业务/包装层用):桥接 DESIGN.md 令牌;普通 @theme:变量发射到 :root,夜色覆写生效 ── */
+  --color-fg: var(--color-text-primary);
+  --color-fg-muted: var(--color-text-secondary);
+  --color-fg-faint: var(--color-text-tertiary);
+  --color-surface: var(--color-raised);
+  --color-surface-muted: var(--color-fill);
+  --color-hairline: var(--color-border-light);
+  --color-line: var(--color-border);
+  --color-brand: var(--color-primary);
+  --color-brand-strong: var(--color-primary-strong);
+  --color-brand-soft: var(--color-primary-soft);
+  --radius-control: 14px;
+  --radius-panel: 18px;
+}

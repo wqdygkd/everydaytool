@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { MotionScope } from './shared/composables/useGsap'
+import ConfirmHost from '@renderer/shared/feedback/ConfirmHost.vue'
 import { findAppTab, getAppTabs } from './config/app-tabs'
 import { getToolRegistry } from './config/tools'
 import HeaderTabs from './shared/components/HeaderTabs.vue'
+import UiToaster from './shared/components/ui/UiToaster.vue'
 import { useAppearance } from './shared/composables/useAppearance'
 import { createMotionScope, gsap } from './shared/composables/useGsap'
 import { runTabCloseGuard } from './shared/composables/useTabCloseGuard'
@@ -83,11 +85,13 @@ const isFullscreen = ref(false)
 // （translucency.scss 按后者覆写 alpha），has-test-wallpaper 是玻璃调试用的假壁纸。
 // 放在 isFullscreen 之后定义，避免前向引用。
 const hasTestWallpaper = computed(() => appearance.value?.testWallpaper === true)
+const hasNight = computed(() => appearance.value?.night === true)
 const modeClasses = computed<string[]>(() => {
   const classes: string[] = []
   if (isFullscreen.value) classes.push('is-fullscreen')
   if (isTransparent.value) classes.push('is-transparent')
   if (hasTestWallpaper.value) classes.push('has-test-wallpaper')
+  if (hasNight.value) classes.push('is-night')
   if (materialClass.value) classes.push(materialClass.value)
   return classes
 })
@@ -212,6 +216,9 @@ function openSettings() {
         <UiIcon name="gear" :size="17" />
       </button>
     </header>
+    <!-- 全局反馈浮层(sonner):样式经 --popover / --radius 桥接令牌,夜色自动跟随 -->
+    <UiToaster position="top-center" :duration="3000" />
+    <ConfirmHost />
 
     <main class="app-main">
       <router-view v-slot="{ Component: RouteComponent, route: r }">

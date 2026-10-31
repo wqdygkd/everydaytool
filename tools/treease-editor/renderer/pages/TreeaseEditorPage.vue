@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease'
 import { isElectronEnvironment } from '@renderer/shared/environment'
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { getTreeaseEditorApi } from '../ipc'
@@ -137,7 +139,7 @@ function persistRules(rules: TreeaseInterceptRule[]) {
   if (!api) return
   void api.invoke(api.channels.RULES_SET, rules, interceptEnabled.value).catch((error: unknown) => {
     // 写盘失败不回滚 UI（用户还能继续调），下次保存会再试
-    ElMessage.error((error as Error).message || '规则保存到数据目录失败')
+    toast.error((error as Error).message || '规则保存到数据目录失败')
   })
 }
 
@@ -214,19 +216,19 @@ async function startIntercept() {
   const api = getIpc()
   if (!api) {
     const w = window as unknown as Record<string, unknown>
-    ElMessage.warning(
+    toast.warning(
       `接口拦截仅在 Electron 桌面端可用（当前：edtRuntime=${Boolean(w.edtRuntime)}，UA含Electron=${navigator.userAgent.includes('Electron')}）。请完全退出 Electron 后重跑 pnpm dev`,
     )
     return
   }
   const guestId = getGuestId()
   if (guestId === null) {
-    ElMessage.warning('页面内核未就绪，请等待页面加载完成')
+    toast.warning('页面内核未就绪，请等待页面加载完成')
     return
   }
   const rules = buildRules()
   if (!hasActiveRule(rules)) {
-    ElMessage.warning('请至少启用一个接口规则（匹配 pattern，修改或屏蔽）')
+    toast.warning('请至少启用一个接口规则（匹配 pattern，修改或屏蔽）')
     return
   }
   starting.value = true
@@ -242,7 +244,7 @@ async function startIntercept() {
     interceptEnabled.value = true
     persistRules(rules)
   } catch (e) {
-    ElMessage.error((e as Error).message || '启动拦截失败')
+    toast.error((e as Error).message || '启动拦截失败')
   } finally {
     starting.value = false
   }
@@ -257,7 +259,7 @@ async function stopIntercept() {
     } catch {
       // 忽略，后端可能已清理
     }
-    ElMessage.info('已停止拦截')
+    toast.info('已停止拦截')
   }
   attached.value = false
   interceptEnabled.value = false
@@ -267,7 +269,7 @@ async function stopIntercept() {
 async function applyRules() {
   const api = getIpc()
   if (!api || currentWebContentsId === null) {
-    ElMessage.warning('拦截未启动')
+    toast.warning('拦截未启动')
     return
   }
   const rules = buildRules()
@@ -279,9 +281,9 @@ async function applyRules() {
     ) as TreeaseInterceptStatus
     applyStatus(status)
     persistRules(rules)
-    ElMessage.success('规则已动态生效，后续响应将按新值修改')
+    toast.success('规则已动态生效，后续响应将按新值修改')
   } catch (e) {
-    ElMessage.error((e as Error).message || '更新规则失败')
+    toast.error((e as Error).message || '更新规则失败')
   }
 }
 
@@ -293,7 +295,7 @@ function addRule() {
 
 async function resetToBuiltIn() {
   try {
-    await ElMessageBox.confirm('将用代码内置规则覆盖当前全部配置，继续吗？', '恢复内置', { type: 'warning' })
+    await confirm('将用代码内置规则覆盖当前全部配置，继续吗？', '恢复内置', { type: 'warning' })
   } catch {
     return
   }
@@ -304,7 +306,7 @@ async function resetToBuiltIn() {
   if (attached.value) {
     await applyRules()
   } else {
-    ElMessage.success('已恢复内置规则')
+    toast.success('已恢复内置规则')
   }
 }
 
@@ -337,7 +339,7 @@ function handleWebviewReady() {
 
 async function handleReload() {
   if (!isOnline.value) {
-    ElMessage.warning('当前处于离线状态，已保留本地缓存；恢复网络后再刷新获取最新内容')
+    toast.warning('当前处于离线状态，已保留本地缓存；恢复网络后再刷新获取最新内容')
     return
   }
   // 手动刷新 = 清页面缓存 + 重载：加载最新内容并重新缓存
@@ -345,7 +347,7 @@ async function handleReload() {
   if (api && currentWebContentsId !== null) {
     try {
       await api.invoke(api.channels.CACHE_CLEAR)
-      ElMessage.success('已清除页面缓存，正在加载最新内容')
+      toast.success('已清除页面缓存，正在加载最新内容')
     } catch {
       // 忽略：继续刷新
     }
@@ -393,12 +395,12 @@ onUnmounted(() => {
         <UiChip v-if="!isOnline" tone="warning" variant="soft">
           离线 · 缓存模式
         </UiChip>
-        <el-button size="small" :disabled="!isElectron" @click="showDialog = true">
+        <UiButton size="small" :disabled="!isElectron" @click="showDialog = true">
           拦截设置
-        </el-button>
-        <el-button size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
+        </UiButton>
+        <UiButton size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
           刷新
-        </el-button>
+        </UiButton>
       </template>
     </UiToolbar>
     <div class="treease-body">
@@ -421,7 +423,7 @@ onUnmounted(() => {
     </div>
 
     <UiDialog v-model="showDialog" title="接口响应拦截" width="680px" destroy-on-close>
-      <el-alert
+      <UiAlert
         type="info"
         class="intercept-alert"
         :closable="false"
@@ -429,66 +431,63 @@ onUnmounted(() => {
         title="每个接口独立规则"
         description="修改模式：命中后改写 JSON 响应体并返回，其余透传；屏蔽模式：请求直接失败不发出（如 sentry.io 上报）。协议层实现，规则保存后立即动态生效。"
       />
-      <el-collapse v-model="expanded">
-        <el-collapse-item v-for="(form, ri) in ruleForms" :key="form.id" :name="form.id">
+      <UiCollapse v-model="expanded">
+        <UiCollapseItem v-for="(form, ri) in ruleForms" :key="form.id" :name="form.id">
           <template #title>
-            <el-switch v-model="form.enabled" size="small" @click.stop />
+            <UiSwitchField v-model="form.enabled" @click.stop />
             <span class="rule-title-name">{{ form.name || '未命名接口' }}</span>
             <UiChip v-if="form.action === 'block'" tone="danger" variant="soft" class="rule-action-tag">
               屏蔽
             </UiChip>
             <span class="rule-title-pattern">{{ form.urlPattern || '未配置匹配' }}</span>
           </template>
-          <el-form label-width="90px">
-            <el-form-item label="接口名称">
-              <el-input v-model="form.name" placeholder="如：用量接口 / 屏蔽 sentry 上报" />
-            </el-form-item>
-            <el-form-item label="接口匹配">
-              <el-input v-model="form.urlPattern" placeholder="*api.treease.com/v1/usage*，屏蔽如 *sentry.io*" />
-            </el-form-item>
-            <el-form-item label="动作">
-              <el-select v-model="form.action">
-                <el-option label="修改响应字段" value="modify" />
-                <el-option label="屏蔽请求（不发出）" value="block" />
-              </el-select>
-            </el-form-item>
-            <el-form-item v-if="form.action === 'modify'" label="修改字段">
+          <div class="config-form">
+            <UiFormField label-width="90px" label="接口名称">
+              <UiInput v-model="form.name" placeholder="如：用量接口 / 屏蔽 sentry 上报" />
+            </UiFormField>
+            <UiFormField label-width="90px" label="接口匹配">
+              <UiInput v-model="form.urlPattern" placeholder="*api.treease.com/v1/usage*，屏蔽如 *sentry.io*" />
+            </UiFormField>
+            <UiFormField label-width="90px" label="动作">
+              <UiSelect v-model="form.action" :options="[{ label: '修改响应字段', value: 'modify' }, { label: '屏蔽请求（不发出）', value: 'block' }]" />
+            </UiFormField>
+            <UiFormField v-if="form.action === 'modify'" label-width="90px" label="修改字段">
               <UiGroup direction="column" gap="sm" block>
                 <div v-for="(row, i) in form.rows" :key="i" class="patch-row">
-                  <el-input v-model="row.path" placeholder="JSON 路径，如 limits.aiProcessingMonthly.limit" />
-                  <el-input v-model="row.text" placeholder="新值，JSON 格式，如 9999" />
-                  <el-button size="small" type="danger" link @click="removeRow(form, i)">
+                  <UiInput v-model="row.path" placeholder="JSON 路径，如 limits.aiProcessingMonthly.limit" />
+                  <UiInput v-model="row.text" placeholder="新值，JSON 格式，如 9999" />
+                  <UiButton size="small" type="danger" link @click="removeRow(form, i)">
                     删除
-                  </el-button>
+                  </UiButton>
                 </div>
                 <UiGroup gap="sm">
-                  <el-button size="small" plain @click="addRow(form)">
+                  <UiButton size="small" plain @click="addRow(form)">
                     新增字段
-                  </el-button>
-                  <el-button size="small" type="danger" link @click="removeRule(ri)">
+                  </UiButton>
+                  <UiButton size="small" type="danger" link @click="removeRule(ri)">
                     删除该接口
-                  </el-button>
+                  </UiButton>
                 </UiGroup>
               </UiGroup>
-            </el-form-item>
-            <el-form-item v-else label="说明">
+            </UiFormField>
+            <UiFormField v-else label-width="90px" label="说明">
               <UiHint>命中该匹配的请求将被拦截并返回 403，上报/遥测类接口适用。</UiHint>
               <UiGroup gap="sm" class="rule-delete-group">
-                <el-button size="small" type="danger" link @click="removeRule(ri)">
+                <UiButton size="small" type="danger" link @click="removeRule(ri)">
                   删除该接口
-                </el-button>
+                </UiButton>
               </UiGroup>
-            </el-form-item>
-          </el-form>
-        </el-collapse-item>
-      </el-collapse>
+            </UiFormField>
+          </div>
+        </UiCollapseItem>
+      </UiCollapse>
       <UiGroup gap="sm" class="rule-actions">
-        <el-button size="small" plain @click="addRule">
+        <UiButton size="small" plain @click="addRule">
           新增接口
-        </el-button>
-        <el-button size="small" plain @click="resetToBuiltIn">
+        </UiButton>
+        <UiButton size="small" plain @click="resetToBuiltIn">
           恢复内置
-        </el-button>
+        </UiButton>
       </UiGroup>
       <UiGroup gap="sm" class="dialog-status">
         <span class="muted">状态：</span>
@@ -500,15 +499,15 @@ onUnmounted(() => {
         </UiChip>
       </UiGroup>
       <template #footer>
-        <el-button v-if="!attached" type="primary" :loading="starting" @click="startIntercept">
+        <UiButton v-if="!attached" type="primary" :loading="starting" @click="startIntercept">
           启动拦截
-        </el-button>
-        <el-button v-if="attached" @click="applyRules">
+        </UiButton>
+        <UiButton v-if="attached" @click="applyRules">
           保存并应用
-        </el-button>
-        <el-button v-if="attached" type="danger" plain @click="stopIntercept">
+        </UiButton>
+        <UiButton v-if="attached" type="danger" plain @click="stopIntercept">
           停止拦截
-        </el-button>
+        </UiButton>
       </template>
     </UiDialog>
   </div>

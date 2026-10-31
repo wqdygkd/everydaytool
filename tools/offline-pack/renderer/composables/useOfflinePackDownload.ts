@@ -5,8 +5,8 @@ import type {
   OfflinePackDownloadResult,
   OfflinePackSimpleDownloadRequest,
 } from '@shared/offline-pack'
-import { ElMessage } from 'element-plus'
 import { onUnmounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { getOfflinePackApi } from '../ipc'
 
 export type OfflinePackDownloadInput
@@ -38,7 +38,7 @@ export function useOfflinePackDownload() {
   async function start(request: OfflinePackDownloadInput): Promise<boolean> {
     const api = getOfflinePackApi()
     if (!api) {
-      ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+      toast.warning('离线包下载 仅在 Electron 桌面端可用')
       return false
     }
     subscribe()
@@ -52,7 +52,7 @@ export function useOfflinePackDownload() {
       result.value = res as OfflinePackDownloadResult
       return true
     } catch (error) {
-      ElMessage.error((error as Error).message || '下载失败')
+      toast.error((error as Error).message || '下载失败')
       return false
     } finally {
       downloading.value = false
@@ -71,7 +71,7 @@ export function useOfflinePackDownload() {
     try {
       await api.invoke(api.channels.OPEN_DIR)
     } catch (error) {
-      ElMessage.error((error as Error).message || '打开目录失败')
+      toast.error((error as Error).message || '打开目录失败')
     }
   }
 

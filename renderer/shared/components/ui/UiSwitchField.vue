@@ -21,7 +21,18 @@ const value = computed({
 
 <template>
   <div class="ui-switch-field" :class="`is-align-${align}`">
-    <el-switch v-model="value" :disabled="disabled" />
+    <!-- 开关内核：EP → 原生 role=switch。轨道可半透明、滑块近实（DESIGN §3.1.3），着色走开关专属三档令牌 -->
+    <button
+      type="button"
+      role="switch"
+      class="ui-switch"
+      :class="{ 'is-on': value, 'is-disabled': disabled }"
+      :aria-checked="value"
+      :disabled="disabled"
+      @click="value = !value"
+    >
+      <span class="ui-switch-knob" />
+    </button>
     <span v-if="$slots.default" class="ui-switch-hint">
       <slot />
     </span>
@@ -58,5 +69,51 @@ const value = computed({
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--ui-switch-hint-line);
+}
+
+.ui-switch {
+  --ui-switch-w: 40px;
+  --ui-switch-h: 20px;
+
+  position: relative;
+  flex: none;
+  width: var(--ui-switch-w);
+  height: var(--ui-switch-h);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: var(--color-switch-track-off);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+  transition: background var(--transition-fast);
+
+  &.is-on {
+    background: var(--color-switch-track);
+  }
+
+  &.is-disabled {
+    cursor: not-allowed;
+    background: color-mix(in oklab, var(--color-switch-track-off) 55%, transparent);
+
+    &.is-on {
+      background: color-mix(in oklab, var(--color-switch-track) 55%, transparent);
+    }
+  }
+}
+
+.ui-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(var(--ui-switch-h) - 4px);
+  height: calc(var(--ui-switch-h) - 4px);
+  border-radius: 50%;
+  background: var(--color-switch-knob);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--color-highlight);
+  transition: transform var(--transition-fast);
+
+  .is-on & {
+    transform: translateX(calc(var(--ui-switch-w) - var(--ui-switch-h)));
+  }
 }
 </style>

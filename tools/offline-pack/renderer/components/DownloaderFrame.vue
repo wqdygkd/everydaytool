@@ -33,21 +33,18 @@ const emit = defineEmits<{
 
     <slot name="before" />
 
-    <el-input
+    <UiSearchInput
       :model-value="modelValue"
       :placeholder="placeholder"
       clearable
+      variant="box"
       @update:model-value="emit('update:modelValue', $event)"
-      @keyup.enter="emit('submit')"
-    >
-      <template #prefix>
-        <UiIcon name="search" :size="16" />
-      </template>
-    </el-input>
+      @enter="emit('submit')"
+    />
 
     <!-- 示例：文字按钮（轻量、可 hover），不引入自定义胶囊样式 -->
     <UiGroup v-if="examples.length" gap="sm" wrap class="btn-flush">
-      <el-button
+      <UiButton
         v-for="example in examples"
         :key="example.value"
         size="small"
@@ -55,19 +52,19 @@ const emit = defineEmits<{
         @click="emit('example', example.value)"
       >
         {{ example.label }}
-      </el-button>
+      </UiButton>
     </UiGroup>
 
     <slot name="between" />
 
-    <el-button
+    <UiButton
       type="primary"
       :loading="loading"
       :disabled="submitDisabled"
       @click="emit('submit')"
     >
       {{ loading ? loadingLabel : submitLabel }}
-    </el-button>
+    </UiButton>
 
     <slot />
   </UiGroup>

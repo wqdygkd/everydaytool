@@ -2,6 +2,7 @@
 import type { WebviewTag } from '../webview'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
+import { toast } from 'vue-sonner'
 import { TELEGRAM_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 import LibraryPanel from '../components/LibraryPanel.vue'
@@ -80,13 +81,13 @@ async function attachPage(): Promise<void> {
   if (!wv) return
   const id = safeCall(() => wv.getWebContentsId(), 0)
   if (!Number.isInteger(id) || id <= 0) {
-    ElMessage.warning('页面内核尚未就绪，请稍后重试')
+    toast.warning('页面内核尚未就绪，请稍后重试')
     return
   }
   try {
     await store.attachPage(id)
   } catch (error) {
-    ElMessage.warning(`页面未绑定：${(error as Error).message}`)
+    toast.warning(`页面未绑定：${(error as Error).message}`)
   }
 }
 
@@ -140,7 +141,7 @@ function goForward(): void {
 async function runJump(jump: { peerId: string, messageId: number }): Promise<void> {
   const wv = webviewRef.value
   if (!wv) {
-    ElMessage.warning('聊天页面尚未就绪')
+    toast.warning('聊天页面尚未就绪')
     return
   }
   if (!/^-?\d{1,20}$/.test(jump.peerId) || !Number.isSafeInteger(jump.messageId)) return
@@ -151,9 +152,9 @@ async function runJump(jump: { peerId: string, messageId: number }): Promise<voi
     + '})()'
   try {
     const jumped = await wv.executeJavaScript(script, true)
-    if (!jumped) ElMessage.warning('该会话还没有在 Telegram 里加载，请先在左侧打开它')
+    if (!jumped) toast.warning('该会话还没有在 Telegram 里加载，请先在左侧打开它')
   } catch (error) {
-    ElMessage.error(`跳转失败：${(error as Error).message}`)
+    toast.error(`跳转失败：${(error as Error).message}`)
   }
 }
 
@@ -176,7 +177,7 @@ function toggleDevTools(): void {
     else wv.openDevTools()
     devtoolsOpen.value = wv.isDevToolsOpened()
   } catch (error) {
-    ElMessage.warning((error as Error).message || '无法打开开发者工具')
+    toast.warning((error as Error).message || '无法打开开发者工具')
   }
 }
 
@@ -219,15 +220,15 @@ onUnmounted(() => {
 
       <template #end>
         <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
-        <el-button size="small" :disabled="!isElectron" @click="openInBrowser">
+        <UiButton size="small" :disabled="!isElectron" @click="openInBrowser">
           外部打开
-        </el-button>
+        </UiButton>
       </template>
     </UiToolbar>
 
     <div class="page-body">
       <section class="browser-pane">
-        <el-alert
+        <UiAlert
           v-if="initError"
           class="pane-alert"
           type="warning"
@@ -236,7 +237,7 @@ onUnmounted(() => {
           title="后端未就绪"
           :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
         />
-        <el-alert
+        <UiAlert
           v-else-if="!isElectron"
           class="pane-alert"
           type="info"
@@ -246,7 +247,7 @@ onUnmounted(() => {
           description="请使用 everydaytool 桌面端打开本工具。"
         />
 
-        <el-alert
+        <UiAlert
           v-else-if="!pageSrc"
           class="pane-alert"
           type="warning"
@@ -256,7 +257,7 @@ onUnmounted(() => {
           :description="siteError || '正在启动本地站点…'"
         />
 
-        <el-alert
+        <UiAlert
           v-else-if="originNotice && !originNoticeDismissed"
           class="pane-alert"
           type="warning"
@@ -281,12 +282,12 @@ onUnmounted(() => {
         <div v-if="loadError" class="browser-overlay is-error">
           <span class="error-text">{{ loadError }}</span>
           <UiGroup gap="sm">
-            <el-button size="small" type="primary" @click="reload">
+            <UiButton size="small" type="primary" @click="reload">
               重试
-            </el-button>
-            <el-button size="small" @click="openInBrowser">
+            </UiButton>
+            <UiButton size="small" @click="openInBrowser">
               在系统浏览器打开
-            </el-button>
+            </UiButton>
           </UiGroup>
         </div>
       </section>

@@ -24,13 +24,14 @@ const value = computed({
 
 <template>
   <div class="ui-code-area">
-    <el-input
+    <!-- 文本域内核：EP → 原生 textarea。底 / 边 / 聚焦与全站输入框同一套令牌 -->
+    <textarea
       v-model="value"
       class="ui-code-input"
-      type="textarea"
       :rows="rows"
       :placeholder="placeholder"
       :disabled="disabled"
+      spellcheck="false"
     />
     <div v-if="meta || $slots.meta" class="ui-code-meta">
       <slot name="meta">
@@ -46,9 +47,30 @@ const value = computed({
 }
 
 .ui-code-input {
-  :deep(textarea) {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+  display: block;
+  width: 100%;
+  padding: var(--spacing-sm) 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+
+  &::placeholder { color: var(--color-text-tertiary); }
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary) inset;
+  }
+
+  &:disabled {
+    background: var(--color-fill);
+    color: var(--color-text-tertiary);
+    cursor: not-allowed;
   }
 }
 

@@ -7,7 +7,7 @@ withDefaults(defineProps<{
   size?: number
   /** 高亮态（如固定图钉的警示色） */
   active?: boolean
-  /** 禁用态（交由 el-button 原生处理，保持与平台其它按钮一致的禁用色） */
+  /** 禁用态（颜色降对比，不加透明度） */
   disabled?: boolean
   /** 无障碍标签与悬停提示 */
   label?: string
@@ -24,8 +24,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <el-button
-    text
+  <button
+    type="button"
     class="ui-icon-button"
     :class="[`is-${tone}`, { 'is-active': active }]"
     :style="{ width: `${size}px`, height: `${size}px` }"
@@ -35,12 +35,21 @@ const emit = defineEmits<{
     @click="emit('click', $event)"
   >
     <UiIcon :name="icon" :size="Math.round(size * 0.5)" />
-  </el-button>
+  </button>
 </template>
 
 <style scoped lang="scss">
 /* 图标按钮：定宽无内边距，弱化描边；hover 抬深 + 浅底，active 高亮为警示色 */
 .ui-icon-button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+
   flex-shrink: 0;
   padding: 0;
   color: var(--color-text-secondary);

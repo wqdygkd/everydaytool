@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { InterceptorTarget } from '../../../../shared/interceptor'
+import { toast } from 'vue-sonner'
 import { parseTargetOrigin } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
 
@@ -16,23 +17,23 @@ const enabledCount = computed(() => store.targets.filter(target => target.enable
 async function add(): Promise<void> {
   const origin = previewOrigin.value
   if (!origin) {
-    ElMessage.warning('请输入 http(s) origin，如 https://www.a.com 或 http://127.0.0.1:8089')
+    toast.warning('请输入 http(s) origin，如 https://www.a.com 或 http://127.0.0.1:8089')
     return
   }
   try {
     const result = await store.addTarget(origin)
     if (!result.target) {
-      ElMessage.error('无法解析成 origin（只支持 http / https）')
+      toast.error('无法解析成 origin（只支持 http / https）')
       return
     }
     originInput.value = ''
     if (result.existed) {
-      ElMessage.info(`「${origin}」已在名单里`)
+      toast.info(`「${origin}」已在名单里`)
       return
     }
-    ElMessage.success(`已加入：${origin}`)
+    toast.success(`已加入：${origin}`)
   } catch (error) {
-    ElMessage.error((error as Error).message || '添加失败')
+    toast.error((error as Error).message || '添加失败')
   }
 }
 
@@ -40,9 +41,9 @@ async function add(): Promise<void> {
 async function applyPatch(target: InterceptorTarget, patch: { enabled?: boolean, noCache?: boolean }): Promise<void> {
   try {
     const applied = await store.updateTarget(target.id, patch)
-    if (!applied) ElMessage.error('设置没生效：后端进程可能还是旧版本，请重启 edt 后再试')
+    if (!applied) toast.error('设置没生效：后端进程可能还是旧版本，请重启 edt 后再试')
   } catch (error) {
-    ElMessage.error((error as Error).message || '更新失败')
+    toast.error((error as Error).message || '更新失败')
   }
 }
 
@@ -95,15 +96,15 @@ function formatTime(iso: string): string {
     </UiHint>
 
     <UiGroup class="add-row" gap="sm" wrap>
-      <el-input
+      <UiInput
         v-model="originInput"
         class="ctl-fill"
         placeholder="origin，如 https://www.a.com（粘整条 URL 会自动取 origin）"
         @keyup.enter="add"
       />
-      <el-button type="primary" :disabled="invalidInput" @click="add">
+      <UiButton type="primary" :disabled="invalidInput" @click="add">
         加入名单
-      </el-button>
+      </UiButton>
     </UiGroup>
     <UiHint v-if="previewOrigin && previewOrigin !== originInput.trim()" block>
       将存为 <span class="mono">{{ previewOrigin }}</span>
@@ -117,38 +118,38 @@ function formatTime(iso: string): string {
       row-key="id"
       empty-text="名单为空（全部透传，规则不会跑）"
     >
-      <el-table-column label="origin" min-width="260">
+      <UiTableColumn label="origin" min-width="260">
         <template #default="{ row }">
           <span class="mono origin-text">{{ row.origin }}</span>
         </template>
-      </el-table-column>
-      <el-table-column label="启用" width="82">
+      </UiTableColumn>
+      <UiTableColumn label="启用" width="82">
         <template #default="{ row }">
-          <el-switch :model-value="row.enabled !== false" size="small" @change="(value: string | number | boolean) => toggleEnabled(targetOf(row), value)" />
+          <UiSwitchField :model-value="row.enabled !== false" size="small" @update:model-value="(value: string | number | boolean) => toggleEnabled(targetOf(row), value)" />
         </template>
-      </el-table-column>
-      <el-table-column width="104">
+      </UiTableColumn>
+      <UiTableColumn width="104">
         <template #header>
-          <el-tooltip content="该 origin 的响应去掉缓存控制，浏览器每次都真的发请求（关掉则允许缓存，重复访问可能不再出现）" placement="top">
+          <span class="ui-tip" title="该 origin 的响应去掉缓存控制，浏览器每次都真的发请求（关掉则允许缓存，重复访问可能不再出现）">
             <span>强制回源</span>
-          </el-tooltip>
+          </span>
         </template>
         <template #default="{ row }">
-          <el-switch :model-value="row.noCache !== false" size="small" @change="(value: string | number | boolean) => toggleNoCache(targetOf(row), value)" />
+          <UiSwitchField :model-value="row.noCache !== false" size="small" @update:model-value="(value: string | number | boolean) => toggleNoCache(targetOf(row), value)" />
         </template>
-      </el-table-column>
-      <el-table-column label="加入时间" width="180">
+      </UiTableColumn>
+      <UiTableColumn label="加入时间" width="180">
         <template #default="{ row }">
           <span class="muted">{{ formatTime(row.createdAt) }}</span>
         </template>
-      </el-table-column>
-      <el-table-column width="82" align="right">
+      </UiTableColumn>
+      <UiTableColumn width="82" align="right">
         <template #default="{ row }">
-          <el-button size="small" text type="danger" @click="remove(targetOf(row))">
+          <UiButton size="small" text type="danger" @click="remove(targetOf(row))">
             移出
-          </el-button>
+          </UiButton>
         </template>
-      </el-table-column>
+      </UiTableColumn>
     </UiTable>
   </UiPanel>
 </template>

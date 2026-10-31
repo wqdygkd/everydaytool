@@ -221,6 +221,51 @@ html.has-test-wallpaper body {
   background-size: cover;
 }
 
+/* ── 夜色玻璃（Aurora Glass 重设计）：纯 CSS 暗色主题轴 ──
+   与材质轴正交组合：alpha / glass 仍由材质模式决定，这里只覆写
+   表面基准色 / 文本色阶 / 边线 / 强调档 / 阴影。九个合成色在本块显式
+   重算（:root 合成值会固化声明时的基准色）；开关轨道色派生自
+   --color-border / --color-primary，随暗色基调自动适配，无需单独覆写。 */
+html.is-night,
+.app-shell.is-night {
+  --color-raised-base: #12161f;
+  --color-header-base: #0f131b;
+  --color-input-base: #131824;
+  --color-field-base: #131824;
+  --color-table-base: #12161f;
+  --color-button-base: #1a2130;
+  --color-fill-base: #161b26;
+  --color-pop-base: #141926;
+  --color-overlay-base: #10141d;
+
+  --color-raised: color-mix(in oklab, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent);
+  --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent);
+  --color-field: color-mix(in oklab, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent);
+  --color-table: color-mix(in oklab, var(--color-table-base) calc(var(--alpha-table) * 100%), transparent);
+  --color-button: color-mix(in oklab, var(--color-button-base) calc(var(--alpha-button) * 100%), transparent);
+  --color-fill: color-mix(in oklab, var(--color-fill-base) calc(var(--alpha-fill) * 100%), transparent);
+  --color-header: color-mix(in oklab, var(--color-header-base) calc(var(--alpha-header) * 100%), transparent);
+  --color-pop: color-mix(in oklab, var(--color-pop-base) calc(var(--alpha-pop) * 100%), transparent);
+  --color-overlay: color-mix(in oklab, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent);
+
+  --color-app-bg: #0d1017;
+  --color-text-primary: #eef1f6;
+  --color-text-secondary: #a7b0bd;
+  --color-text-tertiary: #6d7684;
+  --color-border-light: #232a38;
+  --color-border: #2a3242;
+
+  --color-primary: #6ba1ff;
+  --color-primary-strong: #8db4ff;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 24%, transparent);
+
+  --alpha-highlight: 0.14;
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.5);
+  --shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.55);
+}
+
 /* ── 系统「降低透明度」偏好（Tahoe / Windows 都会提供这个开关） ──
    开启后玻璃退回实色（alpha = 1、玻璃 = none）：用户要的是可读性，
    此时再压着壁纸做半透明文字，等于把无障碍设置当耳旁风。

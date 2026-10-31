@@ -6,7 +6,9 @@
 
 - **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为**唯一**的强调色
   （动作与选中同色、不同档：图形用亮档、文字用墨档），语义色只讲状态。
-- **固定浅色**：无主题切换，颜色一律走语义令牌，禁止硬编码。
+- **浅色为默认 + 「夜色玻璃」暗色轴**：夜色（`WindowAppearance.night`）是纯 CSS 的暗色主题轴，
+  只覆写表面基准色 / 文本色阶 / 强调档 / 阴影（见 translucency.scss 的 `html.is-night` 块），
+  alpha 与玻璃仍由材质轴决定；组件零改动，颜色一律走语义令牌，禁止硬编码。
 - **令牌优先**：所有组件通过 `var(--token)` 引用设计令牌，禁止硬编码颜色 / 圆角 / 阴影。
 - **颜色先分档再分色**：每支色相先确定「它是图形（亮档，≥3:1）还是文字（墨档，≥4.5:1）」，
   再决定用哪个颜色——不要把一支亮色同时当底色和字色（见 §3.1）。
@@ -16,7 +18,7 @@
 
 ## 2. 主题
 
-固定浅色主题，核心色板如下（每支色相先分「图形 / 文字」两档，见 §3.1）：
+默认浅色主题，核心色板如下（每支色相先分「图形 / 文字」两档，见 §3.1）：
 
 | 角色 | 值 | 用途 |
 | ------ | ----- | ------ |
@@ -369,7 +371,7 @@
 
 ## 5. UI 组件库
 
-平台级组件库（27 个组件 + `icons.ts` 图标名表），源码在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import；composable 需显式 import）。以下是完整规范。
+平台级组件库（25 个组件 + `icons.ts` 图标名表），源码在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import；composable 需显式 import）。以下是完整规范。
 
 **使用约定（硬性）**
 
@@ -385,7 +387,6 @@
 | `UiPanel` | `title`、`variant`（`raised` 浮岛 / `outlined` 描边）、`padding`、`titleSize`（`sm`/`lg`）、`shadow`（`sm`/`md`）、`#title` / `#actions` 插槽 | 基础卡片 / 面板。`raised` = surface-raised + radius-lg + shadow；`outlined` = surface-raised + border-light + radius-lg |
 | `UiGroup` | `gap`（xs/sm/md/lg）、`align`、`justify`、`block`、`direction`（row/column）、`wrap` | 行内 / 纵向控件组，替代裸 `display:flex` 布局 |
 | `UiToolbar` | `bordered`、`surface`、`wrap`、`gap`、`padding`、`flush`、`#end` 插槽 | 工具条：默认插槽放左，`#end` 放右；`flush` 去除 EP 按钮原生左边距 |
-| `UiSidebar` | `title`、`titleTone`（subdued/emphasis）、`width`（252px）、`padding`、`#title`/`#actions`/`#footer` 插槽 | 侧栏容器（border-right + surface-raised） |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
 | `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：选中胶囊 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo）。**选中胶囊取品牌色 `--color-primary` 14% 浅底 + 中性黑标签**，计数徽章仍是墨档蓝（同一支蓝，两个职责：图形用亮档、文字用墨档） |

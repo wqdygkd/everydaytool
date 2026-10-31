@@ -49,6 +49,7 @@ function normalizeStored(value: unknown): WindowAppearance {
     material,
     vibrancy,
     testWallpaper: value.testWallpaper === true,
+    night: value.night === true,
   }
 }
 
@@ -107,6 +108,7 @@ export async function updateWindowAppearance(
     material: patch.material ?? current.material,
     vibrancy: patch.vibrancy ?? current.vibrancy,
     testWallpaper: patch.testWallpaper ?? current.testWallpaper,
+    night: patch.night ?? current.night,
   }
   const next = sanitizeWindowAppearance(merged, capabilities)
   current = next

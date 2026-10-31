@@ -25,6 +25,9 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 样式与组件在代码里的位置固定，**细则见 DESIGN.md，不要在本文件另立规范**：
 
 - 全局样式入口 `renderer/shared/styles/main.scss`（按 tokens → base → element-plus → utilities → translucency 顺序 `@use`）。
+- Tailwind v4 入口 `renderer/shared/styles/tailwind.css`（`source(none)` + 显式 `@source` 收敛扫描范围；shadcn 语义变量在此桥接设计令牌）。
+- **shadcn-vue 原始生成组件只读**：CLI 生成物一律放 `renderer/shared/components/shadcn/`，**禁止修改**（eslint 已整目录豁免）；要改样式时写外部包装组件、改 `tailwind.css` 的主题变量或 `@theme` 覆写，不改生成物本体。注册表别名见根目录 `components.json`。
+- 反馈基座 `renderer/shared/feedback/`：ElMessage / ElMessageBox / ElNotification 的唯一接触面（auto-import 已改道至此），业务代码**禁止直接 import element-plus**（eslint 断言；`shared/components/ui/` 内核与 feedback 自身豁免）。
 - Element Plus 覆写**只写**在 `renderer/shared/styles/element-plus.scss`（注入顺序 / 几何差异的坑见 DESIGN §4）。
 - 平台组件库在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板直接用，无需 import）。
 - 组件用法硬约束（`UiTable` / `UiProgress` / `UiChip` 的强制范围）由 `pnpm check:ui` 断言；改 UI 后跑一次。
@@ -42,6 +45,9 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 颜色 / alpha / 玻璃的取值与调节方式见 DESIGN §3.1、§7.1.1；**这里是状态归属与平台能力判定的工程约束**：
 
 - 唯一事实来源是主进程（`backend/utils/appearance-store.ts` 持久化到 `<data>/config/app/window-appearance.json`），渲染层用 `renderer/shared/composables/useAppearance.ts` 只做拉取 + 订阅 + 提交，**不得在 localStorage 留第二份状态**。
+- **夜色玻璃（`night` 字段）是独立纯 CSS 主题轴**：与材质正交组合；开启时主进程同步
+  `nativeTheme.themeSource = 'dark'`（材质背板走系统深色变体）并把标题栏按钮符号色转白，
+  不透明窗口的实底切 `#0d1017`。改夜色取值只动 translucency.scss 的 `html.is-night` 块。
 - 平台能力判定必须走 `shared/appearance.ts` 的纯函数（`resolveAppearanceCapabilities` / `sanitizeWindowAppearance`），禁止在主进程和渲染层各写一份 `process.platform ===` 判断。
 - `transparent` / `vibrancy` / `backgroundMaterial` 只在 `BrowserWindow` 构造时生效：改外观实现时要保证 `loadWindowAppearance()` 先于 `createWindow()` 执行。
 - 模式类由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`；新增窗口模式只加一条模式规则（alpha + glass 两组），组件零改动。
@@ -130,6 +136,9 @@ export default defineTool({
 | ---------- | ------ |
 | 设计令牌 / 主题(浅色) | `renderer/shared/styles/tokens.scss` |
 | 全局样式入口（@use 顺序） | `renderer/shared/styles/main.scss` |
+| Tailwind v4 入口 / shadcn 主题变量 | `renderer/shared/styles/tailwind.css` |
+| **shadcn-vue 生成组件（只读）** | `renderer/shared/components/shadcn/`；注册配置 `components.json` |
+| **反馈基座（ElMessage 系唯一接触面）** | `renderer/shared/feedback/` |
 | Element Plus `--el-*` 绑定与组件覆写 | `renderer/shared/styles/element-plus.scss` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
 | **UI 组件库（面板/分组/键值/表格/进度/对话框等 27 组件）** | `renderer/shared/components/ui/` |

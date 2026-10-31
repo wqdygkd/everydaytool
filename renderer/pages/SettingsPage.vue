@@ -3,6 +3,8 @@ import type { AppAssetsDirectoryInfo, AppAssetsDirectoryUpdateResult, AppDataDir
 import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
 import type { BackupExportResult, BackupInspectResult, BackupRestoreReport } from '../../shared/backup'
 import type { WindowBoundsState } from '../../shared/window-bounds'
+import { alert, confirm, prompt } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { getSensitiveEntries } from '../../shared/data-layers'
 import { useAppearance } from '../shared/composables/useAppearance'
 import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
@@ -32,6 +34,7 @@ const isVibrancyEnabled = computed(() => (capabilities.value?.vibrancies.length 
 // :model-value + @update 显式提交 IPC——不对 appearance 本身做 v-model 双向绑定。
 const transparentOn = computed(() => appearance.value?.enabled === true)
 const testWallpaperOn = computed(() => appearance.value?.testWallpaper === true)
+const nightOn = computed(() => appearance.value?.night === true)
 
 interface MaterialChoice {
   /** 材质标识：Windows 落在 material 字段，macOS 落在 vibrancy 字段，值域互不重叠 */
@@ -93,6 +96,10 @@ async function toggleTestWallpaper(value: boolean) {
   await updateAppearance({ testWallpaper: value })
 }
 
+async function toggleNight(value: boolean) {
+  await updateAppearance({ night: value })
+}
+
 // ── 窗口大小与位置 ──
 // 与外观同理：唯一事实来源是主进程（<data>/app/window-bounds.json），这里只读当前记录、
 // 提交开关 / 重置。具体几何由主进程在 move / resize 时自己记，渲染层不经手。
@@ -104,7 +111,7 @@ async function loadBounds() {
   try {
     bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_GET)
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取窗口位置记录失败')
+    toast.error((error as Error).message || '读取窗口位置记录失败')
   }
 }
 
@@ -112,7 +119,7 @@ async function toggleRememberBounds(value: boolean) {
   try {
     bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_SET, value)
   } catch (error) {
-    ElMessage.error((error as Error).message || '切换窗口位置记忆失败')
+    toast.error((error as Error).message || '切换窗口位置记忆失败')
   }
 }
 
@@ -120,9 +127,9 @@ async function resetBounds() {
   boundsResetting.value = true
   try {
     bounds.value = await invokeAppIpc<WindowBoundsState>(appIpcChannels().WINDOW_BOUNDS_RESET)
-    ElMessage.success('已恢复默认大小并居中')
+    toast.success('已恢复默认大小并居中')
   } catch (error) {
-    ElMessage.error((error as Error).message || '重置窗口大小失败')
+    toast.error((error as Error).message || '重置窗口大小失败')
   } finally {
     boundsResetting.value = false
   }
@@ -132,7 +139,7 @@ async function loadInfo() {
   try {
     info.value = await invokeAppIpc<AppDataDirectoryInfo>(appIpcChannels().DATA_DIRECTORY_GET)
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取数据目录失败')
+    toast.error((error as Error).message || '读取数据目录失败')
   }
 }
 
@@ -140,7 +147,7 @@ async function loadAssetsInfo() {
   try {
     assetsInfo.value = await invokeAppIpc<AppAssetsDirectoryInfo>(appIpcChannels().ASSETS_DIRECTORY_GET)
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取资产目录失败')
+    toast.error((error as Error).message || '读取资产目录失败')
   }
 }
 
@@ -148,7 +155,7 @@ async function openAssetsDirectory() {
   try {
     await invokeAppIpc(appIpcChannels().ASSETS_DIRECTORY_OPEN)
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开资产目录失败')
+    toast.error((error as Error).message || '打开资产目录失败')
   }
 }
 
@@ -157,7 +164,7 @@ async function selectAssetsDirectory() {
   try {
     directory = await invokeAppIpc<string | null>(appIpcChannels().ASSETS_DIRECTORY_SELECT)
   } catch (error) {
-    ElMessage.error((error as Error).message || '选择目录失败')
+    toast.error((error as Error).message || '选择目录失败')
     return
   }
   if (!directory) return
@@ -170,12 +177,12 @@ async function selectAssetsDirectory() {
     )
     assetsInfo.value = result
     if (result.changed) {
-      ElMessage.success('已记录新的资产目录；重启应用后会迁移并生效')
+      toast.success('已记录新的资产目录；重启应用后会迁移并生效')
     } else {
-      ElMessage.info('目录未发生变化')
+      toast.info('目录未发生变化')
     }
   } catch (error) {
-    ElMessage.error((error as Error).message || '更改资产目录失败')
+    toast.error((error as Error).message || '更改资产目录失败')
   } finally {
     assetsChanging.value = false
   }
@@ -191,7 +198,7 @@ async function exportBackup() {
 
   let skipSensitive = false
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       `将导出「配置」层与资产清单（缓存层永不进包）。${sensitiveText}`,
       '导出备份',
       {
@@ -208,7 +215,7 @@ async function exportBackup() {
 
   let password = ''
   try {
-    const answer = await ElMessageBox.prompt(
+    const answer = await prompt(
       '设置备份口令（可留空）。加口令后整个包用 AES-256-GCM 加密，恢复时必须输入同一口令。',
       '备份口令',
       { inputType: 'password', inputPlaceholder: '留空表示不加密', confirmButtonText: '继续导出', cancelButtonText: '取消' },
@@ -226,9 +233,9 @@ async function exportBackup() {
     })
     if (!result) return
     const omitted = result.omittedSensitive.length > 0 ? `，跳过 ${result.omittedSensitive.length} 个敏感项` : ''
-    ElMessage.success(`已导出 ${result.includedEntries.length} 项 / ${formatBytes(result.bytes)}${result.encrypted ? '（已加密）' : ''}${omitted}`)
+    toast.success(`已导出 ${result.includedEntries.length} 项 / ${formatBytes(result.bytes)}${result.encrypted ? '（已加密）' : ''}${omitted}`)
   } catch (error) {
-    ElMessage.error((error as Error).message || '导出备份失败')
+    toast.error((error as Error).message || '导出备份失败')
   } finally {
     backupBusy.value = false
   }
@@ -244,7 +251,7 @@ async function restoreBackup() {
     let inspected = picked
     let password = ''
     if (picked.needsPassword) {
-      const answer = await ElMessageBox.prompt('该备份包已加密，请输入口令', '恢复备份', {
+      const answer = await prompt('该备份包已加密，请输入口令', '恢复备份', {
         inputType: 'password',
         confirmButtonText: '下一步',
         cancelButtonText: '取消',
@@ -260,11 +267,11 @@ async function restoreBackup() {
 
     const manifest = inspected.manifest
     if (!manifest) {
-      ElMessage.error('无法读取备份包内容')
+      toast.error('无法读取备份包内容')
       return
     }
     if (!inspected.checksumOk) {
-      ElMessage.error('备份包校验失败（内容与清单不一致），已中止恢复')
+      toast.error('备份包校验失败（内容与清单不一致），已中止恢复')
       return
     }
 
@@ -278,7 +285,7 @@ async function restoreBackup() {
     if (includeSession) lines.push('包含会话层：恢复后需重启，Chromium 才会使用新的登录态')
     lines.push('', '现有配置会先快照到缓存层（可随时清掉），然后覆盖写入。是否继续？')
 
-    await ElMessageBox.confirm(lines.join('\n'), '恢复备份', {
+    await confirm(lines.join('\n'), '恢复备份', {
       confirmButtonText: '覆盖恢复',
       cancelButtonText: '取消',
       type: 'warning',
@@ -297,13 +304,13 @@ async function restoreBackup() {
       report.touchedSession ? '已写入会话层，请重启应用' : '',
       ...report.warnings.slice(0, 3),
     ].filter(Boolean)
-    await ElMessageBox.alert(summary.join('\n'), '恢复完成', { confirmButtonText: '知道了' })
+    await alert(summary.join('\n'), '恢复完成', { confirmButtonText: '知道了' })
     await Promise.all([loadInfo(), loadAssetsInfo(), loadUsage()])
-    if (report.touchedSession) ElMessage.info('会话数据已更新，重启应用后生效')
+    if (report.touchedSession) toast.info('会话数据已更新，重启应用后生效')
   } catch (error) {
     // 用户取消（prompt / confirm 抛 cancel）不当作错误
     const message = (error as Error)?.message ?? ''
-    if (message && !/cancel|close/i.test(message)) ElMessage.error(message || '恢复备份失败')
+    if (message && !/cancel|close/i.test(message)) toast.error(message || '恢复备份失败')
   } finally {
     backupBusy.value = false
   }
@@ -314,7 +321,7 @@ async function loadUsage() {
   try {
     usage.value = await invokeAppIpc<DataUsage>(appIpcChannels().DATA_USAGE_GET)
   } catch (error) {
-    ElMessage.error((error as Error).message || '计算空间占用失败')
+    toast.error((error as Error).message || '计算空间占用失败')
   } finally {
     usageLoading.value = false
   }
@@ -324,7 +331,7 @@ async function openDirectory() {
   try {
     await invokeAppIpc(appIpcChannels().DATA_DIRECTORY_OPEN)
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开文件夹失败')
+    toast.error((error as Error).message || '打开文件夹失败')
   }
 }
 
@@ -333,7 +340,7 @@ async function selectDirectory() {
   try {
     directory = await invokeAppIpc<string | null>(appIpcChannels().DATA_DIRECTORY_SELECT)
   } catch (error) {
-    ElMessage.error((error as Error).message || '选择目录失败')
+    toast.error((error as Error).message || '选择目录失败')
     return
   }
   if (!directory) return
@@ -346,12 +353,12 @@ async function selectDirectory() {
     )
     info.value = result
     if (result.changed) {
-      ElMessage.success('已记录新的数据目录；重启应用后会整体迁移并生效')
+      toast.success('已记录新的数据目录；重启应用后会整体迁移并生效')
     } else {
-      ElMessage.info('目录未发生变化')
+      toast.info('目录未发生变化')
     }
   } catch (error) {
-    ElMessage.error((error as Error).message || '更改数据目录失败')
+    toast.error((error as Error).message || '更改数据目录失败')
   } finally {
     changing.value = false
   }
@@ -359,7 +366,7 @@ async function selectDirectory() {
 
 async function clearCache() {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       '将删除「缓存」层（浏览器 Cache / Code Cache / GPU 缓存、工具下载与运行产物）以及「会话」层内部的浏览器缓存目录；\n配置（账号 / 规则 / 证书）、资产（归档）与登录态都不会被删除。',
       '清除缓存',
       { confirmButtonText: '清除', cancelButtonText: '取消', type: 'warning' },
@@ -372,15 +379,15 @@ async function clearCache() {
   try {
     const result = await invokeAppIpc<CacheCleanResult>(appIpcChannels().CACHE_CLEAR)
     if (result.skippedDirs > 0) {
-      ElMessage.warning(`已释放 ${formatBytes(result.freedBytes)}，${result.skippedDirs} 个目录被占用或跳过`)
+      toast.warning(`已释放 ${formatBytes(result.freedBytes)}，${result.skippedDirs} 个目录被占用或跳过`)
     } else if (result.cleanedDirs > 0) {
-      ElMessage.success(`已释放 ${formatBytes(result.freedBytes)}`)
+      toast.success(`已释放 ${formatBytes(result.freedBytes)}`)
     } else {
-      ElMessage.info('没有可清理的缓存')
+      toast.info('没有可清理的缓存')
     }
     loadUsage()
   } catch (error) {
-    ElMessage.error((error as Error).message || '清除缓存失败')
+    toast.error((error as Error).message || '清除缓存失败')
   } finally {
     cleaning.value = false
   }
@@ -392,7 +399,7 @@ async function openDevTools() {
   try {
     await invokeAppIpc(appIpcChannels().DEVTOOLS_OPEN)
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开调试控制台失败')
+    toast.error((error as Error).message || '打开调试控制台失败')
   }
 }
 
@@ -430,12 +437,12 @@ onMounted(() => {
         <UiChip>{{ info?.isCustom ? '自定义' : '默认' }}</UiChip>
       </div>
       <UiGroup>
-        <el-button size="small" @click="openDirectory">
+        <UiButton size="small" @click="openDirectory">
           打开文件夹
-        </el-button>
-        <el-button size="small" :loading="changing" @click="selectDirectory">
+        </UiButton>
+        <UiButton size="small" :loading="changing" @click="selectDirectory">
           更改…
-        </el-button>
+        </UiButton>
       </UiGroup>
       <div v-if="info?.pendingDataDirectory" class="directory-row">
         <span class="muted">待切换</span>
@@ -453,9 +460,9 @@ onMounted(() => {
 
     <UiPanel title="数据分层">
       <template #actions>
-        <el-button link size="small" :disabled="usageLoading" @click="loadUsage">
+        <UiButton link size="small" :disabled="usageLoading" @click="loadUsage">
           刷新
-        </el-button>
+        </UiButton>
       </template>
       <p v-if="usage" class="usage-summary">
         总计 <span class="mono">{{ formatBytes(usage.totalBytes) }}</span>
@@ -485,12 +492,12 @@ onMounted(() => {
               归档体量大且不可再生，可放到另一块盘：更改后下次启动会把旧位置的归档整体迁移过去（不覆盖非空目录）。
             </p>
             <UiGroup>
-              <el-button size="small" @click="openAssetsDirectory">
+              <UiButton size="small" @click="openAssetsDirectory">
                 打开
-              </el-button>
-              <el-button size="small" :loading="assetsChanging" @click="selectAssetsDirectory">
+              </UiButton>
+              <UiButton size="small" :loading="assetsChanging" @click="selectAssetsDirectory">
                 更改…
-              </el-button>
+              </UiButton>
             </UiGroup>
           </template>
           <details v-if="layer.entries.length > 0" class="layer-entries">
@@ -557,6 +564,16 @@ onMounted(() => {
           关闭后恢复透出真实桌面。
         </UiHint>
       </div>
+
+      <div class="wallpaper-toggle">
+        <UiSwitchField :model-value="nightOn" align="start" @update:model-value="toggleNight">
+          夜色玻璃
+        </UiSwitchField>
+        <UiHint block>
+          暗色表面基调 + 亮蓝强调的纯 CSS 主题轴,可与任意半透明 / 材质模式组合;
+          跟随「降低透明度」辅助功能自动退回不透明。
+        </UiHint>
+      </div>
     </UiPanel>
 
     <UiPanel title="窗口大小与位置">
@@ -575,9 +592,9 @@ onMounted(() => {
         <span v-else class="muted">暂无记录，按默认尺寸居中</span>
       </div>
       <UiGroup>
-        <el-button size="small" :loading="boundsResetting" @click="resetBounds">
+        <UiButton size="small" :loading="boundsResetting" @click="resetBounds">
           重置为默认大小
-        </el-button>
+        </UiButton>
       </UiGroup>
     </UiPanel>
 
@@ -586,9 +603,9 @@ onMounted(() => {
         只清「缓存」层（含沙箱浏览器与各工具的下载 / 运行产物）和「会话」层内部的浏览器缓存目录。
         不会删除账号、规则、证书、登录态与归档；运行中的沙箱会自动跳过。
       </UiHint>
-      <el-button :loading="cleaning" @click="clearCache">
+      <UiButton :loading="cleaning" @click="clearCache">
         清除缓存
-      </el-button>
+      </UiButton>
     </UiPanel>
 
     <UiPanel title="备份与恢复">
@@ -597,12 +614,12 @@ onMounted(() => {
         恢复前会先把现有配置快照到缓存层，可回滚。
       </UiHint>
       <UiGroup>
-        <el-button :loading="backupBusy" @click="exportBackup">
+        <UiButton :loading="backupBusy" @click="exportBackup">
           导出备份…
-        </el-button>
-        <el-button :loading="backupBusy" @click="restoreBackup">
+        </UiButton>
+        <UiButton :loading="backupBusy" @click="restoreBackup">
           从备份恢复…
-        </el-button>
+        </UiButton>
       </UiGroup>
     </UiPanel>
 
@@ -610,9 +627,9 @@ onMounted(() => {
       <UiHint block>
         在独立窗口中打开 DevTools，用于查看渲染层日志、网络请求与内存快照；关闭该窗口即可收起。
       </UiHint>
-      <el-button @click="openDevTools">
+      <UiButton @click="openDevTools">
         打开调试控制台
-      </el-button>
+      </UiButton>
     </UiPanel>
   </div>
 </template>

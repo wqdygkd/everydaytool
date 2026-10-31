@@ -18,20 +18,51 @@ const clamped = computed(() => Math.min(100, Math.max(0, Math.round(props.percen
 </script>
 
 <template>
-  <el-progress
+  <div
     class="ui-progress"
-    :percentage="clamped"
-    :stroke-width="strokeWidth"
-    :show-text="showText"
-    :status="status"
-  />
+    :class="status ? `is-${status}` : undefined"
+  >
+    <div class="ui-progress-track" :style="{ height: `${strokeWidth}px` }">
+      <div class="ui-progress-fill" :style="{ width: `${clamped}%` }" />
+    </div>
+    <span v-if="showText" class="ui-progress-text mono">{{ clamped }}%</span>
+  </div>
 </template>
 
 <style scoped>
-/* 进度条只承载进度语义：轨道与填充色由全局 EP 绑定（--el-border-color-lighter / --el-color-primary），
-   这里仅把两端钉成胶囊圆角，避免各处用法各自覆写。 */
-.ui-progress :deep(.el-progress-bar__outer),
-.ui-progress :deep(.el-progress-bar__inner) {
+/* 进度条只承载进度语义：轨道灰调填充、填充走品牌亮档，语义态切语义色 */
+.ui-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.ui-progress-track,
+.ui-progress-fill {
   border-radius: 999px;
+}
+
+.ui-progress-track {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--color-fill);
+}
+
+.ui-progress-fill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width var(--transition-base);
+}
+
+.is-success .ui-progress-fill { background: var(--color-success); }
+.is-warning .ui-progress-fill { background: var(--color-warning); }
+.is-exception .ui-progress-fill { background: var(--color-error); }
+
+.ui-progress-text {
+  flex: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 </style>

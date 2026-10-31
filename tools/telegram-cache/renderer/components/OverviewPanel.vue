@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
 import { formatBytes, formatPercent } from '../utils/format'
 
@@ -25,7 +27,7 @@ const cacheUsagePercent = computed(() => {
 
 async function clearCache(): Promise<void> {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       '清理缓存会删除媒体对象库里的去重对象（归档消息本身与进行中的任务不会被删）。确定继续？',
       '清理缓存',
       { type: 'warning' },
@@ -35,9 +37,9 @@ async function clearCache(): Promise<void> {
   }
   try {
     const result = await store.clearCache()
-    ElMessage.success(`已清理 ${formatBytes(result.evictedBytes)}（${result.evictions} 项）`)
+    toast.success(`已清理 ${formatBytes(result.evictedBytes)}（${result.evictions} 项）`)
   } catch (error) {
-    ElMessage.error((error as Error).message || '清理失败')
+    toast.error((error as Error).message || '清理失败')
   }
 }
 
@@ -45,7 +47,7 @@ async function openDataDir(): Promise<void> {
   try {
     await store.openDataDir()
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开数据目录失败')
+    toast.error((error as Error).message || '打开数据目录失败')
   }
 }
 </script>
@@ -84,9 +86,9 @@ async function openDataDir(): Promise<void> {
 
     <UiPanel title="归档概况">
       <template #actions>
-        <el-button size="small" @click="openDataDir">
+        <UiButton size="small" @click="openDataDir">
           打开数据目录
-        </el-button>
+        </UiButton>
       </template>
 
       <UiDetailGrid :columns="2">
@@ -116,9 +118,9 @@ async function openDataDir(): Promise<void> {
 
     <UiPanel title="媒体对象库">
       <template #actions>
-        <el-button size="small" :loading="store.busy.cache" @click="clearCache">
+        <UiButton size="small" :loading="store.busy.cache" @click="clearCache">
           清理缓存
-        </el-button>
+        </UiButton>
       </template>
 
       <UiDetailGrid :columns="2">
