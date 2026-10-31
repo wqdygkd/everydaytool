@@ -19,6 +19,9 @@ export default antfu(
       '*.md',
       'auto-imports.d.ts',
       'components.d.ts',
+      // 上游检出：各有自己的工具链（telegram-tt 用自带 eslint，tweb 用 oxlint），不套本仓库规则
+      'telegram-tt',
+      'tweb',
     ],
   },
   {
