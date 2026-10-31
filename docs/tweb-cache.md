@@ -75,6 +75,9 @@
 - **托管**：`tools/tweb-cache/backend/services/site-service.ts` 起引擎站点（`rootDir=tweb/dist`，
   `extraRootDir=tweb/public`——tweb 的 dist 不含字体/wasm/assets，两个静态根都要挂）。端口落盘在
   `<config>/tweb-cache/config.json`，origin 变化会清空 tweb 登录态，所以端口一旦分配就固定。
+- **懒启动**：站点不随 app 启动拉起。页签挂载时 store 经 `SITE_ACQUIRE` 触发 `ensureTwebCacheSiteStarted()`
+  （引用计数 +1），卸载时 `SITE_RELEASE` 归零后闲置 5 分钟停站点；重开页签会取消闲置停机。端口固定
+  策略保证停/启不换 origin，登录态不受影响。app 退出时 `disposeTwebCacheSite()` 兜底停站点。
 - **bootstrap 注入**：站点服务往 HTML 的 `</head>` 前插 `<script src="/edt-bootstrap.js">`（no-store），
   内容是 `window.__EDT__ = {token, api, media}`。SW 对它 cache-first 是已知坑 → env.ts 的 401 重取兜底。
 

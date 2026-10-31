@@ -15,7 +15,7 @@ export const twebCacheBackend = {
       logger.warn('tweb-cache data directory load failed', { error: (error as Error).message })
     }
 
-    // 站点：独立的回环端口 + 独立的 webview 分区；dist 缺失只记状态，不影响 telegram-cache
+    // 站点懒启动：不随 app 启动拉起，首次打开工具页时经 SITE_ACQUIRE 启动
     await initializeTwebCacheSite()
     registerTwebCacheHandlers()
   },

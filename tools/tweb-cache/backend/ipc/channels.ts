@@ -4,6 +4,9 @@ import { TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL } from '../../../../shared/telegram-
 
 export const TWEB_CACHE_IPC_CHANNELS = {
   SITE_INFO: 'tweb-cache:site:info',
+  // 懒启动引用计数：页签挂载 acquire，卸载 release；站点在无页签时闲置停机
+  SITE_ACQUIRE: 'tweb-cache:site:acquire',
+  SITE_RELEASE: 'tweb-cache:site:release',
   // 影库 / 回收站：由平台归档引擎按 tweb-cache scope 提供数据
   LIBRARY_LIST: 'tweb-cache:library:list',
   LIBRARY_DELETE: 'tweb-cache:library:delete',
