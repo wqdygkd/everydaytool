@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { getTelegramTrashRoot, resolveTelegramRelativePath, toTelegramRelativePath } from '../utils/paths.ts'
+import { getTelegramTrashRoot, toTelegramRelativePath } from '../utils/paths.ts'
 import {
   readTelegramMessageManifest,
   recordTelegramMedia,
@@ -108,7 +108,8 @@ export async function restoreTelegramTrash(trashId: string): Promise<{
   if (!document) throw new Error('回收站条目不存在')
 
   const manifest = await readTrashJsonManifest(trashDir)
-  const target = resolveTelegramRelativePath(document.originalPath)
+  // 目录已不再带 acc-<scope> 这一级：恢复位置按 peerId / messageId 重新算，旧 originalPath 只作记录
+  const target = telegramMessageDir(document.peerId, document.messageId)
   if (existsSync(target)) throw new Error('原路径已被占用，无法恢复')
 
   await mkdir(path.dirname(target), { recursive: true })

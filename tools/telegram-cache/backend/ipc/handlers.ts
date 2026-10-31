@@ -13,7 +13,7 @@ import {
 } from '../services/download-service.ts'
 import { isTelegramResourceKey } from '../services/identity.ts'
 import { listTelegramLibrary } from '../services/message-library.ts'
-import { listTelegramMessageMedia, telegramMessageDir } from '../services/message-store.ts'
+import { listTelegramMessageMedia, normalizeTelegramLibrary, telegramMessageDir } from '../services/message-store.ts'
 import {
   beginMtprotoDownload,
   cancelMtprotoDownload,
@@ -164,6 +164,7 @@ export function registerTelegramCacheHandlers(): void {
     shell.showItemInFolder(dir)
     return true
   })
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.MSG_LIBRARY_NORMALIZE, () => normalizeTelegramLibrary())
   safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.TRASH_LIST, () => listTelegramTrash())
   safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.TRASH_RESTORE, (_event, value: unknown) => {
     if (typeof value !== 'string' || !/^[\w-]{1,120}$/.test(value)) throw new Error('回收站条目非法')

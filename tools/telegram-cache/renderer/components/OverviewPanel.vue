@@ -1,61 +1,32 @@
 <script setup lang="ts">
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
-import { formatBytes, formatClock, formatDuration, formatPercent } from '../utils/format'
+import { formatBytes, formatPercent } from '../utils/format'
 
 const store = useTelegramCacheStore()
 
-const stats = computed(() => store.stats)
+const site = computed(() => store.site)
 const cache = computed(() => store.cache)
-const recentTraffic = computed(() => [...store.traffic].reverse().slice(0, 120))
 
-const capabilityRows = computed(() => {
-  const caps = store.capabilities
-  if (!caps) return []
-  return [
-    { label: 'HTTP 被动观测', tone: caps.httpObservation ? 'success' : 'neutral', text: caps.httpObservation ? '已挂载' : '未挂载', detail: '只读，非阻塞回调' },
-    { label: '响应头大小', tone: caps.httpHeaderBytes ? 'success' : 'neutral', text: caps.httpHeaderBytes ? '可用' : '不可用', detail: 'content-length，非真实计量' },
-    {
-      label: 'MTProto 下载器',
-      tone: caps.telegramDownloader
-        ? (store.mtproto?.connected ? 'success' : 'primary')
-        : 'neutral',
-      text: caps.telegramDownloader
-        ? (store.mtproto?.connected
-            ? '已连接'
-            : (store.mtproto?.configured && store.mtproto?.hasSession ? '已配置' : '需 .env'))
-        : '未实现',
-      detail: '按消息链接下载媒体（可选）',
-    },
-    { label: '页面只读探测', tone: caps.guestProbe ? 'success' : 'neutral', text: caps.guestProbe ? '可用' : '不可用', detail: '诊断页可执行' },
-  ] as const
+const completeEntries = computed(() => store.library.filter(entry => entry.state === 'complete'))
+const partialEntries = computed(() => store.library.filter(entry => entry.state === 'partial' || entry.state === 'downloading'))
+
+const archivedBytes = computed(() => completeEntries.value.reduce((total, entry) => total + (entry.size || 0), 0))
+const archivedPercent = computed(() => {
+  const total = store.library.length
+  if (total <= 0) return 0
+  return Math.round((completeEntries.value.length / total) * 100)
 })
 
-const mergedConsumers = computed(() => store.tasks.reduce((total, task) => total + Math.max(0, task.joinedConsumers - 1), 0))
-const storedCount = computed(() => store.resources.filter(item => item.stored).length)
 const cacheUsagePercent = computed(() => {
   const usage = cache.value
   if (!usage || usage.maxBytes <= 0) return 0
   return Math.min(100, Math.round((usage.sizeBytes / usage.maxBytes) * 100))
 })
 
-async function clearAll(): Promise<void> {
-  try {
-    await ElMessageBox.confirm('清空本次会话的观测统计与最近请求？资源库与归档不受影响。', '清空观测', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await store.clearObservation()
-    ElMessage.success('已清空观测')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '清空失败')
-  }
-}
-
 async function clearCache(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      '清理缓存会删除资源库中的缓存对象（归档副本、no-store 保存内容与进行中的任务不会被删）。确定继续？',
+      '清理缓存会删除媒体对象库里的去重对象（归档消息本身与进行中的任务不会被删）。确定继续？',
       '清理缓存',
       { type: 'warning' },
     )
@@ -70,69 +41,80 @@ async function clearCache(): Promise<void> {
   }
 }
 
-function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger' {
-  if (!code) return 'danger'
-  if (code < 300) return 'success'
-  if (code < 400) return 'info'
-  if (code < 500) return 'warning'
-  return 'danger'
+async function openDataDir(): Promise<void> {
+  try {
+    await store.openDataDir()
+  } catch (error) {
+    ElMessage.error((error as Error).message || '打开数据目录失败')
+  }
 }
 </script>
 
 <template>
   <div class="panel-stack">
-    <UiPanel title="观测总览">
+    <UiPanel title="本地站点">
       <template #actions>
-        <el-button size="small" :disabled="!stats?.requests" @click="clearAll">
-          清空
+        <UiChip :tone="site?.ready ? 'success' : 'neutral'" mono>
+          {{ site?.ready ? '已就绪' : '未就绪' }}
+        </UiChip>
+      </template>
+
+      <UiDetailGrid :columns="2">
+        <UiDetailItem label="页面地址" size="xs" mono>
+          {{ site?.url || '—' }}
+        </UiDetailItem>
+        <UiDetailItem label="端口" size="xs" mono>
+          {{ site?.port ?? '—' }}
+        </UiDetailItem>
+        <UiDetailItem label="origin 稳定性" size="xs">
+          {{ site?.originChanged ? '本次已变化' : '已固定' }}
+        </UiDetailItem>
+        <UiDetailItem label="影库条目" size="xs" mono>
+          {{ store.library.length }}
+        </UiDetailItem>
+      </UiDetailGrid>
+
+      <UiHint v-if="site?.error" block class="danger-hint">
+        {{ site.error }}
+      </UiHint>
+      <UiHint v-else block>
+        主进程把 Telegram Web 托管在同源 <span class="mono">/api</span> 与 <span class="mono">/media</span> 上，端口固定后登录态与本地缓存才能跨重启复用。
+      </UiHint>
+    </UiPanel>
+
+    <UiPanel title="归档概况">
+      <template #actions>
+        <el-button size="small" @click="openDataDir">
+          打开数据目录
         </el-button>
       </template>
 
       <UiDetailGrid :columns="2">
-        <UiDetailItem label="网络接收（按响应头）" size="xs" mono>
-          {{ formatBytes(stats?.networkBytes) }}
+        <UiDetailItem label="已缓存消息" size="xs" mono>
+          {{ completeEntries.length }} 条
         </UiDetailItem>
-        <UiDetailItem label="磁盘缓存命中率" size="xs" mono>
-          {{ formatPercent(stats?.cacheHitRate) }}
-          <span class="muted"> ({{ stats?.fromCache ?? 0 }}/{{ stats?.completed ?? 0 }})</span>
+        <UiDetailItem label="缓存中 / 部分" size="xs" mono>
+          {{ partialEntries.length }} 条
         </UiDetailItem>
-        <UiDetailItem label="请求 / 完成 / 失败" size="xs" mono>
-          {{ stats?.requests ?? 0 }} / {{ stats?.completed ?? 0 }} / {{ stats?.failed ?? 0 }}
+        <UiDetailItem label="归档体积" size="xs" mono>
+          {{ formatBytes(archivedBytes) }}
         </UiDetailItem>
-        <UiDetailItem label="大小未知的完成数" size="xs" mono>
-          {{ stats?.unknownSizeCount ?? 0 }}
-        </UiDetailItem>
-        <UiDetailItem label="合并消费者（去重）" size="xs" mono>
-          {{ mergedConsumers }}
-        </UiDetailItem>
-        <UiDetailItem label="资源库条目" size="xs" mono>
-          {{ storedCount }}
+        <UiDetailItem label="完成率" size="xs" mono>
+          {{ formatPercent(archivedPercent / 100) }}
         </UiDetailItem>
       </UiDetailGrid>
 
+      <UiProgress
+        class="archive-bar"
+        :percentage="archivedPercent"
+      />
+
       <UiHint block>
-        <strong>网络接收</strong>只累加「非缓存命中 + 带 content-length」的响应，是<strong>按响应头推算</strong>的观测值，不等于真实网卡流量；
-        命中率来自 Chromium 的 <span class="mono">fromCache</span> 标记，同样不能直接证明省流量。
+        每条消息落在 <span class="mono">messages/&lt;群 id&gt;/&lt;消息 id&gt;/</span>：<span class="mono">message.md</span> 是正文与元信息，<span class="mono">media/</span> 下按媒体键命名。在 Telegram 消息上右键「缓存此消息」就会写入这里。
       </UiHint>
     </UiPanel>
 
-    <UiPanel title="能力矩阵">
-      <div class="kv-stack">
-        <UiKeyValue v-for="row in capabilityRows" :key="row.label" :label="row.label" label-width="118px">
-          <UiGroup gap="xs" justify="end">
-            <UiChip :tone="row.tone">
-              {{ row.text }}
-            </UiChip>
-            <span class="muted kv-detail">{{ row.detail }}</span>
-          </UiGroup>
-        </UiKeyValue>
-      </div>
-      <UiHint block>
-        观测模式不改变原页面行为：不注入脚本、不改请求头。
-      </UiHint>
-    </UiPanel>
-
-    <UiPanel title="缓存（M2）">
+    <UiPanel title="媒体对象库">
       <template #actions>
         <el-button size="small" :loading="store.busy.cache" @click="clearCache">
           清理缓存
@@ -140,7 +122,7 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
       </template>
 
       <UiDetailGrid :columns="2">
-        <UiDetailItem label="缓存占用 / 配额" size="xs" mono>
+        <UiDetailItem label="占用 / 配额" size="xs" mono>
           {{ formatBytes(cache?.sizeBytes) }} / {{ formatBytes(cache?.maxBytes) }}
         </UiDetailItem>
         <UiDetailItem label="索引条目" size="xs" mono>
@@ -158,98 +140,8 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
       />
 
       <UiHint block>
-        缓存对象按 SHA-256 去重，配额淘汰从最久未访问的条目开始；归档副本是独立文件，不受淘汰影响。
+        对象按 SHA-256 去重，归档目录用硬链接指向它们，所以同一份媒体只占一块磁盘；淘汰只影响去重对象，不影响 <span class="mono">messages/</span> 里的归档。
       </UiHint>
-    </UiPanel>
-
-    <UiPanel title="资源类型分布">
-      <UiTable :data="stats?.byType ?? []" height="180" empty-text="还没有可观测请求">
-        <el-table-column label="类型" min-width="110">
-          <template #default="{ row }">
-            <span class="mono">{{ row.resourceType }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="请求" width="76" align="right">
-          <template #default="{ row }">
-            <span class="mono">{{ row.requests }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="网络字节" width="104" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatBytes(row.bytes) }}</span>
-          </template>
-        </el-table-column>
-      </UiTable>
-    </UiPanel>
-
-    <UiPanel title="主机分布">
-      <UiTable :data="stats?.byHost ?? []" height="180" empty-text="还没有可观测请求">
-        <el-table-column label="主机" min-width="160" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="mono">{{ row.host }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="请求" width="76" align="right">
-          <template #default="{ row }">
-            <span class="mono">{{ row.requests }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="网络字节" width="104" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatBytes(row.bytes) }}</span>
-          </template>
-        </el-table-column>
-      </UiTable>
-    </UiPanel>
-
-    <UiPanel title="最近请求">
-      <template #actions>
-        <UiChip mono>
-          {{ store.traffic.length }}
-        </UiChip>
-      </template>
-      <UiTable :data="recentTraffic" height="260" empty-text="还没有请求：先让 Telegram 页面加载聊天内容">
-        <el-table-column label="时间" width="82">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatClock(row.at) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="方法" width="58">
-          <template #default="{ row }">
-            <span class="mono">{{ row.method }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="76">
-          <template #default="{ row }">
-            <span class="mono muted">{{ row.resourceType }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="66">
-          <template #default="{ row }">
-            <UiChip v-if="row.error" tone="danger" variant="soft">
-              ERR
-            </UiChip>
-            <UiChip v-else :tone="statusTagType(row.statusCode)" variant="soft">
-              {{ row.statusCode ?? '—' }}
-            </UiChip>
-          </template>
-        </el-table-column>
-        <el-table-column label="大小" width="82" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatBytes(row.bytes) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="耗时" width="70" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatDuration(row.durationMs) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="地址（已脱敏）" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="mono path-cell">{{ row.host }}{{ row.path }}</span>
-          </template>
-        </el-table-column>
-      </UiTable>
     </UiPanel>
   </div>
 </template>
@@ -261,21 +153,15 @@ function statusTagType(code?: number): 'success' | 'info' | 'warning' | 'danger'
   gap: var(--spacing-md);
 }
 
-.kv-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.kv-detail {
-  font-size: var(--font-size-xs);
+.archive-bar {
+  margin-top: var(--spacing-md);
 }
 
 .cache-bar {
   margin-top: var(--spacing-md);
 }
 
-.path-cell {
-  font-size: var(--font-size-xs);
+.danger-hint {
+  color: var(--color-danger);
 }
 </style>

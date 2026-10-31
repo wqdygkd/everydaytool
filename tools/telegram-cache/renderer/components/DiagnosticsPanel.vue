@@ -1,79 +1,32 @@
 <script setup lang="ts">
 import type { TelegramCacheConfig } from '../../../../shared/telegram-cache'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
-import { formatBytes, formatDateTime, formatDuration } from '../utils/format'
+import { formatBytes } from '../utils/format'
 
 const store = useTelegramCacheStore()
 
 const MB = 1024 * 1024
-const SIZE_OPTIONS = [128, 256, 512, 1024, 2048]
-const sizeOptions = SIZE_OPTIONS.map(value => ({ label: `${value} MB`, value }))
 const CACHE_OPTIONS = [256, 512, 1024, 2048, 3072, 5120, 10240]
 const cacheOptions = CACHE_OPTIONS.map(value => ({ label: `${value} MB`, value }))
 
-const currentConcurrency = computed(() => store.config?.maxHttpConcurrency ?? 3)
-const currentLimitMb = computed(() => {
-  const bytes = store.config?.maxResourceBytes ?? 512 * MB
-  const mb = Math.round(bytes / MB)
-  return SIZE_OPTIONS.reduce((best, item) => (Math.abs(item - mb) < Math.abs(best - mb) ? item : best), SIZE_OPTIONS[0])
-})
 const currentCacheMb = computed(() => {
   const bytes = store.config?.cacheMaxBytes ?? 3072 * MB
   const mb = Math.round(bytes / MB)
   return CACHE_OPTIONS.reduce((best, item) => (Math.abs(item - mb) < Math.abs(best - mb) ? item : best), CACHE_OPTIONS[0])
 })
-const benchmark = computed(() => store.benchmark)
-const benchmarkLabel = ref('')
-const benchmarkActive = computed(() => benchmark.value?.active ?? null)
-const benchmarkRecords = computed(() => benchmark.value?.records ?? [])
-const benchmarkComparison = computed(() => {
-  const records = benchmarkRecords.value
-  if (records.length < 2) return null
-  const [latest, previous] = records
-  return {
-    latest,
-    previous,
-    networkDelta: latest.networkBytes - previous.networkBytes,
-    cacheDelta: latest.cacheServedBytes - previous.cacheServedBytes,
-  }
+
+// 站点 origin 稳定性：端口落盘后固定；一旦变化，页面侧登录态（localStorage）、IndexedDB 与
+// Cache Storage 全部作废，所以这里要把「已固定 / 本次已变化」显式说清楚。
+const siteReady = computed(() => store.site?.ready ?? false)
+const originLabel = computed(() => {
+  if (!siteReady.value) return '未就绪'
+  return store.site?.originChanged ? '本次已变化' : '已固定'
+})
+const originTone = computed<'neutral' | 'success' | 'warning'>(() => {
+  if (!siteReady.value) return 'neutral'
+  return store.site?.originChanged ? 'warning' : 'success'
 })
 
-function signedBytes(value: number): string {
-  if (value === 0) return '0 B'
-  return `${value > 0 ? '+' : '-'}${formatBytes(Math.abs(value))}`
-}
-
-async function startBenchmark(): Promise<void> {
-  try {
-    await store.startBenchmark(benchmarkLabel.value)
-    ElMessage.success('基准测试已开始，请执行固定场景')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '开始失败')
-  }
-}
-
-async function stopBenchmark(): Promise<void> {
-  try {
-    await store.stopBenchmark()
-    ElMessage.success('样本已保存')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '结束失败')
-  }
-}
-
-async function clearBenchmarks(): Promise<void> {
-  try {
-    await ElMessageBox.confirm('清空所有基准测试样本？此操作不可恢复。', '清空样本', { type: 'warning' })
-  } catch {
-    return
-  }
-  try {
-    await store.clearBenchmarks()
-    ElMessage.success('已清空样本')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '清空失败')
-  }
-}
 const mtproto = computed(() => store.mtproto)
 const mtprotoSessionPath = computed(() => {
   const source = mtproto.value?.sessionSource
@@ -183,18 +136,8 @@ async function clearSecureSession(): Promise<void> {
     ElMessage.error((error as Error).message || '清除失败')
   }
 }
+
 const cache = computed(() => store.cache)
-const probe = computed(() => store.probe)
-const selfTest = computed(() => store.selfTest)
-
-async function updateConcurrency(value: number | undefined): Promise<void> {
-  if (typeof value !== 'number') return
-  await applyConfig({ maxHttpConcurrency: value }, '并发上限已更新')
-}
-
-async function updateLimit(value: number): Promise<void> {
-  await applyConfig({ maxResourceBytes: value * MB }, '单资源上限已更新')
-}
 
 async function updateCacheQuota(value: number): Promise<void> {
   await applyConfig({ cacheMaxBytes: value * MB }, '缓存配额已更新')
@@ -212,7 +155,7 @@ async function applyConfig(patch: Partial<TelegramCacheConfig>, message: string)
 async function clearCache(): Promise<void> {
   try {
     await ElMessageBox.confirm(
-      '清理缓存会删除资源库中的缓存对象（归档副本、no-store 保存内容与进行中的任务不会被删）。确定继续？',
+      '清理缓存会删除媒体对象库里的去重对象（归档消息本身与进行中的任务不会被删）。确定继续？',
       '清理缓存',
       { type: 'warning' },
     )
@@ -224,26 +167,6 @@ async function clearCache(): Promise<void> {
     ElMessage.success(`已清理 ${formatBytes(result.evictedBytes)}（${result.evictions} 项）`)
   } catch (error) {
     ElMessage.error((error as Error).message || '清理失败')
-  }
-}
-
-async function runProbe(): Promise<void> {
-  try {
-    const result = await store.probePage()
-    if (result.ok) ElMessage.success('探测完成')
-    else ElMessage.warning(result.error || '探测失败')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '探测失败')
-  }
-}
-
-async function runSelfTest(): Promise<void> {
-  try {
-    const result = await store.runSelfTest()
-    if (result.ok) ElMessage.success('自检全部通过')
-    else ElMessage.warning('自检存在失败项，请查看详情')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '自检失败')
   }
 }
 
@@ -267,78 +190,6 @@ async function openDataDir(): Promise<void> {
 
 <template>
   <div class="panel-stack">
-    <UiPanel title="页面能力探测">
-      <template #actions>
-        <el-button size="small" type="primary" :loading="store.busy.probe" :disabled="!store.pageWebContentsId" @click="runProbe">
-          探测当前页面
-        </el-button>
-      </template>
-
-      <UiHint v-if="!store.pageWebContentsId" block>
-        页面尚未就绪（webview 未挂载或未完成首次加载）。请等待 Telegram 页面加载后重试。
-      </UiHint>
-
-      <UiEmpty v-else-if="!probe" text="尚未探测。探测只读取页面公开线索（performance / 媒体元素 / Service Worker），不做任何写操作。" variant="bordered" />
-
-      <template v-else>
-        <UiHint v-if="probe.error" block class="error-text">
-          {{ probe.error }}
-        </UiHint>
-        <template v-else>
-          <UiDetailGrid :columns="2">
-            <UiDetailItem label="页面地址" size="xs" wrap>
-              {{ probe.url || '—' }}
-            </UiDetailItem>
-            <UiDetailItem label="探测时间" size="xs" mono>
-              {{ formatDateTime(probe.probedAt) }}
-            </UiDetailItem>
-            <UiDetailItem label="performance 资源" size="xs" mono>
-              {{ probe.performance.resources }}
-            </UiDetailItem>
-            <UiDetailItem label="transfer / decoded" size="xs" mono>
-              {{ formatBytes(probe.performance.transferSize) }} / {{ formatBytes(probe.performance.decodedBodySize) }}
-            </UiDetailItem>
-            <UiDetailItem label="媒体元素（video/audio）" size="xs" mono>
-              {{ probe.mediaElementCount }}（{{ probe.videoCount }}/{{ probe.audioCount }}）
-            </UiDetailItem>
-            <UiDetailItem label="blob: 资源" size="xs" mono>
-              {{ probe.blobUrlCount }}
-            </UiDetailItem>
-          </UiDetailGrid>
-
-          <ul class="finding-list">
-            <li v-for="finding in probe.findings" :key="finding">
-              {{ finding }}
-            </li>
-          </ul>
-        </template>
-      </template>
-    </UiPanel>
-
-    <UiPanel title="任务协调器自检">
-      <template #actions>
-        <el-button size="small" :loading="store.busy.selfTest" @click="runSelfTest">
-          运行自检
-        </el-button>
-      </template>
-
-      <UiEmpty v-if="!selfTest" text="尚未运行。自检使用注入 runner 验证同键合并、异键隔离、取消传播、失败清理与重试，不触碰网络。" variant="bordered" />
-      <div v-else class="step-list">
-        <UiChip :tone="selfTest.ok ? 'success' : 'danger'">
-          {{ selfTest.ok ? '全部通过' : '存在失败' }}
-        </UiChip>
-        <div v-for="step in selfTest.steps" :key="step.name" class="step-row">
-          <UiChip :tone="step.ok ? 'success' : 'danger'">
-            {{ step.ok ? '通过' : '失败' }}
-          </UiChip>
-          <div class="step-body">
-            <span class="step-name">{{ step.name }}</span>
-            <span class="muted step-detail">{{ step.detail }}</span>
-          </div>
-        </div>
-      </div>
-    </UiPanel>
-
     <UiPanel title="MTProto 消息下载（实验）">
       <template #actions>
         <el-button size="small" @click="refreshMtproto">
@@ -444,107 +295,22 @@ async function openDataDir(): Promise<void> {
 
       <UiHint block>
         只能下载当前账号本来就能访问的消息；私密链接要求频道已在对话列表里（access hash 来自会话缓存）。
-        媒体写入归档目录，消息正文（截断 20k 字符）写入同目录 <span class="mono">message.json</span>。
         凭据只在主进程读取；<strong>不要把 .env 提交或截图</strong>。
       </UiHint>
     </UiPanel>
 
-    <UiPanel title="基准测试（M2 验收）">
-      <template #actions>
-        <UiChip :tone="benchmarkActive ? 'warning' : 'neutral'">
-          {{ benchmarkActive ? '进行中' : '未开始' }}
-        </UiChip>
-      </template>
-
-      <UiToolbar gap="sm" class="mt-input-row">
-        <el-input
-          v-model="benchmarkLabel"
-          class="ctl-fill"
-          size="small"
-          placeholder="样本标签，如 baseline / with-cache"
-          :disabled="Boolean(benchmarkActive)"
-          clearable
-        />
-        <el-button size="small" type="primary" :disabled="Boolean(benchmarkActive)" @click="startBenchmark">
-          开始
-        </el-button>
-        <el-button size="small" :disabled="!benchmarkActive" @click="stopBenchmark">
-          结束并保存
-        </el-button>
-        <el-button size="small" :disabled="!benchmarkRecords.length" @click="clearBenchmarks">
-          清空记录
-        </el-button>
-      </UiToolbar>
-
-      <UiHint v-if="benchmarkActive" block>
-        已开始：{{ benchmarkActive.label }}（{{ formatDateTime(benchmarkActive.startedAt) }}）。
-        现在执行固定场景（同一聊天、同样的滚动 / 播放 / 切图操作），完成后点「结束并保存」。
-      </UiHint>
-
-      <UiTable :data="benchmarkRecords.slice(0, 10)" height="220" empty-text="还没有样本：先建立 baseline，再开启本地响应采集对照">
-        <el-table-column label="样本" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">
-            <div class="benchmark-cell">
-              <span>{{ row.label }}</span>
-              <span class="muted benchmark-time">{{ formatDateTime(row.endedAt) }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="时长" width="76">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatDuration(row.durationMs) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="请求" width="64" align="right">
-          <template #default="{ row }">
-            <span class="mono">{{ row.requests }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="网络字节" width="92" align="right">
-          <template #default="{ row }">
-            <span class="mono">{{ formatBytes(row.networkBytes) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="本地复用" width="92" align="right">
-          <template #default="{ row }">
-            <span class="mono muted">{{ formatBytes(row.cacheServedBytes) }}</span>
-          </template>
-        </el-table-column>
-      </UiTable>
-
-      <UiDetailGrid v-if="benchmarkComparison" :columns="2">
-        <UiDetailItem label="网络字节 Δ（最新 − 上一）" size="xs" mono>
-          {{ signedBytes(benchmarkComparison.networkDelta) }}
-        </UiDetailItem>
-        <UiDetailItem label="本地复用字节 Δ" size="xs" mono>
-          {{ signedBytes(benchmarkComparison.cacheDelta) }}
-        </UiDetailItem>
-      </UiDetailGrid>
-
-      <UiHint block>
-        统计口径：网络字节来自响应头 <span class="mono">content-length</span>，只覆盖可观测的 HTTP 请求，
-        <strong>不等于网卡真实流量</strong>；本地复用字节省的是本地返回的响应体。
-        建议先采集 baseline（本地响应关闭），再开启本地响应采集 with-cache，并保持同一聊天 / 同样操作路径。
-        测试期间若清空观测，样本会标注「可能无效」。
-      </UiHint>
-    </UiPanel>
-
-    <UiPanel title="诊断与配置">
+    <UiPanel title="数据与配置">
       <div class="kv-stack">
-        <UiKeyValue label="HTTP 并发" label-width="112px">
-          <el-input-number
-            :model-value="currentConcurrency"
-            :min="1"
-            :max="8"
-            size="small"
-            controls-position="right"
-            @change="updateConcurrency"
-          />
+        <UiKeyValue label="站点 origin" label-width="112px" wrap>
+          <div class="data-dir">
+            <span class="mono data-path">{{ store.site?.url || '未就绪' }}</span>
+            <UiChip variant="soft" :tone="originTone">
+              {{ originLabel }}
+            </UiChip>
+          </div>
         </UiKeyValue>
-        <UiKeyValue label="单资源上限" label-width="112px">
-          <el-select :model-value="currentLimitMb" size="small" class="ctl-sm" @change="updateLimit">
-            <el-option v-for="option in sizeOptions" :key="option.value" :label="option.label" :value="option.value" />
-          </el-select>
+        <UiKeyValue label="站点端口" label-width="112px" mono>
+          {{ store.site?.port ?? '—' }}
         </UiKeyValue>
         <UiKeyValue label="缓存占用" label-width="112px" mono>
           {{ formatBytes(cache?.sizeBytes) }} / {{ formatBytes(cache?.maxBytes) }}
@@ -575,6 +341,13 @@ async function openDataDir(): Promise<void> {
         </UiKeyValue>
       </div>
 
+      <UiHint v-if="store.site?.originChanged" block class="danger-hint">
+        {{ store.site?.portNote }}
+      </UiHint>
+      <UiHint v-else-if="store.site?.port" block>
+        站点端口 {{ store.site.port }} 已落盘：origin 固定，页面登录态与本地缓存可以跨重启复用。
+      </UiHint>
+
       <UiHint v-if="store.snapshot?.webSession?.restartRequired" block class="danger-hint">
         数据目录已切换：重启后 Chromium 会话目录才会指向新位置；旧目录中的缓存与登录态不会迁移（可能需要重新登录）。
       </UiHint>
@@ -592,18 +365,13 @@ async function openDataDir(): Promise<void> {
       </UiToolbar>
 
       <UiHint block>
-        本地响应默认关闭：图片开关只处理「已校验 + 新鲜 + 图片 + 无 Range」；媒体开关只处理单区间 Range（206）。
-        其余请求（多区间、非法区间、过期且验证失败、未入库）一律原样回源。两者都通过
-        <span class="mono">protocol.handle</span> 接管分区 http(s)，页面请求可能不再出现在 webRequest 观测里——
-        <strong>观测覆盖与本地复用不能同时保证</strong>。
-      </UiHint>
-
-      <UiHint block class="danger-hint">
-        多账号提示：当前无法从页面可靠取得 Telegram 账号身份，缓存按 session 分区共享。切换账号前请先「清理缓存」并关闭本地复用，避免把上一个账号的图片当成本地命中。
+        归档目录按 <span class="mono">messages/&lt;群 id&gt;/&lt;消息 id&gt;/</span> 落盘，正文与元信息在
+        <span class="mono">message.md</span>，媒体在 <span class="mono">media/&lt;媒体键&gt;.&lt;扩展名&gt;</span>；
+        媒体对象按 SHA-256 去重后硬链，所以同一份文件只占一块磁盘。
       </UiHint>
 
       <UiHint block>
-        诊断包只包含脱敏后的观测统计、资源索引、任务与配置，不含 Cookie / Authorization / 请求头原文 / 响应体 / 消息正文；
+        诊断包只包含脱敏后的统计、索引、任务与配置，不含 Cookie / Authorization / 请求头原文 / 响应体 / 消息正文；
         URL 查询参数值统一为 <span class="mono">***</span>，完整地址仅存在于主进程内存。
       </UiHint>
     </UiPanel>
@@ -623,42 +391,8 @@ async function openDataDir(): Promise<void> {
   gap: var(--spacing-sm);
 }
 
-.finding-list {
-  margin: var(--spacing-md) 0 0;
-  padding-left: var(--spacing-lg);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
-}
-
 .report-block {
   margin-top: var(--spacing-md);
-}
-
-.report-title {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.check-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
-}
-
-.check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-}
-
-.check-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
 }
 
 .mt-input-row {
@@ -692,45 +426,6 @@ async function openDataDir(): Promise<void> {
   font-size: var(--font-size-xs);
 }
 
-.benchmark-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.benchmark-time {
-  font-size: var(--font-size-xs);
-}
-
-.step-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.step-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-}
-
-.step-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.step-name {
-  font-size: var(--font-size-sm);
-}
-
-.step-detail {
-  font-size: var(--font-size-xs);
-  word-break: break-word;
-}
-
 .data-dir {
   display: flex;
   align-items: center;
@@ -750,10 +445,6 @@ async function openDataDir(): Promise<void> {
 .export-hint {
   font-size: var(--font-size-xs);
   word-break: break-all;
-}
-
-.error-text {
-  color: var(--color-error);
 }
 
 .danger-hint {

@@ -6,7 +6,6 @@ import { TELEGRAM_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 import LibraryPanel from '../components/LibraryPanel.vue'
 import OverviewPanel from '../components/OverviewPanel.vue'
-import ResourcesPanel from '../components/ResourcesPanel.vue'
 import TasksPanel from '../components/TasksPanel.vue'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
 import { tabKeyFromPath, TELEGRAM_CACHE_TABS } from '../tabs'
@@ -31,10 +30,16 @@ const site = computed(() => store.site)
 const pageSrc = computed(() => site.value?.url ?? '')
 const siteError = computed(() => site.value?.error ?? '')
 
+// origin 变了 = 页面侧登录态（localStorage）、IndexedDB、Cache Storage 已经对不上，必须明确提示。
+const originNotice = computed(() => (site.value?.originChanged ? site.value.portNote ?? '' : ''))
+const originNoticeDismissed = ref(false)
+watch(originNotice, () => {
+  originNoticeDismissed.value = false
+})
+
 const activeTab = computed(() => tabKeyFromPath(route.path))
 const PANELS = {
   overview: OverviewPanel,
-  resources: ResourcesPanel,
   tasks: TasksPanel,
   diagnostics: DiagnosticsPanel,
   library: LibraryPanel,
@@ -43,16 +48,17 @@ const activePanel = computed(() => PANELS[activeTab.value])
 
 const displayUrl = computed(() => sanitizePageUrl(pageUrl.value) || pageSrc.value)
 
+/** 「进度」页签的角标 = 还没归档完的消息数（与 TasksPanel 的口径一致） */
+const pendingArchives = computed(() => store.library.filter(entry => entry.state !== 'complete').length)
+
 const menuItems = computed(() => TELEGRAM_CACHE_TABS.map(tab => ({
   value: tab.key as string,
   label: tab.label,
-  badge: tab.key === 'resources'
-    ? store.resources.length
-    : tab.key === 'tasks'
-      ? store.activeTasks.length
-      : tab.key === 'library'
-        ? store.library.length
-        : undefined,
+  badge: tab.key === 'tasks'
+    ? pendingArchives.value
+    : tab.key === 'library'
+      ? store.library.length
+      : undefined,
 })))
 
 function safeCall<T>(fn: () => T, fallback: T): T {
@@ -130,6 +136,32 @@ function goForward(): void {
   safeCall(() => webviewRef.value?.goForward(), undefined)
 }
 
+/** 影库「消息链接」：让内嵌页面切到该消息（页面侧 window.__EDT_JUMP_TO_MESSAGE__） */
+async function runJump(jump: { peerId: string, messageId: number }): Promise<void> {
+  const wv = webviewRef.value
+  if (!wv) {
+    ElMessage.warning('聊天页面尚未就绪')
+    return
+  }
+  if (!/^-?\d{1,20}$/.test(jump.peerId) || !Number.isSafeInteger(jump.messageId)) return
+
+  const script = '(() => {'
+    + 'const fn = window.__EDT_JUMP_TO_MESSAGE__;'
+    + `return typeof fn === 'function' ? fn(${JSON.stringify(jump.peerId)}, ${jump.messageId}) : false;`
+    + '})()'
+  try {
+    const jumped = await wv.executeJavaScript(script, true)
+    if (!jumped) ElMessage.warning('该会话还没有在 Telegram 里加载，请先在左侧打开它')
+  } catch (error) {
+    ElMessage.error(`跳转失败：${(error as Error).message}`)
+  }
+}
+
+watch(() => store.pendingJump, () => {
+  const jump = store.consumeJump()
+  if (jump) void runJump(jump)
+})
+
 function reload(): void {
   loadError.value = ''
   loading.value = true
@@ -154,15 +186,6 @@ function openInBrowser(): void {
   openExternal(url)
 }
 
-async function toggleObservation(value: boolean): Promise<void> {
-  try {
-    await store.setObservationEnabled(value)
-    ElMessage.success(value ? '观测已开启' : '观测已暂停（页面行为不受影响）')
-  } catch (error) {
-    ElMessage.error((error as Error).message || '切换观测失败')
-  }
-}
-
 function switchTab(key: string): void {
   if (key === activeTab.value) return
   const tab = TELEGRAM_CACHE_TABS.find(item => item.key === key)
@@ -176,6 +199,8 @@ onMounted(async () => {
   } catch (error) {
     initError.value = (error as Error).message
   }
+  // 概览/进度的角标都读 library，进页面就先扫一次（影库面板自己也会再刷一次）
+  void store.loadLibrary().catch(() => undefined)
 })
 
 onUnmounted(() => {
@@ -193,9 +218,6 @@ onUnmounted(() => {
       <span v-if="loading" class="loading-dot" aria-label="加载中" />
 
       <template #end>
-        <UiSwitchField :model-value="store.observationEnabled" @update:model-value="toggleObservation">
-          观测
-        </UiSwitchField>
         <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
         <el-button size="small" :disabled="!isElectron" @click="openInBrowser">
           外部打开
@@ -232,6 +254,16 @@ onUnmounted(() => {
           show-icon
           title="本地 Telegram 客户端未就绪"
           :description="siteError || '正在启动本地站点…'"
+        />
+
+        <el-alert
+          v-else-if="originNotice && !originNoticeDismissed"
+          class="pane-alert"
+          type="warning"
+          show-icon
+          title="本地站点端口已变化：页面登录态已重置"
+          :description="originNotice"
+          @close="originNoticeDismissed = true"
         />
 
         <webview

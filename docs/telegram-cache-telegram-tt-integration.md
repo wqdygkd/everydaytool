@@ -195,12 +195,12 @@ telegram-tt/src/util/edt/
 | --- | --- | --- |
 | `HEAD` | `/media/<mediaKey>?t=` | 命中/下载中/缺失 + `x-edt-status`、`received/expected` |
 | `GET` | `/media/<mediaKey>?t=` | 播放/取字节（支持 Range） |
-| `POST` | `/api/media/put` | 整块写入（小文件/图片） |
-| `POST` | `/api/media/append` | 分块追加（`offset`、`complete`） |
+| `POST` | `/api/media/put` | 整块写入（**未接线**：主进程从未实现，页面已不再调用） |
+| `POST` | `/api/media/append` | 分块追加（**未接线**：同上；播放回写会拖慢播放，见主文档 §7） |
 | `GET` | `/api/media/status?keys=` | 批量状态 |
 | `POST` | `/api/archive/prepare` | 幂等建目录，返回逐文件 `received/expected` |
 | `POST` | `/api/archive/append` | 归档分块写入 |
-| `POST` | `/api/archive/commit` | 写 `text.md` + `manifest.json`（最后一步），清理 `.part` |
+| `POST` | `/api/archive/commit` | 写 `message.md` + `manifest.json`（最后一步），清理 `.part` |
 | `POST` | `/api/archive/bind` | 播放已缓存内容时补绑 `peer/mid`（不重下） |
 | `POST` | `/api/archive/delete` | 移入回收站 |
 | `GET` | `/api/archive/status?peer=&mids=` | 批量消息状态（角标） |
@@ -211,8 +211,8 @@ telegram-tt/src/util/edt/
 ### 6.3 存储
 
 ```
-<assets>/telegram-cache/messages/<acc>/<peer>/<mid>/
-  manifest.json  text.md  media/001.jpg …
+<assets>/telegram-cache/messages/<peer>/<mid>/
+  manifest.json  message.md  media/<mediaKey>.<ext> …
 <assets>/telegram-cache/trash/<时间>_<peer>_<mid>/  （30 天）
 <cache>/telegram-cache/objects/<ab>/<sha256>          （去重/硬链来源）
 ```

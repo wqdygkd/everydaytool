@@ -68,7 +68,7 @@
     import-rollback/<ts>/   ← 备份恢复前的配置层快照（回滚点，可随时清）
 
 <assets>/                              # L2 独立根，默认 <data>/assets，可设到任意盘
-  telegram-cache/messages/…           # 消息级缓存（manifest + text.md + 媒体）
+  telegram-cache/messages/…           # 消息级缓存（manifest + message.md + 媒体）
   telegram-cache/trash/…              # 回收站
 ```
 

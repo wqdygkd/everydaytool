@@ -1,5 +1,7 @@
 // telegram-cache IPC 通道：全部为窄接口（键 / 枚举 / 数字），不接受任意 URL、
 // 文件路径或 shell 命令。EVENT_ 前缀为「主进程 → 渲染层」推送通道（preload 白名单据此区分）。
+import { TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL } from '../../../../shared/telegram-cache.ts'
+
 export const TELEGRAM_CACHE_IPC_CHANNELS = {
   // 状态 / 配置
   SNAPSHOT_GET: 'telegram-cache:snapshot:get',
@@ -20,6 +22,7 @@ export const TELEGRAM_CACHE_IPC_CHANNELS = {
   MSG_LIBRARY_MEDIA: 'telegram-cache:library:media',
   MSG_LIBRARY_DELETE: 'telegram-cache:library:delete',
   MSG_LIBRARY_OPEN_DIR: 'telegram-cache:library:open-dir',
+  MSG_LIBRARY_NORMALIZE: 'telegram-cache:library:normalize',
   TRASH_LIST: 'telegram-cache:trash:list',
   TRASH_RESTORE: 'telegram-cache:trash:restore',
   TRASH_EMPTY: 'telegram-cache:trash:empty',
@@ -40,6 +43,7 @@ export const TELEGRAM_CACHE_IPC_CHANNELS = {
   BENCHMARK_CLEAR: 'telegram-cache:benchmark:clear',
   // 事件（主进程 → 渲染层推送）
   EVENT_SNAPSHOT: 'telegram-cache:event:snapshot',
+  EVENT_LIBRARY: TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL,
   EVENT_TRAFFIC: 'telegram-cache:event:traffic',
   EVENT_TASK: 'telegram-cache:event:task',
   EVENT_MTPROTO: 'telegram-cache:event:mtproto',

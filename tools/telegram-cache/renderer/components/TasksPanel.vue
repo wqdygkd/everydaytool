@@ -1,123 +1,126 @@
 <script setup lang="ts">
-import type { TelegramTaskSnapshot } from '../../../../shared/telegram-cache'
+import type { TelegramLibraryEntry, TelegramMessageState } from '../../../../shared/telegram-cache'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
-import { formatBytes, formatClock } from '../utils/format'
+import { formatBytes } from '../utils/format'
 
 const store = useTelegramCacheStore()
 
-const statusMeta: Record<TelegramTaskSnapshot['status'], { label: string, type: 'success' | 'info' | 'warning' | 'danger' }> = {
-  queued: { label: '排队', type: 'info' },
-  running: { label: '下载中', type: 'warning' },
-  completed: { label: '完成', type: 'success' },
-  failed: { label: '失败', type: 'danger' },
-  cancelled: { label: '已取消', type: 'info' },
+type ChipTone = 'success' | 'primary' | 'warning' | 'danger' | 'neutral'
+
+const stateMeta: Record<string, { label: string, tone: ChipTone }> = {
+  queued: { label: '排队中', tone: 'primary' },
+  downloading: { label: '缓存中', tone: 'warning' },
+  partial: { label: '缓存中', tone: 'warning' },
+  failed: { label: '失败', tone: 'danger' },
+  missing: { label: '缺失', tone: 'neutral' },
+  complete: { label: '已缓存', tone: 'success' },
 }
 
 /**
  * el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`），不保证具体字段真的存在；
- * 行处理函数统一按 unknown 收参、进来先收敛到任务快照类型。运行期就是表格里的同一份对象，不做转换。
+ * 进来先收敛到影库条目类型。运行期就是表格里的同一份对象，不做转换。
  */
-function toTask(row: unknown): TelegramTaskSnapshot {
-  return row as TelegramTaskSnapshot
+function toEntry(row: unknown): TelegramLibraryEntry {
+  return row as TelegramLibraryEntry
+}
+
+function stateInfo(state: TelegramMessageState): { label: string, tone: ChipTone } {
+  return stateMeta[state] ?? { label: state, tone: 'neutral' }
 }
 
 function progressOf(row: unknown): number {
-  const task = toTask(row)
-  if (task.status === 'completed') return 100
-  if (!task.totalBytes || task.totalBytes <= 0) return 0
-  return Math.min(99, Math.round((task.bytes / task.totalBytes) * 100))
+  const entry = toEntry(row)
+  if (entry.state === 'complete') return 100
+  const ratio = entry.progress
+  return ratio === undefined ? 0 : Math.min(99, Math.max(0, Math.round(ratio * 100)))
 }
 
-function statusInfo(status: string): { label: string, type: 'success' | 'info' | 'warning' | 'danger' } {
-  return statusMeta[status as TelegramTaskSnapshot['status']] ?? statusMeta.failed
-}
+/** 只列还没归档完的消息：完成的都在影库那边看 */
+const pending = computed(() => store.library.filter(entry => entry.state !== 'complete'))
 
-function kindLabel(_kind: string): string {
-  return '存库'
-}
-
-async function cancelTask(row: unknown): Promise<void> {
-  const task = toTask(row)
+async function refresh(): Promise<void> {
   try {
-    const accepted = await store.cancelTask(task.taskId)
-    if (accepted) ElMessage.success('已请求取消任务')
-    else ElMessage.warning('任务已结束或不存在')
+    await store.loadLibrary()
   } catch (error) {
-    ElMessage.error((error as Error).message || '取消失败')
+    ElMessage.error((error as Error).message || '读取归档进度失败')
   }
+}
+
+function openDir(row: unknown): void {
+  const entry = toEntry(row)
+  void store.openLibraryDir(entry.peerId, entry.messageId).catch((error: unknown) => {
+    ElMessage.error((error as Error).message || '打开目录失败')
+  })
+}
+
+function jump(row: unknown): void {
+  const entry = toEntry(row)
+  store.requestJump(entry.peerId, entry.messageId)
 }
 </script>
 
 <template>
   <div class="panel-stack">
-    <UiPanel title="下载任务">
+    <UiPanel title="归档进度">
       <template #actions>
         <UiChip mono>
-          进行中 {{ store.activeTasks.length }}
+          进行中 {{ pending.length }}
         </UiChip>
+        <el-button size="small" :loading="store.busy.library" @click="refresh">
+          刷新
+        </el-button>
       </template>
 
-      <UiTable :data="store.tasks" height="520" empty-text="还没有任务：在资源行点「存库」或「归档」">
-        <el-table-column label="状态" width="82">
-          <template #default="{ row }">
-            <UiChip :tone="statusInfo(row.status).type" variant="soft">
-              {{ statusInfo(row.status).label }}
-            </UiChip>
-          </template>
-        </el-table-column>
-        <el-table-column label="资源（已脱敏）" min-width="200" show-overflow-tooltip>
+      <UiTable
+        :data="pending"
+        height="520"
+        empty-text="当前没有正在归档的消息：在 Telegram 消息上右键「缓存此消息」"
+      >
+        <el-table-column label="会话" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="task-cell">
-              <span class="mono task-url">{{ row.displayUrl }}</span>
-              <span class="muted task-meta">
-                {{ row.kinds.map(kindLabel).join(' + ') }}
-                <template v-if="row.joinedConsumers > 1"> · 合并 {{ row.joinedConsumers }} 个消费者</template>
-                <template v-if="row.attempts > 1"> · 第 {{ row.attempts }} 次尝试</template>
-              </span>
+              <span>{{ toEntry(row).peerTitle || toEntry(row).peerId }}</span>
+              <span class="muted task-meta">{{ toEntry(row).senderName || toEntry(row).peerId }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="进度" width="118">
+        <el-table-column label="消息" width="110">
           <template #default="{ row }">
-            <UiProgress
-              v-if="row.status === 'running' || row.status === 'completed'"
-              :percentage="progressOf(row)"
-              :status="row.status === 'completed' ? 'success' : undefined"
-            />
-            <span v-else class="mono muted">—</span>
-            <span class="mono muted progress-text">
-              {{ formatBytes(row.bytes) }}<template v-if="row.totalBytes"> / {{ formatBytes(row.totalBytes) }}</template>
-            </span>
+            <el-button link type="primary" size="small" @click="jump(row)">
+              #{{ toEntry(row).messageId }}
+            </el-button>
           </template>
         </el-table-column>
-        <el-table-column label="开始" width="82">
+        <el-table-column label="状态" width="96">
           <template #default="{ row }">
-            <span class="mono muted">{{ formatClock(row.startedAt ?? row.queuedAt) }}</span>
+            <UiChip :tone="stateInfo(toEntry(row).state).tone" variant="soft">
+              {{ stateInfo(toEntry(row).state).label }}
+            </UiChip>
           </template>
         </el-table-column>
-        <el-table-column label="说明" min-width="150" show-overflow-tooltip>
+        <el-table-column label="进度" width="140">
           <template #default="{ row }">
-            <span class="mono error-line">{{ row.error || '—' }}</span>
+            <UiProgress :percentage="progressOf(row)" />
+            <span class="mono muted progress-text">{{ formatBytes(toEntry(row).size) }}</span>
           </template>
         </el-table-column>
-        <el-table-column width="70" align="right">
+        <el-table-column label="说明" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'queued' || row.status === 'running'"
-              size="small"
-              text
-              type="danger"
-              @click="cancelTask(row)"
-            >
-              取消
+            <span class="mono muted">{{ toEntry(row).textPreview || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column width="110" align="right">
+          <template #default="{ row }">
+            <el-button size="small" text @click="openDir(row)">
+              打开文件夹
             </el-button>
           </template>
         </el-table-column>
       </UiTable>
 
       <UiHint block>
-        同一资源同时只有一个底层下载任务：第二个消费者会<strong>合并</strong>进来（不重复下载），单个消费者取消不影响其他消费者；
-        只有全部取消才会中断下载。HTTP 与 MTProto 使用独立并发池 —— 本版本只启用 HTTP 池。
+        进度来自主进程的归档事件（`EVENT_LIBRARY`），按 4MB 分片推进；中断的消息会停在「缓存中」，
+        在影库或这里再点一次「缓存此消息」会从已有分片继续，不会从 0 重下。
       </UiHint>
     </UiPanel>
   </div>
@@ -137,11 +140,6 @@ async function cancelTask(row: unknown): Promise<void> {
   min-width: 0;
 }
 
-.task-url {
-  font-size: var(--font-size-xs);
-  word-break: break-all;
-}
-
 .task-meta {
   font-size: var(--font-size-xs);
 }
@@ -150,11 +148,5 @@ async function cancelTask(row: unknown): Promise<void> {
   display: block;
   margin-top: 2px;
   font-size: var(--font-size-xs);
-}
-
-.error-line {
-  font-size: var(--font-size-xs);
-  color: var(--color-error);
-  word-break: break-all;
 }
 </style>

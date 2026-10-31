@@ -12,6 +12,7 @@ export type WebviewTag = Omit<HTMLElement, 'addEventListener'> & {
   reload: () => void
   loadURL: (url: string) => Promise<void>
   getWebContentsId: () => number
+  executeJavaScript: (code: string, userGesture?: boolean) => Promise<unknown>
   openDevTools: () => void
   closeDevTools: () => void
   isDevToolsOpened: () => boolean

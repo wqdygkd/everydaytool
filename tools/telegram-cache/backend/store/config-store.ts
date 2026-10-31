@@ -11,6 +11,8 @@ import {
   TELEGRAM_MIN_CACHE_BYTES,
   TELEGRAM_MIN_HTTP_CONCURRENCY,
   TELEGRAM_MIN_RESOURCE_BYTES,
+  TELEGRAM_SITE_PORT_MAX,
+  TELEGRAM_SITE_PORT_MIN,
 } from '../../../../shared/telegram-cache.ts'
 import { getTelegramConfigPath } from '../utils/paths.ts'
 
@@ -22,6 +24,16 @@ interface TelegramConfigDocument {
 function clampInt(value: unknown, min: number, max: number, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+/**
+ * 站点端口：只接受合法端口号，其余一律回落 null（= 下次启动重新分配）。
+ * 刻意不 clamp —— 把 80 这类越界值静默改成 1024 只会让「端口为什么会变」更难排查。
+ */
+function sanitizeSitePort(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return null
+  if (value < TELEGRAM_SITE_PORT_MIN || value > TELEGRAM_SITE_PORT_MAX) return null
+  return value
 }
 
 function sanitize(input: unknown): TelegramCacheConfig {
@@ -48,6 +60,7 @@ function sanitize(input: unknown): TelegramCacheConfig {
       TELEGRAM_MAX_CACHE_BYTES,
       TELEGRAM_DEFAULT_CONFIG.cacheMaxBytes,
     ),
+    sitePort: sanitizeSitePort(record.sitePort),
   }
 }
 

@@ -1,6 +1,6 @@
 // telegram-cache 视图 / 路由映射：右侧面板的切换状态由子路由驱动（URL 可深链、前进后退可用），
 // 与 interceptor 的 tabs.ts 同构，避免页面、面板、注册表三处各写一份路径。
-export type TelegramCacheTabKey = 'overview' | 'resources' | 'tasks' | 'diagnostics' | 'library'
+export type TelegramCacheTabKey = 'overview' | 'tasks' | 'diagnostics' | 'library'
 
 export interface TelegramCacheTabDef {
   key: TelegramCacheTabKey
@@ -12,8 +12,7 @@ export const TELEGRAM_CACHE_TOOL_ROOT = '/tools/telegram-cache'
 
 export const TELEGRAM_CACHE_TABS: readonly TelegramCacheTabDef[] = [
   { key: 'overview', label: '概览', routeName: 'tool-telegram-cache-overview' },
-  { key: 'resources', label: '资源', routeName: 'tool-telegram-cache-resources' },
-  { key: 'tasks', label: '任务', routeName: 'tool-telegram-cache-tasks' },
+  { key: 'tasks', label: '进度', routeName: 'tool-telegram-cache-tasks' },
   { key: 'diagnostics', label: '诊断', routeName: 'tool-telegram-cache-diagnostics' },
   { key: 'library', label: '影库', routeName: 'tool-telegram-cache-library' },
 ]

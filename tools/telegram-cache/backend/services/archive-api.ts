@@ -7,19 +7,26 @@
 import type {
   TelegramArchiveCommitRequest,
   TelegramArchivePrepareRequest,
+  TelegramLibraryEvent,
   TelegramMessageStatusEntry,
 } from '../../../../shared/telegram-cache.ts'
 import type { SiteApiContext } from './site-server.ts'
 import { existsSync } from 'node:fs'
 import { shell } from 'electron'
+import { currentArchiveToolId } from '../../../../backend/telegram-archive/scope.ts'
+import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
+import {
+  TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL,
+  TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL,
+} from '../../../../shared/telegram-cache.ts'
 import {
   appendTelegramAttachment,
   commitTelegramMessage,
   getTelegramMessageStatuses,
   prepareTelegramMessage,
+  saveTelegramThumbnail,
   telegramMessageDir,
 } from './message-store.ts'
-import { broadcastTelegramSiteEvent } from './site-server.ts'
 import {
   emptyTelegramTrash,
   listTelegramTrash,
@@ -47,6 +54,17 @@ function headerValue(context: SiteApiContext, name: string): string | undefined 
   return typeof raw === 'string' && raw ? raw : undefined
 }
 
+/**
+ * 一条消息的归档状态同时推给两处：
+ * - 内嵌页面（SSE `msg-status`）→ 消息角标与右键菜单；
+ * - 工具渲染层（IPC `EVENT_LIBRARY`）→ 影库面板实时刷新状态与进度。
+ */
+function publishStatus(context: SiteApiContext, payload: TelegramLibraryEvent): void {
+  context.broadcast('msg-status', payload)
+  const channel = currentArchiveToolId() === 'tweb-cache' ? TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL : TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL
+  broadcastToWindows(channel, payload)
+}
+
 export async function handleTelegramArchiveApi(context: SiteApiContext): Promise<boolean> {
   const { req, url, sendJson, readJson, readBuffer } = context
   const method = req.method ?? 'GET'
@@ -58,7 +76,7 @@ export async function handleTelegramArchiveApi(context: SiteApiContext): Promise
         throw new Error('prepare 参数非法')
       }
       const result = await prepareTelegramMessage(body)
-      broadcastTelegramSiteEvent('msg-status', {
+      publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
         state: result.state,
@@ -81,12 +99,13 @@ export async function handleTelegramArchiveApi(context: SiteApiContext): Promise
         data,
         complete: headerValue(context, 'x-edt-complete') === '1',
       })
-      broadcastTelegramSiteEvent('msg-status', {
+      publishStatus(context, {
         peerId,
         messageId,
         state: result.complete ? 'partial' : 'downloading',
         received: result.received,
         expected: result.expected,
+        progress: result.expected > 0 ? Math.min(1, result.received / result.expected) : 0,
       })
       sendJson(200, result)
       return true
@@ -103,12 +122,23 @@ export async function handleTelegramArchiveApi(context: SiteApiContext): Promise
         text: body.text,
         textTruncated: body.textTruncated,
       })
-      broadcastTelegramSiteEvent('msg-status', {
+      publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
         state: result.state,
       })
       sendJson(200, result)
+      return true
+    }
+
+    if (method === 'POST' && url.pathname === '/api/archive/thumbnail') {
+      const peerId = readPeerId(url)
+      const messageId = readIntParam(url, 'mid', 1, Number.MAX_SAFE_INTEGER)
+      const mediaKey = url.searchParams.get('mediaKey') ?? ''
+      const mimeType = headerValue(context, 'content-type') ?? 'image/jpeg'
+      const data = await readBuffer()
+      const thumbnail = await saveTelegramThumbnail({ peerId, messageId, mediaKey, mimeType, data })
+      sendJson(200, { saved: true, thumbnail })
       return true
     }
 
@@ -128,7 +158,7 @@ export async function handleTelegramArchiveApi(context: SiteApiContext): Promise
       const body = await readJson<{ peer?: { id?: string }, messageId?: number, retentionDays?: number }>()
       if (!body?.peer?.id || typeof body.messageId !== 'number') throw new Error('delete 参数非法')
       const entry = await moveTelegramMessageToTrash(body.peer.id, body.messageId, body.retentionDays)
-      broadcastTelegramSiteEvent('msg-status', {
+      publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
         state: 'missing',
@@ -156,7 +186,7 @@ export async function handleTelegramArchiveApi(context: SiteApiContext): Promise
       const body = await readJson<{ trashId?: string }>()
       if (!body?.trashId) throw new Error('restore 参数非法')
       const restored = await restoreTelegramTrash(body.trashId)
-      broadcastTelegramSiteEvent('msg-status', {
+      publishStatus(context, {
         peerId: restored.peerId,
         messageId: restored.messageId,
         state: restored.state,
