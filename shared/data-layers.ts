@@ -125,6 +125,8 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'telegram-cache.registry', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/registry.json', label: '资源索引', backup: 'include', clean: 'never', integrity: 'index-prune' },
   { id: 'telegram-cache.benchmarks', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/benchmarks.json', label: '测速基准', backup: 'include', clean: 'never' },
   { id: 'telegram-cache.session', toolId: 'telegram-cache', layer: 'config', relativePath: 'telegram-cache/telegram-session.bin', label: 'MTProto 会话密文', backup: 'include', clean: 'never', sensitive: true },
+  // tweb-cache 复用归档实现，但数据按 scope 独立落在 tweb-cache.* 条目下。
+  { id: 'tweb-cache.config', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/config.json', label: '站点端口（tweb 前端）', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.manifest', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/manifest.json', label: '托管二进制清单', backup: 'include', clean: 'never', integrity: 'reinstall-required' },
   { id: 'workbuddy2api-panel.settings', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/app-settings.json', label: '面板设置', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.run', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/run', label: '上游运行目录（api_key / auths / data）', backup: 'include', clean: 'never', sensitive: true },
@@ -134,8 +136,10 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'app.quarantine', toolId: 'app', layer: 'config', relativePath: 'quarantine', label: '旧布局隔离区（未登记遗留项）', backup: 'never', clean: 'never' },
 
   // ── 资产层（独立根 <assets>）──
-  { id: 'telegram-cache.messages', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/messages', label: '消息级缓存（manifest + text.md + 媒体）', backup: 'manifest-only', clean: 'never' },
+  { id: 'telegram-cache.messages', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/messages', label: '消息级缓存（manifest + message.md + 媒体）', backup: 'manifest-only', clean: 'never' },
   { id: 'telegram-cache.trash', toolId: 'telegram-cache', layer: 'assets', relativePath: 'telegram-cache/trash', label: '回收站（默认保留 30 天）', backup: 'manifest-only', clean: 'never' },
+  { id: 'tweb-cache.messages', toolId: 'tweb-cache', layer: 'assets', relativePath: 'tweb-cache/messages', label: '消息级缓存（tweb 前端，manifest + message.md + 媒体）', backup: 'manifest-only', clean: 'never' },
+  { id: 'tweb-cache.trash', toolId: 'tweb-cache', layer: 'assets', relativePath: 'tweb-cache/trash', label: '回收站（tweb 前端，默认保留 30 天）', backup: 'manifest-only', clean: 'never' },
 
   // ── 会话层（Chromium 拥有；relativePath '.' 表示层根本身）──
   { id: 'session.chromium', toolId: 'app', layer: 'session', relativePath: '.', label: 'Cookies / LocalStorage / 页面缓存', backup: 'optional', clean: 'internal-chromium-cache' },
@@ -155,6 +159,9 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'telegram-cache.tmp', toolId: 'telegram-cache', layer: 'cache', relativePath: 'telegram-cache/tmp', label: '下载临时文件', backup: 'never', clean: 'always' },
   { id: 'telegram-cache.mtproto', toolId: 'telegram-cache', layer: 'cache', relativePath: 'telegram-cache/mtproto', label: 'MTProto 分段临时文件', backup: 'never', clean: 'always' },
   { id: 'telegram-cache.diagnostics', toolId: 'telegram-cache', layer: 'cache', relativePath: 'telegram-cache/diagnostics', label: '诊断包', backup: 'never', clean: 'always' },
+  { id: 'tweb-cache.objects', toolId: 'tweb-cache', layer: 'cache', relativePath: 'tweb-cache/objects', label: '资源对象（tweb 前端，按哈希去重）', backup: 'never', clean: 'always', integrity: 'index-prune' },
+  { id: 'tweb-cache.tmp', toolId: 'tweb-cache', layer: 'cache', relativePath: 'tweb-cache/tmp', label: '下载临时文件（tweb 前端）', backup: 'never', clean: 'always' },
+  { id: 'tweb-cache.diagnostics', toolId: 'tweb-cache', layer: 'cache', relativePath: 'tweb-cache/diagnostics', label: '诊断包（tweb 前端）', backup: 'never', clean: 'always' },
   { id: 'workbuddy2api-panel.downloads', toolId: 'workbuddy2api-panel', layer: 'cache', relativePath: 'workbuddy2api-panel/downloads', label: '上游二进制下载', backup: 'never', clean: 'always' },
   { id: 'workbuddy2api-panel.runtime', toolId: 'workbuddy2api-panel', layer: 'cache', relativePath: 'workbuddy2api-panel/runtime', label: '上游二进制（current/previous/staging）', backup: 'never', clean: 'always', integrity: 'reinstall-required' },
 ]
