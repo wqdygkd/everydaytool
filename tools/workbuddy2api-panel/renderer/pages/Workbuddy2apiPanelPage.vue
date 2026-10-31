@@ -324,21 +324,35 @@ onUnmounted(() => {
       </section>
 
       <aside class="wb2api-ops">
-        <UiPanel title="启停" padding="var(--spacing-md)">
-          <div class="wb2api-actions">
-            <el-button
-              type="primary"
-              :disabled="busy || !installed || isRunning || state?.orphanLikely"
-              @click="onStart"
-            >
-              启动
+        <UiPanel title="状态" padding="var(--spacing-md)">
+          <template #actions>
+            <el-button size="small" text :disabled="loading" @click="refresh">
+              刷新
             </el-button>
-            <el-button :disabled="busy || !isRunning" @click="onStop">
-              停止
-            </el-button>
-            <el-button :disabled="busy || !installed" @click="onRestart">
-              重启
-            </el-button>
+          </template>
+          <div class="wb2api-status-row">
+            <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
+            <span class="wb2api-status-label">{{ statusLabel }}</span>
+            <div class="wb2api-status-actions">
+              <!-- 三个动作互斥：未运行只给「启动」，运行中（含 unhealthy）只给「停止 / 重启」 -->
+              <el-button
+                v-if="!isRunning"
+                size="small"
+                type="primary"
+                :disabled="busy || !installed || state?.orphanLikely"
+                @click="onStart"
+              >
+                启动
+              </el-button>
+              <template v-if="isRunning">
+                <el-button size="small" :disabled="busy" @click="onStop">
+                  停止
+                </el-button>
+                <el-button size="small" :disabled="busy || !installed" @click="onRestart">
+                  重启
+                </el-button>
+              </template>
+            </div>
           </div>
           <UiHint v-if="state?.orphanLikely" class="wb2api-hint">
             检测到端口被其它进程占用（非本工具托管）。可结束占用，不会接管该进程。
@@ -353,18 +367,6 @@ onUnmounted(() => {
           >
             结束占用
           </el-button>
-        </UiPanel>
-
-        <UiPanel title="状态" padding="var(--spacing-md)">
-          <template #actions>
-            <el-button size="small" text :disabled="loading" @click="refresh">
-              刷新
-            </el-button>
-          </template>
-          <div class="wb2api-status-row">
-            <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
-            <span class="wb2api-status-label">{{ statusLabel }}</span>
-          </div>
           <UiKeyValue label="版本" mono label-width="72px">
             {{ state?.version ?? '—' }}
           </UiKeyValue>
@@ -526,6 +528,13 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
+}
+
+.wb2api-status-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
 }
 
 .wb2api-status-label {
