@@ -6,7 +6,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程�
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置工具模块（chrome-sandbox / env-browser / interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / workbuddy2api-panel）。
+Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / tweb-cache / workbuddy2api-panel）。
 
 ## 编码规范
 
@@ -155,10 +155,9 @@ export default defineTool({
 
 | 查找内容 | 位置 |
 | ---------- | ------ |
-| IPC 通道 | `tools/chrome-sandbox/backend/ipc/channels.ts` |
-| IPC 处理 | `tools/chrome-sandbox/backend/ipc/handlers.ts` |
-| 沙箱数据（`sandboxes.json` / `fingerprints.json` / `config.json`） | `tools/chrome-sandbox/backend/store/` |
-| 环境浏览器账号（`envs.json`） | `tools/env-browser/backend/store/env-store.ts` |
+| IPC 通道 | `tools/interceptor/backend/ipc/channels.ts` |
+| IPC 处理 | `tools/interceptor/backend/ipc/handlers.ts` |
+| 拦截配置与规则（`config.json` / `rules.json`） | `tools/interceptor/backend/store/` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
 | **应用身份（安装版 / 开发版 userData 隔离）** | `backend/utils/app-instance.ts` |
 | **开发态图标（Dock / 任务栏 DEV 标识）** | `electron/dev-icon.ts`；素材 `resources/dev/`（`scripts/make-dev-icon.py` 生成） |

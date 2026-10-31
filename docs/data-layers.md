@@ -44,8 +44,6 @@
 <data>/
   config/                              # L1 权威：小而可读，可人工校验
     app/                window-appearance.json, window-bounds.json, ui-preferences.json
-    chrome-sandbox/     sandboxes.json, fingerprints.json, config.json
-    env-browser/        envs.json                     [sensitive]
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [sensitive]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [sensitive]
@@ -55,12 +53,10 @@
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
     quarantine/<ts>/    ← 旧布局孤儿白名单（config.db / cdp-injector / .DS_Store），不删、不备份
   session/                             # L3：Electron sessionData 就是这个目录（路径不变）
-    Cookies/ Local Storage/ Partitions/{telegram-cache,treease-editor,workbuddy2api-panel,env-<id>}
-    sandbox/<sandboxId>/               ← chrome-sandbox profile 迁入（Chrome --user-data-dir）
+    Cookies/ Local Storage/ Partitions/{telegram-cache,treease-editor,workbuddy2api-panel}
     Cache/ Code Cache/ GPUCache/ …     ← 内部可再生子目录，L3 里唯一允许被清的部分
   cache/                               # L4
     app/{logs,crash-dumps}
-    chrome-sandbox/shared/fingerprint_ext        (可从 resources 重建)
     interceptor/extension                        (可从 resources 重建)
     offline-pack/downloads/
     telegram-cache/{objects,tmp,mtproto,diagnostics}
@@ -118,10 +114,6 @@
 | --- | --- | --- | --- | --- | --- |
 | `app/window-*.json` | `config/app/` | config | include | never | 仅换根 |
 | `app/logs`、`app/crash-dumps` | `cache/app/` | cache | never | always | 诊断用 |
-| `chrome-sandbox/{sandboxes,fingerprints,config}.json` | `config/chrome-sandbox/` | config | include | never | — |
-| `chrome-sandbox/sandboxes/<id>/` | `session/sandbox/<id>/` | session | optional | internal | 迁后改写 `sandboxes.json` 绝对 `userDataPath`（复用 `rewriteSandboxPaths`） |
-| `chrome-sandbox/shared/fingerprint_ext` | `cache/chrome-sandbox/` | cache | never | always | 可从 resources 重建 |
-| `env-browser/envs.json` | `config/env-browser/` | config | include | never | `sensitive`（明文密码，P2 加密） |
 | `interceptor/{config,rules}.json` | `config/interceptor/` | config | include | never | — |
 | `interceptor/certs/` | `config/interceptor/certs/` | config | include | never | `sensitive`（私钥必须进备份） |
 | `interceptor/extension/` | `cache/interceptor/` | cache | never | always | 从 resources 重建 |
@@ -134,13 +126,13 @@
 | `telegram-cache/{objects,tmp,mtproto,diagnostics}` | `cache/telegram-cache/` | cache | never | always | 清后须 `pruneMissingObjects()` 修剪索引 |
 | `workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `config/workbuddy2api-panel/` | config | include | never | `run/` 是上游 cwd，含 api_key 与上游数据 |
 | `workbuddy2api-panel/{downloads,runtime}` | `cache/workbuddy2api-panel/` | cache | never | always | 清后须校验 `runtime/current/<bin>`，否则显示「需重新下载」 |
-| `session/`（现状） | `session/` | session | optional | internal | 不搬家，只新增 `sandbox/` |
+| `session/`（现状） | `session/` | session | optional | internal | 不搬家 |
 | `treease-editor/`（空） | `config/treease-editor/rules.json` | config | include | never | 规则从 LocalStorage 上台面 |
 | `data/config.db`、`data/cdp-injector/`、`.DS_Store` | `config/quarantine/<ts>/` | config | never | never | **仅白名单内的已知孤儿**；不删、不备份、不随清缓存消失 |
 | （运行时自动产生） | `cache/import-rollback/<ts>/` | cache | never | always | 备份恢复前的配置层快照：回滚点，可随时清 |
 | `data/.env` | 原地不动（`DATA_ROOT_KEEP_NAMES`） | —（不属任何层） | — | — | 用户自备凭据：隔离它等于删凭据 |
 
-**留在 Local Storage 的**：打开的页签（会话性）、offline-pack 镜像地址（偏好）、env-browser 网页预览回退。
+**留在 Local Storage 的**：打开的页签（会话性）、offline-pack 镜像地址（偏好）。
 **迁到 `config/app/ui-preferences.json` 的**：收藏的工具、首页工具排序（用户数据，要能带走）。
 
 ## 5. 基建 API
@@ -260,7 +252,7 @@ payload        gzip(条目表)；条目表 = u32 条目数 + 重复(u16 名长 |
   未登记又不在白名单里的顶层项**原地不动**（只 warn）——「先把不认识的东西全隔离」会静默吃掉用户自己的文件。
 - `.env`（`DATA_ROOT_KEEP_NAMES`）属于用户自备凭据，永远原地保留：tool 的 `.env` 读取是合法来源，隔离它等于删凭据。
 - 隔离区在**配置层**而不是缓存层：放 `cache/` 下就意味着「清缓存顺手销毁不可再生数据」。它不备份、不自动清理。
-- `session/` 不搬迁（sessionData 路径不变），只新增 `sandbox/`；`chrome-sandbox/sandboxes` → `session/sandbox` 搬完必须改写 `sandboxes.json` 里的绝对 `userDataPath`。
+- `session/` 不搬迁（sessionData 路径不变）。
 - 幂等：目标在、源不在 → 已完成；两边都在 → 冲突并跳过（绝不覆盖）；只有零错误零冲突才写版本标记，否则保持 v1 下次重试。
 - 不支持降级：老版本读不到 v2 布局；`layoutVersion` 大于本版支持值时 `upgradeDataLayout()` **一个字节都不动**
   （`blockedByNewerLayout`），`electron/main.ts` 弹错误框后 `app.exit(1)`，避免新版数据被老版按自己的理解覆盖。
@@ -286,7 +278,7 @@ payload        gzip(条目表)；条目表 = u32 条目数 + 重复(u16 名长 |
 
 ### 10.2 工具层（全部改走 `resolveLayerPath`）
 
-chrome-sandbox（配置 / `session/sandbox` profile / 共享扩展缓存）、env-browser、interceptor（配置+证书 / 扩展缓存）、
+interceptor（配置+证书 / 扩展缓存）、
 offline-pack（历史 / 下载）、wxp-enhancer、telegram-cache（索引+密文 / 资产归档 / 对象缓存）、
 workbuddy2api-panel（manifest+run / 二进制缓存）。
 
@@ -337,10 +329,8 @@ P2（备份导出/恢复）追加验证：
 
 - **凭据静态加密**（`backend/utils/secret-box.ts`）：统一信封 `edt-secret:<base64(safeStorage)>`；
   `openSecret()` 对非信封值原样返回，因此旧明文文件照旧可读、第一次写入自动升级。
-  - `env-browser/envs.json` 的 `password` 逐条加密；读盘时解密进内存（渲染层仍是明文，属既有行为），
-    检测到旧明文即就地写回密文；
   - `wxp-enhancer/data-cache.json` 整份封为 `{ schemaVersion: 2, sealed }`（token / 用户对象 / 收藏备份）；
-  - safeStorage 不可用时两者都退化为明文并 warn——**加密是增强，不是功能前提**。
+  - safeStorage 不可用时退化为明文并 warn——**加密是增强，不是功能前提**。
   - 解不开的密文（换机器 / 系统密钥变化）**原样保留**：`openSecretDetailed()` 报 `failed`，store 写盘时把
     原密文写回，不把空串当新密码落盘（否则一轮「读 → 升级写回」就静默删掉用户密码）。
 - **LocalStorage 上台面**：

@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | 不同 `el-*` 组件 | 36 种 | 32 种 | **34 种**（`UiTable` / `UiProgress` 内部各保留 1 种） |
 | `el-*` 模板出现次数 | 519 处 | ≈ 464 处 | **466 处** |
-| `el-tag` | 36 处 / 9 文件 | 0 | **0** ✅ |
+| `el-tag` | 28 处 / 6 文件 | 0 | **0** ✅ |
 | `el-empty` | 1 处 | 0 | **0** ✅ |
 | `el-progress` | 4 处 | ≤ 1（仅 UiProgress） | **1** ✅ |
 | `el-table` 直接使用 | 14 处 / 11 文件 | ≤ 1（仅 UiTable） | **1** ✅ |
@@ -33,8 +33,8 @@
 > **口径修正**：上一轮分析写的是「26 → ≤10」，实施后按三档记：
 > `Ui*` 封装内部 12 处（`UiSearchInput` 6 / `UiTable` 2 / `UiProgress` 2 / `UiPathField` 1 / `UiChip` 0）+
 > 应用外壳标题栏 4 处（App.vue 的 card tabs，标题栏专用样式，保留为 exception）+
-> **业务组件侧 8 处**（`RulesPanel` 7 + `EnvBrowserPage` 1，均有明确理由，见 §9.3）。
-> 业务侧从 15 降到 8：删 5 处（tag 宽度 / mono 表格 / 行指针 / 两处 cell 密度）、
+> **业务组件侧 7 处**（全部在 `RulesPanel`，均有明确理由，见 §9.3）。
+> 业务侧从 15 降到 7：删 5 处（tag 宽度 / mono 表格 / 行指针 / 两处 cell 密度）、
 > 用全局 `.radio-flush` 工具类抵掉 2 处。
 
 ### 1.3 非目标
@@ -127,7 +127,7 @@ EP 的组件 CSS 由 `ElementPlusResolver({ importStyle: 'css' })` 懒加载、*
 - [ ] `pnpm lint` / `pnpm typecheck` 通过。
 - [ ] 表格：interceptor 两张表、telegram-cache 全部 7 张表、offline-pack 两张表、id-card 结果表、wxp 树形表的行高与字号一致（12px 表体、表头 medium）。
 - [ ] 按钮：默认 / small / primary / danger / link 五态高度与圆角符合令牌。
-- [ ] `el-alert`：8 处（EnvBrowser / Interceptor ×2 / offline-pack ×2 / telegram-cache ×2 / treease）在半透明模式下不再出现不透明白块。
+- [ ] `el-alert`：7 处（Interceptor ×2 / offline-pack ×2 / telegram-cache ×2 / treease）在半透明模式下不再出现不透明白块。
 - [ ] 五种窗口外观模式（默认 / acrylic / mica / tabbed / transparent-only）× 表格 / 按钮 / 输入 / 弹层，逐个目测。
 
 ---
@@ -183,17 +183,12 @@ type ChipVariant = 'auto' | 'soft' | 'solid' | 'outline'
 | `size="small"` | 无需传（`UiChip` 只有一档 xs 尺寸） |
 | 计数徽章（原本若用 tag 当数字） | `variant="solid"`（本项目无此用法，记录备查） |
 
-> 附录 A 给出 36 处的逐条落点，可直接照表替换。
+> 附录 A 给出 28 处的逐条落点，可直接照表替换。
 
-### 5.4 迁移后要删的样式
-
-- [StatusPanel.vue:145](../tools/chrome-sandbox/renderer/components/StatusPanel.vue#L145) `:deep(.el-tag) { width: fit-content; max-width: 100% }` —— `UiChip` 本身是 `inline-flex` + `max-width: 100%` 语义，删除即可。
-
-### 5.5 验收
+### 5.4 验收
 
 - [ ] `grep '<el-tag'` = 0。
 - [ ] interceptor 流量表「状态 / 标记」列：1200 行级别数据下，行高与 B1 表格密度一致（soft 胶囊与实底胶囊的高度相同，不引起抖动）。
-- [ ] chrome-sandbox 沙箱卡片的 `effect="plain"` 标签改用 outline 后，与卡片描边层次仍可读。
 - [ ] treease 的「拦截中 · N 个接口 · 命中 M 次」长文本标签：`max-width: 100%` + 省略不破坏布局。
 
 ---
@@ -358,32 +353,28 @@ withDefaults(defineProps<{
 | 1 | [UiSearchInput.vue:67/87/94/100/104](../renderer/shared/components/ui/UiSearchInput.vue#L67) | pill/box 输入框几何 | **保留**（A） |
 | 2 | [UiPathField.vue:53](../renderer/shared/components/ui/UiPathField.vue#L53) | 等宽字体 | **保留**（A） |
 | 3 | [App.vue:344/351/356/360](../renderer/App.vue#L344) | 标题栏 card tabs | **保留 exception**（B）：见 §9.1 理由 |
-| 4 | [EnvBrowserPage.vue:420](../tools/env-browser/renderer/pages/EnvBrowserPage.vue#L420) | 环境页签 header（`margin: 0`） | **保留 exception**（C）：单行几何，包一层 tab 变体收益低于复杂度 |
-| 5 | [StatusPanel.vue:145](../tools/chrome-sandbox/renderer/components/StatusPanel.vue#L145) | `el-tag` 宽度自适应 | **已删除**（B2 迁 `UiChip`） |
-| 6 | [IdCardGeneratorPage.vue:187](../tools/id-card-generator/renderer/pages/IdCardGeneratorPage.vue#L187) | 整表等宽 | **已删除**（`UiTable mono`） |
-| 7 | [TrafficPanel.vue:259](../tools/interceptor/renderer/components/TrafficPanel.vue#L259) | 行指针 | **已删除**（`UiTable row-clickable`） |
-| 8 | [ResourcesPanel.vue:262](../tools/telegram-cache/renderer/components/ResourcesPanel.vue#L262) | cell 上下 4px | **已删除**（B1 全局表格密度） |
-| 9 | [TasksPanel.vue:153](../tools/telegram-cache/renderer/components/TasksPanel.vue#L153) | cell 上下 4px | **已删除**（同上） |
-| 10 | RulesPanel `dest-radio-group` / `request-body-mode-group` 的 `.el-radio` 覆写（2 处） | radio 间距 / 行高 | **已删除**：改用全局工具类 `.radio-flush`（与 `.btn-flush` 同构，写进 `utilities.scss`），间距交给 `gap` |
-| 11 | [RulesPanel.vue:1392/1400/1404](../tools/interceptor/renderer/components/RulesPanel.vue#L1392) | `el-menu` 侧栏菜单 | **例外保留**（C）：全项目唯一 `el-menu`，样式与规则类型分组强耦合 |
-| 12 | [RulesPanel.vue:1480](../tools/interceptor/renderer/components/RulesPanel.vue#L1480) | 规则标题输入字号 | **例外保留**（C）：编辑器内专属排版 |
-| 13 | [RulesPanel.vue:1257](../tools/interceptor/renderer/components/RulesPanel.vue#L1257) | 置顶行左侧高亮 | **例外保留**（C）：业务状态可视化 |
-| 14 | RulesPanel `.dest-input` 输入框底色（1 处） | 让输入框与 raised 面板同底 | **例外保留**（C）：有意的层次差异，不是全局密度 |
+| 4 | [IdCardGeneratorPage.vue:187](../tools/id-card-generator/renderer/pages/IdCardGeneratorPage.vue#L187) | 整表等宽 | **已删除**（`UiTable mono`） |
+| 5 | [TrafficPanel.vue:259](../tools/interceptor/renderer/components/TrafficPanel.vue#L259) | 行指针 | **已删除**（`UiTable row-clickable`） |
+| 6 | [ResourcesPanel.vue:262](../tools/telegram-cache/renderer/components/ResourcesPanel.vue#L262) | cell 上下 4px | **已删除**（B1 全局表格密度） |
+| 7 | [TasksPanel.vue:153](../tools/telegram-cache/renderer/components/TasksPanel.vue#L153) | cell 上下 4px | **已删除**（同上） |
+| 8 | RulesPanel `dest-radio-group` / `request-body-mode-group` 的 `.el-radio` 覆写（2 处） | radio 间距 / 行高 | **已删除**：改用全局工具类 `.radio-flush`（与 `.btn-flush` 同构，写进 `utilities.scss`），间距交给 `gap` |
+| 9 | [RulesPanel.vue:1392/1400/1404](../tools/interceptor/renderer/components/RulesPanel.vue#L1392) | `el-menu` 侧栏菜单 | **例外保留**（C）：全项目唯一 `el-menu`，样式与规则类型分组强耦合 |
+| 10 | [RulesPanel.vue:1480](../tools/interceptor/renderer/components/RulesPanel.vue#L1480) | 规则标题输入字号 | **例外保留**（C）：编辑器内专属排版 |
+| 11 | [RulesPanel.vue:1257](../tools/interceptor/renderer/components/RulesPanel.vue#L1257) | 置顶行左侧高亮 | **例外保留**（C）：业务状态可视化 |
+| 12 | RulesPanel `.dest-input` 输入框底色（1 处） | 让输入框与 raised 面板同底 | **例外保留**（C）：有意的层次差异，不是全局密度 |
 
-**结果**：`A 12 + B 4 + C 8 = 24`（脚本实测 23，`UiChip` 无 deep 规则）。业务侧 15 → **8**：删 5 处、`.radio-flush` 抵 2 处；剩余 8 处中 7 处在 `RulesPanel`（唯一的重交互编辑器）、1 处是环境页签单行几何，每处都带注释。
+**结果**：`A 12 + B 4 + C 7 = 23`（脚本实测 23，`UiChip` 无 deep 规则）。业务侧 15 → **7**：删 5 处、`.radio-flush` 抵 2 处（原第 8 处属已下线的 `EnvBrowserPage`，随工具移除）；剩余 7 处全部在 `RulesPanel`（唯一的重交互编辑器），每处都带注释。
 
 ### 9.3 剩余 exception 清单（需长期保留）
 
 | 位置 | 为什么不能归位 |
 | --- | --- |
 | `App.vue` ×4 | 标题栏 card tabs：34px 行高、`-webkit-app-region`、关闭图标常驻占位，属 app-shell 而非 EP 主题 |
-| `EnvBrowserPage.vue` ×1 | 环境页签仅需 `header { margin: 0 }`，为单行几何建变体不划算 |
 | `RulesPanel.vue` ×7 | `el-menu` 分组侧栏（3）、规则标题字号（1）、置顶行高亮（1）、目标输入框底色（1）、请求体模式 radio 标签字号（1）——全部是编辑器内语义，不是可复用的密度规则 |
 
 ### 9.4 验收
 
-- [x] 业务侧 `:deep(.el-*)` 由 15 降到 8，`pnpm check:ui` 断言通过（≤8）。
-- [ ] EnvBrowser 环境页签视觉与迁移前一致（未改动）。
+- [x] 业务侧 `:deep(.el-*)` 由 15 降到 7，`pnpm check:ui` 断言通过（≤8）。
 - [ ] RulesPanel：radio 间距（改 `gap`）、目标输入框、菜单选中态与迁移前对比（截图对照）。
 
 ---
@@ -405,10 +396,10 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 | 批次 | 必测路径 |
 | --- | --- |
 | B1 | 每张表（14 张）行高/表头；8 处 alert；按钮五态；输入/选择高度 |
-| B2 | interceptor 流量表状态列（14 处 tag）、chrome-sandbox 卡片标签、treease 长文本标签 |
+| B2 | interceptor 流量表状态列（14 处 tag）、treease 长文本标签 |
 | B3 | offline-pack 下载进度；telegram-cache 三处进度（含 warning/exception 态）；规则空态 |
 | B4 | §8.5 五项；另加 RulesPanel 排序、TrafficPanel 行点击 |
-| B5 | EnvBrowser 与 App 页签对照；RulesPanel 三处 exception 目测 |
+| B5 | RulesPanel 三处 exception 目测 |
 | B6 | 11 个工具 + 设置页冒烟；五种窗口外观 × 玻璃/alpha 组合 |
 
 ### 10.3 外观矩阵
@@ -467,8 +458,8 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 | `el-checkbox` / `el-radio*` → `UiCheckbox` / `UiRadio` | 4 文件 / 27 处 | 与 `el-radio-button` 分段钮规范对齐 | 可选 |
 | `el-menu` → `UiSideMenu` | 1 文件 / 3 处 | 消掉 RulesPanel 的 3 处 exception | 可选（与规则面板重构合并做） |
 | `el-tooltip` / `el-dropdown` / `el-popover` → `Ui*` | 2 文件 / 9 处 | 收口浮层玻璃实现 | 收益低，暂缓 |
-| `el-tabs` → 保留 | 2 处 | 标题栏/环境页签是「可关闭标签」，与视图切换语义不同 | **不做** |
-| `el-alert` → 保留 | 8 处 | B1 已令牌化 | **不做** |
+| `el-tabs` → 保留 | 2 处 | 标题栏页签是「可关闭标签」，与视图切换语义不同 | **不做** |
+| `el-alert` → 保留 | 7 处 | B1 已令牌化 | **不做** |
 
 ---
 
@@ -480,7 +471,7 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 | --- | --- | --- |
 | B0 | EP 接触面度量 / 断言脚本，新增 `pnpm check:ui` | [scripts/ui-ep-check.mjs](../scripts/ui-ep-check.mjs)、[package.json](../package.json) |
 | B1 | 视觉收紧：控件尺寸 / 按钮圆角 / 表格字阶与密度 / `el-alert` 半透明底色 | [element-plus.scss](../renderer/shared/styles/element-plus.scss) |
-| B2 | `UiChip` 新增 `variant`（auto/soft/solid/outline，auto 严格等价旧观感）；36 处 `el-tag` → `UiChip`；删 1 处 `:deep(.el-tag)` | [UiChip.vue](../renderer/shared/components/ui/UiChip.vue) + 9 个业务文件 |
+| B2 | `UiChip` 新增 `variant`（auto/soft/solid/outline，auto 严格等价旧观感）；28 处 `el-tag` → `UiChip`；删 1 处 `:deep(.el-tag)` | [UiChip.vue](../renderer/shared/components/ui/UiChip.vue) + 6 个业务文件 |
 | B3 | 新增 `UiProgress`（4 处接入）；`el-empty` → `UiEmpty` | [UiProgress.vue](../renderer/shared/components/ui/UiProgress.vue)、[RulesPanel.vue](../tools/interceptor/renderer/components/RulesPanel.vue) |
 | B4 | 新增 `UiTable`（14 张表接入）；删 2 处表格专用 `:deep` | [UiTable.vue](../renderer/shared/components/ui/UiTable.vue) + 11 个业务文件 |
 | B5 | 新增全局 `.radio-flush` 工具类，删 2 处 radio `:deep`；删 2 处 cell 密度 + 1 处 tag 宽度 | [utilities.scss](../renderer/shared/styles/utilities.scss)、[RulesPanel.vue](../tools/interceptor/renderer/components/RulesPanel.vue) |
@@ -491,9 +482,9 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 | 计划 | 实际 | 原因 |
 | --- | --- | --- |
 | `App.vue` 4 处 tabs 迁全局 `.el-tabs--bar` | **后续改为自研页签** | 标题栏页签需要浏览器式拖拽排序与自定义拖拽浮层，已改为 `HeaderTabs.vue`（不再使用 `el-tabs`），原 exception 失效 |
-| 业务侧 `:deep` 目标 ≤5 | **实测 8** | 其中 7 处在 `RulesPanel`（菜单 / 标题字号 / 置顶行 / 输入底色 / radio 标签字号），都是编辑器内语义；再压只能造一次性工具类，违背「反过度设计」 |
+| 业务侧 `:deep` 目标 ≤5 | **实测 7** | 全部在 `RulesPanel`（菜单 / 标题字号 / 置顶行 / 输入底色 / radio 标签字号），都是编辑器内语义；再压只能造一次性工具类，违背「反过度设计」（原 8 处含 1 处属已下线的 `EnvBrowserPage`） |
 | `el-progress` / `el-table` 归零 | **各 1 处（封装内部）** | 组件基座本身必须写 EP 标签，断言已限定「业务文件 0」 |
-| `el-tag` 迁移覆盖 36 处 | 36 处全部迁移 | — |
+| `el-tag` 迁移覆盖 28 处 | 28 处全部迁移 | — |
 | 表格密度只在 B1 动 | 同批删掉 telegram-cache 两处 4px 覆写 | 否则全局 4px + 原 4px 会叠成 8px |
 
 ### 15.3 验证记录
@@ -502,7 +493,7 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 | --- | --- |
 | `pnpm lint` | 通过 |
 | `pnpm typecheck` | 通过 |
-| `pnpm check:ui --strict` | 5/5 PASS（el-tag 0、el-empty 0、el-progress 1、el-table 1、业务侧 `:deep` 8） |
+| `pnpm check:ui --strict` | 5/5 PASS（el-tag 0、el-empty 0、el-progress 1、el-table 1、业务侧 `:deep` 7） |
 | `@vue/compiler-sfc` 全量编译 | 69 个 SFC + 2 个 SCSS 全部通过（沙箱内 `vite build` 会 `spawn EPERM`） |
 | 视觉回归（5 种窗口外观 × 表格 / 弹层 / 标签） | **待执行**（见 §10.2、§10.3） |
 
@@ -513,20 +504,12 @@ pnpm check:ui   # EP 用法断言（--strict：el-tag / el-empty 归零、el-pro
 
 ---
 
-## 附录 A · `el-tag` 36 处逐条映射
+## 附录 A · `el-tag` 28 处逐条映射
 
 规则见 §5.3。`plain` = 原 `effect="plain"`。
 
 | 文件:行 | 原 type / effect | 目标 |
 | --- | --- | --- |
-| chrome-sandbox/SandboxCard.vue:26 | danger / plain | `tone="danger" variant="outline"` |
-| chrome-sandbox/SandboxCard.vue:29 | danger / plain | `tone="danger" variant="outline"` |
-| chrome-sandbox/SandboxCard.vue:32 | info / plain | `tone="info" variant="outline"` |
-| chrome-sandbox/StatusPanel.vue:37 | success / info 条件 | `:tone="… ? 'success' : 'info'" variant="soft"` |
-| chrome-sandbox/StatusPanel.vue:56 | success / info 条件，plain | `:tone` + `variant="outline"` |
-| chrome-sandbox/StatusPanel.vue:64 | danger / plain | `tone="danger" variant="outline"` |
-| chrome-sandbox/StatusPanel.vue:67 | danger / plain | `tone="danger" variant="outline"` |
-| env-browser/EnvCard.vue:24 | success | `tone="success" variant="soft"` |
 | interceptor/InterceptorStatusPanel.vue:123 | success / info 条件 | `:tone` + `variant="soft"` |
 | interceptor/InterceptorStatusPanel.vue:163 | 无 | `tone="neutral" variant="outline"`（appId 元信息） |
 | interceptor/InterceptorStatusPanel.vue:167 | success / warning 条件 | `:tone` + `variant="soft"` |

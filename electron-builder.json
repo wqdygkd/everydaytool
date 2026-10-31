@@ -23,10 +23,6 @@
   ],
   "extraResources": [
     {
-      "from": "tools/chrome-sandbox/extension",
-      "to": "extension"
-    },
-    {
       "from": "tools/interceptor/extension",
       "to": "extension-interceptor"
     }

@@ -1,5 +1,5 @@
 // 拦截器总调度：装配 WS 桥 / MITM 代理 / 证书 / 名单 / 规则（动态脚本由规则派生下发）/ 流量，
-// 并向渲染层广播状态事件（chrome-sandbox 的广播模式同款）。
+// 并向渲染层广播状态事件。
 import type {
   CaStatus,
   InjectedScript,

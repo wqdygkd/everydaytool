@@ -1,4 +1,4 @@
-// Telegram Web A 的 webview 标签最小类型（与 env-browser / treease-editor 同款做法）：
+// Telegram Web A 的 webview 标签最小类型（与 treease-editor 同款做法）：
 // Electron 的 <webview> 是自定义元素，DOM lib 里没有这些方法；这里只声明本工具用到的部分，
 // 避免 `as any` 到处散落。getWebContentsId 只有 guest 就绪后才可调用，调用方需 try/catch。
 export type WebviewTag = Omit<HTMLElement, 'addEventListener'> & {

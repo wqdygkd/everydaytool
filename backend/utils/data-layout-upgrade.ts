@@ -88,8 +88,8 @@ const LEGACY_TOP_LEVEL_NAMES = Array.from(new Set(
 
 /**
  * 数据根里的合法顶层项：旧顶层目录 + v2 的三个层目录 + 版本标记 +
- * pre-v1 的遗留目录 `sandboxes` / `shared`（早期布局，由 chrome-sandbox 自己的
- * ensureChromeSandboxLayout 在运行期收编，不能在这里当孤儿隔离）+
+ * 已移除工具的遗留目录（chrome-sandbox / env-browser 及其 pre-v1 的
+ * `sandboxes` / `shared`，工具已删，数据原样保留，不当孤儿隔离）+
  * 用户自备、我们不拥有也不理解的 `.env` 一类文件（`DATA_ROOT_KEEP_NAMES`）。
  */
 const KNOWN_DATA_ROOT_NAMES = new Set<string>([
@@ -98,6 +98,8 @@ const KNOWN_DATA_ROOT_NAMES = new Set<string>([
   'session',
   'cache',
   'assets',
+  'chrome-sandbox',
+  'env-browser',
   'sandboxes',
   'shared',
   DATA_LAYOUT_VERSION_FILE,
@@ -247,34 +249,6 @@ function moveEntry(from: string, to: string, kind: 'file' | 'dir'): void {
 }
 
 /**
- * 搬完 profile 后改写沙箱记录里的绝对 userDataPath。
- * 不做这一步，沙箱列表里的路径会指向已不存在的旧目录（Chrome 会当新 profile 起）。
- */
-function rewriteSandboxUserDataPaths(roots: DataLayoutRoots, legacyRoot: string, nextRoot: string): void {
-  const storePath = path.join(layerRoot(roots, 'config'), 'chrome-sandbox', 'sandboxes.json')
-  if (!existsSync(storePath)) return
-  try {
-    const list = JSON.parse(readFileSync(storePath, 'utf8')) as unknown
-    if (!Array.isArray(list)) return
-    let changed = 0
-    for (const item of list as Array<Record<string, unknown>>) {
-      const current = item.userDataPath
-      if (typeof current !== 'string') continue
-      const relative = path.relative(legacyRoot, current)
-      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue
-      item.userDataPath = path.join(nextRoot, relative)
-      changed++
-    }
-    if (changed > 0) {
-      writeFileSync(storePath, `${JSON.stringify(list, null, 2)}\n`, 'utf8')
-      logger.info('Sandbox profile paths rewritten after layout upgrade', { changed })
-    }
-  } catch (error) {
-    logger.warn('Failed to rewrite sandbox profile paths', { error: (error as Error).message })
-  }
-}
-
-/**
  * 执行升级。`dryRun: true` 时只返回计划（不改盘），用于验证脚本与排障。
  */
 export function upgradeDataLayout(roots: DataLayoutRoots, options: { dryRun?: boolean } = {}): DataLayoutUpgradeResult {
@@ -324,10 +298,6 @@ export function upgradeDataLayout(roots: DataLayoutRoots, options: { dryRun?: bo
       moveEntry(step.from, step.to, step.kind)
       result.movedCount++
       result.movedBytes += step.bytes
-      const rule = DATA_LAYOUT_V1_TO_V2.find(item => item.id === step.ruleId)
-      if (rule?.rewriteAbsolutePaths === 'sandbox-user-data-path') {
-        rewriteSandboxUserDataPaths(roots, step.from, step.to)
-      }
     } catch (error) {
       result.ok = false
       result.errors.push(`${step.ruleId}: ${(error as Error).message}`)
