@@ -81,6 +81,16 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
     site.value = await invoke<TwebCacheSiteInfo>(channels().SITE_INFO)
   }
 
+  /** 打开页签：拉起站点（懒启动）并返回站点状态 */
+  async function acquireSite(): Promise<void> {
+    site.value = await invoke<TwebCacheSiteInfo>(channels().SITE_ACQUIRE)
+  }
+
+  /** 关闭页签：释放站点引用（主进程归零后延迟停站点），只通知不等待 */
+  function releaseSite(): void {
+    void invoke(channels().SITE_RELEASE).catch(() => undefined)
+  }
+
   async function loadLibrary(silent = false): Promise<void> {
     if (!silent) busy.library = true
     try {
@@ -134,7 +144,7 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
         applyLibraryEvent(payload as TelegramLibraryEvent)
       }))
 
-      await refreshSite()
+      await acquireSite()
       await Promise.all([loadLibrary(), loadTrash()])
       ready.value = true
     } catch (error) {
@@ -144,6 +154,7 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
   }
 
   function dispose(): void {
+    releaseSite()
     for (const off of disposers) off()
     disposers = []
     if (libraryRefreshTimer !== undefined) {

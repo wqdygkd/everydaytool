@@ -4,7 +4,12 @@ import { ipcMain, shell } from 'electron'
 import { getTelegramArchiveEngine } from '../../../../backend/telegram-archive/engine.ts'
 import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
-import { getTwebCacheMediaOrigin, getTwebCacheSiteStatus } from '../services/site-service.ts'
+import {
+  ensureTwebCacheSiteStarted,
+  getTwebCacheMediaOrigin,
+  getTwebCacheSiteStatus,
+  releaseTwebCacheSite,
+} from '../services/site-service.ts'
 import { TWEB_CACHE_IPC_CHANNELS } from './channels.ts'
 
 /** 存储作用域：归档数据落在 assets/tweb-cache/…（与 telegram-cache 各一份） */
@@ -34,6 +39,11 @@ export function registerTwebCacheHandlers(): void {
   handlersRegistered = true
 
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_INFO, () => getTwebCacheSiteStatus())
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_ACQUIRE, () => ensureTwebCacheSiteStarted())
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_RELEASE, () => {
+    releaseTwebCacheSite()
+    return true
+  })
 
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.LIBRARY_LIST, async () => {
     const entries = await getTelegramArchiveEngine().listLibrary(SCOPE)
