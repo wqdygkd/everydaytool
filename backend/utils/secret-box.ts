@@ -1,6 +1,6 @@
 // 凭据的静态加密（at-rest）：把明文密文包一层 Electron safeStorage（Windows DPAPI / macOS Keychain）。
 //
-// 为什么放在平台基建：env-browser 的账号密码、wxp 采集到的 token 都要落盘，但都不该以明文躺在
+// 为什么放在平台基建：wxp 采集到的 token 等敏感数据都要落盘，但都不该以明文躺在
 // `<data>/config/...` 里（配置层会被导出成备份包）。这里提供统一的 **信封格式**：
 //
 //   edt-secret:<base64(safeStorage.encryptString(plain))>

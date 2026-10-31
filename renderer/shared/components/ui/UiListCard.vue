@@ -23,8 +23,8 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="scss">
-/* 列表卡片：白底细边浮岛，hover / 选中时用**品牌色**高亮
-   （合并 chrome-sandbox 沙箱卡与环境卡两处重复）。hover 只提描边、选中才铺浅底：
+/* 列表卡片：白底细边浮岛，hover / 选中时用**品牌色**高亮。
+  hover 只提描边、选中才铺浅底：
    两种状态本来就不等价，颜色上分开之后「鼠标路过」不会再像「已经选中」。 */
 .ui-list-card {
   padding: var(--spacing-md) var(--spacing-lg);

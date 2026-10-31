@@ -1,6 +1,6 @@
 // edt 应用级数据根目录（所有工具的配置 / 缓存 / 产出都落在其下）的唯一事实来源：
 // 默认目录、用户覆盖（data-root.json 引导配置 + data-root.path 镜像文件）、setup 状态。
-// 与具体工具域无关；Chrome / 沙箱专属路径见 tools/chrome-sandbox/backend/utils/path-helper.ts。
+// 与具体工具域无关；各工具的落点一律经 resolveLayerPath（backend/utils/data-layers.ts）。
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'

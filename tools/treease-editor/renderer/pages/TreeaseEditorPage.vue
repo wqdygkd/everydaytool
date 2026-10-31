@@ -215,7 +215,7 @@ async function startIntercept() {
   if (!api) {
     const w = window as unknown as Record<string, unknown>
     ElMessage.warning(
-      `接口拦截仅在 Electron 桌面端可用（当前：envBrowser=${Boolean(w.envBrowser)}，edtRuntime=${Boolean(w.edtRuntime)}，UA含Electron=${navigator.userAgent.includes('Electron')}）。请完全退出 Electron 后重跑 pnpm dev`,
+      `接口拦截仅在 Electron 桌面端可用（当前：edtRuntime=${Boolean(w.edtRuntime)}，UA含Electron=${navigator.userAgent.includes('Electron')}）。请完全退出 Electron 后重跑 pnpm dev`,
     )
     return
   }

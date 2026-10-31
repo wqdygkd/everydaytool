@@ -78,14 +78,6 @@ export default antfu(
     },
   },
   {
-    files: ['tools/chrome-sandbox/extension/**/*.js'],
-    languageOptions: {
-      globals: {
-        chrome: 'readonly',
-      },
-    },
-  },
-  {
     files: ['tools/interceptor/extension/**/*.js'],
     languageOptions: {
       globals: {

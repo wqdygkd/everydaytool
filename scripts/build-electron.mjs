@@ -84,9 +84,8 @@ const backendEntryPoints = [
   ...toolBackendEntries,
 ]
 
-const backendAssets = [
-  'tools/chrome-sandbox/backend/chrome/chrome-process-query.ps1',
-]
+// 需要原样拷进 dist-electron 的非 TS 资产（当前为空，保留入口）
+const backendAssets = []
 
 // 源码里相对导入统一写 .ts（编辑器可跳转、类型完整），产出改为纯 ESM 的 .js 目录
 // （Node 只认运行时后缀）。esbuild 无 rewriteExtensions 选项，用插件在产物里做后缀改写。

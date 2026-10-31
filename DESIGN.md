@@ -230,7 +230,7 @@
 #### 3.2.6 标题标签（`h1–h6`）
 
 - 已全局 reset：`margin: 0` + `font-size: inherit` + `font-weight: var(--font-weight-medium)` + `text-wrap: balance`。
-- 因此**标题必须显式取令牌字号**（例：`UiSectionHeader` 用 `lg`、工具卡名用 `base`、沙箱名用 `lg`）；
+- 因此**标题必须显式取令牌字号**（例：`UiSectionHeader` 用 `lg`、工具卡名用 `base`）；
   禁止依赖浏览器默认的 h1–h6 字号（21 / 18 / 16px，会直接越过 18px 上限）。
 - 标题与正文之间**上方间距必须大于下方**（区块间距 32 / 标题到内容 12）：标题属于它下面的那一块。
 
@@ -626,7 +626,7 @@
 | 骨架 | 判据 | 页面骨架 | 谁 |
 | ------ | ---------------- | ---------------------------------------------- | ------------------------------------------ |
 | **文档型** | 读完 → 填 → 确认 | 内容栏 `--column-document`（760）居中；页面内边距 `24 / 32 / 32`（≤760 收 16）；同级区块 24 | 设置、离线包、身份证生成器 |
-| **工作区型** | 边看边操作、多区域并行 | 铺满窗口，**不设内容栏**；面板 / 侧栏 / 表格可贴边，贴边时由各 pane 自己的内边距负责呼吸（≥12） | interceptor、telegram-cache、env-browser、chrome-sandbox、workbuddy2api |
+| **工作区型** | 边看边操作、多区域并行 | 铺满窗口，**不设内容栏**；面板 / 侧栏 / 表格可贴边，贴边时由各 pane 自己的内边距负责呼吸（≥12） | interceptor、telegram-cache、workbuddy2api |
 
 - **文档型为什么要有栏**：不设栏时窗口一宽，「标签 → 输入框」能拉出 1500px，扫读要转头；
   说明文字又会因为 `--measure-prose` 在半途截断，右边缘和输入框对不齐。
@@ -637,7 +637,6 @@
 - **工作区型为什么不能有栏**：表格列、webview、双栏面板靠宽度换信息密度；加栏等于把可用区砍掉一截。
   它们只守一条：**页面级内边距 0–16，且内容不贴死窗口边**——pane 内部自己负责 12–16 的呼吸。
 - 具体实现：
-  - 侧栏 + 主区（chrome-sandbox / env-browser）：`grid-template-columns: <sidebar> 1fr`，≤760px 折为上下堆叠。
   - 页签 + 面板（interceptor / telegram-cache / offline-pack）：`tool-page` + `UiMenuHorizontal` + `KeepAlive` 包裹的 `<component :is>`，子视图由路由驱动；需要品牌图标时给 `items` 传 `icon`。
   - 顶栏 + 内容（treease / wxp）：`UiToolbar` 顶栏 + 下方内容（wxp 的内容全宽铺满，见上方全宽变体）。
   - 居中卡片（id-card-generator）：`tool-page` 内居中一张卡片（720），不铺栏。

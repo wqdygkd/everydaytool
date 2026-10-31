@@ -1,7 +1,5 @@
 import type { IpcChannels } from '../shared/ipc-validation.ts'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
-import { CHROME_SANDBOX_IPC_CHANNELS } from '../tools/chrome-sandbox/backend/ipc/channels.ts'
-import { ENV_BROWSER_IPC_CHANNELS } from '../tools/env-browser/backend/ipc/channels.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/channels.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
 import { TELEGRAM_CACHE_IPC_CHANNELS } from '../tools/telegram-cache/backend/ipc/channels.ts'
@@ -22,8 +20,6 @@ export interface IpcNamespace {
 export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'edtApp', channels: EDT_APP_IPC_CHANNELS },
   { preloadNamespace: 'interceptor', channels: INTERCEPTOR_IPC_CHANNELS },
-  { preloadNamespace: 'chromeSandbox', channels: CHROME_SANDBOX_IPC_CHANNELS },
-  { preloadNamespace: 'envBrowser', channels: ENV_BROWSER_IPC_CHANNELS },
   { preloadNamespace: 'treeaseEditor', channels: TREEASE_EDITOR_IPC_CHANNELS },
   { preloadNamespace: 'wxpEnhancer', channels: WXP_ENHANCER_IPC_CHANNELS },
   { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },

@@ -4,7 +4,6 @@ export const STORAGE_KEYS = {
   favoriteTools: 'edt:favorite-tools',
   homeToolOrder: 'edt:home-tool-order',
   toolTabs: 'edt:tool-tabs',
-  envBrowserConfigs: 'edt:env-browser:configs',
   offlinePackRegistryMirror: 'edt:offline-pack:registry-mirror',
   treeaseInterceptRules: 'edt:treease-intercept-rules',
   treeaseInterceptEnabled: 'edt:treease-intercept-enabled',

@@ -113,8 +113,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'app.window-appearance', toolId: 'app', layer: 'config', relativePath: 'app/window-appearance.json', label: '窗口外观', backup: 'include', clean: 'never' },
   { id: 'app.window-bounds', toolId: 'app', layer: 'config', relativePath: 'app/window-bounds.json', label: '窗口大小与位置', backup: 'include', clean: 'never' },
   { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '收藏的工具与首页排序', backup: 'include', clean: 'never' },
-  { id: 'chrome-sandbox.stores', toolId: 'chrome-sandbox', layer: 'config', relativePath: 'chrome-sandbox', label: '沙箱列表 / 指纹 / 配置', backup: 'include', clean: 'never' },
-  { id: 'env-browser.envs', toolId: 'env-browser', layer: 'config', relativePath: 'env-browser/envs.json', label: '环境账号', backup: 'include', clean: 'never', sensitive: true },
   { id: 'interceptor.config', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/config.json', label: '拦截配置', backup: 'include', clean: 'never' },
   { id: 'interceptor.rules', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/rules.json', label: '拦截规则', backup: 'include', clean: 'never' },
   { id: 'interceptor.certs', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/certs', label: '根 CA 证书与私钥', backup: 'include', clean: 'never', sensitive: true },
@@ -143,7 +141,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
 
   // ── 会话层（Chromium 拥有；relativePath '.' 表示层根本身）──
   { id: 'session.chromium', toolId: 'app', layer: 'session', relativePath: '.', label: 'Cookies / LocalStorage / 页面缓存', backup: 'optional', clean: 'internal-chromium-cache' },
-  { id: 'session.sandbox-profiles', toolId: 'chrome-sandbox', layer: 'session', relativePath: 'sandbox', label: '沙箱 Chrome profile', backup: 'optional', clean: 'internal-chromium-cache' },
   // 各工具的 webview 分区（telegram-cache / treease-editor / workbuddy2api-panel / env-<id>）
   // 由 Chromium 动态创建在 session/Partitions 下，不能静态列举，统计时随 session 层整体计入。
 
@@ -152,7 +149,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'app.crash-dumps', toolId: 'app', layer: 'cache', relativePath: 'app/crash-dumps', label: '崩溃转储', backup: 'never', clean: 'always' },
   // 备份恢复前自动生成的配置层快照：回滚点。可再生（清缓存即可丢），但**不随清缓存删除**自动快照以外的东西
   { id: 'app.import-rollback', toolId: 'app', layer: 'cache', relativePath: 'import-rollback', label: '备份恢复回滚快照', backup: 'never', clean: 'always' },
-  { id: 'chrome-sandbox.shared', toolId: 'chrome-sandbox', layer: 'cache', relativePath: 'chrome-sandbox/shared', label: '共享指纹扩展（可重建）', backup: 'never', clean: 'always' },
   { id: 'interceptor.extension', toolId: 'interceptor', layer: 'cache', relativePath: 'interceptor/extension', label: '运行时扩展（可重建）', backup: 'never', clean: 'always' },
   { id: 'offline-pack.downloads', toolId: 'offline-pack', layer: 'cache', relativePath: 'offline-pack/downloads', label: '下载的离线包', backup: 'never', clean: 'always' },
   { id: 'telegram-cache.objects', toolId: 'telegram-cache', layer: 'cache', relativePath: 'telegram-cache/objects', label: '资源对象（按哈希去重）', backup: 'never', clean: 'always', integrity: 'index-prune' },
@@ -209,8 +205,6 @@ export interface DataLayoutMigrationRule {
   /** 新位置：**相对所属层根 */
   to: string
   kind: DataLayoutEntryKind
-  /** 目录迁移后需要改写其它记录里的绝对路径（目前只有沙箱列表） */
-  rewriteAbsolutePaths?: 'sandbox-user-data-path'
   note?: string
 }
 
@@ -228,16 +222,6 @@ export const DATA_LAYOUT_V1_TO_V2: readonly DataLayoutMigrationRule[] = [
   { id: 'app.window-bounds', layer: 'config', from: 'app/window-bounds.json', to: 'app/window-bounds.json', kind: 'file' },
   { id: 'app.logs', layer: 'cache', from: 'app/logs', to: 'app/logs', kind: 'dir' },
   { id: 'app.crash-dumps', layer: 'cache', from: 'app/crash-dumps', to: 'app/crash-dumps', kind: 'dir' },
-
-  // chrome-sandbox：配置 / profile（会话）/ 共享扩展（缓存）三层拆开
-  { id: 'chrome-sandbox.sandboxes-json', layer: 'config', from: 'chrome-sandbox/sandboxes.json', to: 'chrome-sandbox/sandboxes.json', kind: 'file' },
-  { id: 'chrome-sandbox.fingerprints-json', layer: 'config', from: 'chrome-sandbox/fingerprints.json', to: 'chrome-sandbox/fingerprints.json', kind: 'file' },
-  { id: 'chrome-sandbox.config-json', layer: 'config', from: 'chrome-sandbox/config.json', to: 'chrome-sandbox/config.json', kind: 'file' },
-  { id: 'chrome-sandbox.profiles', layer: 'session', from: 'chrome-sandbox/sandboxes', to: 'sandbox', kind: 'dir', rewriteAbsolutePaths: 'sandbox-user-data-path', note: 'Chrome --user-data-dir，含登录态；搬完须改写 sandboxes.json 里的绝对路径' },
-  { id: 'chrome-sandbox.shared', layer: 'cache', from: 'chrome-sandbox/shared', to: 'chrome-sandbox/shared', kind: 'dir', note: '可从 resources 重建' },
-
-  // env-browser
-  { id: 'env-browser.envs-json', layer: 'config', from: 'env-browser/envs.json', to: 'env-browser/envs.json', kind: 'file', note: '敏感：明文账号密码' },
 
   // interceptor
   { id: 'interceptor.config-json', layer: 'config', from: 'interceptor/config.json', to: 'interceptor/config.json', kind: 'file' },
