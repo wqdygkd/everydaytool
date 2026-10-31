@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { WxpRunningStatus } from '../../../../shared/wxp'
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
@@ -73,7 +75,7 @@ const statusTone = computed<'success' | 'warning' | 'danger' | 'neutral'>(() => 
 
 async function handleLaunch(): Promise<void> {
   if (!settingsForm.executablePath.trim()) {
-    ElMessage.warning('请先选择 WXP 可执行文件')
+    toast.warning('请先选择 WXP 可执行文件')
     return
   }
   launching.value = true
@@ -81,9 +83,9 @@ async function handleLaunch(): Promise<void> {
     await store.saveSettings({ ...settingsForm })
     settingsDirty.value = false
     await store.launch()
-    ElMessage.success('WXP 已启动，增强脚本已注入')
+    toast.success('WXP 已启动，增强脚本已注入')
   } catch (error) {
-    ElMessage.error((error as Error).message || '启动失败')
+    toast.error((error as Error).message || '启动失败')
   } finally {
     launching.value = false
   }
@@ -94,7 +96,7 @@ async function handleStop(): Promise<void> {
   try {
     await store.stop()
   } catch (error) {
-    ElMessage.error((error as Error).message || '停止失败')
+    toast.error((error as Error).message || '停止失败')
   } finally {
     stopping.value = false
   }
@@ -107,7 +109,7 @@ async function handleClearLoginCache(): Promise<void> {
     ? '将清除缓存的登录会话（快照/镜像）并刷新页面回到登录状态，需要重新登录。确定继续？'
     : 'WXP 未在运行：将登记清除标记，下次启动 WXP 时自动清除登录缓存并回到登录页。确定继续？'
   try {
-    await ElMessageBox.confirm(confirmText, '清除登录缓存', {
+    await confirm(confirmText, '清除登录缓存', {
       type: 'warning',
       confirmButtonText: '清除',
       cancelButtonText: '取消',
@@ -119,12 +121,12 @@ async function handleClearLoginCache(): Promise<void> {
   try {
     const result = await store.clearLoginCache()
     if (result.pending) {
-      ElMessage.success('已登记，将在下次启动 WXP 时自动清除登录缓存')
+      toast.success('已登记，将在下次启动 WXP 时自动清除登录缓存')
     } else {
-      ElMessage.success(`已清除登录缓存（${result.pages} 个页面），请重新登录`)
+      toast.success(`已清除登录缓存（${result.pages} 个页面），请重新登录`)
     }
   } catch (error) {
-    ElMessage.error((error as Error).message || '清除登录缓存失败')
+    toast.error((error as Error).message || '清除登录缓存失败')
   } finally {
     clearing.value = false
   }
@@ -133,13 +135,6 @@ async function handleClearLoginCache(): Promise<void> {
 // —— 数据缓存（来自 WXP） ——
 const collecting = ref(false)
 const dataLogin = computed(() => store.dataCache?.login ?? null)
-// 用户信息 JSON 的折叠面板不吃 el 控件底：EP 的折叠头 / 内容包裹层默认取
-// --el-fill-color-blank（本仓库绑到 --color-input），在玻璃面板上会显成一条白带。
-// 直接覆写 EP 自己的两个变量，比 :deep 改内部类更稳；--color-canvas 恒为 transparent。
-const collapseTransparentStyle = {
-  '--el-collapse-header-bg-color': 'var(--color-canvas)',
-  '--el-collapse-content-bg-color': 'var(--color-canvas)',
-}
 const userCode = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.code ?? '—'))
 const userName = computed(() => String((dataLogin.value?.user as Record<string, unknown> | null)?.name ?? '—'))
 const UNKNOWN_HOSPITAL = '未知医院'
@@ -199,9 +194,9 @@ async function handleCollect(): Promise<void> {
   collecting.value = true
   try {
     await store.collectData()
-    ElMessage.success('已从 WXP 读取并缓存')
+    toast.success('已从 WXP 读取并缓存')
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取失败')
+    toast.error((error as Error).message || '读取失败')
   } finally {
     collecting.value = false
   }
@@ -212,7 +207,7 @@ async function pickExecutable(): Promise<void> {
     const path = await store.selectExecutable()
     if (path) settingsForm.executablePath = path
   } catch (error) {
-    ElMessage.error((error as Error).message || '选择可执行文件失败')
+    toast.error((error as Error).message || '选择可执行文件失败')
   }
 }
 
@@ -221,27 +216,27 @@ async function detectExecutable(): Promise<void> {
     const path = await store.detectExecutable()
     if (path) {
       settingsForm.executablePath = path
-      ElMessage.success(`已检测到：${path}`)
+      toast.success(`已检测到：${path}`)
     } else {
-      ElMessage.info('未在常见安装位置找到 WXP，请手动选择')
+      toast.info('未在常见安装位置找到 WXP，请手动选择')
     }
   } catch (error) {
-    ElMessage.error((error as Error).message || '自动检测失败')
+    toast.error((error as Error).message || '自动检测失败')
   }
 }
 
 async function saveSettings(): Promise<void> {
   if (!settingsForm.executablePath.trim()) {
-    ElMessage.warning('请先选择 WXP 可执行文件')
+    toast.warning('请先选择 WXP 可执行文件')
     return
   }
   saving.value = true
   try {
     await store.saveSettings({ ...settingsForm })
     settingsDirty.value = false
-    ElMessage.success('设置已保存')
+    toast.success('设置已保存')
   } catch (error) {
-    ElMessage.error((error as Error).message || '保存失败')
+    toast.error((error as Error).message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -254,7 +249,7 @@ onMounted(async () => {
     unsubscribeStatus = store.bindStatusEvents()
     await store.load()
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取 WXP 增强设置失败')
+    toast.error((error as Error).message || '读取 WXP 增强设置失败')
   } finally {
     syncSettingsForm()
     loading.value = false
@@ -303,22 +298,21 @@ onUnmounted(() => {
         <!-- 启动 / 停止互斥：同一时刻只露出一个（未启动只有启动，运行中只有停止）。
              两个按钮都是两字 + 同尺寸，「!」跟着启动钮一起出现，切换时按钮不跳动。 -->
         <UiGroup v-if="!isRunning" gap="xs">
-          <el-button
+          <UiButton
             type="primary"
             :loading="launching"
             :disabled="loading"
             @click="handleLaunch"
           >
             启动
-          </el-button>
+          </UiButton>
           <!-- 单实例约束紧贴启动钮：原正文里的那句说明收在这里，只在 hover / 聚焦时展开 -->
-          <el-tooltip content="启动前请先退出已打开的 WXP" placement="top">
-            <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP">
-              <UiIcon name="alert" :size="16" />
-            </span>
-          </el-tooltip>
+          <!-- EP tooltip → 原生 title:单条静态提示,不值得为它挂浮层组件 -->
+          <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP" title="启动前请先退出已打开的 WXP">
+            <UiIcon name="alert" :size="16" />
+          </span>
         </UiGroup>
-        <el-button
+        <UiButton
           v-else
           type="warning"
           plain
@@ -326,14 +320,14 @@ onUnmounted(() => {
           @click="handleStop"
         >
           停止
-        </el-button>
+        </UiButton>
       </UiGroup>
     </UiPanel>
 
     <!-- 启动设置 -->
     <UiPanel title="启动设置">
       <template #actions>
-        <el-button
+        <UiButton
           size="small"
           type="primary"
           plain
@@ -342,10 +336,10 @@ onUnmounted(() => {
           @click="saveSettings"
         >
           保存设置
-        </el-button>
+        </UiButton>
       </template>
-      <el-form label-width="110px">
-        <el-form-item label="WXP 路径" required>
+      <div class="config-form">
+        <UiFormField label-width="110px" label="WXP 路径" required>
           <UiPathField
             v-model="settingsForm.executablePath"
             placeholder="选择 WxP Client 可执行文件（如 WxP Client.exe）"
@@ -354,24 +348,27 @@ onUnmounted(() => {
             mono
           >
             <template #actions>
-              <el-button :disabled="settingsLocked" @click="pickExecutable">
+              <UiButton :disabled="settingsLocked" @click="pickExecutable">
                 浏览
-              </el-button>
-              <el-button :disabled="settingsLocked" @click="detectExecutable">
+              </UiButton>
+              <UiButton :disabled="settingsLocked" @click="detectExecutable">
                 自动检测
-              </el-button>
+              </UiButton>
             </template>
           </UiPathField>
-        </el-form-item>
-        <el-form-item label="调试端口">
-          <el-input-number
+        </UiFormField>
+        <UiFormField label-width="110px" label="调试端口">
+          <input
             v-model="settingsForm.debugPort"
+            type="number"
             :min="1024"
             :max="65535"
             :disabled="settingsLocked"
-          />
-        </el-form-item>
-        <el-form-item label="状态角标">
+            class="ui-port-input"
+            @change="settingsForm.debugPort = Math.min(65535, Math.max(1024, Math.round(Number(settingsForm.debugPort) || 1024)))"
+          >
+        </UiFormField>
+        <UiFormField label-width="110px" label="状态角标">
           <UiSwitchField
             v-model="settingsForm.showStatusBadge"
             align="start"
@@ -379,8 +376,8 @@ onUnmounted(() => {
           >
             在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯
           </UiSwitchField>
-        </el-form-item>
-        <el-form-item label="缓存登录状态">
+        </UiFormField>
+        <UiFormField label-width="110px" label="缓存登录状态">
           <UiSwitchField
             v-model="settingsForm.cacheLogin"
             align="start"
@@ -388,17 +385,17 @@ onUnmounted(() => {
           >
             登录一次后整体缓存会话
           </UiSwitchField>
-        </el-form-item>
-        <el-form-item label="额外启动参数" class="form-item--last">
-          <el-input
+        </UiFormField>
+        <UiFormField label-width="110px" label="额外启动参数" class="form-item--last">
+          <UiInput
             v-model="settingsForm.extraArgs"
             placeholder="可选，空格分隔，如 --lang=zh-CN；调试端口会自动附加"
             :disabled="settingsLocked"
             class="mono"
             spellcheck="false"
           />
-        </el-form-item>
-      </el-form>
+        </UiFormField>
+      </div>
     </UiPanel>
 
     <!-- 数据缓存（来自 WXP） -->
@@ -406,7 +403,7 @@ onUnmounted(() => {
       <template #actions>
         <UiGroup gap="sm" wrap>
           <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
-          <el-button
+          <UiButton
             size="small"
             type="danger"
             plain
@@ -414,8 +411,8 @@ onUnmounted(() => {
             @click="handleClearLoginCache"
           >
             清除登录缓存
-          </el-button>
-          <el-button
+          </UiButton>
+          <UiButton
             size="small"
             type="primary"
             plain
@@ -424,7 +421,7 @@ onUnmounted(() => {
             @click="handleCollect"
           >
             从 WXP 读取
-          </el-button>
+          </UiButton>
         </UiGroup>
       </template>
       <UiHint class="section-hint">
@@ -445,9 +442,9 @@ onUnmounted(() => {
           <UiKeyValue label="访问令牌" label-width="88px" mono>
             {{ maskToken(dataLogin.accessToken) }}
             <template #actions>
-              <el-button link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
+              <UiButton link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
                 复制
-              </el-button>
+              </UiButton>
             </template>
           </UiKeyValue>
           <UiKeyValue label="访问有效期至" label-width="88px">
@@ -456,9 +453,9 @@ onUnmounted(() => {
           <UiKeyValue label="刷新令牌" label-width="88px" mono>
             {{ maskToken(dataLogin.refreshToken) }}
             <template #actions>
-              <el-button link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
+              <UiButton link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
                 复制
-              </el-button>
+              </UiButton>
             </template>
           </UiKeyValue>
           <UiKeyValue label="刷新有效期至" label-width="88px">
@@ -477,13 +474,13 @@ onUnmounted(() => {
             {{ dataLogin.snapshotExists ? '存在' : '无' }}
           </UiKeyValue>
         </div>
-        <el-collapse v-if="dataLogin.user" class="user-json" :style="collapseTransparentStyle">
-          <el-collapse-item name="user" title="用户信息 JSON">
+        <UiCollapse v-if="dataLogin.user" class="user-json">
+          <UiCollapseItem name="user" title="用户信息 JSON">
             <UiCodeBlock max-height="240px">
               {{ JSON.stringify(dataLogin.user, null, 2) }}
             </UiCodeBlock>
-          </el-collapse-item>
-        </el-collapse>
+          </UiCollapseItem>
+        </UiCollapse>
         <template v-if="favCount">
           <div class="fav-head">
             <h4 class="fav-title">
@@ -502,10 +499,10 @@ onUnmounted(() => {
             max-height="420"
             :row-class-name="favRowClass"
           >
-            <el-table-column prop="name" label="医院 / 转发" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="sceneformal" label="环境" width="90" />
-            <el-table-column prop="accessPoint" label="接入点" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
+            <UiTableColumn prop="name" label="医院 / 转发" min-width="200" show-overflow-tooltip />
+            <UiTableColumn prop="sceneformal" label="环境" width="90" />
+            <UiTableColumn prop="accessPoint" label="接入点" min-width="140" show-overflow-tooltip />
+            <UiTableColumn prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
           </UiTable>
         </template>
         <UiHint v-else block>

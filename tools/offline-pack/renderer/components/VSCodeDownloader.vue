@@ -2,8 +2,8 @@
 import type { OfflinePackVsCodeLinkResult, OfflinePackVsCodeQueryResult } from '@shared/offline-pack'
 import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
-import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
 import DownloaderFrame from './DownloaderFrame.vue'
@@ -39,12 +39,12 @@ function useExample(value: string): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+    toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
   }
   const trimmed = input.value.trim()
   if (!trimmed) {
-    ElMessage.warning('请输入插件 URL')
+    toast.warning('请输入插件 URL')
     return
   }
   loading.value = true
@@ -55,7 +55,7 @@ async function handleSubmit(): Promise<void> {
     const res = await api.invoke(api.channels.VSCODE_QUERY, trimmed) as OfflinePackVsCodeQueryResult
     versions.value = res.versions
   } catch (error) {
-    ElMessage.error((error as Error).message || '查询失败')
+    toast.error((error as Error).message || '查询失败')
   } finally {
     loading.value = false
   }
@@ -67,7 +67,7 @@ async function buildLink(): Promise<void> {
     const res = await api.invoke(api.channels.VSCODE_LINK, input.value.trim(), selectedVersion.value) as OfflinePackVsCodeLinkResult
     linkUrl.value = res.downloadUrl
   } catch (error) {
-    ElMessage.error((error as Error).message || '生成链接失败')
+    toast.error((error as Error).message || '生成链接失败')
   }
 }
 
@@ -90,13 +90,13 @@ async function handleDownload(): Promise<void> {
   >
     <template #hint>
       仅支持插件页链接，或前往
-      <el-link
+      <UiLink
         type="primary"
         :underline="false"
         @click="openExternal('https://marketplace.visualstudio.com/vscode')"
       >
         VSCode Marketplace
-      </el-link>
+      </UiLink>
     </template>
 
     <UiPanel v-if="versions.length" variant="outlined">
@@ -104,17 +104,15 @@ async function handleDownload(): Promise<void> {
         <UiHint size="xs">
           选择版本
         </UiHint>
-        <el-select v-model="selectedVersion" class="full-width" placeholder="选择版本" @change="buildLink">
-          <el-option v-for="v in versions" :key="v" :label="v" :value="v" />
-        </el-select>
+        <UiSelect v-model="selectedVersion" class="full-width" placeholder="选择版本" :options="versions.map(v => ({ label: v, value: v }))" @update:model-value="buildLink" />
 
         <UiGroup v-if="linkUrl" gap="sm" wrap class="btn-flush">
-          <el-button type="primary" :disabled="downloading" @click="handleDownload">
+          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
             下载到本地
-          </el-button>
-          <el-button @click="useCopy(linkUrl, '下载链接')">
+          </UiButton>
+          <UiButton @click="useCopy(linkUrl, '下载链接')">
             复制链接
-          </el-button>
+          </UiButton>
         </UiGroup>
       </UiGroup>
     </UiPanel>

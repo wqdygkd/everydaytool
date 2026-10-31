@@ -2,8 +2,8 @@
 import type { OfflinePackEdgeDetail, OfflinePackEdgeSearchItem } from '@shared/offline-pack'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { parseEdgeQuery } from '@shared/offline-pack'
-import { ElMessage } from 'element-plus'
 import { onUnmounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
 import DownloaderFrame from './DownloaderFrame.vue'
@@ -66,11 +66,11 @@ function selectResult(item: OfflinePackEdgeSearchItem): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+    toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
   }
   if (!input.value.trim()) {
-    ElMessage.warning('请输入扩展名称、CRX ID、ProductId 或商店链接')
+    toast.warning('请输入扩展名称、CRX ID、ProductId 或商店链接')
     return
   }
   loading.value = true
@@ -78,7 +78,7 @@ async function handleSubmit(): Promise<void> {
   try {
     detail.value = await api.invoke(api.channels.EDGE_DETAIL, input.value.trim()) as OfflinePackEdgeDetail
   } catch (error) {
-    ElMessage.error((error as Error).message || '获取详情失败')
+    toast.error((error as Error).message || '获取详情失败')
   } finally {
     loading.value = false
   }
@@ -112,13 +112,13 @@ onUnmounted(() => {
   >
     <template #hint>
       输入名称搜索，或直接粘贴 CRX ID / ProductId / 商店链接，或前往
-      <el-link
+      <UiLink
         type="primary"
         :underline="false"
         @click="openExternal('https://microsoftedge.microsoft.com/addons/')"
       >
         Edge 加载项
-      </el-link>
+      </UiLink>
     </template>
 
     <template #between>
@@ -158,12 +158,12 @@ onUnmounted(() => {
         </UiDetailGrid>
 
         <UiGroup gap="sm" wrap class="btn-flush">
-          <el-button type="primary" :disabled="downloading" @click="handleDownload('crx')">
+          <UiButton type="primary" :disabled="downloading" @click="handleDownload('crx')">
             下载 CRX
-          </el-button>
-          <el-button :disabled="downloading" @click="handleDownload('zip')">
+          </UiButton>
+          <UiButton :disabled="downloading" @click="handleDownload('zip')">
             下载 ZIP
-          </el-button>
+          </UiButton>
         </UiGroup>
       </UiGroup>
     </UiPanel>

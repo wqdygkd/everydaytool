@@ -1,4 +1,5 @@
 import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../../shared/appearance'
+import { toast } from 'vue-sonner'
 import { appIpcChannels, invokeAppIpc, onAppIpc } from '../ipc/useAppIpc'
 
 /**
@@ -39,7 +40,7 @@ export function useAppearance() {
       appearance.value = next
       return next
     } catch (error) {
-      ElMessage.error((error as Error).message || '切换窗口外观失败')
+      toast.error((error as Error).message || '切换窗口外观失败')
       return null
     }
   }

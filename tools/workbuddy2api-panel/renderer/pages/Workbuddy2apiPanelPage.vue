@@ -5,8 +5,9 @@ import type {
   Wb2apiUpdateInfo,
 } from '../../../../shared/workbuddy2api-panel'
 import { registerTabCloseGuard } from '@renderer/shared/composables/useTabCloseGuard'
+import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { WB2API_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import {
   buildWb2apiAnthropicBaseUrl,
@@ -110,7 +111,7 @@ async function refresh() {
     const next = await invokeWb2apiIpc(channels.value!.GET_STATE) as Wb2apiPanelState
     applyState(next)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : String(error))
+    toast.error(error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -123,7 +124,7 @@ async function runAction(action: () => Promise<unknown>, okMsg?: string) {
     } else {
       await refresh()
     }
-    if (okMsg) ElMessage.success(okMsg)
+    if (okMsg) toast.success(okMsg)
   } catch (error) {
     if (cancelRequested.value) {
       // 主动取消引发的中断：已由 onCancelDownload 提示过，这里只同步状态
@@ -131,7 +132,7 @@ async function runAction(action: () => Promise<unknown>, okMsg?: string) {
       await refresh().catch(() => {})
       return
     }
-    ElMessage.error(error instanceof Error ? error.message : String(error))
+    toast.error(error instanceof Error ? error.message : String(error))
     await refresh().catch(() => {})
   } finally {
     loading.value = false
@@ -155,14 +156,14 @@ async function onCancelDownload() {
   try {
     const result = await invokeWb2apiIpc(channels.value!.CANCEL_DOWNLOAD) as { cancelled: boolean }
     if (result.cancelled) {
-      ElMessage.info('已取消下载，临时文件已清理')
+      toast.info('已取消下载，临时文件已清理')
     } else {
       cancelRequested.value = false
-      ElMessage.info('当前没有进行中的下载')
+      toast.info('当前没有进行中的下载')
     }
   } catch (error) {
     cancelRequested.value = false
-    ElMessage.error(error instanceof Error ? error.message : String(error))
+    toast.error(error instanceof Error ? error.message : String(error))
   } finally {
     cancelling.value = false
   }
@@ -192,18 +193,18 @@ async function onCheckUpdate() {
   // 检查更新只服务「已安装」后的升级判断：没装时「可更新」没有比较基准，
   // 顺手点「应用更新」还会退化成重装。按钮已禁用，这里再兜一层（键盘 / 程序触发）。
   if (!installed.value) {
-    ElMessage.info('安装后才能检查更新')
+    toast.info('安装后才能检查更新')
     return
   }
   if (busy.value) return
   loading.value = true
   try {
     const info = await invokeWb2apiIpc(channels.value!.CHECK_UPDATE) as Wb2apiUpdateInfo
-    if (!info.hasUpdate) ElMessage.success('已是最新版本')
+    if (!info.hasUpdate) toast.success('已是最新版本')
     // 结果已缓存在主进程，这里刷一次让面板（含已安装版本对照）取到同一份结论
     await refresh()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : String(error))
+    toast.error(error instanceof Error ? error.message : String(error))
   } finally {
     loading.value = false
   }
@@ -211,7 +212,7 @@ async function onCheckUpdate() {
 
 async function onApplyUpdate() {
   if (!installed.value) {
-    ElMessage.info('安装后才能应用更新')
+    toast.info('安装后才能应用更新')
     return
   }
   if (busy.value) return
@@ -219,11 +220,11 @@ async function onApplyUpdate() {
   // 「应用更新」只消费已有的检查结果（按钮无可用更新时本就禁用）：
   // 这里不再顺手触发检查，避免一次点击里跑两个动作、loading 互相覆盖。
   if (!info?.hasUpdate) {
-    ElMessage.info('没有可用更新，请先「检查更新」')
+    toast.info('没有可用更新，请先「检查更新」')
     return
   }
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       `将更新到 ${info.latestTag}（${info.assetName}）。失败会回滚 previous。`,
       '确认更新',
       { confirmButtonText: '更新', cancelButtonText: '取消', type: 'warning' },
@@ -279,7 +280,7 @@ onMounted(() => {
         || current.status === 'updating'
       if (!running) return true
       try {
-        await ElMessageBox.confirm('关闭将停止服务', '关闭页签', {
+        await confirm('关闭将停止服务', '关闭页签', {
           confirmButtonText: '停止并关闭',
           cancelButtonText: '取消',
           type: 'warning',
@@ -290,7 +291,7 @@ onMounted(() => {
       await invokeWb2apiIpc(channels.value!.STOP)
       return true
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : String(error))
+      toast.error(error instanceof Error ? error.message : String(error))
       return false
     }
   })
@@ -326,16 +327,16 @@ onUnmounted(() => {
       <aside class="wb2api-ops">
         <UiPanel title="状态" padding="var(--spacing-md)">
           <template #actions>
-            <el-button size="small" text :disabled="loading" @click="refresh">
+            <UiButton size="small" text :disabled="loading" @click="refresh">
               刷新
-            </el-button>
+            </UiButton>
           </template>
           <div class="wb2api-status-row">
             <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
             <span class="wb2api-status-label">{{ statusLabel }}</span>
             <div class="wb2api-status-actions">
               <!-- 三个动作互斥：未运行只给「启动」，运行中（含 unhealthy）只给「停止 / 重启」 -->
-              <el-button
+              <UiButton
                 v-if="!isRunning"
                 size="small"
                 type="primary"
@@ -343,21 +344,21 @@ onUnmounted(() => {
                 @click="onStart"
               >
                 启动
-              </el-button>
+              </UiButton>
               <template v-if="isRunning">
-                <el-button size="small" :disabled="busy" @click="onStop">
+                <UiButton size="small" :disabled="busy" @click="onStop">
                   停止
-                </el-button>
-                <el-button size="small" :disabled="busy || !installed" @click="onRestart">
+                </UiButton>
+                <UiButton size="small" :disabled="busy || !installed" @click="onRestart">
                   重启
-                </el-button>
+                </UiButton>
               </template>
             </div>
           </div>
           <UiHint v-if="state?.orphanLikely" class="wb2api-hint">
             检测到端口被其它进程占用（非本工具托管）。可结束占用，不会接管该进程。
           </UiHint>
-          <el-button
+          <UiButton
             v-if="state?.orphanLikely"
             class="full-width"
             size="small"
@@ -366,7 +367,7 @@ onUnmounted(() => {
             @click="onKillOrphan"
           >
             结束占用
-          </el-button>
+          </UiButton>
           <UiKeyValue label="版本" mono label-width="72px">
             {{ state?.version ?? '—' }}
           </UiKeyValue>
@@ -391,9 +392,9 @@ onUnmounted(() => {
           <UiKeyValue class="wb2api-kv-inline" label="API Key" mono label-width="72px">
             <span class="wb2api-api-key" :title="apiKeyVisible ? (state?.apiKey ?? '') : ''">{{ apiKeyDisplay }}</span>
             <template v-if="state?.apiKey" #actions>
-              <el-button size="small" text @click="apiKeyVisible = !apiKeyVisible">
+              <UiButton size="small" text @click="apiKeyVisible = !apiKeyVisible">
                 {{ apiKeyVisible ? '隐藏' : '显示' }}
-              </el-button>
+              </UiButton>
               <UiCopyButton :text="state.apiKey" label="API Key" />
             </template>
           </UiKeyValue>
@@ -407,20 +408,20 @@ onUnmounted(() => {
           </UiKeyValue>
           <div class="wb2api-actions">
             <!-- 运行中 / 端口被占用时不允许换版本：旧二进制还在执行，Windows 下 current/ 换不掉 -->
-            <el-button :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
+            <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
               GitHub 安装
-            </el-button>
-            <el-button :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
+            </UiButton>
+            <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
               本地 ZIP
-            </el-button>
+            </UiButton>
           </div>
           <div class="wb2api-actions">
             <!-- 检查 / 应用更新只对「已安装」开放（applyUpdate 在没有 current 时等于重装）；
                  运行中只禁「检查更新」，用禁用态表达，不额外堆提示文案。 -->
-            <el-button size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
+            <UiButton size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
               检查更新
-            </el-button>
-            <el-button
+            </UiButton>
+            <UiButton
               size="small"
               type="primary"
               plain
@@ -428,15 +429,15 @@ onUnmounted(() => {
               @click="onApplyUpdate"
             >
               应用更新
-            </el-button>
-            <el-button
+            </UiButton>
+            <UiButton
               v-if="canCancelDownload"
               size="small"
               :loading="cancelling"
               @click="onCancelDownload"
             >
               取消下载
-            </el-button>
+            </UiButton>
           </div>
           <UiHint v-if="updateInfo" class="wb2api-hint">
             最新 {{ updateInfo.latestTag }}
@@ -446,9 +447,9 @@ onUnmounted(() => {
           <UiHint v-if="progressText" class="wb2api-hint">
             {{ progressText }}
           </UiHint>
-          <el-button class="full-width" size="small" text @click="onOpenDataDir">
+          <UiButton class="full-width" size="small" text @click="onOpenDataDir">
             打开数据目录
-          </el-button>
+          </UiButton>
         </UiPanel>
 
         <UiPanel title="说明" padding="var(--spacing-md)">

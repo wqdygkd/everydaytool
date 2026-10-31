@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TelegramLibraryEntry, TelegramMessageState } from '../../../../shared/telegram-cache'
+import { toast } from 'vue-sonner'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
 import { formatBytes } from '../utils/format'
 
@@ -42,14 +43,14 @@ async function refresh(): Promise<void> {
   try {
     await store.loadLibrary()
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取归档进度失败')
+    toast.error((error as Error).message || '读取归档进度失败')
   }
 }
 
 function openDir(row: unknown): void {
   const entry = toEntry(row)
   void store.openLibraryDir(entry.peerId, entry.messageId).catch((error: unknown) => {
-    ElMessage.error((error as Error).message || '打开目录失败')
+    toast.error((error as Error).message || '打开目录失败')
   })
 }
 
@@ -66,9 +67,9 @@ function jump(row: unknown): void {
         <UiChip mono>
           进行中 {{ pending.length }}
         </UiChip>
-        <el-button size="small" :loading="store.busy.library" @click="refresh">
+        <UiButton size="small" :loading="store.busy.library" @click="refresh">
           刷新
-        </el-button>
+        </UiButton>
       </template>
 
       <UiTable
@@ -76,46 +77,46 @@ function jump(row: unknown): void {
         height="520"
         empty-text="当前没有正在归档的消息：在 Telegram 消息上右键「缓存此消息」"
       >
-        <el-table-column label="会话" min-width="150" show-overflow-tooltip>
+        <UiTableColumn label="会话" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="task-cell">
               <span>{{ toEntry(row).peerTitle || toEntry(row).peerId }}</span>
               <span class="muted task-meta">{{ toEntry(row).senderName || toEntry(row).peerId }}</span>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="消息" width="110">
+        </UiTableColumn>
+        <UiTableColumn label="消息" width="110">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="jump(row)">
+            <UiButton link type="primary" size="small" @click="jump(row)">
               #{{ toEntry(row).messageId }}
-            </el-button>
+            </UiButton>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" width="96">
+        </UiTableColumn>
+        <UiTableColumn label="状态" width="96">
           <template #default="{ row }">
             <UiChip :tone="stateInfo(toEntry(row).state).tone" variant="soft">
               {{ stateInfo(toEntry(row).state).label }}
             </UiChip>
           </template>
-        </el-table-column>
-        <el-table-column label="进度" width="140">
+        </UiTableColumn>
+        <UiTableColumn label="进度" width="140">
           <template #default="{ row }">
             <UiProgress :percentage="progressOf(row)" />
             <span class="mono muted progress-text">{{ formatBytes(toEntry(row).size) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="说明" min-width="160" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="说明" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono muted">{{ toEntry(row).textPreview || '—' }}</span>
           </template>
-        </el-table-column>
-        <el-table-column width="110" align="right">
+        </UiTableColumn>
+        <UiTableColumn width="110" align="right">
           <template #default="{ row }">
-            <el-button size="small" text @click="openDir(row)">
+            <UiButton size="small" text @click="openDir(row)">
               打开文件夹
-            </el-button>
+            </UiButton>
           </template>
-        </el-table-column>
+        </UiTableColumn>
       </UiTable>
 
       <UiHint block>

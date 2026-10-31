@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { IconName } from '../../../../renderer/shared/components/ui/icons'
 import type { DelayRuleConfig, HeaderAction, HeaderOperation, HeadersRuleConfig, InterceptorRule, QueryParamAction, QueryParamModification, QueryParamRuleConfig, RedirectRuleConfig, ReplaceRuleConfig, RequestBodyMode, RequestRuleConfig, ResponseRuleConfig, RuleFilters, RuleOperator, RuleSourceKey, RuleType, ScriptRuleConfig, ScriptRunAt, ScriptWorld, UserAgentRuleConfig } from '../../../../shared/interceptor'
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { REQUEST_METHODS, RESOURCE_TYPE_LABELS, RULE_DELAY_MAX_MS, RULE_TYPE_LABELS } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
 import { RULE_TYPES, ruleTypeFromPath, ruleTypeRouteName } from '../tabs'
@@ -156,7 +158,7 @@ async function duplicateRule(rule: InterceptorRule): Promise<void> {
     updatedAt: new Date().toISOString(),
   }
   await store.upsertRule(copy)
-  ElMessage.success('已复制规则')
+  toast.success('已复制规则')
 }
 
 function handleRuleAction(command: string, rule: InterceptorRule): void {
@@ -171,13 +173,13 @@ async function bulkToggleEnabled(): Promise<void> {
   for (const rule of rules) {
     await store.upsertRule({ ...rule, enabled: target, updatedAt: new Date().toISOString() })
   }
-  ElMessage.success(`${target ? '已启用' : '已停用'} ${rules.length} 条规则`)
+  toast.success(`${target ? '已启用' : '已停用'} ${rules.length} 条规则`)
 }
 
 async function bulkDelete(): Promise<void> {
   const rules = selectedRules.value
   try {
-    await ElMessageBox.confirm(`确认删除选中的 ${rules.length} 条规则？`, '删除确认', { type: 'warning' })
+    await confirm(`确认删除选中的 ${rules.length} 条规则？`, '删除确认', { type: 'warning' })
   } catch {
     return
   }
@@ -185,7 +187,7 @@ async function bulkDelete(): Promise<void> {
     await store.deleteRule(rule.id)
     selectedIds.value.delete(rule.id)
   }
-  ElMessage.success('已删除选中规则')
+  toast.success('已删除选中规则')
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -296,6 +298,26 @@ function ruleTypeOptionValue(value: RuleType | null): RuleType {
 // ─────────────────────────────────────────────────────────────
 
 const redirectForm = computed<RedirectRuleConfig>(() => draft.value?.redirect ?? { destination: '', statusCode: 302, preserveQueryParams: false })
+/* UiSelect 原生 value 是字符串:状态码在消费侧转 Number */
+const statusCodeOption = computed({
+  get: () => String(redirectForm.value.statusCode),
+  set: (v: string) => {
+    redirectForm.value.statusCode = Number(v) as 301 | 302 | 307 | 308
+  },
+})
+/* 多选过滤:el-select multiple → chip 开组 */
+function toggleInList(list: string[] | undefined, value: string) {
+  if (!list) {
+    return
+  }
+  const i = list.indexOf(value)
+  if (i >= 0) {
+    list.splice(i, 1)
+  }
+  else {
+    list.push(value)
+  }
+}
 const replaceForm = computed<ReplaceRuleConfig>(() => draft.value?.replace ?? { from: '', to: '' })
 const queryParamForm = computed<QueryParamRuleConfig>(() => draft.value?.queryParam ?? { modifications: [] })
 const delayForm = computed<DelayRuleConfig>(() => draft.value?.delay ?? { delayMs: 1000 })
@@ -533,7 +555,7 @@ async function save(): Promise<void> {
   rule.name = rule.name.trim() || sourceSummary(rule)
   rule.description = rule.description?.trim() || undefined
   if (!rule.source.value.trim() && rule.type !== 'script') {
-    ElMessage.warning('请填写匹配值')
+    toast.warning('请填写匹配值')
     return
   }
 
@@ -560,11 +582,11 @@ async function save(): Promise<void> {
     case 'redirect': {
       const destination = rule.redirect?.destination?.trim() ?? ''
       if (!destination) {
-        ElMessage.warning('请填写重定向目标地址')
+        toast.warning('请填写重定向目标地址')
         return
       }
       if (!/^https?:\/\//i.test(destination) && !/\$[1-9]/.test(destination)) {
-        ElMessage.warning('目标地址需以 http(s):// 开头（或用 $n 捕获组）')
+        toast.warning('目标地址需以 http(s):// 开头（或用 $n 捕获组）')
         return
       }
       rule.redirect = {
@@ -577,7 +599,7 @@ async function save(): Promise<void> {
     case 'replace': {
       const from = rule.replace?.from ?? ''
       if (!from) {
-        ElMessage.warning('请填写要替换的原片段')
+        toast.warning('请填写要替换的原片段')
         return
       }
       rule.replace = { from, to: rule.replace?.to ?? '' }
@@ -586,7 +608,7 @@ async function save(): Promise<void> {
     case 'queryParam': {
       const modifications = (rule.queryParam?.modifications ?? []).filter(mod => mod.action === 'removeAll' || mod.param.trim())
       if (!modifications.length) {
-        ElMessage.warning('请至少添加一个参数修改项')
+        toast.warning('请至少添加一个参数修改项')
         return
       }
       rule.queryParam = { modifications }
@@ -601,7 +623,7 @@ async function save(): Promise<void> {
       const request = cleanOps(rule.headers?.request)
       const response = cleanOps(rule.headers?.response)
       if (!request && !response) {
-        ElMessage.warning('请至少添加一个头操作')
+        toast.warning('请至少添加一个头操作')
         return
       }
       rule.headers = { request, response }
@@ -610,7 +632,7 @@ async function save(): Promise<void> {
     case 'userAgent': {
       const userAgent = rule.userAgent?.userAgent?.trim() ?? ''
       if (!userAgent) {
-        ElMessage.warning('请填写 User-Agent')
+        toast.warning('请填写 User-Agent')
         return
       }
       rule.userAgent = { userAgent }
@@ -621,11 +643,11 @@ async function save(): Promise<void> {
       const value = rule.request?.value ?? ''
       if (mode === 'code') {
         if (!value.trim()) {
-          ElMessage.warning('请填写动态脚本')
+          toast.warning('请填写动态脚本')
           return
         }
       } else if (!value.length) {
-        ElMessage.warning('请填写替换后的请求体')
+        toast.warning('请填写替换后的请求体')
         return
       }
       rule.request = { type: mode, value }
@@ -637,7 +659,7 @@ async function save(): Promise<void> {
       const bodyReplace = rule.response?.bodyReplace?.length ? rule.response.bodyReplace : undefined
       const mock = rule.response?.mock || undefined
       if (!statusCode && !statusText && bodyReplace === undefined && !mock) {
-        ElMessage.warning('请至少设置状态码 / 状态文案 / 响应体 / Mock 之一')
+        toast.warning('请至少设置状态码 / 状态文案 / 响应体 / Mock 之一')
         return
       }
       rule.response = { statusCode, statusText, bodyReplace, mock }
@@ -646,7 +668,7 @@ async function save(): Promise<void> {
     case 'script': {
       const code = rule.script?.code ?? ''
       if (!code.trim()) {
-        ElMessage.warning('请填写脚本正文')
+        toast.warning('请填写脚本正文')
         return
       }
       rule.source.value = rule.source.value.trim()
@@ -665,7 +687,7 @@ async function save(): Promise<void> {
   rule.updatedAt = new Date().toISOString()
   await store.upsertRule(rule)
   closeEditor()
-  ElMessage.success('规则已保存')
+  toast.success('规则已保存')
 }
 
 async function toggleEnabled(rule: InterceptorRule): Promise<void> {
@@ -675,7 +697,7 @@ async function toggleEnabled(rule: InterceptorRule): Promise<void> {
 
 async function remove(rule: InterceptorRule): Promise<void> {
   try {
-    await ElMessageBox.confirm(`确认删除规则「${rule.name}」？`, '删除确认', { type: 'warning' })
+    await confirm(`确认删除规则「${rule.name}」？`, '删除确认', { type: 'warning' })
   } catch {
     return
   }
@@ -703,38 +725,34 @@ async function remove(rule: InterceptorRule): Promise<void> {
             class="ctl-md"
             :size="16"
           />
-          <el-radio-group v-model="activeFilter">
-            <el-radio-button v-for="option in filterOptions" :key="option.key" :value="option.key">
+          <div class="seg-filter" role="group" aria-label="规则过滤">
+            <button v-for="option in filterOptions" :key="option.key" type="button" class="seg-filter-btn" :class="{ 'is-active': activeFilter === option.key }" @click="activeFilter = option.key">
               <UiIcon v-if="option.icon === 'pin'" name="pin" />
               <UiIcon v-else-if="option.icon === 'toggle'" name="toggle" />
               {{ option.label }}
               <UiChip v-if="filterCounts[option.key]" mono>
                 {{ filterCounts[option.key] }}
               </UiChip>
-            </el-radio-button>
-          </el-radio-group>
-          <el-select
-            :model-value="activeType"
+            </button>
+          </div>
+          <UiSelect
+            :model-value="activeType ?? ''"
             class="ctl-sm"
-            @change="selectRuleType"
-          >
-            <el-option v-for="option in ruleTypeFilterOptions" :key="option.label" :label="option.label" :value="ruleTypeOptionValue(option.value)" />
-          </el-select>
+            :options="ruleTypeFilterOptions.map(option => ({ label: option.label, value: ruleTypeOptionValue(option.value) }))"
+            @update:model-value="(v: string) => selectRuleType(v === '' ? null : v as RuleType)"
+          />
         </div>
         <div class="rq-content-list-header-actions">
-          <el-popover
-            v-model:visible="pickerVisible"
-            trigger="click"
-            placement="bottom-end"
+          <UiPopover
+            :visible="pickerVisible"
             :width="400"
-            :offset="0"
-            popper-class="rule-picker-popover"
+            @update:visible="pickerVisible = $event"
           >
-            <template #reference>
-              <el-button type="primary">
+            <template #trigger>
+              <UiButton type="primary">
                 <UiIcon name="plus" class="btn-icon" />
                 新建规则
-              </el-button>
+              </UiButton>
             </template>
             <div class="rule-picker-list">
               <div v-for="group in typeGroups" :key="group.title" class="rule-picker-section">
@@ -757,7 +775,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 </button>
               </div>
             </div>
-          </el-popover>
+          </UiPopover>
         </div>
       </div>
 
@@ -768,20 +786,20 @@ async function remove(rule: InterceptorRule): Promise<void> {
         @row-dblclick="openEditor"
         @sort-change="onSortChange"
       >
-        <el-table-column width="46" align="center">
+        <UiTableColumn width="46" align="center">
           <template #header>
-            <el-checkbox
+            <UiCheckbox
               :model-value="allVisibleSelected"
               :indeterminate="someVisibleSelected && !allVisibleSelected"
               :disabled="!visibleRules.length"
-              @change="toggleSelectAll"
+              @update:model-value="toggleSelectAll"
             />
           </template>
           <template #default="{ row }">
-            <el-checkbox :model-value="isSelected(ruleOf(row))" @change="toggleSelect(ruleOf(row))" />
+            <UiCheckbox :model-value="isSelected(ruleOf(row))" @update:model-value="toggleSelect(ruleOf(row))" />
           </template>
-        </el-table-column>
-        <el-table-column width="64" align="center">
+        </UiTableColumn>
+        <UiTableColumn width="64" align="center">
           <template #default="{ row }">
             <UiIconButton
               icon="pin"
@@ -790,59 +808,45 @@ async function remove(rule: InterceptorRule): Promise<void> {
               @click="togglePin(ruleOf(row))"
             />
           </template>
-        </el-table-column>
-        <el-table-column prop="name" label="规则" sortable="custom" min-width="220">
+        </UiTableColumn>
+        <UiTableColumn prop="name" label="规则" sortable="custom" min-width="220">
           <template #default="{ row }">
             <button type="button" class="rule-name" :title="row.name" @click="openEditor(ruleOf(row))">
               {{ row.name }}
             </button>
           </template>
-        </el-table-column>
-        <el-table-column prop="type" label="类型" sortable="custom" width="200">
+        </UiTableColumn>
+        <UiTableColumn prop="type" label="类型" sortable="custom" width="200">
           <template #default="{ row }">
             <span class="rule-type-tag" :title="RULE_TYPE_LABELS[ruleOf(row).type]">
               <UiIcon :name="row.type" />
               <span class="rule-type-tag-name">{{ RULE_TYPE_LABELS[ruleOf(row).type] }}</span>
             </span>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" width="130">
+        </UiTableColumn>
+        <UiTableColumn label="状态" width="130">
           <template #default="{ row }">
-            <el-switch :model-value="row.enabled" size="small" @change="() => toggleEnabled(ruleOf(row))" />
+            <UiSwitchField :model-value="row.enabled" size="small" @update:model-value="() => toggleEnabled(ruleOf(row))" />
           </template>
-        </el-table-column>
-        <el-table-column prop="updatedAt" label="更新时间" sortable="custom" width="150">
+        </UiTableColumn>
+        <UiTableColumn prop="updatedAt" label="更新时间" sortable="custom" width="150">
           <template #default="{ row }">
             <span class="rule-updated-on">{{ formatDate(row.updatedAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column width="110" align="right">
+        </UiTableColumn>
+        <UiTableColumn width="110" align="right">
           <template #default="{ row }">
             <div class="rules-actions-container">
-              <el-dropdown trigger="click" popper-class="rule-more-actions-dropdown" @command="(command: string) => handleRuleAction(command, ruleOf(row))">
-                <el-button text class="icon-btn" aria-label="更多操作">
-                  <UiIcon name="more" />
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="edit">
-                      <UiIcon name="pencil" class="menu-icon" />
-                      <span>编辑</span>
-                    </el-dropdown-item>
-                    <el-dropdown-item command="duplicate">
-                      <UiIcon name="copy" class="menu-icon" />
-                      <span>复制</span>
-                    </el-dropdown-item>
-                    <el-dropdown-item command="delete" class="danger-item">
-                      <UiIcon name="trash" class="menu-icon" />
-                      <span>删除</span>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
+              <UiDropdown :items="[{ command: 'edit', label: '编辑', icon: 'pencil' }, { command: 'duplicate', label: '复制', icon: 'copy' }, { command: 'delete', label: '删除', icon: 'trash', danger: true }]" @command="(command: string) => handleRuleAction(command, ruleOf(row))">
+                <template #trigger>
+                  <UiButton text class="icon-btn" aria-label="更多操作">
+                    <UiIcon name="more" />
+                  </UiButton>
                 </template>
-              </el-dropdown>
+              </UiDropdown>
             </div>
           </template>
-        </el-table-column>
+        </UiTableColumn>
         <template #empty>
           <UiEmpty center padding="var(--spacing-2xl)">
             <template #title>
@@ -850,9 +854,9 @@ async function remove(rule: InterceptorRule): Promise<void> {
             </template>
             规则在代理层改写请求：改请求头 / 改 body / 重定向 / 注入脚本。先选一个类型，剩下的照着填。
             <template #actions>
-              <el-button size="small" @click="pickerVisible = true">
+              <UiButton size="small" @click="pickerVisible = true">
                 新建规则
-              </el-button>
+              </UiButton>
             </template>
           </UiEmpty>
         </template>
@@ -864,32 +868,31 @@ async function remove(rule: InterceptorRule): Promise<void> {
         已选 {{ selectedRules.length }} 条规则
       </div>
       <UiGroup gap="sm">
-        <el-button size="small" @click="bulkToggleEnabled">
+        <UiButton size="small" @click="bulkToggleEnabled">
           {{ bulkAllEnabled ? '停用' : '启用' }}
-        </el-button>
-        <el-button size="small" type="danger" @click="bulkDelete">
+        </UiButton>
+        <UiButton size="small" type="danger" @click="bulkDelete">
           删除
-        </el-button>
-        <el-button size="small" text @click="clearSelection">
+        </UiButton>
+        <UiButton size="small" text @click="clearSelection">
           取消
-        </el-button>
+        </UiButton>
       </UiGroup>
     </div>
   </div>
 
   <div v-else-if="draft" class="rule-editor-screen">
-    <el-menu
-      class="rule-editor-sidebar"
-      :default-active="draft.type"
-      @select="(index: string) => switchDraftType(index as RuleType)"
-    >
-      <el-menu-item-group v-for="group in typeGroups" :key="group.title" :title="group.title">
-        <el-menu-item v-for="option in group.options" :key="option.type" :index="option.type">
+    <nav class="rule-editor-sidebar">
+      <div v-for="group in typeGroups" :key="group.title" class="rule-editor-group">
+        <p class="rule-editor-group-title">
+          {{ group.title }}
+        </p>
+        <button v-for="option in group.options" :key="option.type" type="button" class="rule-editor-menu-item" :class="{ 'is-active': draft.type === option.type }" @click="switchDraftType(option.type)">
           <UiIcon :name="option.icon" />
           <span>{{ option.title }}</span>
-        </el-menu-item>
-      </el-menu-item-group>
-    </el-menu>
+        </button>
+      </div>
+    </nav>
 
     <div class="rule-editor-main">
       <UiToolbar class="rule-editor-topbar">
@@ -900,17 +903,17 @@ async function remove(rule: InterceptorRule): Promise<void> {
         />
         <template #end>
           <span class="muted enable-label">启用</span>
-          <el-switch v-model="draft.enabled" size="small" />
-          <el-button type="primary" @click="save">
+          <UiSwitchField v-model="draft.enabled" size="small" />
+          <UiButton type="primary" @click="save">
             保存规则
             <span class="kbd-hint">Ctrl S</span>
-          </el-button>
+          </UiButton>
         </template>
       </UiToolbar>
 
       <div class="rule-editor-body">
         <div class="rule-title-row">
-          <el-input
+          <UiInput
             v-if="editingName"
             v-model="draft.name"
             class="rule-title-input"
@@ -923,7 +926,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
           </button>
         </div>
         <div class="rule-description-row">
-          <el-input
+          <UiInput
             v-if="editingDescription"
             v-model="draft.description"
             placeholder="添加描述（可选）"
@@ -940,14 +943,14 @@ async function remove(rule: InterceptorRule): Promise<void> {
             <span class="panel-header">选择资源类型</span>
           </div>
           <div class="muted-panel">
-            <el-radio-group model-value="rest" class="dest-radio-group radio-flush">
-              <el-radio value="rest">
+            <UiRadioGroup model-value="rest" class="dest-radio-group radio-flush">
+              <UiRadio value="rest">
                 REST API
-              </el-radio>
-              <el-radio value="graphql" disabled>
+              </UiRadio>
+              <UiRadio value="graphql" disabled>
                 GraphQL API
-              </el-radio>
-            </el-radio-group>
+              </UiRadio>
+            </UiRadioGroup>
             <UiHint>
               GraphQL 请求体改写暂未支持，当前按 REST API 处理。
             </UiHint>
@@ -964,18 +967,14 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
           <div v-show="!ifCardCollapsed" class="rule-pair-body">
             <div class="source-row">
-              <el-select v-model="draft.source.key" class="ctl-xs">
-                <el-option v-for="option in keyOptions" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
-              <el-select v-model="draft.source.operator" class="ctl-md">
-                <el-option v-for="option in operatorOptions" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
-              <el-input
+              <UiSelect v-model="draft.source.key" class="ctl-xs" :options="keyOptions.map(option => ({ label: option.label, value: option.value }))" />
+              <UiSelect v-model="draft.source.operator" class="ctl-md" :options="operatorOptions.map(option => ({ label: option.label, value: option.value }))" />
+              <UiInput
                 v-model="draft.source.value"
                 :placeholder="draft.type === 'script' ? '留空 = 应用于所有页面（例如 example.com/checkout）' : '例如 example.com/api'"
                 class="ctl-fill"
               />
-              <el-button
+              <UiButton
                 v-if="draft.type !== 'script'"
                 :type="countActiveFilters(draft.filters) > 0 ? 'primary' : 'default'"
                 :plain="countActiveFilters(draft.filters) > 0"
@@ -985,30 +984,31 @@ async function remove(rule: InterceptorRule): Promise<void> {
                 <UiChip v-if="countActiveFilters(draft.filters)" tone="primary" mono>
                   {{ countActiveFilters(draft.filters) }}
                 </UiChip>
-              </el-button>
+              </UiButton>
             </div>
 
             <div v-if="draft.type !== 'script'" v-show="filterPanelOpen" class="filter-block">
               <UiGroup wrap gap="sm">
-                <el-select v-model="draft.filters!.requestMethod" multiple collapse-tags clearable placeholder="方法（不限留空）" class="ctl-md">
-                  <el-option v-for="method in REQUEST_METHODS" :key="method" :label="method" :value="method" />
-                </el-select>
-                <el-select v-model="draft.filters!.resourceType" multiple collapse-tags clearable placeholder="资源类型（不限留空）" class="ctl-md">
-                  <el-option v-for="(label, value) in RESOURCE_TYPE_LABELS" :key="value" :label="label" :value="value" />
-                </el-select>
-                <el-input v-model="draft.filters!.pageUrl" placeholder="页面 URL 包含…（如 example.com/checkout）" class="ctl-lg" />
+                <div class="chip-filter ctl-md" role="group" aria-label="方法过滤">
+                  <button v-for="method in REQUEST_METHODS" :key="method" type="button" class="chip-toggle" :class="{ 'is-on': draft.filters?.requestMethod?.includes(method) }" @click="toggleInList(draft.filters?.requestMethod, method)">
+                    {{ method }}
+                  </button>
+                </div>
+                <div class="chip-filter ctl-md" role="group" aria-label="资源类型过滤">
+                  <button v-for="(label, value) in RESOURCE_TYPE_LABELS" :key="value" type="button" class="chip-toggle" :class="{ 'is-on': draft.filters?.resourceType?.includes(value) }" @click="toggleInList(draft.filters?.resourceType, value)">
+                    {{ label }}
+                  </button>
+                </div>
+                <UiInput v-model="draft.filters!.pageUrl" placeholder="页面 URL 包含…（如 example.com/checkout）" class="ctl-lg" />
               </UiGroup>
               <UiGroup wrap gap="sm" class="payload-row">
-                <el-checkbox v-model="payloadEnabled">
+                <UiCheckbox v-model="payloadEnabled">
                   请求体过滤
-                </el-checkbox>
+                </UiCheckbox>
                 <template v-if="draft.filters?.requestPayload">
-                  <el-input v-model="draft.filters.requestPayload.key" placeholder="键（JSON 顶层 / GraphQL 变量 / 表单参数）" class="ctl-lg" />
-                  <el-select v-model="draft.filters.requestPayload.operator" class="ctl-xs">
-                    <el-option label="等于" value="equals" />
-                    <el-option label="包含" value="contains" />
-                  </el-select>
-                  <el-input v-model="draft.filters.requestPayload.value" placeholder="值" class="ctl-md" />
+                  <UiInput v-model="draft.filters.requestPayload.key" placeholder="键（JSON 顶层 / GraphQL 变量 / 表单参数）" class="ctl-lg" />
+                  <UiSelect v-model="draft.filters.requestPayload.operator" class="ctl-xs" :options="[{ label: '等于', value: 'equals' }, { label: '包含', value: 'contains' }]" />
+                  <UiInput v-model="draft.filters.requestPayload.value" placeholder="值" class="ctl-md" />
                 </template>
                 <UiHint block>
                   命中请求体过滤的规则会先缓冲请求体（超大请求体会被拒）
@@ -1019,63 +1019,58 @@ async function remove(rule: InterceptorRule): Promise<void> {
             <div class="then-section">
               <div class="then-label">
                 <span>{{ thenSectionLabel }}</span>
-                <el-radio-group
+                <UiRadioGroup
                   v-if="draft.type === 'request' && draft.request"
                   class="request-body-mode-group radio-flush"
                   :model-value="requestBodyMode"
                   @change="switchRequestBodyMode"
                 >
-                  <el-radio value="static">
+                  <UiRadio value="static">
                     静态数据
-                    <el-tooltip content="填写要随请求发送的静态 JSON 请求体" placement="top">
+                    <span class="ui-tip" title="填写要随请求发送的静态 JSON 请求体">
                       <span class="info-icon-wrap">
                         <UiIcon name="info" class="info-icon" />
                       </span>
-                    </el-tooltip>
-                  </el-radio>
-                  <el-radio value="code">
+                    </span>
+                  </UiRadio>
+                  <UiRadio value="code">
                     动态（JavaScript）
-                    <el-tooltip content="编写 JavaScript 代码改写现有请求体" placement="top">
+                    <span class="ui-tip" title="编写 JavaScript 代码改写现有请求体">
                       <span class="info-icon-wrap">
                         <UiIcon name="info" class="info-icon" />
                       </span>
-                    </el-tooltip>
-                  </el-radio>
-                </el-radio-group>
-                <el-tooltip v-if="draft.type === 'redirect'" content="定义要将原始请求重定向到的目标地址" placement="top">
+                    </span>
+                  </UiRadio>
+                </UiRadioGroup>
+                <span v-if="draft.type === 'redirect'" class="ui-tip" title="定义要将原始请求重定向到的目标地址">
                   <span class="info-icon-wrap">
                     <UiIcon name="info" class="info-icon" />
                   </span>
-                </el-tooltip>
+                </span>
               </div>
 
               <template v-if="draftType === 'redirect'">
                 <div class="muted-panel">
-                  <el-radio-group v-model="redirectTargetType" class="dest-radio-group radio-flush">
-                    <el-radio value="url">
+                  <UiRadioGroup v-model="redirectTargetType" class="dest-radio-group radio-flush">
+                    <UiRadio value="url">
                       另一个 URL
-                    </el-radio>
-                    <el-radio value="local" disabled>
+                    </UiRadio>
+                    <UiRadio value="local" disabled>
                       本机文件
-                    </el-radio>
-                    <el-radio value="fileserver" disabled>
+                    </UiRadio>
+                    <UiRadio value="fileserver" disabled>
                       文件服务器
-                    </el-radio>
-                  </el-radio-group>
+                    </UiRadio>
+                  </UiRadioGroup>
                   <UiHint>
                     「本机文件 / 文件服务器」后续版本支持，当前仅支持重定向到 URL。
                   </UiHint>
-                  <el-input v-model="redirectForm.destination" placeholder="例如 https://new-example.com（支持 $1 捕获组）" class="dest-input" />
+                  <UiInput v-model="redirectForm.destination" placeholder="例如 https://new-example.com（支持 $1 捕获组）" class="dest-input" />
                   <UiGroup wrap gap="sm">
-                    <el-select v-model="redirectForm.statusCode" class="ctl-md">
-                      <el-option :value="302" label="302 临时" />
-                      <el-option :value="301" label="301 永久" />
-                      <el-option :value="307" label="307 保留方法" />
-                      <el-option :value="308" label="308 永久 + 保留方法" />
-                    </el-select>
-                    <el-checkbox v-model="redirectForm.preserveQueryParams">
+                    <UiSelect v-model="statusCodeOption" class="ctl-md" :options="[{ label: '302 临时', value: '302' }, { label: '301 永久', value: '301' }, { label: '307 保留方法', value: '307' }, { label: '308 永久 + 保留方法', value: '308' }]" />
+                    <UiCheckbox :model-value="redirectForm.preserveQueryParams ?? false" @update:model-value="redirectForm.preserveQueryParams = $event">
                       目标未带查询串时保留原查询参数
-                    </el-checkbox>
+                    </UiCheckbox>
                   </UiGroup>
                   <UiHint block>
                     源用「正则匹配 / 通配符」时，目标里的 $1、$2 会替换为捕获内容（通配符 * 也可用 $1 取到）。
@@ -1085,9 +1080,9 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
               <template v-else-if="draftType === 'replace'">
                 <UiGroup wrap gap="sm">
-                  <el-input v-model="replaceForm.from" placeholder="原片段（在完整 URL 中把…）" class="ctl-fill" />
+                  <UiInput v-model="replaceForm.from" placeholder="原片段（在完整 URL 中把…）" class="ctl-fill" />
                   <span class="muted">→</span>
-                  <el-input v-model="replaceForm.to" placeholder="替换为" class="ctl-fill" />
+                  <UiInput v-model="replaceForm.to" placeholder="替换为" class="ctl-fill" />
                 </UiGroup>
                 <UiHint block>
                   只替换 URL 中第一处匹配；替换后的 URL 直接作为新请求目标（浏览器不可见，比重定向更透明）。
@@ -1096,43 +1091,32 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
               <template v-else-if="draftType === 'queryParam'">
                 <div v-for="mod in queryParamForm.modifications" :key="mod.id" class="param-mod-row">
-                  <el-dropdown trigger="click" popper-class="rule-more-actions-dropdown" @command="(action: QueryParamAction) => setQueryModAction(mod, action)">
-                    <el-button text class="param-mod-type">
-                      {{ queryParamRowLabels[mod.action] }}
-                      <UiIcon name="chevronDown" class="param-mod-caret" />
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="add">
-                          添加 / 替换
-                        </el-dropdown-item>
-                        <el-dropdown-item command="remove">
-                          删除
-                        </el-dropdown-item>
-                        <el-dropdown-item command="removeAll">
-                          清空全部
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
+                  <UiDropdown :items="[{ command: 'add', label: '添加 / 替换' }, { command: 'remove', label: '删除' }, { command: 'removeAll', label: '清空全部' }]" @command="(action: string) => setQueryModAction(mod, action as QueryParamAction)">
+                    <template #trigger>
+                      <UiButton text class="param-mod-type">
+                        {{ queryParamRowLabels[mod.action] }}
+                        <UiIcon name="chevronDown" class="param-mod-caret" />
+                      </UiButton>
                     </template>
-                  </el-dropdown>
-                  <el-input v-model="mod.param" :disabled="mod.action === 'removeAll'" class="param-mod-name" placeholder="参数名">
+                  </UiDropdown>
+                  <UiPathField v-model="mod.param" :disabled="mod.action === 'removeAll'" class="param-mod-name" placeholder="参数名">
                     <template #prepend>
                       参数
                     </template>
-                  </el-input>
-                  <el-input v-model="mod.value" :disabled="mod.action !== 'add'" class="param-mod-value" placeholder="参数值">
+                  </UiPathField>
+                  <UiPathField v-model="mod.value" :disabled="mod.action !== 'add'" class="param-mod-value" placeholder="参数值">
                     <template #prepend>
                       值
                     </template>
-                  </el-input>
-                  <el-tooltip content="移除" placement="top">
+                  </UiPathField>
+                  <span class="ui-tip" title="移除">
                     <UiIconButton icon="close" tone="danger" label="移除" @click="removeQueryMod(mod.id)" />
-                  </el-tooltip>
+                  </span>
                 </div>
-                <el-button class="dashed-add-btn param-mod-add" @click="addQueryMod">
+                <UiButton class="dashed-add-btn param-mod-add" @click="addQueryMod">
                   <UiIcon name="plus" />
                   添加参数修改
-                </el-button>
+                </UiButton>
               </template>
 
               <template v-else-if="draftType === 'cancel'">
@@ -1143,7 +1127,14 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
               <template v-else-if="draftType === 'delay'">
                 <UiGroup wrap gap="sm">
-                  <el-input-number v-model="delayForm.delayMs" :min="1" :max="RULE_DELAY_MAX_MS" :step="500" />
+                  <input
+                    v-model.number="delayForm.delayMs"
+                    type="number"
+                    class="ui-input is-default"
+                    :min="1"
+                    :max="RULE_DELAY_MAX_MS"
+                    :step="500"
+                  >
                   <span class="muted">毫秒（上限 {{ RULE_DELAY_MAX_MS / 1000 }}s），延迟后照常请求上游</span>
                 </UiGroup>
               </template>
@@ -1153,42 +1144,36 @@ async function remove(rule: InterceptorRule): Promise<void> {
                   请求头操作
                 </div>
                 <UiGroup v-for="op in headersForm.request ?? []" :key="op.id" wrap gap="sm" class="op-row">
-                  <el-select v-model="op.action" class="ctl-sm">
-                    <el-option v-for="option in headerActionOptions" :key="option.value" :label="option.label" :value="option.value" />
-                  </el-select>
-                  <el-input v-model="op.name" placeholder="头名称" class="ctl-md" />
-                  <el-input v-model="op.value" :disabled="op.action === 'remove'" placeholder="值" class="ctl-fill" />
-                  <el-button text type="danger" @click="removeHeaderOp('request', op.id)">
+                  <UiSelect :model-value="op.action ?? ''" class="ctl-sm" :options="headerActionOptions.map(option => ({ label: option.label, value: option.value }))" @update:model-value="op.action = $event as HeaderAction" />
+                  <UiInput v-model="op.name" placeholder="头名称" class="ctl-md" />
+                  <UiInput v-model="op.value" :disabled="op.action === 'remove'" placeholder="值" class="ctl-fill" />
+                  <UiButton text type="danger" @click="removeHeaderOp('request', op.id)">
                     移除
-                  </el-button>
+                  </UiButton>
                 </UiGroup>
-                <el-button size="small" text type="primary" @click="addHeaderOp('request')">
+                <UiButton size="small" text type="primary" @click="addHeaderOp('request')">
                   + 请求头操作
-                </el-button>
+                </UiButton>
                 <div class="muted op-section-title">
                   响应头操作
                 </div>
                 <UiGroup v-for="op in headersForm.response ?? []" :key="op.id" wrap gap="sm" class="op-row">
-                  <el-select v-model="op.action" class="ctl-sm">
-                    <el-option v-for="option in headerActionOptions" :key="option.value" :label="option.label" :value="option.value" />
-                  </el-select>
-                  <el-input v-model="op.name" placeholder="头名称" class="ctl-md" />
-                  <el-input v-model="op.value" :disabled="op.action === 'remove'" placeholder="值" class="ctl-fill" />
-                  <el-button text type="danger" @click="removeHeaderOp('response', op.id)">
+                  <UiSelect :model-value="op.action ?? ''" class="ctl-sm" :options="headerActionOptions.map(option => ({ label: option.label, value: option.value }))" @update:model-value="op.action = $event as HeaderAction" />
+                  <UiInput v-model="op.name" placeholder="头名称" class="ctl-md" />
+                  <UiInput v-model="op.value" :disabled="op.action === 'remove'" placeholder="值" class="ctl-fill" />
+                  <UiButton text type="danger" @click="removeHeaderOp('response', op.id)">
                     移除
-                  </el-button>
+                  </UiButton>
                 </UiGroup>
-                <el-button size="small" text type="primary" @click="addHeaderOp('response')">
+                <UiButton size="small" text type="primary" @click="addHeaderOp('response')">
                   + 响应头操作
-                </el-button>
+                </UiButton>
               </template>
 
               <template v-else-if="draftType === 'userAgent'">
                 <UiGroup wrap gap="sm">
-                  <el-input v-model="userAgentForm.userAgent" placeholder="自定义 UA 字符串" class="ctl-fill" />
-                  <el-select placeholder="常用预设" class="ctl-md" @change="applyUaPreset">
-                    <el-option v-for="preset in uaPresets" :key="preset.label" :label="preset.label" :value="preset.value" />
-                  </el-select>
+                  <UiInput v-model="userAgentForm.userAgent" placeholder="自定义 UA 字符串" class="ctl-fill" />
+                  <UiSelect placeholder="常用预设" class="ctl-md" :options="uaPresets" @update:model-value="applyUaPreset" />
                 </UiGroup>
               </template>
 
@@ -1208,15 +1193,14 @@ async function remove(rule: InterceptorRule): Promise<void> {
               <template v-else-if="draftType === 'response'">
                 <UiGroup wrap gap="sm">
                   <span class="muted">状态码</span>
-                  <el-input-number v-model="responseForm.statusCode" :min="100" :max="599" :controls="false" placeholder="原始" class="ctl-xs" />
-                  <el-input v-model="responseForm.statusText" placeholder="状态文案（如 Teapot）" class="ctl-md" />
-                  <el-checkbox v-model="responseForm.mock">
+                  <input v-model.number="responseForm.statusCode" type="number" class="ctl-xs ctl-input" :min="100" :max="599" placeholder="原始">
+                  <input v-model="responseForm.statusText" type="text" class="ctl-md ctl-input" placeholder="状态文案（如 Teapot）">
+                  <UiCheckbox :model-value="responseForm.mock ?? false" @update:model-value="responseForm.mock = $event">
                     Mock（不调服务器直接返回）
-                  </el-checkbox>
+                  </UiCheckbox>
                 </UiGroup>
-                <el-input
+                <textarea
                   v-model="responseForm.bodyReplace"
-                  type="textarea"
                   :rows="5"
                   placeholder="静态替换响应体 / Mock 返回体（留空 = 不改体；Mock 时返回空体）"
                   class="body-input"
@@ -1225,12 +1209,8 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
               <template v-else-if="draftType === 'script'">
                 <UiGroup wrap gap="sm">
-                  <el-select v-model="scriptForm.world" class="ctl-lg">
-                    <el-option v-for="option in worldOptions" :key="option.value" :label="option.label" :value="option.value" />
-                  </el-select>
-                  <el-select v-model="scriptForm.runAt" class="ctl-lg">
-                    <el-option v-for="option in runAtOptions" :key="option.value" :label="option.label" :value="option.value" />
-                  </el-select>
+                  <UiSelect v-model="scriptForm.world" class="ctl-lg" :options="worldOptions.map(option => ({ label: option.label, value: option.value }))" />
+                  <UiSelect v-model="scriptForm.runAt" class="ctl-lg" :options="runAtOptions.map(option => ({ label: option.label, value: option.value }))" />
                 </UiGroup>
                 <UiCodeArea
                   v-model="scriptForm.code"
@@ -1247,14 +1227,14 @@ async function remove(rule: InterceptorRule): Promise<void> {
           </div>
         </div>
 
-        <el-tooltip content="暂不支持多条件（单规则单动作）" placement="top">
+        <span class="ui-tip" title="暂不支持多条件（单规则单动作）">
           <span class="add-condition-wrap">
-            <el-button class="dashed-add-btn dashed-add-btn--block" disabled>
+            <UiButton class="dashed-add-btn dashed-add-btn--block" disabled>
               <UiIcon name="plus" />
               添加新条件
-            </el-button>
+            </UiButton>
           </span>
-        </el-tooltip>
+        </span>
       </div>
     </div>
   </div>
@@ -1423,7 +1403,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   width: 100%;
 }
 
-/* 类型侧栏：EP el-menu（去右边框、紧凑行高、选中态品牌浅底） */
+/* 类型侧栏：原生 nav(紧凑行高、选中态品牌浅底) */
 .rule-editor-sidebar {
   position: sticky;
   top: 0;
@@ -1434,23 +1414,91 @@ async function remove(rule: InterceptorRule): Promise<void> {
   padding: var(--spacing-sm) 0;
   border-right: 0;
   background: transparent;
+}
 
-  :deep(.el-menu-item) {
-    height: var(--control-height);
-    margin: 0 var(--spacing-xs);
-    padding: 0 var(--spacing-sm);
-    border-radius: var(--radius-xs);
-    font-size: var(--font-size-sm);
+.rule-editor-group-title {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+}
+
+.rule-editor-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: calc(100% - 8px);
+  height: var(--control-height);
+  margin: 0 var(--spacing-xs);
+  padding: 0 var(--spacing-sm);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--color-fill);
   }
 
-  :deep(.el-menu-item.is-active) {
+  &.is-active {
     background: var(--color-primary-soft);
   }
+}
 
-  :deep(.el-menu-item-group__title) {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
+/* 列表头过滤胶囊(el-radio-button → 原生按钮组) */
+.seg-filter {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.seg-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--control-height);
+  padding: 0 var(--spacing-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover { color: var(--color-text-primary); }
+
+  &.is-active {
+    color: var(--color-text-primary);
+    background: var(--color-raised);
+  }
+}
+
+/* 多选过滤 chip(el-select multiple → 开组) */
+.chip-filter {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-field);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &.is-on {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-strong);
   }
 }
 
@@ -1761,52 +1809,38 @@ async function remove(rule: InterceptorRule): Promise<void> {
 .body-input {
   margin-top: var(--spacing-sm);
 }
+
+/* 原生输入件(替换 el-input / el-input-number 处):与 UiInput 同一套令牌 */
+.ctl-input,
+.ctl-num,
+textarea.body-input {
+  height: var(--control-height);
+  min-width: 0;
+  padding: 0 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary) inset;
+  }
+}
+
+textarea.body-input {
+  height: auto;
+  padding: var(--spacing-sm) 11px;
+  font-family: var(--font-mono);
+  resize: vertical;
+}
 </style>
 
 <style>
-/* 行操作下拉（el-dropdown 传送至 body，非 scoped） */
-.rule-more-actions-dropdown {
-  --el-dropdown-menuItem-hover-fill: var(--color-fill);
-  --el-dropdown-menuItem-hover-color: var(--color-text-primary);
-  /* 必须走 --color-pop（下拉浮层角色）：这里写 --color-surface 会覆盖全局
-     .el-dropdown__popper 的 pop 底色，导致本工具的下拉在透明模式下变成实色白。 */
-  --el-bg-color-overlay: var(--color-pop);
-  border-radius: var(--radius-xs);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-md);
-}
-
-.rule-more-actions-dropdown .el-dropdown-menu {
-  padding: var(--spacing-xs);
-}
-
-.rule-more-actions-dropdown .el-dropdown-menu__item {
-  min-width: 160px;
-  /* 比标准控件行高高一档：control-height + xs */
-  height: calc(var(--control-height) + var(--spacing-xs));
-  margin: 0;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-xs);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-base);
-  line-height: var(--line-height-control);
-  letter-spacing: 0.25px;
-}
-
-.rule-more-actions-dropdown .el-dropdown-menu__item .menu-icon {
-  width: 16px;
-  height: 16px;
-  margin-right: var(--spacing-sm);
-  color: inherit;
-}
-
-.rule-more-actions-dropdown .el-dropdown-menu__item.danger-item,
-.rule-more-actions-dropdown .el-dropdown-menu__item.danger-item:hover {
-  color: var(--color-error);
-}
-
-/* ── 新建规则下拉（el-popover 传送至 body，非 scoped；对齐 Requestly RuleSelectionList） ── */
-
+/* 新建规则下拉(UiPopover 传送至 body,非 scoped) */
 .rule-picker-popover.el-popover.el-popper {
   padding: 0;
   overflow: hidden;

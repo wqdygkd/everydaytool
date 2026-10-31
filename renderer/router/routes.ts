@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type { RouteRecordRaw } from 'vue-router'
 import type { ToolDefinition } from '../shared/types/tool'
 import { getAppTabs } from '../config/app-tabs'
@@ -55,3 +56,14 @@ export const routes: RouteRecordRaw[] = [
     redirect: '/',
   },
 ]
+
+// 组件预览页（仅本地开发可访问 /ui-kit）：不进 APP_TABS 页签系统、不进生产构建，
+// 浏览器直接输地址即可打开。vue-router 按路径优先级匹配，排在兜底通配之后无碍。
+if (import.meta.env.DEV) {
+  routes.push({
+    path: '/ui-kit',
+    name: 'ui-kit',
+    component: () => import('../pages/UiShowcasePage.vue'),
+    meta: { title: 'UI 组件预览' },
+  })
+}

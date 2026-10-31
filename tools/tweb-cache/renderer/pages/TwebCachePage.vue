@@ -2,7 +2,9 @@
 import type { TelegramLibraryEntry, TelegramTrashEntry } from '../../../../shared/telegram-cache'
 import type { TwebWebviewTag } from '../webview'
 import { isElectronEnvironment } from '@renderer/shared/environment'
+import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
+import { toast } from 'vue-sonner'
 import { TWEB_CACHE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { useTwebCacheStore } from '../stores/twebCacheStore'
 import { tabKeyFromPath, TWEB_CACHE_TABS } from '../tabs'
@@ -156,7 +158,7 @@ function toggleDevTools(): void {
     else wv.openDevTools()
     devtoolsOpen.value = wv.isDevToolsOpened()
   } catch (error) {
-    ElMessage.warning((error as Error).message || '无法打开开发者工具')
+    toast.warning((error as Error).message || '无法打开开发者工具')
   }
 }
 
@@ -230,7 +232,7 @@ async function refreshMediaCache(silent = false): Promise<void> {
 async function clearMediaCache(): Promise<void> {
   if (mediaCacheClearing.value || !isElectron) return
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       '将删除 tweb 页面里已缓存的媒体字节（整文件与流式分块）。清理后重新查看 / 播放会重新从 Telegram 下载。继续？',
       '清理 tweb 媒体缓存',
       { type: 'warning', confirmButtonText: '清理', cancelButtonText: '取消' },
@@ -254,10 +256,10 @@ async function clearMediaCache(): Promise<void> {
       return cleared;
     })()`)
     if (typeof cleared === 'number') {
-      ElMessage.success(`已清理 ${cleared} 个媒体缓存桶`)
+      toast.success(`已清理 ${cleared} 个媒体缓存桶`)
       void refreshMediaCache()
     } else {
-      ElMessage.warning('tweb 页面尚未就绪，无法清理')
+      toast.warning('tweb 页面尚未就绪，无法清理')
     }
   } finally {
     mediaCacheClearing.value = false
@@ -293,19 +295,19 @@ async function backfillThumbnails(): Promise<void> {
   if (thumbnailBackfillRunning.value || !isElectron) return
   const requests = store.library
     .filter(entry => entry.state === 'complete' && !entry.thumbnailUrl)
-    .map(entry => ({peerId: entry.peerId, messageId: entry.messageId}))
+    .map(entry => ({ peerId: entry.peerId, messageId: entry.messageId }))
   if (!requests.length) return
 
   thumbnailBackfillRunning.value = true
   try {
-    const result = await runMediaCacheBridge<{saved: number, failed: number}>(`
+    const result = await runMediaCacheBridge<{ saved: number, failed: number }>(`
       (() => {
         const fn = window.__EDT_BACKFILL_THUMBNAILS__;
         return typeof fn === 'function' ? fn(${JSON.stringify(requests)}) : null;
       })()
     `)
     if (result?.saved) {
-      ElMessage.success(`已补齐 ${result.saved} 个缩略图`)
+      toast.success(`已补齐 ${result.saved} 个缩略图`)
       await store.loadLibrary(true)
     }
   } finally {
@@ -321,7 +323,7 @@ watch(activeTab, (tab) => {
 async function runJump(jump: { peerId: string, messageId: number }): Promise<void> {
   const wv = webviewRef.value
   if (!wv) {
-    ElMessage.warning('tweb 页面尚未就绪')
+    toast.warning('tweb 页面尚未就绪')
     return
   }
   if (!/^-?\d{1,20}$/.test(jump.peerId) || !Number.isSafeInteger(jump.messageId)) return
@@ -332,9 +334,9 @@ async function runJump(jump: { peerId: string, messageId: number }): Promise<voi
     + '})()'
   try {
     const jumped = await wv.executeJavaScript(script, true)
-    if (!jumped) ElMessage.warning('该会话还没有在 tweb 里加载，请先在左侧打开它')
+    if (!jumped) toast.warning('该会话还没有在 tweb 里加载，请先在左侧打开它')
   } catch (error) {
-    ElMessage.error(`跳转失败：${(error as Error).message}`)
+    toast.error(`跳转失败：${(error as Error).message}`)
   }
 }
 
@@ -353,7 +355,7 @@ async function openDir(entry: TelegramLibraryEntry): Promise<void> {
   try {
     await store.openMessageDir(entry.peerId, entry.messageId)
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开目录失败')
+    toast.error((error as Error).message || '打开目录失败')
   }
 }
 
@@ -363,7 +365,7 @@ function jumpToEntry(entry: TelegramLibraryEntry): void {
 
 async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       `把消息 ${entry.messageId} 移入回收站？原目录与 manifest 会保留，可在回收站恢复。`,
       '移入回收站',
       { type: 'warning' },
@@ -382,18 +384,18 @@ async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
       } catch {}
     }
     await store.deleteMessage(entry.peerId, entry.messageId)
-    ElMessage.success('已移入回收站')
+    toast.success('已移入回收站')
   } catch (error) {
-    ElMessage.error((error as Error).message || '移入回收站失败')
+    toast.error((error as Error).message || '移入回收站失败')
   }
 }
 
 async function restoreTrash(entry: TelegramTrashEntry): Promise<void> {
   try {
     await store.restoreTrash(entry.trashId)
-    ElMessage.success('已恢复')
+    toast.success('已恢复')
   } catch (error) {
-    ElMessage.error((error as Error).message || '恢复失败')
+    toast.error((error as Error).message || '恢复失败')
   }
 }
 
@@ -406,7 +408,7 @@ async function refreshAll(): Promise<void> {
       refreshMediaCache(true),
     ])
   } catch (error) {
-    ElMessage.error((error as Error).message || '刷新失败')
+    toast.error((error as Error).message || '刷新失败')
   }
 }
 
@@ -414,7 +416,7 @@ async function openDataDir(): Promise<void> {
   try {
     await store.openDataDir()
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开数据目录失败')
+    toast.error((error as Error).message || '打开数据目录失败')
   }
 }
 
@@ -485,15 +487,15 @@ onUnmounted(() => {
 
       <template #end>
         <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
-        <el-button size="small" :disabled="!isElectron" @click="openInBrowser">
+        <UiButton size="small" :disabled="!isElectron" @click="openInBrowser">
           外部打开
-        </el-button>
+        </UiButton>
       </template>
     </UiToolbar>
 
     <div class="page-body">
       <section class="browser-pane">
-        <el-alert
+        <UiAlert
           v-if="initError"
           class="pane-alert"
           type="warning"
@@ -502,7 +504,7 @@ onUnmounted(() => {
           title="后端未就绪"
           :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
         />
-        <el-alert
+        <UiAlert
           v-else-if="!isElectron"
           class="pane-alert"
           type="info"
@@ -511,7 +513,7 @@ onUnmounted(() => {
           title="网页预览不支持内嵌 tweb"
           description="请使用 everydaytool 桌面端打开本工具。"
         />
-        <el-alert
+        <UiAlert
           v-else-if="!pageSrc"
           class="pane-alert"
           type="warning"
@@ -520,7 +522,7 @@ onUnmounted(() => {
           title="tweb 本地站点未就绪"
           :description="siteError || '正在启动本地站点…（首次需要先在 tweb/ 里构建 dist）'"
         />
-        <el-alert
+        <UiAlert
           v-else-if="originNotice && !originNoticeDismissed"
           class="pane-alert"
           type="warning"
@@ -545,12 +547,12 @@ onUnmounted(() => {
         <div v-if="loadError" class="browser-overlay is-error">
           <span class="error-text">{{ loadError }}</span>
           <UiGroup gap="sm">
-            <el-button size="small" type="primary" @click="reload">
+            <UiButton size="small" type="primary" @click="reload">
               重试
-            </el-button>
-            <el-button size="small" @click="openInBrowser">
+            </UiButton>
+            <UiButton size="small" @click="openInBrowser">
               在系统浏览器打开
-            </el-button>
+            </UiButton>
           </UiGroup>
         </div>
       </section>
@@ -589,12 +591,12 @@ onUnmounted(() => {
 
             <UiPanel title="本地归档">
               <template #actions>
-                <el-button size="small" @click="openDataDir">
+                <UiButton size="small" @click="openDataDir">
                   打开数据目录
-                </el-button>
-                <el-button size="small" :loading="store.busy.library" @click="refreshAll">
+                </UiButton>
+                <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
                   刷新
-                </el-button>
+                </UiButton>
               </template>
               <UiDetailGrid :columns="2">
                 <UiDetailItem label="已缓存消息" size="xs" mono>
@@ -611,12 +613,12 @@ onUnmounted(() => {
 
             <UiPanel title="tweb 媒体缓存">
               <template #actions>
-                <el-button size="small" :loading="mediaCacheLoading" @click="refreshMediaCache()">
+                <UiButton size="small" :loading="mediaCacheLoading" @click="refreshMediaCache()">
                   刷新
-                </el-button>
-                <el-button size="small" type="danger" plain :loading="mediaCacheClearing" @click="clearMediaCache">
+                </UiButton>
+                <UiButton size="small" type="danger" plain :loading="mediaCacheClearing" @click="clearMediaCache">
                   清理
-                </el-button>
+                </UiButton>
               </template>
               <UiDetailGrid :columns="2">
                 <UiDetailItem label="占用" size="xs" mono>
@@ -644,9 +646,9 @@ onUnmounted(() => {
                 <UiChip mono>
                   {{ store.library.length }}
                 </UiChip>
-                <el-button size="small" :loading="store.busy.library" @click="refreshAll">
+                <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
                   刷新
-                </el-button>
+                </UiButton>
               </template>
 
               <UiTable
@@ -655,15 +657,15 @@ onUnmounted(() => {
                 empty-text="还没有本地缓存：先在 tweb 页面里右键「缓存此消息」"
                 :span-method="librarySpanMethod"
               >
-                <el-table-column label="会话 / 组" min-width="130" show-overflow-tooltip>
+                <UiTableColumn label="会话 / 组" min-width="130" show-overflow-tooltip>
                   <template #default="{ row }">
                     <div class="group-cell">
                       <span class="mono">{{ row.groupTitle }}</span>
                       <span v-if="row.groupSize > 1" class="muted">组内 {{ row.groupSize }} 条</span>
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="图" width="72">
+                </UiTableColumn>
+                <UiTableColumn label="图" width="72">
                   <template #default="{ row }">
                     <img
                       v-if="row.thumbnailUrl"
@@ -674,15 +676,15 @@ onUnmounted(() => {
                     >
                     <span v-else class="muted">—</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="消息" width="86" align="right">
+                </UiTableColumn>
+                <UiTableColumn label="消息" width="86" align="right">
                   <template #default="{ row }">
-                    <el-button size="small" text type="primary" @click="jumpToEntry(toEntry(row))">
+                    <UiButton size="small" text type="primary" @click="jumpToEntry(toEntry(row))">
                       <span class="mono">{{ row.messageId }}</span>
-                    </el-button>
+                    </UiButton>
                   </template>
-                </el-table-column>
-                <el-table-column label="状态 / 进度" width="124">
+                </UiTableColumn>
+                <UiTableColumn label="状态 / 进度" width="124">
                   <template #default="{ row }">
                     <div class="state-cell">
                       <UiChip :tone="stateTone(toEntry(row))">
@@ -695,18 +697,18 @@ onUnmounted(() => {
                       />
                     </div>
                   </template>
-                </el-table-column>
-                <el-table-column label="大小" width="90" align="right">
+                </UiTableColumn>
+                <UiTableColumn label="大小" width="90" align="right">
                   <template #default="{ row }">
                     <span class="mono muted">{{ formatBytes(row.size) }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="缓存时间" width="140">
+                </UiTableColumn>
+                <UiTableColumn label="缓存时间" width="140">
                   <template #default="{ row }">
                     <span class="mono muted">{{ formatDateTime(row.savedAt) }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="正文" min-width="140" show-overflow-tooltip>
+                </UiTableColumn>
+                <UiTableColumn label="正文" min-width="140" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span class="muted">
                       <template v-if="row.forwardSource">
@@ -715,22 +717,22 @@ onUnmounted(() => {
                       {{ row.textPreview || '—' }}
                     </span>
                   </template>
-                </el-table-column>
-                <el-table-column label="操作" width="210" align="right">
+                </UiTableColumn>
+                <UiTableColumn label="操作" width="210" align="right">
                   <template #default="{ row }">
                     <div class="row-actions">
-                      <el-button size="small" text type="primary" @click="jumpToEntry(toEntry(row))">
+                      <UiButton size="small" text type="primary" @click="jumpToEntry(toEntry(row))">
                         定位
-                      </el-button>
-                      <el-button size="small" text type="primary" @click="openDir(toEntry(row))">
+                      </UiButton>
+                      <UiButton size="small" text type="primary" @click="openDir(toEntry(row))">
                         打开文件夹
-                      </el-button>
-                      <el-button size="small" text type="danger" @click="removeEntry(toEntry(row))">
+                      </UiButton>
+                      <UiButton size="small" text type="danger" @click="removeEntry(toEntry(row))">
                         删除
-                      </el-button>
+                      </UiButton>
                     </div>
                   </template>
-                </el-table-column>
+                </UiTableColumn>
               </UiTable>
             </UiPanel>
 
@@ -741,18 +743,18 @@ onUnmounted(() => {
                 </UiChip>
               </template>
               <UiTable :data="store.trash" height="200" empty-text="回收站为空">
-                <el-table-column label="会话 / 消息" min-width="160" show-overflow-tooltip>
+                <UiTableColumn label="会话 / 消息" min-width="160" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span class="mono">{{ row.peerId }} / {{ row.messageId }}</span>
                   </template>
-                </el-table-column>
-                <el-table-column label="操作" width="90" align="right">
+                </UiTableColumn>
+                <UiTableColumn label="操作" width="90" align="right">
                   <template #default="{ row }">
-                    <el-button size="small" text type="primary" @click="restoreTrash(toTrash(row))">
+                    <UiButton size="small" text type="primary" @click="restoreTrash(toTrash(row))">
                       恢复
-                    </el-button>
+                    </UiButton>
                   </template>
-                </el-table-column>
+                </UiTableColumn>
               </UiTable>
             </UiPanel>
           </div>

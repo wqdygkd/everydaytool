@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TrafficEntry } from '../../../../shared/interceptor'
+import { confirm } from '@renderer/shared/feedback'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { useInterceptorStore } from '../stores/interceptorStore'
 
@@ -50,7 +51,7 @@ function createRule(entry: TrafficEntry): void {
 
 async function clearAll(): Promise<void> {
   try {
-    await ElMessageBox.confirm('确认清空当前流量记录？', '清空确认', { type: 'warning' })
+    await confirm('确认清空当前流量记录？', '清空确认', { type: 'warning' })
   } catch {
     return
   }
@@ -75,10 +76,10 @@ function headersText(headers?: Record<string, string>): string {
     </template>
     <template #actions>
       <UiGroup gap="sm">
-        <el-input v-model="filter" class="ctl-md" placeholder="按 URL 过滤" clearable size="small" />
-        <el-button size="small" :disabled="!store.traffic.length" @click="clearAll">
+        <UiInput v-model="filter" class="ctl-md" placeholder="按 URL 过滤" clearable size="small" />
+        <UiButton size="small" :disabled="!store.traffic.length" @click="clearAll">
           清空
-        </el-button>
+        </UiButton>
       </UiGroup>
     </template>
     <UiHint>
@@ -95,22 +96,22 @@ function headersText(headers?: Record<string, string>): string {
       row-clickable
       @row-click="openDetail"
     >
-      <el-table-column label="时间" width="110">
+      <UiTableColumn label="时间" width="110">
         <template #default="{ row }">
           <span class="mono muted">{{ formatTime(row.at) }}</span>
         </template>
-      </el-table-column>
-      <el-table-column label="方法" width="80">
+      </UiTableColumn>
+      <UiTableColumn label="方法" width="80">
         <template #default="{ row }">
           <span class="mono">{{ row.method }}</span>
         </template>
-      </el-table-column>
-      <el-table-column label="URL" min-width="320" show-overflow-tooltip>
+      </UiTableColumn>
+      <UiTableColumn label="URL" min-width="320" show-overflow-tooltip>
         <template #default="{ row }">
           <span class="mono url-cell">{{ row.host }}{{ row.path }}</span>
         </template>
-      </el-table-column>
-      <el-table-column label="状态" width="90">
+      </UiTableColumn>
+      <UiTableColumn label="状态" width="90">
         <template #default="{ row }">
           <UiChip v-if="row.error" tone="danger" variant="soft">
             ERR
@@ -119,13 +120,13 @@ function headersText(headers?: Record<string, string>): string {
             {{ row.status ?? '—' }}
           </UiChip>
         </template>
-      </el-table-column>
-      <el-table-column label="耗时" width="90">
+      </UiTableColumn>
+      <UiTableColumn label="耗时" width="90">
         <template #default="{ row }">
           <span class="mono muted">{{ row.durationMs != null ? `${row.durationMs}ms` : '—' }}</span>
         </template>
-      </el-table-column>
-      <el-table-column label="标记" min-width="180">
+      </UiTableColumn>
+      <UiTableColumn label="标记" min-width="180">
         <template #default="{ row }">
           <UiGroup wrap gap="sm">
             <UiChip v-if="row.canceled" tone="danger" variant="soft">
@@ -145,14 +146,14 @@ function headersText(headers?: Record<string, string>): string {
             </UiChip>
           </UiGroup>
         </template>
-      </el-table-column>
-      <el-table-column width="120" align="right">
+      </UiTableColumn>
+      <UiTableColumn width="120" align="right">
         <template #default="{ row }">
-          <el-button size="small" text type="primary" @click.stop="createRule(entryOf(row))">
+          <UiButton size="small" text type="primary" @click.stop="createRule(entryOf(row))">
             建规则
-          </el-button>
+          </UiButton>
         </template>
-      </el-table-column>
+      </UiTableColumn>
     </UiTable>
   </UiPanel>
 
@@ -198,9 +199,9 @@ function headersText(headers?: Record<string, string>): string {
       <UiDetailGrid>
         <UiPanel variant="outlined" title="请求头">
           <template #actions>
-            <el-button size="small" text type="primary" @click="useCopy(headersText(detail.requestHeaders), '请求头')">
+            <UiButton size="small" text type="primary" @click="useCopy(headersText(detail.requestHeaders), '请求头')">
               复制
-            </el-button>
+            </UiButton>
           </template>
           <UiCodeBlock wrap>
             {{ headersText(detail.requestHeaders) || '—' }}
@@ -208,9 +209,9 @@ function headersText(headers?: Record<string, string>): string {
         </UiPanel>
         <UiPanel variant="outlined" title="响应头">
           <template #actions>
-            <el-button size="small" text type="primary" @click="useCopy(headersText(detail.responseHeaders), '响应头')">
+            <UiButton size="small" text type="primary" @click="useCopy(headersText(detail.responseHeaders), '响应头')">
               复制
-            </el-button>
+            </UiButton>
           </template>
           <UiCodeBlock wrap>
             {{ headersText(detail.responseHeaders) || '—' }}
@@ -221,9 +222,9 @@ function headersText(headers?: Record<string, string>): string {
       <div v-if="detail.requestBody" class="body-section">
         <div class="detail-item-title">
           请求体
-          <el-button size="small" text type="primary" @click="useCopy(detail.requestBody, '请求体')">
+          <UiButton size="small" text type="primary" @click="useCopy(detail.requestBody, '请求体')">
             复制
-          </el-button>
+          </UiButton>
         </div>
         <UiCodeBlock wrap max-height="260px">
           {{ detail.requestBody }}
@@ -232,9 +233,9 @@ function headersText(headers?: Record<string, string>): string {
       <div v-if="detail.responseBody" class="body-section">
         <div class="detail-item-title">
           响应体
-          <el-button size="small" text type="primary" @click="useCopy(detail.responseBody, '响应体')">
+          <UiButton size="small" text type="primary" @click="useCopy(detail.responseBody, '响应体')">
             复制
-          </el-button>
+          </UiButton>
         </div>
         <UiCodeBlock wrap max-height="260px">
           {{ detail.responseBody }}
@@ -246,12 +247,12 @@ function headersText(headers?: Record<string, string>): string {
     </UiGroup>
 
     <template #footer>
-      <el-button @click="detailVisible = false">
+      <UiButton @click="detailVisible = false">
         关闭
-      </el-button>
-      <el-button v-if="detail" type="primary" @click="createRule(detail)">
+      </UiButton>
+      <UiButton v-if="detail" type="primary" @click="createRule(detail)">
         以此建规则
-      </el-button>
+      </UiButton>
     </template>
   </UiDialog>
 </template>

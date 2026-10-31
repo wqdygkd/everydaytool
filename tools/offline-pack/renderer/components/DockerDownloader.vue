@@ -3,8 +3,8 @@ import type { OfflinePackDockerImageInfo, OfflinePackDockerManifest, OfflinePack
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { extractDockerImageInfo, formatBytes } from '@shared/offline-pack'
 import { STORAGE_KEYS } from '@shared/storage-keys'
-import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
 import DownloaderFrame from './DownloaderFrame.vue'
@@ -110,12 +110,12 @@ function onMirrorChange(): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+    toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
   }
   const trimmed = input.value.trim()
   if (!trimmed) {
-    ElMessage.warning('请输入镜像名或 Docker Hub 链接')
+    toast.warning('请输入镜像名或 Docker Hub 链接')
     return
   }
   loading.value = true
@@ -150,7 +150,7 @@ async function handleSubmit(): Promise<void> {
       imageNotFound.value = true
       await searchCandidatesFallback(trimmed)
     } else {
-      ElMessage.error(msg)
+      toast.error(msg)
     }
   } finally {
     loading.value = false
@@ -238,13 +238,13 @@ async function handleDownload(): Promise<void> {
   >
     <template #hint>
       输入完整镜像名或 Docker Hub 仓库链接，或前往
-      <el-link
+      <UiLink
         type="primary"
         :underline="false"
         @click="openExternal('https://hub.docker.com/search')"
       >
         Docker Hub
-      </el-link>
+      </UiLink>
     </template>
 
     <!-- 加速服务：高级选项，放在主输入框之前（切换后会自动重新解析已输入的镜像） -->
@@ -255,17 +255,7 @@ async function handleDownload(): Promise<void> {
             docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io
           </UiHint>
 
-          <el-select
-            v-model="mirror"
-            class="full-width"
-            filterable
-            allow-create
-            clearable
-            placeholder="直连（不使用加速）"
-            @change="onMirrorChange"
-          >
-            <el-option v-for="m in MIRRORS" :key="m.value" :label="m.label" :value="m.value" />
-          </el-select>
+          <UiSelect v-model="mirror" class="full-width" placeholder="直连（不使用加速）" :options="MIRRORS.map(m => ({ label: m.label, value: m.value }))" @update:model-value="onMirrorChange" />
 
           <UiGroup v-if="mirrorTarget" direction="column" gap="xs" block>
             <UiHint size="xs">
@@ -297,20 +287,20 @@ async function handleDownload(): Promise<void> {
           </UiHint>
 
           <UiGroup gap="md" wrap>
-            <el-link
+            <UiLink
               type="primary"
               :underline="false"
               @click="openExternal(getSearchUrl(info.repository))"
             >
               前往 Docker Hub 搜索
-            </el-link>
-            <el-link
+            </UiLink>
+            <UiLink
               type="primary"
               :underline="false"
               @click="openExternal(getRepoUrl(info.namespace || 'library', info.repository))"
             >
               预览当前仓库页
-            </el-link>
+            </UiLink>
           </UiGroup>
 
           <UiGroup v-if="searchCandidates.length" direction="column" gap="sm" block>
@@ -349,25 +339,21 @@ async function handleDownload(): Promise<void> {
             <UiHint size="xs">
               选择标签
             </UiHint>
-            <el-select v-model="selectedTag" class="full-width" placeholder="选择标签" @change="onTagChange">
-              <el-option v-for="t in tags" :key="t" :label="t" :value="t" />
-            </el-select>
+            <UiSelect v-model="selectedTag" class="full-width" placeholder="选择标签" :options="tags.map(t => ({ label: t, value: t }))" @update:model-value="onTagChange" />
           </UiGroup>
 
           <UiGroup v-if="platforms.length" class="ctl-sm" direction="column" gap="xs">
             <UiHint size="xs">
               选择架构
             </UiHint>
-            <el-select v-model="selectedPlatform" class="full-width" placeholder="选择架构" @change="onPlatformChange">
-              <el-option v-for="p in platforms" :key="formatPlatform(p)" :label="formatPlatform(p)" :value="formatPlatform(p)" />
-            </el-select>
+            <UiSelect v-model="selectedPlatform" class="full-width" placeholder="选择架构" :options="platforms.map(p => ({ label: formatPlatform(p), value: formatPlatform(p) }))" @update:model-value="onPlatformChange" />
           </UiGroup>
         </UiGroup>
 
         <UiGroup gap="sm" align="center" wrap class="btn-flush">
-          <el-button type="primary" :disabled="downloading" @click="handleDownload">
+          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
             下载并打包 TAR
-          </el-button>
+          </UiButton>
           <UiHint v-if="selectedPlatform" size="xs" class="mono">
             {{ buildFilename() }}
           </UiHint>
@@ -389,21 +375,21 @@ async function handleDownload(): Promise<void> {
       </template>
 
       <UiTable :data="manifest.layers" max-height="240">
-        <el-table-column label="#" width="52" align="right">
+        <UiTableColumn label="#" width="52" align="right">
           <template #default="{ $index }">
             <span class="mono muted">{{ $index + 1 }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="层摘要" min-width="200">
+        </UiTableColumn>
+        <UiTableColumn label="层摘要" min-width="200">
           <template #default="{ row }">
             <span class="mono" :title="row.digest">{{ row.digest.slice(7, 19) }}…</span>
           </template>
-        </el-table-column>
-        <el-table-column label="大小" width="100" align="right">
+        </UiTableColumn>
+        <UiTableColumn label="大小" width="100" align="right">
           <template #default="{ row }">
             <span class="mono">{{ formatBytes(row.size) }}</span>
           </template>
-        </el-table-column>
+        </UiTableColumn>
       </UiTable>
 
       <UiKeyValue class="manifest-total" label="总计（压缩）" mono>

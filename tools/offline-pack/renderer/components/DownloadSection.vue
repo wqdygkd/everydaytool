@@ -29,9 +29,9 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
             （层 {{ progress.layerIndex }}/{{ progress.totalLayers }}）
           </template>
         </UiHint>
-        <el-button size="small" @click="emit('cancel')">
+        <UiButton size="small" @click="emit('cancel')">
           取消
-        </el-button>
+        </UiButton>
       </UiGroup>
 
       <UiProgress
@@ -41,7 +41,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
     </UiGroup>
   </UiPanel>
 
-  <el-alert
+  <UiAlert
     v-if="progress?.status === 'error' && progress.error"
     type="error"
     :closable="false"
@@ -59,9 +59,9 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
           已保存到本地下载目录
         </UiHint>
       </UiGroup>
-      <el-button type="primary" size="small" @click="emit('openDir')">
+      <UiButton type="primary" size="small" @click="emit('openDir')">
         打开目录
-      </el-button>
+      </UiButton>
     </UiGroup>
   </UiPanel>
 </template>

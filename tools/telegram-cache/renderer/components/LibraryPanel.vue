@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TelegramLibraryEntry, TelegramTrashEntry } from '../../../../shared/telegram-cache'
 import type { LibraryMediaItem } from '../stores/telegramCacheStore'
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
 import { formatBytes, formatDateTime } from '../utils/format'
 
@@ -69,9 +71,9 @@ function jumpToMessage(entry: TelegramLibraryEntry): void {
 async function copyLink(entry: TelegramLibraryEntry): Promise<void> {
   try {
     await navigator.clipboard.writeText(entry.messageLink)
-    ElMessage.success('消息链接已复制')
+    toast.success('消息链接已复制')
   } catch {
-    ElMessage.error(`复制失败：${entry.messageLink}`)
+    toast.error(`复制失败：${entry.messageLink}`)
   }
 }
 
@@ -79,7 +81,7 @@ async function refresh(): Promise<void> {
   try {
     await Promise.all([store.loadLibrary(), store.loadTrash()])
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取影库失败')
+    toast.error((error as Error).message || '读取影库失败')
   }
 }
 
@@ -87,7 +89,7 @@ async function openDir(entry: TelegramLibraryEntry): Promise<void> {
   try {
     await store.openLibraryDir(entry.peerId, entry.messageId)
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开目录失败')
+    toast.error((error as Error).message || '打开目录失败')
   }
 }
 
@@ -95,7 +97,7 @@ async function play(entry: TelegramLibraryEntry): Promise<void> {
   try {
     const items = await store.loadLibraryMedia(entry.peerId, entry.messageId)
     if (!items.length) {
-      ElMessage.warning('该消息没有可播放的媒体')
+      toast.warning('该消息没有可播放的媒体')
       return
     }
     playerItems.value = items
@@ -103,7 +105,7 @@ async function play(entry: TelegramLibraryEntry): Promise<void> {
     playerTitle.value = `${entry.peerTitle || entry.peerId} · #${entry.messageId}`
     playerVisible.value = true
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取媒体失败')
+    toast.error((error as Error).message || '读取媒体失败')
   }
 }
 
@@ -117,7 +119,7 @@ function nextMedia(): void {
 
 async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       `把消息 ${entry.messageId} 移入回收站？原目录与 manifest 会保留，可在回收站恢复。`,
       '移入回收站',
       { type: 'warning' },
@@ -127,27 +129,27 @@ async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
   }
   try {
     await store.deleteLibraryMessage(entry.peerId, entry.messageId)
-    ElMessage.success('已移入回收站')
+    toast.success('已移入回收站')
   } catch (error) {
-    ElMessage.error((error as Error).message || '移入回收站失败')
+    toast.error((error as Error).message || '移入回收站失败')
   }
 }
 
 async function restore(entry: TelegramTrashEntry): Promise<void> {
   try {
     await store.restoreTrash(entry.trashId)
-    ElMessage.success('已恢复')
+    toast.success('已恢复')
   } catch (error) {
-    ElMessage.error((error as Error).message || '恢复失败')
+    toast.error((error as Error).message || '恢复失败')
   }
 }
 
 async function emptyExpired(): Promise<void> {
   try {
     const removed = await store.emptyTrash()
-    ElMessage.success(removed > 0 ? `已清理 ${removed} 个到期条目` : '没有到期的回收站条目')
+    toast.success(removed > 0 ? `已清理 ${removed} 个到期条目` : '没有到期的回收站条目')
   } catch (error) {
-    ElMessage.error((error as Error).message || '清理失败')
+    toast.error((error as Error).message || '清理失败')
   }
 }
 
@@ -156,7 +158,7 @@ onMounted(() => {
   // 旧目录一次性正名：001.jpg → media/<mediaKey>.<ext>、text.md → message.md、acc-default/ 上移（幂等，无需用户操作）
   void store.normalizeLibrary()
     .then((summary) => {
-      if (summary.migrated > 0) ElMessage.success(`已把 ${summary.migrated} 条缓存迁到 messages/<群id>/<消息id>/`)
+      if (summary.migrated > 0) toast.success(`已把 ${summary.migrated} 条缓存迁到 messages/<群id>/<消息id>/`)
       if (summary.changed > 0) void refresh()
     })
     .catch(() => undefined)
@@ -170,9 +172,9 @@ onMounted(() => {
         <UiChip mono>
           {{ store.library.length }}
         </UiChip>
-        <el-button size="small" :loading="store.busy.library" @click="refresh">
+        <UiButton size="small" :loading="store.busy.library" @click="refresh">
           刷新
-        </el-button>
+        </UiButton>
       </template>
 
       <UiToolbar wrap gap="sm">
@@ -180,24 +182,24 @@ onMounted(() => {
       </UiToolbar>
 
       <UiTable :data="filteredLibrary" height="420" empty-text="还没有本地缓存：在 Telegram 消息上右键「缓存此消息」">
-        <el-table-column label="时间" width="132">
+        <UiTableColumn label="时间" width="132">
           <template #default="{ row }">
             <span class="mono muted">{{ formatDateTime(row.savedAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="会话" width="150" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="会话" width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="cell-stack">
               <span class="mono">{{ row.peerTitle || row.peerId }}</span>
               <span v-if="row.senderName" class="muted small">{{ row.senderName }}</span>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="消息 / 链接" width="210" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="消息 / 链接" width="210" show-overflow-tooltip>
           <template #default="{ row }">
             <div class="cell-stack">
               <span class="mono">{{ row.messageId }}</span>
-              <el-button
+              <UiButton
                 size="small"
                 text
                 type="primary"
@@ -206,35 +208,35 @@ onMounted(() => {
                 @click="jumpToMessage(toEntry(row))"
               >
                 {{ linkLabel(toEntry(row)) }}
-              </el-button>
+              </UiButton>
             </div>
           </template>
-        </el-table-column>
-        <el-table-column label="状态" width="112">
+        </UiTableColumn>
+        <UiTableColumn label="状态" width="112">
           <template #default="{ row }">
             <UiChip :tone="stateMeta(toEntry(row)).tone">
               {{ stateMeta(toEntry(row)).label }}
             </UiChip>
           </template>
-        </el-table-column>
-        <el-table-column label="大小" width="88" align="right">
+        </UiTableColumn>
+        <UiTableColumn label="大小" width="88" align="right">
           <template #default="{ row }">
             <span class="mono muted">{{ formatBytes(row.size) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="附件" width="64" align="right">
+        </UiTableColumn>
+        <UiTableColumn label="附件" width="64" align="right">
           <template #default="{ row }">
             <span class="mono muted">{{ row.attachmentCount }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="正文" min-width="180" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="正文" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="muted">{{ row.textPreview || '—' }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="本地目录" min-width="200" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="本地目录" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button
+            <UiButton
               size="small"
               text
               type="primary"
@@ -243,27 +245,27 @@ onMounted(() => {
               @click="openDir(toEntry(row))"
             >
               {{ row.relativeDir }}
-            </el-button>
+            </UiButton>
           </template>
-        </el-table-column>
-        <el-table-column label="操作" width="212" align="right">
+        </UiTableColumn>
+        <UiTableColumn label="操作" width="212" align="right">
           <template #default="{ row }">
             <div class="row-actions">
-              <el-button size="small" text type="primary" @click="play(toEntry(row))">
+              <UiButton size="small" text type="primary" @click="play(toEntry(row))">
                 播放
-              </el-button>
-              <el-button size="small" text type="primary" :title="row.localDir" @click="openDir(toEntry(row))">
+              </UiButton>
+              <UiButton size="small" text type="primary" :title="row.localDir" @click="openDir(toEntry(row))">
                 打开文件夹
-              </el-button>
-              <el-button size="small" text type="primary" @click="copyLink(toEntry(row))">
+              </UiButton>
+              <UiButton size="small" text type="primary" @click="copyLink(toEntry(row))">
                 复制链接
-              </el-button>
-              <el-button size="small" text type="danger" @click="removeEntry(toEntry(row))">
+              </UiButton>
+              <UiButton size="small" text type="danger" @click="removeEntry(toEntry(row))">
                 删除
-              </el-button>
+              </UiButton>
             </div>
           </template>
-        </el-table-column>
+        </UiTableColumn>
       </UiTable>
 
       <UiHint block>
@@ -277,34 +279,34 @@ onMounted(() => {
         <UiChip mono>
           {{ store.trash.length }}
         </UiChip>
-        <el-button size="small" @click="emptyExpired">
+        <UiButton size="small" @click="emptyExpired">
           清理到期
-        </el-button>
+        </UiButton>
       </template>
 
       <UiTable :data="store.trash" height="220" empty-text="回收站为空">
-        <el-table-column label="删除时间" width="132">
+        <UiTableColumn label="删除时间" width="132">
           <template #default="{ row }">
             <span class="mono muted">{{ formatDateTime(row.deletedAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="会话 / 消息" min-width="200" show-overflow-tooltip>
+        </UiTableColumn>
+        <UiTableColumn label="会话 / 消息" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono">{{ row.peerId }} / {{ row.messageId }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="到期" width="132">
+        </UiTableColumn>
+        <UiTableColumn label="到期" width="132">
           <template #default="{ row }">
             <span class="mono muted">{{ formatDateTime(row.expiresAt) }}</span>
           </template>
-        </el-table-column>
-        <el-table-column label="操作" width="90" align="right">
+        </UiTableColumn>
+        <UiTableColumn label="操作" width="90" align="right">
           <template #default="{ row }">
-            <el-button size="small" text type="primary" @click="restore(toTrash(row))">
+            <UiButton size="small" text type="primary" @click="restore(toTrash(row))">
               恢复
-            </el-button>
+            </UiButton>
           </template>
-        </el-table-column>
+        </UiTableColumn>
       </UiTable>
     </UiPanel>
 
@@ -334,13 +336,13 @@ onMounted(() => {
           {{ currentMedia.fileName || currentMedia.mediaKey }}
         </div>
         <div v-if="playerItems.length > 1" class="player-nav">
-          <el-button size="small" @click="prevMedia">
+          <UiButton size="small" @click="prevMedia">
             上一个
-          </el-button>
+          </UiButton>
           <span class="mono muted">{{ playerIndex + 1 }} / {{ playerItems.length }}</span>
-          <el-button size="small" @click="nextMedia">
+          <UiButton size="small" @click="nextMedia">
             下一个
-          </el-button>
+          </UiButton>
         </div>
       </div>
     </UiDialog>

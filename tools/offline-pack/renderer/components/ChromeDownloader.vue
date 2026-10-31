@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { OfflinePackChromeDetail, OfflinePackChromeSearchItem } from '@shared/offline-pack'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
-import { ElMessage } from 'element-plus'
 import { onUnmounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
 import DownloaderFrame from './DownloaderFrame.vue'
@@ -74,7 +74,7 @@ function selectResult(item: OfflinePackChromeSearchItem): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+    toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
   }
   loading.value = true
@@ -90,7 +90,7 @@ async function handleSubmit(): Promise<void> {
     }
     detail.value = next
   } catch (error) {
-    ElMessage.error((error as Error).message || '解析失败')
+    toast.error((error as Error).message || '解析失败')
   } finally {
     loading.value = false
   }
@@ -124,13 +124,13 @@ onUnmounted(() => {
   >
     <template #hint>
       输入名称搜索或直接粘贴 ID，或前往
-      <el-link
+      <UiLink
         type="primary"
         :underline="false"
         @click="openExternal('https://chromewebstore.google.com/category/extensions')"
       >
         Chrome 商店
-      </el-link>
+      </UiLink>
     </template>
 
     <template #between>
@@ -161,12 +161,12 @@ onUnmounted(() => {
         </UiDetailGrid>
 
         <UiGroup gap="sm" wrap class="btn-flush">
-          <el-button type="primary" :disabled="downloading" @click="handleDownload('crx')">
+          <UiButton type="primary" :disabled="downloading" @click="handleDownload('crx')">
             下载 CRX
-          </el-button>
-          <el-button :disabled="downloading" @click="handleDownload('zip')">
+          </UiButton>
+          <UiButton :disabled="downloading" @click="handleDownload('zip')">
             下载 ZIP
-          </el-button>
+          </UiButton>
         </UiGroup>
       </UiGroup>
     </UiPanel>

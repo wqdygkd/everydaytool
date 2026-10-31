@@ -1,8 +1,8 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
 
@@ -13,10 +13,10 @@ export default defineConfig({
   base: './',
   plugins: [
     vue(),
+    tailwindcss(),
     AutoImport({
       dts: path.join(__dirname, 'auto-imports.d.ts'),
       imports: ['vue', 'vue-router', 'pinia'],
-      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
       vueTemplate: true,
     }),
     Components({
@@ -25,7 +25,6 @@ export default defineConfig({
         path.join(__dirname, 'renderer/shared/components'),
         path.join(__dirname, 'tools/**/renderer/components'),
       ],
-      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
     }),
   ],
   resolve: {
@@ -33,6 +32,9 @@ export default defineConfig({
       '@renderer': path.join(__dirname, 'renderer'),
       '@tools': path.join(__dirname, 'tools'),
       '@shared': path.join(__dirname, 'shared'),
+      // lucide 官方已把 lucide-vue-next 更名为 @lucide/vue;shadcn 注册表模板仍写旧名,
+      // 用别名承接,生成组件保持只读不修改
+      'lucide-vue-next': '@lucide/vue',
     },
   },
   build: {

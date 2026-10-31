@@ -42,19 +42,28 @@ function onEsc() {
 </script>
 
 <template>
-  <el-input
-    v-model="value"
+  <!-- 搜索框内核：EP → 原生 input。底色走 --color-input（input 角色），玻璃按角色独立取档 -->
+  <label
     :class="variant === 'pill' ? 'ui-search-pill' : 'ui-search-box'"
     :style="width ? { width } : undefined"
-    :placeholder="placeholder"
-    :clearable="clearable"
-    @keydown.enter="onEnter"
-    @keydown.esc="onEsc"
   >
-    <template #prefix>
-      <UiIcon name="search" :size="iconSize" :stroke-width="variant === 'pill' ? 2 : undefined" />
-    </template>
-  </el-input>
+    <UiIcon name="search" :size="iconSize" :stroke-width="variant === 'pill' ? 2 : undefined" />
+    <input
+      v-model="value"
+      :placeholder="placeholder"
+      @keydown.enter="onEnter"
+      @keydown.esc="onEsc"
+    >
+    <button
+      v-if="clearable && modelValue"
+      type="button"
+      class="ui-search-clear"
+      aria-label="清空"
+      @click="value = ''"
+    >
+      <UiIcon name="close" :size="12" />
+    </button>
+  </label>
 </template>
 
 <style scoped lang="scss">
@@ -64,45 +73,87 @@ function onEsc() {
    不能写 --color-raised：那是卡片角色（acrylic 下 0.78），会比输入框更透，
    且 scoped 选择器优先级高于全局绑定、无法被覆盖修正。 */
 .ui-search-pill {
-  :deep(.el-input__wrapper) {
-    height: 42px;
-    padding: 0 var(--spacing-lg);
-    border-radius: var(--radius-control);
-    background: var(--color-input);
-    /* 玻璃：搜索框直接浮在画布上（没有卡片兜底），背后就是壁纸，
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: 42px;
+  padding: 0 var(--spacing-lg);
+  border-radius: var(--radius-control);
+  background: var(--color-input);
+  /* 玻璃：搜索框直接浮在画布上（没有卡片兜底），背后就是壁纸，
        故走 input 角色自己的玻璃档，不与卡片共用模糊半径 */
-    backdrop-filter: var(--glass-input);
-    box-shadow: 0 0 0 2px var(--color-border-light) inset;
+  backdrop-filter: var(--glass-input);
+  box-shadow: 0 0 0 2px var(--color-border-light) inset;
 
-    &:hover {
-      box-shadow: 0 0 0 2px var(--color-border) inset;
-    }
-
-    &.is-focus {
-      box-shadow: 0 0 0 2px var(--color-primary) inset;
-    }
+  &:hover {
+    box-shadow: 0 0 0 2px var(--color-border) inset;
   }
 
-  /* 边框/聚焦/占位符色由 main.scss 全局绑定，此处只补图标色 */
-  :deep(.el-input__prefix),
-  :deep(.el-input__suffix) {
-    color: var(--color-text-secondary);
+  &:focus-within {
+    box-shadow: 0 0 0 2px var(--color-primary) inset;
   }
 }
 
+/* 图标色与全站输入框一致 */
+.ui-search-pill > :first-child {
+  color: var(--color-text-secondary);
+  flex: none;
+}
+
 .ui-search-box {
-  :deep(.el-input__wrapper) {
-    height: var(--control-height);
-    padding: 0 var(--spacing-md);
-    border-radius: var(--radius-xs);
-  }
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: var(--control-height);
+  padding: 0 var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-input);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 
-  :deep(.el-input__inner) {
-    font-size: var(--font-size-sm);
-  }
+  &:hover { border-color: color-mix(in oklab, var(--color-border) 60%, var(--color-text-tertiary)); }
 
-  :deep(.el-input__prefix) {
-    color: var(--color-text-secondary);
+  &:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary) inset;
+  }
+}
+
+.ui-search-box > :first-child {
+  color: var(--color-text-secondary);
+  flex: none;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+
+  &::placeholder { color: var(--color-text-tertiary); }
+}
+
+.ui-search-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-primary);
+    background: var(--color-fill);
   }
 }
 </style>

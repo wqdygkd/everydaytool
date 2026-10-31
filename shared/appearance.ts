@@ -22,6 +22,11 @@ export interface WindowAppearance {
    * 纯 CSS、与平台能力无关，任何平台 / 浏览器调试下都能开；关闭后回到「透出真实桌面」。
    */
   testWallpaper: boolean
+  /**
+   * 夜色玻璃：纯 CSS 的暗色主题轴（Aurora Glass 重设计），与平台能力 / 半透明状态无关，
+   * 可与任意材质组合——暗色表面基调 + 亮蓝强调，alpha / glass 仍由材质轴决定。
+   */
+  night: boolean
 }
 
 /** 主进程可落盘的外观配置：与平台无关的字段在跨平台时会被裁剪 */
@@ -52,6 +57,7 @@ export const DEFAULT_WINDOW_APPEARANCE: WindowAppearance = {
   material: 'none',
   vibrancy: 'none',
   testWallpaper: false,
+  night: false,
 }
 
 /** Windows 11 22H2 及以上的 build 号（DwmSetWindowAttribute 系统背景材质的最低要求） */
@@ -154,14 +160,15 @@ export function sanitizeWindowAppearance(
   capabilities: WindowAppearanceCapabilities,
 ): WindowAppearance {
   const testWallpaper = appearance.testWallpaper === true
+  const night = appearance.night === true
 
   if (!appearance.enabled || !capabilities.supportsTransparent) {
-    return { enabled: false, material: 'none', vibrancy: 'none', testWallpaper }
+    return { enabled: false, material: 'none', vibrancy: 'none', testWallpaper, night }
   }
 
   const material = capabilities.materials.includes(appearance.material) ? appearance.material : 'none'
   const vibrancy = capabilities.vibrancies.includes(appearance.vibrancy) ? appearance.vibrancy : 'none'
-  return { enabled: true, material, vibrancy, testWallpaper }
+  return { enabled: true, material, vibrancy, testWallpaper, night }
 }
 
 /**

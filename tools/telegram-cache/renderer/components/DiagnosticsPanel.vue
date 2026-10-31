@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { TelegramCacheConfig } from '../../../../shared/telegram-cache'
+import { confirm } from '@renderer/shared/feedback'
+import { toast } from 'vue-sonner'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
 import { formatBytes } from '../utils/format'
 
@@ -68,23 +70,23 @@ function mtPhaseTone(phase?: string): 'success' | 'danger' | 'warning' | 'neutra
 async function startMtprotoDownload(): Promise<void> {
   const link = mtLink.value.trim()
   if (!link) {
-    ElMessage.warning('请输入 Telegram 消息链接')
+    toast.warning('请输入 Telegram 消息链接')
     return
   }
   try {
     await store.startMtprotoDownload(link)
-    ElMessage.success('已开始解析消息')
+    toast.success('已开始解析消息')
   } catch (error) {
-    ElMessage.error((error as Error).message || '启动下载失败')
+    toast.error((error as Error).message || '启动下载失败')
   }
 }
 
 async function cancelMtprotoDownload(): Promise<void> {
   try {
     const accepted = await store.cancelMtprotoDownload()
-    if (accepted) ElMessage.info('正在取消…')
+    if (accepted) toast.info('正在取消…')
   } catch (error) {
-    ElMessage.error((error as Error).message || '取消失败')
+    toast.error((error as Error).message || '取消失败')
   }
 }
 
@@ -92,7 +94,7 @@ async function refreshMtproto(): Promise<void> {
   try {
     await store.refreshMtprotoStatus()
   } catch (error) {
-    ElMessage.error((error as Error).message || '读取状态失败')
+    toast.error((error as Error).message || '读取状态失败')
   }
 }
 
@@ -113,15 +115,15 @@ function sessionSourceTone(): 'success' | 'warning' | 'danger' {
 async function migrateSession(): Promise<void> {
   try {
     await store.migrateMtprotoSession()
-    ElMessage.success('会话已迁移到 OS 加密存储（可删除 .env 里的 TELEGRAM_SESSION）')
+    toast.success('会话已迁移到 OS 加密存储（可删除 .env 里的 TELEGRAM_SESSION）')
   } catch (error) {
-    ElMessage.error((error as Error).message || '迁移失败')
+    toast.error((error as Error).message || '迁移失败')
   }
 }
 
 async function clearSecureSession(): Promise<void> {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       '会删除本工具保存的加密会话并断开连接。若 .env 里仍有 TELEGRAM_SESSION，会回退使用它；要彻底移除请自行删除该行。',
       '清除加密会话',
       { type: 'warning' },
@@ -131,9 +133,9 @@ async function clearSecureSession(): Promise<void> {
   }
   try {
     await store.clearMtprotoSecureSession()
-    ElMessage.success('已清除加密会话')
+    toast.success('已清除加密会话')
   } catch (error) {
-    ElMessage.error((error as Error).message || '清除失败')
+    toast.error((error as Error).message || '清除失败')
   }
 }
 
@@ -146,15 +148,15 @@ async function updateCacheQuota(value: number): Promise<void> {
 async function applyConfig(patch: Partial<TelegramCacheConfig>, message: string): Promise<void> {
   try {
     await store.updateConfig(patch)
-    ElMessage.success(message)
+    toast.success(message)
   } catch (error) {
-    ElMessage.error((error as Error).message || '保存配置失败')
+    toast.error((error as Error).message || '保存配置失败')
   }
 }
 
 async function clearCache(): Promise<void> {
   try {
-    await ElMessageBox.confirm(
+    await confirm(
       '清理缓存会删除媒体对象库里的去重对象（归档消息本身与进行中的任务不会被删）。确定继续？',
       '清理缓存',
       { type: 'warning' },
@@ -164,18 +166,18 @@ async function clearCache(): Promise<void> {
   }
   try {
     const result = await store.clearCache()
-    ElMessage.success(`已清理 ${formatBytes(result.evictedBytes)}（${result.evictions} 项）`)
+    toast.success(`已清理 ${formatBytes(result.evictedBytes)}（${result.evictions} 项）`)
   } catch (error) {
-    ElMessage.error((error as Error).message || '清理失败')
+    toast.error((error as Error).message || '清理失败')
   }
 }
 
 async function exportDiagnostics(): Promise<void> {
   try {
     const result = await store.exportDiagnostics()
-    ElMessage.success(`诊断包已导出（${formatBytes(result.bytes)}）`)
+    toast.success(`诊断包已导出（${formatBytes(result.bytes)}）`)
   } catch (error) {
-    ElMessage.error((error as Error).message || '导出失败')
+    toast.error((error as Error).message || '导出失败')
   }
 }
 
@@ -183,7 +185,7 @@ async function openDataDir(): Promise<void> {
   try {
     await store.openDataDir()
   } catch (error) {
-    ElMessage.error((error as Error).message || '打开数据目录失败')
+    toast.error((error as Error).message || '打开数据目录失败')
   }
 }
 </script>
@@ -192,9 +194,9 @@ async function openDataDir(): Promise<void> {
   <div class="panel-stack">
     <UiPanel title="MTProto 消息下载（实验）">
       <template #actions>
-        <el-button size="small" @click="refreshMtproto">
+        <UiButton size="small" @click="refreshMtproto">
           刷新状态
-        </el-button>
+        </UiButton>
       </template>
 
       <div class="kv-stack">
@@ -229,12 +231,12 @@ async function openDataDir(): Promise<void> {
         gap="sm"
         class="mt-input-row"
       >
-        <el-button v-if="mtproto?.sessionSource === 'env' && mtproto?.encryptionAvailable" size="small" @click="migrateSession">
+        <UiButton v-if="mtproto?.sessionSource === 'env' && mtproto?.encryptionAvailable" size="small" @click="migrateSession">
           迁移到加密存储
-        </el-button>
-        <el-button v-if="mtproto?.sessionSource === 'secure'" size="small" @click="clearSecureSession">
+        </UiButton>
+        <UiButton v-if="mtproto?.sessionSource === 'secure'" size="small" @click="clearSecureSession">
           清除加密会话
-        </el-button>
+        </UiButton>
       </UiToolbar>
 
       <UiHint v-if="mtproto?.missing?.length" block class="danger-hint">
@@ -246,7 +248,7 @@ async function openDataDir(): Promise<void> {
       </UiHint>
 
       <UiToolbar gap="sm" class="mt-input-row">
-        <el-input
+        <UiInput
           v-model="mtLink"
           class="ctl-fill"
           size="small"
@@ -254,12 +256,12 @@ async function openDataDir(): Promise<void> {
           :disabled="Boolean(mtActive)"
           clearable
         />
-        <el-button size="small" type="primary" :loading="Boolean(mtActive) && mtActive?.phase === 'resolving'" :disabled="Boolean(mtActive)" @click="startMtprotoDownload">
+        <UiButton size="small" type="primary" :loading="Boolean(mtActive) && mtActive?.phase === 'resolving'" :disabled="Boolean(mtActive)" @click="startMtprotoDownload">
           下载媒体
-        </el-button>
-        <el-button size="small" :disabled="!mtActive" @click="cancelMtprotoDownload">
+        </UiButton>
+        <UiButton size="small" :disabled="!mtActive" @click="cancelMtprotoDownload">
           取消
-        </el-button>
+        </UiButton>
       </UiToolbar>
 
       <template v-if="mtActive">
@@ -316,9 +318,13 @@ async function openDataDir(): Promise<void> {
           {{ formatBytes(cache?.sizeBytes) }} / {{ formatBytes(cache?.maxBytes) }}
         </UiKeyValue>
         <UiKeyValue label="缓存配额" label-width="112px">
-          <el-select :model-value="currentCacheMb" size="small" class="ctl-sm" @change="updateCacheQuota">
-            <el-option v-for="option in cacheOptions" :key="option.value" :label="option.label" :value="option.value" />
-          </el-select>
+          <UiSelect
+            :model-value="currentCacheMb"
+            size="small"
+            class="ctl-sm"
+            :options="cacheOptions"
+            @update:model-value="v => updateCacheQuota(Number(v))"
+          />
         </UiKeyValue>
         <UiKeyValue label="Web 登录缓存" label-width="112px" wrap>
           <div class="data-dir">
@@ -334,9 +340,9 @@ async function openDataDir(): Promise<void> {
         <UiKeyValue label="数据目录" label-width="112px" wrap>
           <div class="data-dir">
             <span class="mono data-path">{{ store.snapshot?.dataDirectory || '—' }}</span>
-            <el-button size="small" text type="primary" @click="openDataDir">
+            <UiButton size="small" text type="primary" @click="openDataDir">
               打开
-            </el-button>
+            </UiButton>
           </div>
         </UiKeyValue>
       </div>
@@ -353,12 +359,12 @@ async function openDataDir(): Promise<void> {
       </UiHint>
 
       <UiToolbar gap="sm" class="actions-row">
-        <el-button size="small" type="primary" :loading="store.busy.diagnostics" @click="exportDiagnostics">
+        <UiButton size="small" type="primary" :loading="store.busy.diagnostics" @click="exportDiagnostics">
           导出诊断包
-        </el-button>
-        <el-button size="small" :loading="store.busy.cache" @click="clearCache">
+        </UiButton>
+        <UiButton size="small" :loading="store.busy.cache" @click="clearCache">
           清理缓存
-        </el-button>
+        </UiButton>
         <span class="muted export-hint">
           {{ store.diagnostics ? `已导出 ${formatBytes(store.diagnostics.bytes)}：${store.diagnostics.relativePath}` : '未导出' }}
         </span>

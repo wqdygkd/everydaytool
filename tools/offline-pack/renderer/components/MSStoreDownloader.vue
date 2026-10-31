@@ -3,8 +3,8 @@ import type { OfflinePackMsStoreFile, OfflinePackMsStoreResolveResult } from '@s
 import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { formatDateTime } from '@shared/offline-pack'
-import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
 import DownloaderFrame from './DownloaderFrame.vue'
@@ -40,12 +40,12 @@ function useExample(value: string): void {
 
 async function handleSubmit(): Promise<void> {
   if (!api) {
-    ElMessage.warning('离线包下载 仅在 Electron 桌面端可用')
+    toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
   }
   const trimmed = input.value.trim()
   if (!trimmed) {
-    ElMessage.warning('请输入商店链接、ProductId、PackageFamilyName 或 CategoryId')
+    toast.warning('请输入商店链接、ProductId、PackageFamilyName 或 CategoryId')
     return
   }
   loading.value = true
@@ -57,7 +57,7 @@ async function handleSubmit(): Promise<void> {
       selectedFile.value = files.value[0].url
     }
   } catch (error) {
-    ElMessage.error((error as Error).message || '解析失败')
+    toast.error((error as Error).message || '解析失败')
   } finally {
     loading.value = false
   }
@@ -81,13 +81,13 @@ async function handleDownload(): Promise<void> {
   >
     <template #hint>
       输入 MS 应用链接、ProductId、PackageFamilyName 或 CategoryId，或前往
-      <el-link
+      <UiLink
         type="primary"
         :underline="false"
         @click="openExternal('https://apps.microsoft.com/')"
       >
         Microsoft Store
-      </el-link>
+      </UiLink>
     </template>
 
     <UiPanel v-if="resolveResult" variant="outlined">
@@ -107,29 +107,27 @@ async function handleDownload(): Promise<void> {
           </UiDetailItem>
         </UiDetailGrid>
 
-        <el-select
+        <UiSelect
           v-if="files.length"
           v-model="selectedFile"
           class="full-width"
-          filterable
           placeholder="选择安装包"
-        >
-          <el-option v-for="f in files" :key="f.url" :label="f.name" :value="f.url" />
-        </el-select>
+          :options="files.map(f => ({ label: f.name, value: f.url }))"
+        />
 
         <UiGroup v-if="selected" gap="sm" align="center" wrap class="btn-flush">
-          <el-button type="primary" :disabled="downloading" @click="handleDownload">
+          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
             下载到本地
-          </el-button>
-          <el-button @click="useCopy(selected.url, '下载链接')">
+          </UiButton>
+          <UiButton @click="useCopy(selected.url, '下载链接')">
             复制链接
-          </el-button>
+          </UiButton>
           <UiHint v-if="selected.size" size="xs" class="mono">
             {{ selected.size }}
           </UiHint>
         </UiGroup>
 
-        <el-alert
+        <UiAlert
           v-if="resolveResult.filesError"
           type="warning"
           :closable="false"

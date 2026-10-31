@@ -4,18 +4,13 @@ import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
 import { GENDER, generateIdCards } from '../shared/generator'
 
-/**
- * el-cascader 的 CascaderOption 带索引签名（Record<string, unknown>），本地的 AreaNode 结构等价但少了这一层，
- * 直接把 AREA_TREE 传给 :options 会报类型不兼容。这里只在类型层补上索引签名——运行期仍是同一份 AREA_TREE
- * 数据，不复制、不改写任何节点。
- */
-interface AreaCascaderOption extends Record<string, unknown> {
+interface AreaNode {
   value: string
   label: string
-  children?: AreaCascaderOption[]
+  children?: AreaNode[]
 }
 
-const areaOptions = AREA_TREE as AreaCascaderOption[]
+const areaOptions = AREA_TREE as AreaNode[]
 
 const birthMode = ref<'age' | 'date'>('age')
 const gender = ref(GENDER.RANDOM)
@@ -23,6 +18,62 @@ const ageRange = ref([18, 60])
 const dateRange = ref<[Date, Date] | null>(null)
 const areaPath = ref<Array<string | number> | null>(null)
 const count = ref(1)
+
+/* 地区级联:el-cascader → 省 / 市 / 区三联下拉(同一份 AREA_TREE,areaPrefixFromPath 语义不变) */
+const province = computed({
+  get: () => String(areaPath.value?.[0] ?? ''),
+  set: (v: string) => {
+    areaPath.value = v ? [v] : null
+  },
+})
+const city = computed({
+  get: () => String(areaPath.value?.[1] ?? ''),
+  set: (v: string) => {
+    areaPath.value = v ? [province.value, v] : [province.value]
+  },
+})
+const county = computed({
+  get: () => String(areaPath.value?.[2] ?? ''),
+  set: (v: string) => {
+    areaPath.value = v ? [province.value, city.value, v] : [province.value, city.value]
+  },
+})
+const provinceNodes = computed(() => areaOptions)
+const cityNodes = computed(() => provinceNodes.value.find(n => n.value === province.value)?.children ?? [])
+const countyNodes = computed(() => cityNodes.value.find(n => n.value === city.value)?.children ?? [])
+
+/* 日期范围:el-date-picker daterange → 两个原生 date 输入(本地时区互转) */
+function toDateInput(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+}
+const dateStart = computed({
+  get: () => dateRange.value ? toDateInput(dateRange.value[0]) : '',
+  set: (v: string) => {
+    if (!v) {
+      dateRange.value = null
+      return
+    }
+    const [y, m, d] = v.split('-').map(Number)
+    const end = dateRange.value?.[1] ?? new Date(y, m - 1, d)
+    dateRange.value = [new Date(y, m - 1, d), end]
+  },
+})
+const dateEnd = computed({
+  get: () => dateRange.value ? toDateInput(dateRange.value[1]) : '',
+  set: (v: string) => {
+    if (!v) {
+      dateRange.value = null
+      return
+    }
+    const [y, m, d] = v.split('-').map(Number)
+    const start = dateRange.value?.[0] ?? new Date(y, m - 1, d)
+    dateRange.value = [start, new Date(y, m - 1, d)]
+  },
+})
+
+function clampCount() {
+  count.value = Math.min(20, Math.max(1, Math.round(Number(count.value) || 1)))
+}
 
 const results = ref<IdCardResult[]>([])
 
@@ -59,70 +110,85 @@ onMounted(handleGenerate)
 <template>
   <div class="id-card-page tool-page">
     <UiPanel class="generator-card" padding="">
-      <el-form label-width="80px" class="config-form">
-        <el-form-item label="出生方式">
-          <el-radio-group v-model="birthMode">
-            <el-radio value="age">
+      <div class="config-form">
+        <UiFormField label="出生方式">
+          <UiRadioGroup v-model="birthMode">
+            <UiRadio value="age">
               按年龄
-            </el-radio>
-            <el-radio value="date">
+            </UiRadio>
+            <UiRadio value="date">
               按出生日期
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
+            </UiRadio>
+          </UiRadioGroup>
+        </UiFormField>
 
-        <el-form-item v-if="birthMode === 'age'" label="年龄范围">
-          <el-slider v-model="ageRange" range :min="1" :max="100" />
-        </el-form-item>
+        <UiFormField v-if="birthMode === 'age'" label="年龄范围">
+          <UiSlider v-model="ageRange" :min="1" :max="100" />
+        </UiFormField>
 
-        <el-form-item v-else label="出生日期">
-          <el-date-picker
-            v-model="dateRange"
-            class="form-fill"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-          />
-        </el-form-item>
+        <UiFormField v-else label="出生日期">
+          <div class="form-fill date-range">
+            <input v-model="dateStart" type="date" class="ui-date-input">
+            <span class="muted">至</span>
+            <input v-model="dateEnd" type="date" class="ui-date-input">
+          </div>
+        </UiFormField>
 
-        <el-form-item label="性别">
-          <el-radio-group v-model="gender">
-            <el-radio :value="GENDER.MALE">
+        <UiFormField label="性别">
+          <UiRadioGroup v-model="gender">
+            <UiRadio :value="GENDER.MALE">
               男
-            </el-radio>
-            <el-radio :value="GENDER.FEMALE">
+            </UiRadio>
+            <UiRadio :value="GENDER.FEMALE">
               女
-            </el-radio>
-            <el-radio :value="GENDER.RANDOM">
+            </UiRadio>
+            <UiRadio :value="GENDER.RANDOM">
               随机
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
+            </UiRadio>
+          </UiRadioGroup>
+        </UiFormField>
 
-        <el-form-item label="地区">
-          <el-cascader
-            v-model="areaPath"
-            class="form-fill"
-            :options="areaOptions"
-            :props="{ expandTrigger: 'hover' }"
-            clearable
-            placeholder="随机全国"
-          />
-        </el-form-item>
+        <UiFormField label="地区">
+          <div class="form-fill area-cascade">
+            <select v-model="province" class="ui-select">
+              <option value="">
+                随机全国
+              </option>
+              <option v-for="node in provinceNodes" :key="node.value" :value="node.value">
+                {{ node.label }}
+              </option>
+            </select>
+            <select v-if="province" v-model="city" class="ui-select">
+              <option value="">
+                全省
+              </option>
+              <option v-for="node in cityNodes" :key="node.value" :value="node.value">
+                {{ node.label }}
+              </option>
+            </select>
+            <select v-if="city" v-model="county" class="ui-select">
+              <option value="">
+                全市
+              </option>
+              <option v-for="node in countyNodes" :key="node.value" :value="node.value">
+                {{ node.label }}
+              </option>
+            </select>
+          </div>
+        </UiFormField>
 
-        <el-form-item label="生成数量">
-          <el-input-number v-model="count" :min="1" :max="20" :step="1" />
-        </el-form-item>
-      </el-form>
+        <UiFormField label="生成数量">
+          <input v-model="count" type="number" class="ui-number-input" min="1" max="20" step="1" @change="clampCount">
+        </UiFormField>
+      </div>
 
       <UiGroup class="actions" gap="sm">
-        <el-button type="primary" @click="handleGenerate">
+        <UiButton type="primary" @click="handleGenerate">
           生成
-        </el-button>
-        <el-button :disabled="results.length === 0" @click="handleCopyAll">
+        </UiButton>
+        <UiButton :disabled="results.length === 0" @click="handleCopyAll">
           复制全部
-        </el-button>
+        </UiButton>
       </UiGroup>
 
       <UiPanel v-if="results.length > 0" variant="outlined" padding="18px" class="result-section">
@@ -130,23 +196,23 @@ onMounted(handleGenerate)
           <span class="muted">共 {{ results.length }} 条</span>
         </div>
         <UiTable :data="results" max-height="340" mono>
-          <el-table-column label="身份证号" min-width="200">
+          <UiTableColumn label="身份证号" min-width="200">
             <template #default="{ row }">
               <span class="id-cell mono" @click="handleCopyId(row.id)">
                 {{ row.id }}
               </span>
             </template>
-          </el-table-column>
-          <el-table-column prop="areaName" label="地区" min-width="140" />
-          <el-table-column prop="birthDateDisplay" label="出生日期" width="110" />
-          <el-table-column prop="genderLabel" label="性别" width="70" />
-          <el-table-column label="操作" width="70" align="center">
+          </UiTableColumn>
+          <UiTableColumn prop="areaName" label="地区" min-width="140" />
+          <UiTableColumn prop="birthDateDisplay" label="出生日期" width="110" />
+          <UiTableColumn prop="genderLabel" label="性别" width="70" />
+          <UiTableColumn label="操作" width="70" align="center">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="handleCopyId(row.id)">
+              <UiButton link type="primary" size="small" @click="handleCopyId(row.id)">
                 复制
-              </el-button>
+              </UiButton>
             </template>
-          </el-table-column>
+          </UiTableColumn>
         </UiTable>
       </UiPanel>
 
@@ -158,6 +224,47 @@ onMounted(handleGenerate)
 </template>
 
 <style scoped lang="scss">
+/* 级联 / 日期 / 数量输入:与全站输入框同一套令牌 */
+.ui-select,
+.ui-date-input,
+.ui-number-input {
+  height: var(--control-height);
+  min-width: 0;
+  padding: 0 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-field);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary) inset;
+  }
+}
+
+.date-range,
+.area-cascade {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.area-cascade .ui-select {
+  flex: 1;
+}
+
+.ui-date-input {
+  flex: 1;
+}
+
+.ui-number-input {
+  width: 120px;
+}
+
 /* EP 选择类控件默认不满宽（daterange 350px / cascader 自适应）：表单内统一撑满 */
 .form-fill {
   width: 100%;
@@ -182,6 +289,9 @@ onMounted(handleGenerate)
   box-shadow: none;
 
   .config-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
   }
 

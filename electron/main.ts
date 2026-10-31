@@ -3,7 +3,7 @@ import type { ShellMenuAction } from '../shared/menu.ts'
 import type { WindowBoundsState } from '../shared/window-bounds.ts'
 import path from 'node:path'
 import process from 'node:process'
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { configureInstanceIdentity } from '../backend/utils/app-instance.ts'
@@ -77,6 +77,9 @@ const TITLEBAR_COLORS = { color: '#00000000', symbolColor: '#000000' } as const
 // 窗口原生底色：恒透明——外壳与各页面自理底色
 // （工具页 .tool-page 自带 app-bg，首页透出桌面），窗口层不兜实色。
 const TRANSPARENT_WINDOW_BG = '#00000000'
+/* 夜色玻璃的原生窗口底色:半透明关闭时画布后面就是这块实底,
+   不跟随的话透明画布会透出 Chromium 默认白底(Aurora Glass 重设计) */
+const NIGHT_WINDOW_BG = '#0d1017'
 
 // ── 窗口大小 / 位置 ──
 // 记录用 debounce：拖动 / 缩放会连续触发 resize / move，攒到 400ms 才落一次盘；
@@ -167,7 +170,9 @@ function buildApplicationMenu(): void {
  */
 function buildAppearanceWindowOptions(appearance: WindowAppearance): Partial<Electron.BrowserWindowConstructorOptions> {
   const plan = resolveWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
-  if (!plan.enabled) return {}
+  // 不透明形态补实底:夜色 = 深色,否则白底。透明 / 材质形态不设 backgroundColor
+  // （透明窗口上的不透明底色会破坏 alpha 形态）
+  if (!plan.enabled) return { backgroundColor: appearance.night ? NIGHT_WINDOW_BG : '#ffffff' }
 
   if (plan.vibrancy !== 'none') return { vibrancy: plan.vibrancy }
   if (plan.transparent) return { transparent: true, thickFrame: true, roundedCorners: true }
@@ -181,13 +186,21 @@ function applyWindowAppearance(appearance: WindowAppearance): void {
   if (!win || win.isDestroyed()) return
   const plan = resolveWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
 
+  // 夜色玻璃的原生侧:themeSource=dark 让 mica / acrylic / tabbed 材质背板走系统深色变体
+  // （浅色系统下材质背板是白的，CSS 夜色盖不住它），标题栏原生按钮符号色同步反转
+  nativeTheme.themeSource = appearance.night ? 'dark' : 'system'
+  if (process.platform === 'win32' && win.setTitleBarOverlay) {
+    win.setTitleBarOverlay({ color: TITLEBAR_COLORS.color, symbolColor: appearance.night ? '#ffffff' : '#000000', height: 44 })
+  }
+
   if (process.platform === 'darwin') {
     win.setVibrancy(plan.vibrancy === 'none' ? null : plan.vibrancy)
   } else if (process.platform === 'win32') {
     win.setBackgroundMaterial(plan.material)
-    // 透明开关随 CSS 类切换（见 App.vue 的 is-transparent）；此处只同步原生窗口底色（恒全透明）
-    win.setBackgroundColor(TRANSPARENT_WINDOW_BG)
   }
+  // 透明开关随 CSS 类切换（见 App.vue 的 is-transparent）；原生底色只在半透明开启时
+  // 恒全透明，关闭时同步为实底（夜色 = 深色，否则透出默认白底）
+  win.setBackgroundColor(plan.enabled ? TRANSPARENT_WINDOW_BG : (appearance.night ? NIGHT_WINDOW_BG : '#ffffff'))
 
   const safe = sanitizeWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
   win.webContents.send(EDT_APP_IPC_CHANNELS.EVENT_APPEARANCE_CHANGED, safe)
@@ -394,6 +407,8 @@ async function createWindow(): Promise<void> {
   // 开发态图标（带 DEV 标识）；安装版恒为 undefined，窗口沿用系统默认图标
   const devWindowIcon = resolveDevWindowIconPath()
 
+  // 材质背板深浅在窗口构造时由 themeSource 决定（夜色 → 系统深色变体）
+  nativeTheme.themeSource = getWindowAppearance().night ? 'dark' : 'system'
   mainWindow = new BrowserWindow({
     ...savedBounds.options,
     // 开发态图标（带 DEV 标识）：Windows / Linux 只能通过窗口 icon 指定；macOS 该选项无效，
@@ -412,7 +427,7 @@ async function createWindow(): Promise<void> {
       : {
           titleBarOverlay: {
             color: TITLEBAR_COLORS.color,
-            symbolColor: TITLEBAR_COLORS.symbolColor,
+            symbolColor: getWindowAppearance().night ? '#ffffff' : TITLEBAR_COLORS.symbolColor,
             height: 44,
           },
         }),

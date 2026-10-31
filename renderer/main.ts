@@ -3,6 +3,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router/index'
 import './shared/styles/fonts/roboto.css'
+import './shared/styles/tailwind.css'
+import 'vue-sonner/style.css'
 import './shared/styles/main.scss'
 
 const app = createApp(App)
