@@ -63,6 +63,7 @@ const pad = computed(() => props.padding ?? (props.variant === 'bordered' ? 'var
     flex-direction: column;
     justify-content: center;
     text-align: center;
+    align-items: center;
   }
 
   /* 有图标时图标与文字间保留间距（无图标不引入 gap，避免干扰 slot 自定义排版） */
