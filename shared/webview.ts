@@ -10,3 +10,7 @@ export const TELEGRAM_WEBVIEW_PARTITION = 'persist:telegram-cache'
 
 // workbuddy2api-panel 内嵌上游 /panel/ 的 session 分区：与宿主页隔离，保留面板登录态。
 export const WB2API_WEBVIEW_PARTITION = 'persist:workbuddy2api-panel'
+
+// tweb-cache 内嵌 tweb（Telegram Web K）的 session 分区：与 telegram-cache 的分区**分开**，
+// 两个客户端的登录态、IndexedDB、Cache Storage 互不干扰（各自站点端口也不同）。
+export const TWEB_CACHE_WEBVIEW_PARTITION = 'persist:tweb-cache'
