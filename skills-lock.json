@@ -79,12 +79,6 @@
       "skillPath": "skills/gsap-plugins/SKILL.md",
       "computedHash": "791bda0e6e460511fe82a78e745db519b88ffaeeab4d04a74879a03ca4f41740"
     },
-    "gsap-react": {
-      "source": "greensock/gsap-skills",
-      "sourceType": "github",
-      "skillPath": "skills/gsap-react/SKILL.md",
-      "computedHash": "7d3b52822681a4158e371f895c58fb7030ecaf33f585a534b7162f9e92c5d893"
-    },
     "gsap-scrolltrigger": {
       "source": "greensock/gsap-skills",
       "sourceType": "github",
@@ -144,18 +138,6 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
       "computedHash": "50d6c45174f56a4323b24978f36fcc9169fae0b3abb026587bf636e468c4954c"
-    },
-    "shadcn-vue": {
-      "source": "unovue/shadcn-vue",
-      "sourceType": "github",
-      "skillPath": "skills/shadcn-vue/SKILL.md",
-      "computedHash": "8f889bee4622048473cab8272b5bbcdf3e0e83929afb1b444adf572fa9c252a3"
-    },
-    "supabase": {
-      "source": "supabase/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/supabase/SKILL.md",
-      "computedHash": "211141fd078b4b3645803868528d54221bc7755d24d5c8af45a366785c151dba"
     },
     "tdd": {
       "source": "mattpocock/skills",
