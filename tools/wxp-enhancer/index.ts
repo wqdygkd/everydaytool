@@ -8,7 +8,7 @@ const tool = defineTool({
   icon: 'wxpEnhancer',
   category: { key: 'automation', name: '自动化工具' },
   keywords: ['wxp', 'cdp', '注入', '增强', '登录', '登录缓存', '收藏', '角标', '界面'],
-  supportedTargets: ['win', 'mac'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-10-05',
   route: {
     path: 'wxp-enhancer',

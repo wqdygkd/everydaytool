@@ -8,7 +8,7 @@ const tool = defineTool({
   icon: 'telegram',
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['telegram', 'tg', 'telegram web', '缓存', '归档', '影库', '离线播放', '下载', 'mtproto', '诊断'],
-  supportedTargets: ['win', 'mac'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-10-25',
   route: {
     path: 'telegram-cache',
