@@ -218,7 +218,7 @@ package.json                       + telegram:check / telegram:build
 | `cache-manager` 的本地响应计量（`servedBytes/localHits/revalidations/…`）与 benchmark/self-test 对应字段 | 本地响应已删，计量归零保留；可一并收敛为只保留观测 + 淘汰计量 |
 | `TelegramServeClass`/`cacheable`/`freshUntil`（HTTP 本地复用元数据） | 无本地复用后仅作展示，无害；可保留或清除 |
 
-验证：`pnpm typecheck`、`pnpm check:ui`、`pnpm data-layers:check`、`node scripts/build-telegram-tt.mjs --check` 全绿。
+验证：`pnpm typecheck`、`pnpm data-layers:check`、`node scripts/build-telegram-tt.mjs --check` 全绿。
 
 ## 15. 界面瘦身（1.8.0）
 

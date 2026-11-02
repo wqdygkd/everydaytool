@@ -27,7 +27,7 @@
 | submodule 注册 | ⚠️ 被沙箱阻断：`.gitmodules` 已生成并暂存，gitlink 未写入；需普通终端执行 | 见 §1 |
 | `npm ci` / `vite build`（Node 24） | ⬜ 未在本会话执行；`telegram-tt/dist` 已存在（211.9MB，SW 在根目录） | `pnpm telegram:build` |
 
-已知验证结果：`tsc -p tsconfig.node.json` 通过、ESLint 通过、`ui-ep-check` 通过、自带 18 项自检通过、
+已知验证结果：`tsc -p tsconfig.node.json` 通过、ESLint 通过、自带 18 项自检通过、
 `site-server` 冒烟 16/16 与 8/8 通过；`message-store` 在 Electron 桩下 12/12 通过（prepare/跳写/commit/manifest/媒体索引）；
 归档 API 的 HTTP 端到端 7/7 通过（prepare/append/commit/status/Range/媒体状态）。
 未覆盖：`vue-tsc`（缺 devDependencies）、telegram-tt 的 `npm run check:ts/css`（需先 `npm ci`）、真实 Electron 登录与媒体播放。

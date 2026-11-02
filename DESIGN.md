@@ -13,7 +13,7 @@
 - **颜色先分档再分色**：每支色相先确定「它是图形（亮档，≥3:1）还是文字（墨档，≥4.5:1）」，
   再决定用哪个颜色——不要把一支亮色同时当底色和字色（见 §3.1）。
 - **圆角与浮岛**：按钮、页签为圆角矩形；头像、徽章保持圆形/胶囊；卡片与面板为浮岛，靠细边框与轻阴影分层。
-- **组件减法**：能用 Element Plus（`el-*`）组件的不自造，覆写只写几何差异，颜色与状态交给全局令牌绑定。
+- **组件减法**：能用 `renderer/shared/components/ui/` 的平台组件或 Reka UI 原语的不自造，样式与状态交给设计令牌。
 - **反过度设计**：间距、宽度、圆角严格取令牌阶梯，不为一两像素差异新增魔法数字。
 
 ## 2. 主题
@@ -36,7 +36,7 @@
 
 ## 3. 设计令牌
 
-令牌定义在 `renderer/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → element-plus → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
+令牌定义在 `renderer/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
 
 ### 3.1 颜色
 
@@ -54,7 +54,7 @@
 - **浅底两档**：`--color-primary-soft`（10%）可以压墨档蓝文字；`--color-primary-light`（20%）
   只能配中性黑文字或图形（墨档蓝压 20% 浅底只有 4.06:1）。
 - **不按工具换色**：工具定义里没有 `color`，页签选中浅底、首页卡片头像与 hover 描边、
-  页内分段菜单（`UiMenuHorizontal`）与分段钮（`el-radio-button`）、列表卡选中态一律取 `--color-primary`。
+  页内分段菜单（`UiMenuHorizontal`）与分段钮（`UiRadioGroup` + `UiRadio`）、列表卡选中态一律取 `--color-primary`。
   强调色只做**图形**（14% 浅底、描边、指示条），文字一律留中性黑或墨档蓝。
 - **三种色各管一件事**，同一个界面里不会有两只色抢同一个含义：
   **动作 / 注意 = 品牌蓝**（主按钮、链接、计数徽章）、**选中 = 品牌蓝浅底 + 中性黑文字**、
@@ -92,8 +92,8 @@
 | ------ | ------ | ------------- |
 | `raised` | 卡片 / 面板 / 浮岛 | `--alpha-raised` · `--glass-raised` |
 | `input` | 其余非弹出层 el 控件（树 / 上传 / 日历 / 搜索框 UiSearchInput） | `--alpha-input` · `--glass-input` |
-| `field` | 通用表单输入框（el-input / textarea / select） | `--alpha-field` |
-| `table` | 表格行（el-table 的 tr） | `--alpha-table` |
+| `field` | 通用表单输入框（UiInput / textarea / UiSelect） | `--alpha-field` |
+| `table` | 表格行（UiTable 的 tr） | `--alpha-table` |
 | `button` | 普通按钮（玻璃钮；primary/danger 实心钮不走此角色） | `--alpha-button` |
 | `fill` | 灰调填充（表头 / 行 hover / 灰底面版） | `--alpha-fill` |
 | `header` | 标题栏 | `--alpha-header` · `--glass-header` |
@@ -179,8 +179,7 @@
 - **18px 是上限**：本应用没有营销型大标题，不再出现 20 / 24 / 28px 的散值；需要强调时用层级（间距 + 字号）与色阶，不放大字号。
 - **18px 目前只有规则编辑器在用**：工具页 / 设置页**不放页面大标题**——页签已经写着工具名，
   再压一行标题是重复（见 `SettingsPage` 顶部注释）。`--font-size-xl` 留给需要"独立成篇"的编辑器标题。
-- Element Plus 的 5 档字号已全部绑到本表（`--el-font-size-extra-small/small/base/medium/large`），
-  改 `tokens.scss` 即按钮 / 输入 / 表格 / 弹层 / 消息同步生效（EP 默认 small 13 / extra-small 12 已统一为 12 / 11）。
+- 平台组件统一使用本表的字号档位；业务样式不得另起一套字号。
 - 数字看板与计数**不放大字号**，靠 `.mono` + `--font-weight-bold` 提升可读性。
 
 #### 3.2.3 字重：只有两个真切面
@@ -220,8 +219,7 @@
 > 行高不得低于 `1.5`（**含 11–12px 的说明**：中文在这个字号下的字形框接近满格，
 > 1.4 只有 15.4px 行距，两三行就糊成一段）；不再出现 `1.7` 以上的散值。
 > 单行元素（按钮文字、徽标）用 `1` 或控制行高，不参与这条规则。
-> 表格的实际行高 = `.cell` 上下内边距（§7.5）+ `--line-height-control`，
-> EP 自带的 23px 单元格行高已在 `element-plus.scss` 收回令牌。
+> 表格的实际行高 = `.ui-cell` 上下内边距（§7.5）+ `--line-height-control`。
 
 #### 3.2.5 字距
 
@@ -334,40 +332,14 @@
 | `--transition-fast` | `0.15s cubic-bezier(.25,1,.5,1)` | 微交互（图标钮、页签、chip） |
 | `--transition-base` | `0.25s cubic-bezier(.33,1,.68,1)` | 卡片 hover、边框过渡 |
 
-## 4. Element Plus 绑定
+## 4. 组件内核
 
-`--el-*` 变量在 `element-plus.scss` 中绑定到设计令牌，使 Element Plus 组件（按钮、输入框、表格、弹层、消息等）自动继承主题。**颜色与状态只写变量绑定**，属性覆写只留给 EP 没有变量可用的地方（玻璃 / 几何 / 少数写死颜色的选中态文字）。
+平台组件以 `renderer/shared/components/ui/` 为唯一业务入口；交互原语统一使用 Reka UI（弹层、下拉、选择、滑块、单选等）。组件对外只暴露语义 props 与插槽，不暴露第三方类名。
 
-`:root`（全局阶梯）：
-
-- 语义色：`--el-color-primary` → `--color-primary`，`success` / `warning` → 同名令牌，`danger` **与** `error` → `--color-error`，`info` → `--color-primary-strong`；各自再派生 light-3/5/7/8/9 与 dark-2。
-  EP 的按钮 / 标签走 `danger`、alert / message 走 `error`，两支都要绑，否则同一语义会出现两种红。
-- 中性阶梯：边框 `-color` / `-light` / `-lighter` / `-extra-light` → 边框令牌，`-hover` / `-dark` / `-darker` 由边框压深派生；
-  填充 `-fill-color` 六档 → `--color-fill`（`-dark` / `-darker` 由 fill 压深）；文本 `primary` / `regular` / `secondary` / `placeholder` / `disabled` → 文本令牌。
-  这一层的意义是让 **EP 自己算出来的状态**（hover 边框、disabled 底、填充、弹层阴影）跟着令牌走，界面上不再冒出第二套 EP 灰。
-- 底色：`--el-bg-color` / `--el-fill-color-blank` → `--color-input`（EP 内部 tree / upload / calendar 等共用此入口）；`--el-bg-color-overlay` → `--color-overlay`；`--el-color-white` → `--color-on-solid`。
-- 阴影 `--el-box-shadow` / `-light` / `-lighter` / `-dark` → `--shadow-lg` / `-md` / `-sm` / `-lg`；`--el-mask-color` → `rgba(0,0,0,.25)`。
-
-组件级（`html .el-<组件>`，压过 EP 组件 CSS 里的同名默认值）：
-
-- 按钮：`--el-button-bg-color` / `-border-color` / `-text-color` / `-hover-*` / `-active-*` → `--color-button` 与文本令牌（玻璃钮）；primary / danger 实心钮改用 `--color-primary-strong` / `--color-error` 的**可读档**实底；文字钮 / 链接钮 → `--el-button-text-color` / `--el-link-text-color` 取墨档。
-- 输入框：`--el-input-bg-color` → `--color-field`，`--el-input-border-color` → 边框令牌，`--el-input-hover-border-color` → `--el-border-color-hover`，`--el-input-focus-border-color` → `--color-primary`，`--el-input-text-color` → `--color-text-primary`。
-- 表格：`--el-table-tr-bg-color` → `--color-table`，表头 / 行 hover → `--color-fill`。
-- 弹层：`--el-dialog-bg-color` / `-border-radius` / `-box-shadow`、`--el-messagebox-*`、`--el-message-*`、`--el-notification-*`、`--el-alert-bg-color`、`--el-popper-border-radius` 各自接令牌；下拉类浮层作用域内把 `--el-bg-color-overlay` 改绑为 `--color-pop`。
-- 选择控件：`--el-checkbox-checked-text-color`、`--el-radio-button-checked-*`（品牌色）、`--el-switch-on-color` / `-off-color`。
-
-只能写选择器的三类（EP 把颜色写死在规则里，没有变量）：「选中 = 墨档文字」（下拉项 / 级联节点 / 页签 / 分页器 / 单选与开关标签）、开关轨道高光与滑块、以及 `el-input-number` 加减钮的透明底。
-
-> **不要写死静态色**：`--color-*` 合成变量之外的实色（如 `#fff`）会在半透明窗口下变成「死白」，
-> 与周围半透明表面脱节。新增 EP 覆写时务必接到对应角色上。
-
-**覆写原则**：只在局部覆写几何差异（高度 / 圆角 / 边框宽度），颜色与状态一律交全局绑定；视觉不一致时优先改全局绑定，不要单点堆 `:deep`。
-
-**注入顺序（必踩的坑）**：EP 的组件 CSS 由 `ElementPlusResolver({ importStyle: 'css' })` 懒加载、**晚于** `element-plus.scss` 注入，
-同权声明会被 EP 盖回。需要压过 EP 默认值的规则一律带 `html` / `.el-xxx .el-yyy` 前缀并在注释写明原因
-（现有先例：`html .el-switch`、`html .el-table`、`html .el-alert`）。
-同样地，`--el-button-*` / `--el-input-*` / `--el-dialog-*` 这类**定义在组件根节点上**的变量也必须带 `html` 前缀——
-只写在单类选择器里会是死代码（EP 后注入、同权覆盖）。`:root` 上的全局变量不受此限制。
+- 颜色、边框、阴影、圆角和字阶一律引用设计令牌，不在组件内另建主题变量。
+- 无行为差异的几何覆写留在组件内部；业务页面通过 `class` 只做布局与间距调整。
+- 弹层统一挂到 `body`，并从 `<html>` 读取主题变量，确保半透明与夜色模式一致。
+- 禁止重新引入 Element Plus 或 shadcn 生成组件目录；新增交互原语优先复用 Reka UI。
 
 ## 5. UI 组件库
 
@@ -376,8 +348,8 @@
 **使用约定（硬性）**
 
 - **新工具页优先用组件**：卡片 / 分组 / 键值 / 提示 / 空态 / 表格 / 进度 / 徽章 / 对话框等模式一律走本库，禁止在业务文件里重写同类通用样式；组件确不满足时写局部样式并在注释说明原因。
-- **表格与进度条必须走 `UiTable` / `UiProgress`**，不直接写 `el-table` / `el-progress`；状态标签用 `UiChip`（`variant="soft"`），不写 `el-tag`。`pnpm check:ui` 会断言这三类用法归零。
-- EP 类名知识只允许存在于本库组件内部；组件对外只暴露语义 props（`tone` / `variant` / `padding` …），不暴露 EP 类名。
+- **表格与进度条必须走 `UiTable` / `UiProgress`**；状态标签用 `UiChip`（`variant="soft"`）。
+- 第三方类名知识只允许存在于本库组件内部；组件对外只暴露语义 props（`tone` / `variant` / `padding` …）。
 - `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，**不得恢复**。
 
 ### 5.1 布局
@@ -386,7 +358,7 @@
 | ------ | ------------- | ------ |
 | `UiPanel` | `title`、`variant`（`raised` 浮岛 / `outlined` 描边）、`padding`、`titleSize`（`sm`/`lg`）、`shadow`（`sm`/`md`）、`#title` / `#actions` 插槽 | 基础卡片 / 面板。`raised` = surface-raised + radius-lg + shadow；`outlined` = surface-raised + border-light + radius-lg |
 | `UiGroup` | `gap`（xs/sm/md/lg）、`align`、`justify`、`block`、`direction`（row/column）、`wrap` | 行内 / 纵向控件组，替代裸 `display:flex` 布局 |
-| `UiToolbar` | `bordered`、`surface`、`wrap`、`gap`、`padding`、`flush`、`#end` 插槽 | 工具条：默认插槽放左，`#end` 放右；`flush` 去除 EP 按钮原生左边距 |
+| `UiToolbar` | `bordered`、`surface`、`wrap`、`gap`、`padding`、`flush`、`#end` 插槽 | 工具条：默认插槽放左，`#end` 放右；`flush` 去除按钮间原生左边距 |
 | `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
 | `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
 | `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：选中胶囊 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo）。**选中胶囊取品牌色 `--color-primary` 14% 浅底 + 中性黑标签**，计数徽章仍是墨档蓝（同一支蓝，两个职责：图形用亮档、文字用墨档） |
@@ -399,15 +371,15 @@
 | `UiDetailItem` | `label`、`mono`、`wrap`、`size`（sm/xs） | 详情卡片单项（label 上 / value 下，描边卡片） |
 | `UiCodeBlock` | `maxHeight`（200px）、`wrap` | 等宽代码块（app-bg 底 + radius-sm + 滚动） |
 | `UiEmpty` | `text`、`variant`（plain/bordered）、`center`、`icon`、`padding` | 空状态（纯文本 / 虚线框） |
-| `UiTable` | `data`、`loading`、`emptyText`、`height`、`maxHeight`、`rowKey`、`mono`、`rowClickable`、`#empty` 插槽；默认插槽放 `el-table-column` | 表格基座：内部 `el-table size="small"`，统一 loading、空态（渲染 `UiEmpty`）、整表等宽与可点行手型。其余属性 / 事件（`@row-click`、`@sort-change`、`row-class-name`、`:tree-props`、`default-expand-all`、`class`）由单根组件自动透传，树形表格也能直接用 |
-| `UiProgress` | `percentage`、`strokeWidth`（6）、`status`（success/warning/exception）、`showText` | 进度条：百分比自动收敛 0–100；颜色与轨道走全局 EP 绑定（`--el-color-primary` / `--el-border-color-lighter`），两端胶囊圆角；**不要直接写 `el-progress`** |
+| `UiTable` | `data`、`loading`、`emptyText`、`height`、`maxHeight`、`rowKey`、`mono`、`rowClickable`、`#empty` 插槽；默认插槽放 `UiTableColumn` | 表格基座：原生 `<table>`，统一 loading、空态（渲染 `UiEmpty`）、整表等宽与可点行手型。支持行点击、排序、行类名、树形展开与最大高度 |
+| `UiProgress` | `percentage`、`strokeWidth`（6）、`status`（success/warning/exception）、`showText` | 进度条：百分比自动收敛 0–100；颜色与轨道使用语义令牌，两端胶囊圆角 |
 | `UiBreadcrumb` | `items`、`navigate` 事件 | 面包屑导航 |
 
 ### 5.3 徽章 / 状态
 
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
-| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`variant`（auto/soft/solid/outline）、`mono` | 小胶囊徽章。`variant="auto"`（默认）按 tone 取历史外观：neutral→描边、success→实底绿白字、其余→浅底彩字；`soft` 浅底彩字（对齐原 `el-tag` 默认样式）、`outline` 透明底彩边、`solid` 实底反白（计数徽章）。**底色取亮档、文字与实底取墨档**（`--chip-tone` / `--chip-ink`）：11px 状态胶囊永远是可读档 |
+| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`variant`（auto/soft/solid/outline）、`mono` | 小胶囊徽章。`variant="auto"`（默认）按 tone 取历史外观：neutral→描边、success→实底绿白字、其余→浅底彩字；`soft` 浅底彩字、`outline` 透明底彩边、`solid` 实底反白（计数徽章）。**底色取亮档、文字与实底取墨档**（`--chip-tone` / `--chip-ink`）：11px 状态胶囊永远是可读档 |
 | `UiStatusTag` | `tone`（neutral/success/warning/danger）、`pulsing` | 状态点（10px 圆点）；`pulsing` 呼吸光环 |
 
 ### 5.4 表单与输入
@@ -415,7 +387,7 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiPathField` | `modelValue`、`placeholder`、`disabled`、`mono`、`#actions` 插槽 | 路径输入（等宽 + 右侧动作） |
-| `UiSwitchField` | `modelValue`、`disabled`、`align`（`center` 单行 / `start` 多行） | 开关 + 说明文字的组合。两种模式都把**轨道中线对到说明文字首行中线**（EP 的开关根节点比一行说明高，不做补偿文字会高出半个控制框）；`center`（默认）整块居中——单行说明用；`start` 从首行起排、后续行向下——多行说明用，否则开关会漂到段落中间 |
+| `UiSwitchField` | `modelValue`、`disabled`、`align`（`center` 单行 / `start` 多行） | 开关 + 说明文字的组合。两种模式都把**轨道中线对到说明文字首行中线**；`center`（默认）整块居中——单行说明用；`start` 从首行起排、后续行向下——多行说明用，否则开关会漂到段落中间 |
 | `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 圆角（42px 大搜索），`box` 方形（32px 面板内搜索） |
 | `UiCodeArea` | `modelValue`、`rows`（8）、`placeholder`、`disabled`、`meta` | 等宽多行输入 + 右下角元信息 |
 
@@ -424,7 +396,7 @@
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
 | `UiIcon` | `name`、`size`（16）、`strokeWidth` | 线性 stroke 图标（`icons.ts` 统一名表） |
-| `UiIconButton` | `icon`、`size`（32）、`active`、`disabled`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮，`disabled` 走 EP 原生禁用色 |
+| `UiIconButton` | `icon`、`size`（32）、`active`、`disabled`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮，`disabled` 使用禁用色令牌 |
 | `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
 | `UiAvatar` | `text`、`color`、`size`（42） | 字母头像（首字符 + 纵向渐变底） |
 
@@ -432,7 +404,7 @@
 
 | 组件 | Props / 变体 | 说明 |
 | ------ | ------------- | ------ |
-| `UiDialog` | `modelValue`、`title`、`width`（560px）、`destroyOnClose`、`closeOnClickModal`、`#footer` 插槽 | 模态框（radius-xl + shadow-lg）；footer 保留 EP 原生按钮间距 |
+| `UiDialog` | `modelValue`、`title`、`width`（560px）、`destroyOnClose`、`closeOnClickModal`、`#footer` 插槽 | 模态框（radius-xl + shadow-lg）；footer 使用统一按钮间距 |
 | `UiListCard` | `active` | 可点列表卡片。hover 只提描边（品牌色 45%），`active` 才铺浅底（品牌色 8% + 70% 描边）——鼠标路过与真正选中不再同一种视觉 |
 
 ### 5.7 通用状态约定
@@ -442,7 +414,7 @@
 | hover | 卡片浮岛 hover 变浅底或抬描边（工具卡描边取**品牌色** 42%）；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
 | active / 选中 | 品牌色浅底（14%）+ 中性黑文字 + 品牌色描边（页签 / 分段菜单 / 分段钮 / 列表卡同一套）；收藏星为**实底琥珀 + 白星**（与 hover 的浅底琥珀区分） |
 | focus | `--shadow-focus` 蓝色内环（亮档蓝，3.31:1 ≥ 图形 3:1；输入框为蓝边框 + 无外发光） |
-| disabled | EP 默认禁用灰（走全局绑定），图标/文字按钮降低透明度——**不**调容器 opacity |
+| disabled | 使用禁用色令牌，图标/文字按钮降低透明度——**不**调容器 opacity |
 
 ## 6. 通用工具类
 
@@ -453,15 +425,15 @@
 | `.mono` | 等宽数字字体（`--font-mono` + tabular-nums） |
 | `.ctl-xs/sm/md/lg` | 表单控件定宽阶梯（90/140/200/280px） |
 | `.ctl-fill` | 弹性填充剩余宽度 |
-| `.btn-flush` | 消除 EP 按钮间原生 12px 左边距 |
-| `.radio-flush` | 消除 EP 单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
+| `.btn-flush` | 消除按钮间原生 12px 左边距 |
+| `.radio-flush` | 消除单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
 | `.full-width` | 占满容器宽度 |
 
 **使用约定**
 
-- 弱化说明文字用 `.muted` 或 `--color-text-secondary`；**排版统一用语义色，不用 `--el-text-color-*`**（那是 EP 内部绑定入口）。
+- 弱化说明文字用 `.muted` 或 `--color-text-secondary`；**排版统一用语义色**。
 - 卡片 / 网格 / 键值 / 提示 / 行内组等通用模式一律用组件库（见 §5），不得在 `main.scss` 恢复旧通用类。
-- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉，先用平台组件（`UiTable` / `el-radio-button` / `el-menu` / `el-input` / `el-dropdown`）再谈覆写。
+- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉，先用平台组件（`UiTable` / `UiRadioGroup` / `UiMenuHorizontal` / `UiInput` / `UiDropdown`）再谈覆写。
 - **层级靠字号与色阶，不靠字重**：拉丁面只有 Regular / Medium 两个切面（§3.2.3），
   600 会让中英混排半边变粗。需要更强的标题时，加字号、加间距、抬色阶，不要换字重。
 - 结构性间距 / 宽度 / 圆角见 §3.3–§3.5 的阶梯与豁免项，不要为一点差异新增魔法数字。
@@ -507,20 +479,6 @@
 - **组件只引用合成变量 / 玻璃变量**，永远不写死 `rgba` 或 `blur(Npx)`，也不关心当前是哪种模式。
 - **新增模式 = 加一条模式规则**覆写该模式的 alpha + glass 两组，组件零改动。
 - 默认（不透明）模式 alpha 全为 `1`、玻璃全为 `none`，视觉与旧版完全一致。
-
-##### 测试壁纸（调参辅助，`--appearance.testWallpaper`）
-
-调 alpha / 玻璃最大的困难是**没有可对照的背景**：真实桌面壁纸往往一片柔和，
-磨砂开与不开几乎看不出差别；系统材质还可能把窗口背后统一成一片渐变。
-
-- 开启后 `App.vue` 给 `<html>` 挂 `has-test-wallpaper`，`translucency.scss` 据此在 `body`
-  铺一面**高对比色块假壁纸**（令牌 `--test-wallpaper-base` / `--test-wallpaper-image`）：
-  色块硬边界最容易暴露「模糊半径够不够、alpha 是否过高」。
-- 铺在 `body` 而不是 `.app-shell`：EP 弹层 teleport 到 body 且盖满视口，壁纸必须在它们之下，
-  并随视口固定（`background-attachment: fixed`），不随 `.app-main` 滚动。
-- **与半透明开关、平台能力都无关**（`sanitizeWindowAppearance` 原样保留该字段）：
-  不透明窗口下也能开，用于检查卡片白底压在高对比背景上是否仍显得干净。
-- 关闭即摘类，`html` / `body` 回到 `base.scss` 的 `transparent`，透出真实桌面。
 
 > `field` / `table` / `button` / `input` 四档**刻意分开**：单独调某一类控件时不必牵动其它控件。
 > 其中 `field` 已被单独调低（acrylic 下 .30）：它只服务「卡片内的表单输入」，
@@ -591,7 +549,7 @@
 
 - **必须同时放行 alpha**：`html` / `body` 的默认底色会盖住原生透明通道，
   `base.scss` 已把它们设为 `transparent`；漏掉这一步界面看起来毫无变化（最常见的坑）。
-- **弹层必须靠 `<html>` 拿变量**：EP 的弹层全部 teleport 到 body，不在 `.app-shell` 内。
+- **弹层必须靠 `<html>` 拿变量**：弹层全部 teleport 到 body，不在 `.app-shell` 内。
   模式类因此由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`，`translucency.scss` 的 `mode()` mixin
   匹配这两处落点；`--color-*` 合成变量也定义在 `:root` 而非 `.app-shell`。
   只在 `.app-shell` 上定义会导致下拉 / 弹窗全部变成透明（曾踩过的坑）。
@@ -652,8 +610,8 @@
 
 ### 7.5 表格
 
-- 统一用 `UiTable`（内部 `el-table size="small"`，几何由全局绑定：表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg`、表体 12px、单元格行高 `--line-height-control`）。
-- 列定义仍写 `el-table-column`；整表等宽传 `mono`（ID / 摘要 / 字节列），行可点击传 `rowClickable`，空态用 `emptyText`（内部渲染 `UiEmpty`）。
+- 统一用 `UiTable`（原生 `<table>`：表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg`、表体 12px、单元格行高 `--line-height-control`）。
+- 列定义写 `UiTableColumn`；整表等宽传 `mono`（ID / 摘要 / 字节列），行可点击传 `rowClickable`，空态用 `emptyText`（内部渲染 `UiEmpty`）。
 - 数字列用 `.mono`，时间列用 `.muted`，状态列用 `UiChip`（`variant="soft"`）。
 
 ## 8. 交互与动效

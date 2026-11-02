@@ -32,8 +32,7 @@ export default defineConfig({
       '@renderer': path.join(__dirname, 'renderer'),
       '@tools': path.join(__dirname, 'tools'),
       '@shared': path.join(__dirname, 'shared'),
-      // lucide 官方已把 lucide-vue-next 更名为 @lucide/vue;shadcn 注册表模板仍写旧名,
-      // 用别名承接,生成组件保持只读不修改
+      // lucide 官方已把 lucide-vue-next 更名为 @lucide/vue；保留别名兼容旧引用。
       'lucide-vue-next': '@lucide/vue',
     },
   },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 文字链接内核:EP el-link → 原生 <a>。underline 仅保持 API 兼容(本站链接恒无下划线)。
+// 文字链接内核：原生 <a>。underline 仅保持 API 兼容（本站链接恒无下划线）。
 withDefaults(defineProps<{
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   underline?: boolean

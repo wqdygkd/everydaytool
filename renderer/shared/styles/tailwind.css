@@ -1,6 +1,6 @@
-/* Tailwind v4 入口(见 docs/ui-shadcn-roadmap.md Phase 1)。
+/* Tailwind v4 入口。
    分层说明:tailwind 的 preflight / theme / utilities 全部在 @layer 内,
-   main.scss 等既有未分层样式的优先级天然高于它——EP 并存期零视觉回归。 */
+   main.scss 等既有未分层样式的优先级天然高于它。 */
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
 
@@ -13,9 +13,8 @@
 /* 夜色轴:html 挂 .is-night 时生成物的 dark: 前缀生效(同时保留标准 .dark 兼容) */
 @custom-variant dark (&:is(.dark *, .is-night *));
 
-/* ── shadcn 语义变量(只读生成组件消费的唯一主题面) ──
-   取值全部桥接现有设计令牌(DESIGN.md §2),改主题只改这里,
-   永不改 renderer/shared/components/shadcn/ 内的生成组件。 */
+/* ── Tailwind 语义变量 ──
+   取值桥接现有设计令牌(DESIGN.md §3),供 Tailwind 工具类消费。 */
 :root {
   --background: #f4f4f5;
   --foreground: #000000;

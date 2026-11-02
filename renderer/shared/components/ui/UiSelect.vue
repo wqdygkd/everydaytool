@@ -11,7 +11,7 @@ import {
   SelectValue,
   SelectViewport,
 } from 'reka-ui'
-// 下拉内核:reka-ui Select 原语 + 自家令牌样式(参考 shadcn Select 的结构,不引其生成物)。
+// 下拉内核：Reka UI Select 原语 + 平台令牌样式。
 // - 选项经 :options 传入,value 统一以字符串匹配,发射字符串
 // - 数值型消费方(缓存配额 / 状态码)在自身 handler 里 Number() 转换
 import { computed, useAttrs } from 'vue'

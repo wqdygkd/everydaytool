@@ -33,7 +33,7 @@ async function load(): Promise<void> {
   }
 }
 
-/** el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`）：按 unknown 收参后收敛回历史记录类型，运行期原样使用。 */
+/** UiTableColumn 的插槽行是宽泛记录类型：按 unknown 收参后收敛回历史记录类型，运行期原样使用。 */
 async function remove(row: unknown): Promise<void> {
   const item = row as OfflinePackHistoryItem
   if (!api) return

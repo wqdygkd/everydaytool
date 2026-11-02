@@ -19,7 +19,7 @@ const dateRange = ref<[Date, Date] | null>(null)
 const areaPath = ref<Array<string | number> | null>(null)
 const count = ref(1)
 
-/* 地区级联:el-cascader → 省 / 市 / 区三联下拉(同一份 AREA_TREE,areaPrefixFromPath 语义不变) */
+/* 地区级联：省 / 市 / 区三联下拉（同一份 AREA_TREE，areaPrefixFromPath 语义不变）。 */
 const province = computed({
   get: () => String(areaPath.value?.[0] ?? ''),
   set: (v: string) => {
@@ -42,7 +42,7 @@ const provinceNodes = computed(() => areaOptions)
 const cityNodes = computed(() => provinceNodes.value.find(n => n.value === province.value)?.children ?? [])
 const countyNodes = computed(() => cityNodes.value.find(n => n.value === city.value)?.children ?? [])
 
-/* 日期范围:el-date-picker daterange → 两个原生 date 输入(本地时区互转) */
+/* 日期范围：两个原生 date 输入（本地时区互转）。 */
 function toDateInput(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 }
@@ -265,7 +265,7 @@ onMounted(handleGenerate)
   width: 120px;
 }
 
-/* EP 选择类控件默认不满宽（daterange 350px / cascader 自适应）：表单内统一撑满 */
+/* 表单内选择类控件统一撑满。 */
 .form-fill {
   width: 100%;
 }

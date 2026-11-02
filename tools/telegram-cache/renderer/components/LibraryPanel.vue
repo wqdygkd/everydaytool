@@ -24,7 +24,7 @@ function mediaKind(mimeType?: string): 'video' | 'audio' | 'image' | 'file' {
   return 'file'
 }
 
-/** el-table 插槽行是 EP 的 DefaultRow；先收敛到业务类型再使用 */
+/** UiTableColumn 插槽行是宽泛记录类型；先收敛到业务类型再使用。 */
 function toEntry(row: unknown): TelegramLibraryEntry {
   return row as TelegramLibraryEntry
 }

@@ -296,7 +296,7 @@ pnpm data-layers:check                    # 分层断言：清单/搬迁表一�
 
 ### 10.4 验证记录
 
-- `pnpm typecheck`（前端 + 后端两套 tsconfig）通过；`pnpm lint` 通过；`pnpm check:ui` 通过；
+- `pnpm typecheck`（前端 + 后端两套 tsconfig）通过；`pnpm lint` 通过；
 - `pnpm build:electron` 产出 `data-layers.js` / `data-layout-upgrade.js` / `data-root-scan.js` / `shared/data-layers.js`
   （新增主进程模块必须确认产物存在，否则启动即 `ERR_MODULE_NOT_FOUND`）；
 - 合成 v1 目录实测升级：条目搬迁、`sandboxes.json` 绝对路径改写为 `session/sandbox/…`、白名单孤儿进 `config/quarantine/<ts>/`、
@@ -356,7 +356,7 @@ P2（备份导出/恢复）追加验证：
    `const root = getDataDirectory()` 这类别名，豁免**只能**写 `data-layers:allow <原因>`（原因必填、逐行生效），
    不存在「行内出现某个词就放过」的通道。
 7. 设置页四层卡片体积之和 = 数据根 + 资产根实际占用（无重复计数）。
-8. `pnpm typecheck` + `pnpm check:ui` 通过。
+8. `pnpm typecheck` 通过。
 
 ## 12. UI（设置页 → 数据与备份）
 

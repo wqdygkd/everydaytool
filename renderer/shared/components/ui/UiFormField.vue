@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 表单行:label + 控件区(EP el-form-item 的最小替代,label 宽度可调)
+// 表单行：label + 控件区，label 宽度可调。
 withDefaults(defineProps<{
   label?: string
   labelWidth?: string

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 五个下载器共用的表单骨架：说明行（#hint）→ [#before] → 主输入框 → 示例按钮 → [#between]
 // → 主 CTA → 默认插槽（结果面板 / 下载进度）。
-// 间距与控件外观全部交给 UiGroup / UiHint / el-*，各下载器不再各自复制一份输入框、示例与按钮的 CSS。
+// 间距与控件外观全部交给 UiGroup / UiHint / Ui* 组件，各下载器不再复制输入框、示例与按钮样式。
 withDefaults(defineProps<{
   modelValue: string
   placeholder: string

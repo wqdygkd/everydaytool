@@ -7,7 +7,7 @@ withDefaults(defineProps<{
   wrap?: boolean
   gap?: 'xs' | 'sm' | 'md' | 'lg'
   padding?: string
-  /** 去掉 Element Plus 按钮间原生 12px 左边距，仅保留 gap（间距以 gap 为准的场景） */
+  /** 去掉按钮间原生 12px 左边距，仅保留 gap（间距以 gap 为准的场景） */
   flush?: boolean
 }>(), {
   bordered: false,

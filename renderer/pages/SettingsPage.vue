@@ -33,7 +33,6 @@ const isVibrancyEnabled = computed(() => (capabilities.value?.vibrancies.length 
 // 开关状态：appearance 允许为 null（尚未加载完成），故收敛成 boolean 后由模板用
 // :model-value + @update 显式提交 IPC——不对 appearance 本身做 v-model 双向绑定。
 const transparentOn = computed(() => appearance.value?.enabled === true)
-const testWallpaperOn = computed(() => appearance.value?.testWallpaper === true)
 const nightOn = computed(() => appearance.value?.night === true)
 
 interface MaterialChoice {
@@ -74,7 +73,7 @@ const appearanceHint = computed(() => {
     return '当前系统不支持半透明窗口（Linux 需合成器支持），该选项已禁用。'
   }
   if (appearance.value?.enabled) {
-    return '各表面按当前材质的 alpha + 玻璃档位透出桌面；可用下方「测试壁纸」比对磨砂程度。'
+    return '各表面按当前材质的 alpha + 玻璃档位透出桌面。'
   }
   return '开启后窗口画布透出桌面壁纸，可再选择系统背景材质。'
 })
@@ -87,13 +86,6 @@ async function chooseMaterial(value: WindowMaterial | MacVibrancy) {
   // 选项值来自上面两路的并集，这里按当前生效的那一路收回各自字段
   if (isMaterialEnabled.value) await updateAppearance({ material: value as WindowMaterial })
   else await updateAppearance({ vibrancy: value as MacVibrancy })
-}
-
-// 测试壁纸：纯 CSS 的调试辅助，与平台能力 / 半透明开关都无关，
-// 因此不受 isTransparentEnabled / isMaterialEnabled 约束——不透明窗口下也能开，
-// 用来检查卡片底色压在高对比背景上是否还够干净。
-async function toggleTestWallpaper(value: boolean) {
-  await updateAppearance({ testWallpaper: value })
 }
 
 async function toggleNight(value: boolean) {
@@ -552,20 +544,7 @@ onMounted(() => {
         </UiHint>
       </div>
 
-      <div class="wallpaper-toggle">
-        <UiSwitchField :model-value="testWallpaperOn" align="start" @update:model-value="toggleTestWallpaper">
-          测试壁纸
-          <template v-if="!appearance?.enabled">
-            （半透明未开启，仅预览底色）
-          </template>
-        </UiSwitchField>
-        <UiHint block>
-          在窗口最底层铺一张高对比色块假壁纸，用于比对卡片 / 浮层 / 标题栏的磨砂与透视程度；
-          关闭后恢复透出真实桌面。
-        </UiHint>
-      </div>
-
-      <div class="wallpaper-toggle">
+      <div class="appearance-toggle">
         <UiSwitchField :model-value="nightOn" align="start" @update:model-value="toggleNight">
           夜色玻璃
         </UiSwitchField>
@@ -703,8 +682,8 @@ onMounted(() => {
   font-weight: var(--font-weight-medium);
 }
 
-/* 测试壁纸开关：与上方的半透明 / 材质选项之间留出分隔，表明它是独立的调试项 */
-.wallpaper-toggle {
+/* 夜间主题开关：与上方的半透明 / 材质选项之间留出分隔。 */
+.appearance-toggle {
   margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--color-border-light);

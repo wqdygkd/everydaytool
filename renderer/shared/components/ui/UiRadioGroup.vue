@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 单选组内核:EP el-radio-group → 原生 role=radiogroup + provide/inject
+// 单选组内核：原生 role=radiogroup + provide/inject。
 import { provide } from 'vue'
 
 const props = defineProps<{

@@ -1,5 +1,5 @@
 // 设计令牌：全局唯一来源（颜色 / 字阶 / 间距 / 几何 / 圆角 / 阴影 / 过渡 / 字体栈）。
-// Element Plus 的 --el-* 绑定见 element-plus.scss；半透明 alpha 见 translucency.scss。
+// 半透明 alpha 见 translucency.scss。
 :root {
   /* ── 色阶规则：每支色相先回答「它是图形还是文字」，再回答「是哪个颜色」 ──
      · 亮档 `--color-<tone>`：圆点 / 浅底 / 描边 / 焦点环 / 进度条这类**图形**。
@@ -36,9 +36,9 @@
      本文件定义基准色，translucency.scss 按窗口模式覆写 alpha，
      消费端用 --color-<role> 合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
   --color-raised-base: #ffffff; /* 角色 raised：卡片 / 面板 / 浮岛的表面色 */
-  --color-input-base: #ffffff; /* 角色 input：其余非弹出层 el 控件底（树 / 上传 / 日历 / 搜索框 UiSearchInput） */
-  --color-field-base: #ffffff; /* 角色 field：通用表单输入框底（全局 el-input / textarea / select 输入区） */
-  --color-table-base: #ffffff; /* 角色 table：表格行底（el-table 的 tr），与其它控件分开以便单独调透明度 */
+  --color-input-base: #ffffff; /* 角色 input：其余非弹出层控件底（树 / 上传 / 日历 / 搜索框 UiSearchInput） */
+  --color-field-base: #ffffff; /* 角色 field：通用表单输入框底（UiInput / textarea / UiSelect 输入区） */
+  --color-table-base: #ffffff; /* 角色 table：表格行底（UiTable 的 tr），与其它控件分开以便单独调透明度 */
   --color-button-base: #ffffff; /* 角色 button：普通按钮底（非 primary / danger 等实心按钮），单独一档 */
   --color-fill-base: #f4f4f5; /* 角色 fill：灰调填充（表头 / 行 hover / 灰底面版），与控件同档 alpha 但取冷灰以拉开层次 */
   --color-header-base: #ffffff; /* 角色 header：标题栏（原生窗口按钮 + 页签文字的底） */
@@ -48,7 +48,7 @@
   /* 默认（不透明窗口）：全部实色，与旧版一致；各角色 1 = 完全不透明 */
   --alpha-raised: 1; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 1; /* 其余非弹出层控件 */
-  --alpha-field: 1; /* 通用表单输入框（el-input / textarea / select） */
+  --alpha-field: 1; /* 通用表单输入框（UiInput / textarea / UiSelect） */
   --alpha-table: 1; /* 表格行 */
   --alpha-button: 1; /* 普通按钮 */
   --alpha-fill: 1; /* 灰调填充（表头 / hover） */
@@ -82,17 +82,6 @@
   --glass-pop: none; /* 下拉类浮层 */
   --glass-overlay: none; /* 其它弹层：dialog / message */
   --glass-veil: blur(2px); /* 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 */
-
-  /* ── 玻璃调试壁纸（仅在 --appearance.testWallpaper 开启时铺在整页最底层） ──
-     刻意用**高对比色块**而不是照片：色块边界最容易看出「模糊半径够不够、alpha 是否过高」，
-     真实壁纸往往一片柔和，磨砂开与不开几乎无从分辨。
-     这组值不是界面配色，不参与语义令牌（只服务于半透明/玻璃调参）。 */
-  --test-wallpaper-base: #1b1f3b; /* 底色：深色，白卡片的半透明一眼可辨 */
-  --test-wallpaper-image:
-    radial-gradient(circle at 12% 18%, #ff7a59 0 12%, transparent 26%),
-    radial-gradient(circle at 78% 12%, #4f7cff 0 10%, transparent 28%),
-    radial-gradient(circle at 62% 84%, #14c38e 0 12%, transparent 30%),
-    radial-gradient(circle at 24% 78%, #f9d423 0 10%, transparent 26%);
 
   /* ── lines ── */
   --color-border-light: #e4e4e5; /* 细分隔线 / 卡片描边 */

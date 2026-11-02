@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 通用输入框内核:EP el-input(无前后缀场景)→ 原生 input。
+// 通用输入框内核：原生 input。
 // 带搜索图标 / 清空的场景用 UiSearchInput;路径 + 前置块用 UiPathField。
 import { computed } from 'vue'
 

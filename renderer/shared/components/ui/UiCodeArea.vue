@@ -24,7 +24,7 @@ const value = computed({
 
 <template>
   <div class="ui-code-area">
-    <!-- 文本域内核：EP → 原生 textarea。底 / 边 / 聚焦与全站输入框同一套令牌 -->
+    <!-- 文本域内核：原生 textarea。底 / 边 / 聚焦与全站输入框同一套令牌 -->
     <textarea
       v-model="value"
       class="ui-code-input"

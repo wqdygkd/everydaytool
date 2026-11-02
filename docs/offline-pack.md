@@ -51,7 +51,7 @@ utils/downloads.ts  下载目录 + 落盘 + 进度广播 + 取消（AbortControl
 
 **要点**：
 - 阴影用 `shadow-apple-lg`（双层）与 `shadow-apple-button`（`0 1px 3px rgba(0,0,0,.1)`），tool-hub 无对应令牌，按设计值写局部样式。
-- 页签用品牌 logo（`assets/logos/*.svg`），el-tabs 经 `#label` 插槽放 `<img>`（16px），彩色 logo 不随主题变色。
+- 页签用品牌 logo（`assets/logos/*.svg`），页签组件经标签插槽放 `<img>`（16px），彩色 logo 不随主题变色。
 
 ## 4. 图标资产
 

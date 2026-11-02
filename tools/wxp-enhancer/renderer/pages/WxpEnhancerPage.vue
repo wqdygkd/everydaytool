@@ -307,7 +307,7 @@ onUnmounted(() => {
             启动
           </UiButton>
           <!-- 单实例约束紧贴启动钮：原正文里的那句说明收在这里，只在 hover / 聚焦时展开 -->
-          <!-- EP tooltip → 原生 title:单条静态提示,不值得为它挂浮层组件 -->
+          <!-- 单条静态提示使用原生 title，不额外挂浮层组件。 -->
           <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP" title="启动前请先退出已打开的 WXP">
             <UiIcon name="alert" :size="16" />
           </span>
@@ -543,7 +543,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 面板里最后一个表单项清掉 EP 默认的 18px 底 margin：它会叠在 UiPanel 的 16px
+/* 面板里最后一个表单项清掉默认的 18px 底 margin：它会叠在 UiPanel 的 16px
    内边距上，底部比顶部多空出一块（表单本身没有收尾间隔的需要） */
 .form-item--last {
   margin-bottom: 0;
@@ -647,19 +647,6 @@ onUnmounted(() => {
 
 .fav-table :deep(.fav-hospital-row) {
   font-weight: var(--font-weight-medium);
-}
-
-/* 收藏表嵌在玻璃面板里：EP 表格默认把行底铺成 --el-fill-color-blank（本仓库 = --color-input，
-   白色 .88），在 raised 面板上就是一块比面板还亮的大白块。这里让表格自身不铺底
-   （行直接透出面板），表头也不压灰底、只留一条 hairline；hover 用品牌浅底而不是灰调填充，
-   避免整行变“实心灰条”。 */
-.fav-table {
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-expanded-cell-bg-color: transparent;
-  --el-table-header-bg-color: transparent;
-  --el-table-row-hover-bg-color: var(--color-primary-soft);
-  --el-table-border-color: var(--color-border-light);
 }
 
 @media (max-width: 760px) {

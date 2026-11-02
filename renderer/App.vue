@@ -82,24 +82,20 @@ let motion: MotionScope | undefined
 // mac 原生全屏不触发 DOM fullscreen API，主来源是主进程推送事件，DOM 监听只做兜底
 const isFullscreen = ref(false)
 // 外壳模式类：is-transparent 表示「已开启半透明」，is-<material> 表示当前材质
-// （translucency.scss 按后者覆写 alpha），has-test-wallpaper 是玻璃调试用的假壁纸。
+// （translucency.scss 按后者覆写 alpha）。
 // 放在 isFullscreen 之后定义，避免前向引用。
-const hasTestWallpaper = computed(() => appearance.value?.testWallpaper === true)
 const hasNight = computed(() => appearance.value?.night === true)
 const modeClasses = computed<string[]>(() => {
   const classes: string[] = []
   if (isFullscreen.value) classes.push('is-fullscreen')
   if (isTransparent.value) classes.push('is-transparent')
-  if (hasTestWallpaper.value) classes.push('has-test-wallpaper')
   if (hasNight.value) classes.push('is-night')
   if (materialClass.value) classes.push(materialClass.value)
   return classes
 })
-// 同一份模式类也要挂到 <html>：EP 弹层（select / cascader / dropdown / date-picker /
-// autocomplete / dialog / message）全部 teleport 到 body，不在 .app-shell 内，
+// 同一份模式类也要挂到 <html>：弹层（select / dropdown / popover / dialog）
+// 全部 teleport 到 body，不在 .app-shell 内，
 // 只挂外壳的话这些浮层继承不到 --alpha-* / --glass-*，会退化成「无背景」的透明面板。
-// 测试壁纸同样只能挂在 <html> / body 上：它必须画在所有内容之下（含 teleport 出去的浮层），
-// 挂在外壳内会随 .app-main 的滚动与层级被裁切。
 // 摘掉上一轮、挂上这一轮：新增模式类只改上面的列表，不必再同步维护第二份类名清单。
 watch(
   modeClasses,

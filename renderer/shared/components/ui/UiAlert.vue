@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 提示条内核:EP el-alert → 语义浅底块(图标 + 标题 + 描述)。closable 仅保持 API 兼容(恒不关闭)。
+// 提示条内核：语义浅底块（图标 + 标题 + 描述）。closable 仅保持 API 兼容（恒不关闭）。
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{

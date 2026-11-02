@@ -428,7 +428,7 @@ Electron 主进程（telegram-cache 后端，单实例）
 - 文档：本文件落地为 `docs/tweb-cache.md`（模块记忆）+ 更新 `AGENTS.md` 的文件定位速查；
 - `tweb/src` 触点的升级重放清单维护在 `docs/tweb-cache.md` §2。
 
-**完成判据**：`pnpm typecheck`、`pnpm lint`、`pnpm check:ui` 全绿；`pnpm build` 可出包。
+**完成判据**：`pnpm typecheck`、`pnpm lint` 全绿；`pnpm build` 可出包。
 
 ### Step 8 · 验收
 

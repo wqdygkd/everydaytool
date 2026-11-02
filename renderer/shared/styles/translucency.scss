@@ -18,8 +18,8 @@
 //   两者都按「表面角色」分档，因此每种模式、每类控件都可以独立调，互不牵连。
 
 // 模式类的两个落点：
-//   html.is-x        —— 真正必需。EP 弹层（select / cascader / dropdown / date-picker /
-//                       autocomplete / dialog / message）全部 teleport 到 body，DOM 上
+//   html.is-x        —— 真正必需。弹层（select / dropdown / popover / dialog）
+//                       全部 teleport 到 body，DOM 上
 //                       不在 .app-shell 内，只有挂在 <html> 才能让这些浮层继承到
 //                       --alpha-* / --glass-*。
 //   .app-shell.is-x  —— 兜底：万一 html 同步失效（App.vue 的 watch 被改坏 / 类没挂上），
@@ -40,7 +40,7 @@
 @include mode('is-acrylic') {
   --alpha-raised: 0.78; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.88; /* 其余非弹出层控件（树 / 上传 / 搜索框） */
-  --alpha-field: 0.3; /* 通用表单输入框（el-input / textarea / select） */
+  --alpha-field: 0.3; /* 通用表单输入框（UiInput / textarea / UiSelect） */
   --alpha-table: 0.88; /* 表格行 */
   --alpha-button: 0.88; /* 普通按钮 */
   --alpha-fill: 0.8; /* 灰调填充（表头 / 行 hover） */
@@ -160,11 +160,11 @@
   --glass-overlay: blur(28px) saturate(var(--glass-saturate));
 }
 
-/* ── 合成导出：供各组件与 EP 绑定层直接引用 ──
+/* ── 合成导出：供各组件直接引用 ──
    写在这里而不是每个组件里，是为了让「换模式只改 alpha」真正成立：
    组件只认 --color-* 合成变量，永远不关心当前是哪种模式。
 
-   必须挂在 :root 而不是 .app-shell：EP 的弹层全部 teleport 到 body，
+   必须挂在 :root 而不是 .app-shell：弹层全部 teleport 到 body，
    DOM 上不在 .app-shell 内，挂在 .app-shell 会让这些浮层取不到变量而变成透明。
    模式 alpha 因此同时挂在 <html> 与 .app-shell 上（见上方 mode() mixin）。
 
@@ -176,7 +176,7 @@
 :root {
   --color-canvas: transparent; /* 画布：恒透明，工具页与主页同一观感（透出窗口 / 桌面） */
   --color-raised: color-mix(in oklab, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent); /* 卡片 / 面板 / 浮岛 */
-  --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层 el 控件底 */
+  --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层控件底 */
   --color-field: color-mix(in oklab, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent); /* 通用表单输入框底 */
   --color-table: color-mix(in oklab, var(--color-table-base) calc(var(--alpha-table) * 100%), transparent); /* 表格行底 */
   --color-button: color-mix(in oklab, var(--color-button-base) calc(var(--alpha-button) * 100%), transparent); /* 普通按钮底 */
@@ -205,20 +205,6 @@
 .app-shell.is-acrylic .app-header {
   background: var(--color-header); /* 标题栏半透明表面 */
   backdrop-filter: var(--glass-header); /* 玻璃：补偿 acrylic 强透光下的壁纸细节 */
-}
-
-/* ── 玻璃调试壁纸（窗口外观 → 测试壁纸） ──
-   在 <html> 上挂 has-test-wallpaper 时，把这面高对比「假壁纸」铺在整页最底层：
-   卡片的 alpha 越低、--glass-* 越大，色块边界越模糊——磨砂档位是否合适一眼可辨。
-   挂在 body 而不是 .app-shell：EP 的弹层 teleport 到 body 且盖满视口，
-   壁纸必须在它们之下、且不随 .app-main 滚动（fixed + cover）。
-   关闭该开关时类被摘掉，html / body 回到 base.scss 的 transparent，透出真实桌面。 */
-html.has-test-wallpaper body {
-  background-color: var(--test-wallpaper-base);
-  background-image: var(--test-wallpaper-image);
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-size: cover;
 }
 
 /* ── 夜色玻璃（Aurora Glass 重设计）：纯 CSS 暗色主题轴 ──

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-// 气泡卡内核:EP el-popover(v-model:visible + 定宽内容)→ reka-ui Popover。
+// 气泡卡内核：Reka UI Popover。
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui'
 
 withDefaults(defineProps<{
   visible: boolean
   width?: string | number
+  /** 透传到 teleport 后的内容层，供调用方做局部布局。 */
+  contentClass?: string
 }>(), {
   width: 320,
 })
@@ -22,6 +24,7 @@ const emit = defineEmits<{
     <PopoverPortal>
       <PopoverContent
         class="ui-popover-content"
+        :class="contentClass"
         :side-offset="4"
         align="end"
         :style="{ width: typeof width === 'number' ? `${width}px` : width }"

@@ -19,7 +19,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
 </script>
 
 <template>
-  <!-- 下载中：说明 + 取消 + 进度条（进度条底色走全局 EP 绑定，不再单点覆写） -->
+  <!-- 下载中：说明 + 取消 + 进度条（进度条颜色走 UiProgress 令牌） -->
   <UiPanel v-if="downloading" variant="outlined" padding="var(--spacing-md)">
     <UiGroup direction="column" gap="sm" block>
       <UiGroup justify="between" gap="sm" align="center">

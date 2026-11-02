@@ -9,8 +9,8 @@ const props = withDefaults(defineProps<{
   /**
    * 视觉变体：
    * - `auto`（默认）= 平台历史外观，按 tone 自动取：neutral → outline、success → solid、其余 → soft
-   * - `soft` = 浅底彩字（对齐 el-tag 默认样式，用于状态列）
-   * - `outline` = 透明底彩边彩字（对齐 el-tag `effect="plain"`，用于弱化标记）
+   * - `soft` = 浅底彩字（用于状态列）
+   * - `outline` = 透明底彩边彩字（用于弱化标记）
    * - `solid` = 实底反白（计数 / 未读徽章）
    */
   variant?: ChipVariant

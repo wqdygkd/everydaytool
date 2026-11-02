@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { PropType } from 'vue'
 // UiTable 的列声明件:渲染空,只把「props + 插槽」注册进 UiTable 的列注册表
-// (provide/inject)。消费方模板与 el-table-column 同形:
+// (provide/inject)。消费方模板使用与列定义同形的 props：
 // label / prop / width / min-width / align / sortable="custom" / show-overflow-tooltip
 // + #default({ row, $index }) / #header。
 import type { UiTableColumnReg } from './uiTableColumns'

@@ -120,7 +120,7 @@ const visible = computed({
 .ui-dialog-footer {
   display: flex;
   justify-content: flex-end;
-  /* EP 时代按钮间是原生 12px 间距，这里显式保持一致 */
+  /* 按钮间距统一由 gap 控制。 */
   gap: var(--spacing-md);
   margin-top: var(--spacing-lg);
 }
