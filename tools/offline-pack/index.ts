@@ -9,7 +9,7 @@ const tool = defineTool({
   icon: 'offline-pack',
   category: { key: 'dev', name: '开发工具' },
   keywords: ['offline-pack', 'offlinepack', '离线', '下载', 'vscode', 'chrome', 'edge', 'docker', 'msstore', '离线包'],
-  supportedTargets: ['win', 'mac'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-10-18',
   route: {
     path: 'offline-pack',

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WxpRunningStatus } from '../../../../shared/wxp'
+import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { toast } from 'vue-sonner'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
@@ -8,6 +9,7 @@ import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
 import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
 const store = useWxpEnhancerStore()
+const isElectron = isElectronEnvironment()
 
 const ACTIVE_STATUSES = ['launching', 'waiting', 'connecting', 'running']
 
@@ -245,6 +247,11 @@ async function saveSettings(): Promise<void> {
 let unsubscribeStatus: (() => void) | null = null
 
 onMounted(async () => {
+  if (!isElectron) {
+    syncSettingsForm()
+    loading.value = false
+    return
+  }
   try {
     unsubscribeStatus = store.bindStatusEvents()
     await store.load()
