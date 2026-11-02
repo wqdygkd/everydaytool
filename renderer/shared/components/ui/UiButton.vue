@@ -1,17 +1,17 @@
 <script setup lang="ts">
-// 通用按钮内核:EP el-button → 原生 button(Phase 3 清扫用)。几何 / 状态色与
-// element-plus.scss 的全站绑定一致;主钮为 Aurora 渐变底 + 光晕。
+// 通用按钮内核：原生 button。几何与状态色统一走设计令牌；
+// 主钮为 Aurora 渐变底 + 光晕。
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
   size?: 'small' | 'default' | 'large'
   /** info = 默认玻璃钮;primary / danger = 实底;success / warning 走对应语义实底 */
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'default'
-  /** EP text 模式:无底无边,hover 铺 fill */
+  /** 文字模式：无底无边，hover 铺 fill */
   text?: boolean
-  /** EP link 模式:同 text 但按 type 上色 */
+  /** 链接模式：同 text 但按 type 上色 */
   link?: boolean
-  /** EP plain 模式:透明底 + 彩边彩字(type 有值时) */
+  /** 朴素模式：透明底 + 彩边彩字（type 有值时） */
   plain?: boolean
   /** loading 时按钮禁用并显示转圈 */
   loading?: boolean

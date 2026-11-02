@@ -50,7 +50,7 @@ async function onClick() {
 </template>
 
 <style scoped lang="scss">
-/* 按钮内核：EP → 原生 button。几何与状态色复刻 element-plus.scss 的全站绑定 */
+/* 按钮内核：原生 button。几何与状态色统一走设计令牌。 */
 .ui-copy-btn {
   display: inline-flex;
   align-items: center;

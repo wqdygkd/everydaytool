@@ -47,12 +47,12 @@ async function applyPatch(target: InterceptorTarget, patch: { enabled?: boolean,
   }
 }
 
-/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回名单条目类型 */
+/** UiTableColumn 插槽给的 row 是宽泛记录类型，这里收窄为名单条目类型。 */
 function targetOf(row: unknown): InterceptorTarget {
   return row as InterceptorTarget
 }
 
-/** 开关入口：EP 的 change 参数是 string | number | boolean，这里按开关语义取布尔 */
+/** 开关入口：兼容 string | number | boolean，这里按开关语义取布尔。 */
 async function toggleEnabled(target: InterceptorTarget, enabled: string | number | boolean): Promise<void> {
   await applyPatch(target, { enabled: enabled === true })
 }

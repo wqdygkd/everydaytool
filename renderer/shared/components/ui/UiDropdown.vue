@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { IconName } from './icons'
-// 下拉菜单内核:EP el-dropdown(@command)→ reka-ui DropdownMenu。
+// 下拉菜单内核：Reka UI DropdownMenu。
 // 菜单项由 items 声明,选择后 emit command;触发器用 #trigger 插槽。
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
 

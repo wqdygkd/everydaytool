@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UiTableColumnReg } from './uiTableColumns'
-// 表格基座内核:EP el-table → 原生 <table>(特性登记见 docs/ui-shadcn-roadmap.md:
+// 表格基座内核：原生 <table>（支持
 // width / min-width / align / sortable="custom" / show-overflow-tooltip /
 // #default / #header / row-click / sort-change / row-class-name / 树形全展开 /
 // max-height / loading / 空态)。列由 UiTableColumn 注册,行展开与单元格渲染都在这里。
@@ -91,7 +91,7 @@ function cellComp(col: UiTableColumnReg, item: { row: Record<PropertyKey, any>, 
   }
 }
 
-/* ── 排序:仅 custom 模式(表头点击翻转 → emit,数据排序由消费方完成,与 EP 行为一致) ── */
+/* ── 排序：仅 custom 模式（表头点击翻转 → emit，数据排序由消费方完成） ── */
 const orders = reactive<Record<string, 'ascending' | 'descending' | null>>({})
 
 function toggleSort(col: UiTableColumnReg) {

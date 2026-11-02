@@ -1,6 +1,6 @@
 # everydaytool (edt)
 
-多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Element Plus + Vite**。
+多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Reka UI + Vite**。
 
 采用单体仓库子目录架构：主壳只负责首页导航、页签与设置，各工具独立存放在 `tools/` 下，
 按需加载、互不耦合。内置 8 个工具模块：

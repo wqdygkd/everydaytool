@@ -1,5 +1,5 @@
-// 命令式 confirm / alert / prompt:基于 shadcn AlertDialog 的 Promise 胶水。
-// 这是全仓唯一保留的自建反馈逻辑(shadcn 无 promise 弹窗);EP 语义保持:
+// 命令式 confirm / alert / prompt：基于 UiMessageBox 的 Promise 胶水。
+// 保持既有调用语义：
 // confirm/alert 取消时 reject 'cancel',prompt resolve { value }。
 import { reactive } from 'vue'
 
@@ -9,7 +9,7 @@ export interface ConfirmOptions {
   type?: 'success' | 'warning' | 'error' | 'info'
   confirmButtonText?: string
   cancelButtonText?: string
-  /** 仅保持 EP API 兼容:遮罩点击与取消按钮的拒绝原因相同('cancel') */
+  /** 保持旧 API 兼容：遮罩点击与取消按钮的拒绝原因相同('cancel') */
   distinguishCancelAndClose?: boolean
   /** prompt 专用 */
   inputType?: 'text' | 'password'
@@ -57,12 +57,12 @@ export function settleCancel() {
   state.reject('cancel')
 }
 
-/** ElMessageBox.confirm / alert 对应(位置参数与 EP 同形) */
+/** 确认框；保持既有位置参数形式。 */
 export function confirm(message: string, title?: string, options?: Omit<ConfirmOptions, 'message' | 'title' | 'showInput' | 'inputType' | 'inputPlaceholder'>) {
   return open({ message, title, ...options }).then(() => undefined)
 }
 
-/** ElMessageBox.alert 对应(确认即 resolve,取消 reject ''cancel'') */
+/** 提示框；确认即 resolve，取消 reject 'cancel'。 */
 export function alert(message: string, title?: string, options?: Omit<ConfirmOptions, 'message' | 'title' | 'showInput' | 'inputType' | 'inputPlaceholder'>) {
   return confirm(message, title, options)
 }

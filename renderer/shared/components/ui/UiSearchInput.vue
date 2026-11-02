@@ -42,7 +42,7 @@ function onEsc() {
 </script>
 
 <template>
-  <!-- 搜索框内核：EP → 原生 input。底色走 --color-input（input 角色），玻璃按角色独立取档 -->
+  <!-- 搜索框内核：原生 input。底色走 --color-input（input 角色），玻璃按角色独立取档 -->
   <label
     :class="variant === 'pill' ? 'ui-search-pill' : 'ui-search-box'"
     :style="width ? { width } : undefined"

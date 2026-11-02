@@ -18,7 +18,7 @@ const stateMeta: Record<string, { label: string, tone: ChipTone }> = {
 }
 
 /**
- * el-table 的插槽行是 EP 的 DefaultRow（`Record<PropertyKey, any>`），不保证具体字段真的存在；
+ * UiTableColumn 的插槽行是宽泛记录类型，不保证具体字段真的存在；
  * 进来先收敛到影库条目类型。运行期就是表格里的同一份对象，不做转换。
  */
 function toEntry(row: unknown): TelegramLibraryEntry {

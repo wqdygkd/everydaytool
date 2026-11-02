@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import UiMessageBox from '../components/ui/UiMessageBox.vue'
 // 全局确认 / 输入弹窗宿主:App.vue 挂载一次,useConfirm 的命令式调用经
-// UiMessageBox(shadcn alert-dialog + 自家 UiButton / UiInput)渲染。
+// 由 UiMessageBox(UiDialog + UiButton / UiInput)渲染。
 import { settleCancel, settleConfirm, useConfirmState } from './useConfirm'
 
 const state = useConfirmState()

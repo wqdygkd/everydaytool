@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 复选框内核:EP el-checkbox → 原生 input + 自绘勾选框(支持半选态)
+// 复选框内核：原生 input + 自绘勾选框（支持半选态）。
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{

@@ -65,7 +65,7 @@ p strong,
 li strong,
 dd strong,
 .ui-hint strong,
-.el-alert__description strong {
+.ui-alert-desc strong {
   color: var(--color-text-primary);
 }
 
@@ -74,7 +74,7 @@ dd strong,
    2. 「不孤字」折行：宽容器里的中文很容易把最后一个字单独甩到下一行。 */
 p,
 .ui-hint,
-.el-alert__description {
+.ui-alert-desc {
   max-width: var(--measure-prose);
   text-wrap: pretty;
 }
@@ -108,7 +108,7 @@ textarea,
 button:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-.el-button:focus-visible {
+.ui-button:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }

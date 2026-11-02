@@ -22,17 +22,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 覆盖 Element Plus 的 .el-button + .el-button { margin-left: 12px }：
-   flex gap 布局下间距以 gap 为准，不再叠加原生左边距（原 ActionBar / UiSidebar /
-   UiToolbar 三处重复的 :deep 覆写收敛至此）。 */
-.btn-flush .el-button + .el-button {
+/* flex gap 布局下间距以 gap 为准，不再叠加按钮原生左边距。 */
+.btn-flush .ui-button + .ui-button {
   margin-left: 0;
 }
 
-/* 单选组用 gap 控制间距时，抵消 EP 原生的 margin-right 与固定高度。
+/* 单选组用 gap 控制间距时，抵消原生 margin-right 与固定高度。
    与 .btn-flush 同构：把「flex 布局取代原生外边距」这件事收成全局工具类，
-   业务里不再各自写 :deep(.el-radio)。 */
-.radio-flush .el-radio {
+   业务里不再各自写单选组间距。 */
+.radio-flush .ui-radio {
   margin-right: 0;
   height: auto;
 }
@@ -43,8 +41,7 @@
 }
 
 /* 表单控件定宽阶梯：选择器 / 输入框按阶梯取宽，禁止一处一个 px 的内联宽度。
-   EP 组件样式按需懒加载（运行时注入，文档序晚于本文件），宽度须 !important
-   才能稳定压过 .el-input / .el-select / .el-input-number 根元素的默认宽度。 */
+   宽度须 !important 才能稳定压过 UiInput / UiSelect 根元素的默认宽度。 */
 .ctl-xs {
   width: 90px !important;
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 折叠组内核:EP el-collapse → 受控多开列表(modelValue 为展开的 name 数组)。
+// 折叠组内核：受控多开列表（modelValue 为展开的 name 数组）。
 // 未传 modelValue 时内部自管(全部收起)。
 import { provide, ref } from 'vue'
 

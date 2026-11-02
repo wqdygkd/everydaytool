@@ -20,7 +20,7 @@ const value = computed({
 
 <template>
   <div class="ui-path-field">
-    <!-- 输入内核：EP → 原生 input + 可选前置块（EP prepend 同款灰底） -->
+    <!-- 输入内核：原生 input + 可选前置块（灰底令牌） -->
     <div class="ui-path-input" :class="{ 'is-mono': mono, 'has-prepend': !!$slots.prepend }">
       <span v-if="$slots.prepend" class="ui-path-prepend">
         <slot name="prepend" />

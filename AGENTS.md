@@ -6,7 +6,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程�
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / tweb-cache / workbuddy2api-panel）。
+Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / tweb-cache / workbuddy2api-panel）。
 
 ## 编码规范
 
@@ -24,13 +24,11 @@ Electron + Vue 3 + Pinia + Element Plus + Vite + SCSS 多工具平台，内置�
 
 样式与组件在代码里的位置固定，**细则见 DESIGN.md，不要在本文件另立规范**：
 
-- 全局样式入口 `renderer/shared/styles/main.scss`（按 tokens → base → element-plus → utilities → translucency 顺序 `@use`）。
-- Tailwind v4 入口 `renderer/shared/styles/tailwind.css`（`source(none)` + 显式 `@source` 收敛扫描范围；shadcn 语义变量在此桥接设计令牌）。
-- **shadcn-vue 原始生成组件只读**：CLI 生成物一律放 `renderer/shared/components/shadcn/`，**禁止修改**（eslint 已整目录豁免）；要改样式时写外部包装组件、改 `tailwind.css` 的主题变量或 `@theme` 覆写，不改生成物本体。注册表别名见根目录 `components.json`。
-- 反馈基座 `renderer/shared/feedback/`：ElMessage / ElMessageBox / ElNotification 的唯一接触面（auto-import 已改道至此），业务代码**禁止直接 import element-plus**（eslint 断言；`shared/components/ui/` 内核与 feedback 自身豁免）。
-- Element Plus 覆写**只写**在 `renderer/shared/styles/element-plus.scss`（注入顺序 / 几何差异的坑见 DESIGN §4）。
+- 全局样式入口 `renderer/shared/styles/main.scss`（按 tokens → base → utilities → translucency 顺序 `@use`）。
+- Tailwind v4 入口 `renderer/shared/styles/tailwind.css`（`source(none)` + 显式 `@source` 收敛扫描范围；主题变量在此桥接设计令牌）。
+- 反馈基座 `renderer/shared/feedback/`：`confirm` / `alert` / `prompt` 的统一入口；toast 使用 `vue-sonner`。
 - 平台组件库在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板直接用，无需 import）。
-- 组件用法硬约束（`UiTable` / `UiProgress` / `UiChip` 的强制范围）由 `pnpm check:ui` 断言；改 UI 后跑一次。
+- 组件用法硬约束（`UiTable` / `UiProgress` / `UiChip` 的强制范围）由评审与类型检查保证；业务页面优先复用平台组件。
 
 ## 布局与页签机制（工程侧）
 
@@ -81,7 +79,6 @@ pnpm web          # 纯浏览器预览（无 preload / IPC：只列 supportedTar
 pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm vite build   # 仅构建前端
 pnpm typecheck    # TS 类型检查（前端 + 后端两套 tsconfig）
-pnpm check:ui     # EP 用法断言（el-tag / el-empty / el-progress / el-table 收敛状态）
 pnpm data-layers:check   # 分层断言：清单/搬迁表一致 + 禁止绕过 resolveLayerPath 拼数据根（含别名）
 pnpm data-layout plan    # 预览 v1→v2 数据布局搬迁计划（只读）
 pnpm lint         # ESLint（含 tools 内文件）
@@ -136,15 +133,11 @@ export default defineTool({
 | ---------- | ------ |
 | 设计令牌 / 主题(浅色) | `renderer/shared/styles/tokens.scss` |
 | 全局样式入口（@use 顺序） | `renderer/shared/styles/main.scss` |
-| Tailwind v4 入口 / shadcn 主题变量 | `renderer/shared/styles/tailwind.css` |
-| **shadcn-vue 生成组件（只读）** | `renderer/shared/components/shadcn/`；注册配置 `components.json` |
-| **反馈基座（ElMessage 系唯一接触面）** | `renderer/shared/feedback/` |
-| Element Plus `--el-*` 绑定与组件覆写 | `renderer/shared/styles/element-plus.scss` |
+| Tailwind v4 入口 / 主题变量 | `renderer/shared/styles/tailwind.css` |
+| **反馈基座（confirm / alert / prompt）** | `renderer/shared/feedback/` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
 | **UI 组件库（面板/分组/键值/表格/进度/对话框等 27 组件）** | `renderer/shared/components/ui/` |
 | UI 设计规范（令牌 / 组件 / 布局 / 动效） | `DESIGN.md` |
-| **EP 接触面收敛计划（B0–B6 批次 / 验收断言）** | `docs/ui-ep-convergence-plan.md` |
-| EP 用法断言（`pnpm check:ui`） | `scripts/ui-ep-check.mjs` |
 
 ### 外壳与页面
 

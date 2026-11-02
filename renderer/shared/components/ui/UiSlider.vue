@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack } from 'reka-ui'
-// 滑块内核:EP el-slider → reka-ui Slider(单值 / 双值 range 均支持)
+// 滑块内核：Reka UI Slider（单值 / 双值 range 均支持）。
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{

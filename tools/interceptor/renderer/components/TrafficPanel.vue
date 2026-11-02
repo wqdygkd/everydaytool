@@ -33,7 +33,7 @@ function formatTime(at: number): string {
   return `${date.toLocaleTimeString()}.${String(date.getMilliseconds()).padStart(3, '0')}`
 }
 
-/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回流量条目类型 */
+/** UiTableColumn 插槽给的 row 是宽泛记录类型，这里收窄为流量条目类型。 */
 function entryOf(row: unknown): TrafficEntry {
   return row as TrafficEntry
 }

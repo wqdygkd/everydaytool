@@ -121,12 +121,12 @@ function clearSelection(): void {
   selectedIds.value.clear()
 }
 
-/** el-table 行类名：固定行标记 + 选中行高亮 */
+/** UiTable 行类名：固定行标记 + 选中行高亮。 */
 function rowClassName({ row }: { row: InterceptorRule }): string {
   return [row.pinned ? 'record-pinned' : '', isSelected(row) ? 'is-selected' : ''].join(' ')
 }
 
-/** el-table 自定义排序（asc → desc → 取消，与原三轮点击一致） */
+/** UiTable 自定义排序（asc → desc → 取消，与原三轮点击一致）。 */
 function onSortChange({ prop, order }: { prop: string, order: 'ascending' | 'descending' | null }): void {
   if (order === 'ascending') {
     sortKey.value = prop as SortKey
@@ -280,12 +280,12 @@ const payloadEnabled = computed({
   },
 })
 
-/** el-table 列插槽给的 row 是 EP 的 DefaultRow（属性全 any），这里收回规则类型 */
+/** UiTableColumn 插槽给的 row 是宽泛记录类型，这里收窄为规则类型。 */
 function ruleOf(row: unknown): InterceptorRule {
   return row as InterceptorRule
 }
 
-/** el-option 的 value 声明不接受 null：「全部类型」一项运行期仍是 null，这里只放宽类型 */
+/** UiSelect 的 value 声明不接受 null：「全部类型」一项运行期仍是 null，这里只放宽类型。 */
 function ruleTypeOptionValue(value: RuleType | null): RuleType {
   return value as RuleType
 }
@@ -305,7 +305,7 @@ const statusCodeOption = computed({
     redirectForm.value.statusCode = Number(v) as 301 | 302 | 307 | 308
   },
 })
-/* 多选过滤:el-select multiple → chip 开组 */
+/* 多选过滤：chip 开关组。 */
 function toggleInList(list: string[] | undefined, value: string) {
   if (!list) {
     return
@@ -746,6 +746,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
           <UiPopover
             :visible="pickerVisible"
             :width="400"
+            content-class="rule-picker-popover"
             @update:visible="pickerVisible = $event"
           >
             <template #trigger>
@@ -1241,7 +1242,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 </template>
 
 <style scoped>
-/* ── 列表屏（EP el-table + 语义令牌，与全应用表格一致） ── */
+/* ── 列表屏（UiTable + 语义令牌，与全应用表格一致） ── */
 
 /* 面包屑用 UiBreadcrumb；仅保留原列表屏的底部间距 */
 .rq-breadcrumb {
@@ -1263,7 +1264,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   gap: var(--spacing-sm);
 }
 
-/* 过滤分段钮样式已收敛至 main.scss 的全局 .el-radio-button 绑定 */
+/* 过滤分段钮样式由全局工具类和组件令牌控制。 */
 
 .rq-content-list-header-actions {
   display: flex;
@@ -1279,12 +1280,12 @@ async function remove(rule: InterceptorRule): Promise<void> {
 /* 规则表：主题令牌（muted 表头 / hover 行 / 圆角卡片 / 选中行）已在 main.scss 绑定 */
 .rules-table {
   /* 固定行：首列左侧警示色标记（inset 不占布局，业务专属） */
-  :deep(.el-table__row.record-pinned td:first-child) {
+  :deep(.ui-table tbody tr.record-pinned td:first-child) {
     box-shadow: inset 3px 0 0 var(--color-warning);
   }
 }
 
-/* 图标钮：仅剩 el-dropdown「更多操作」触发钮（需保持原生 el-button 以正确绑定触发器；其余图标钮已收敛至 UiIconButton） */
+/* 图标钮：更多操作触发钮沿用原生按钮挂载；其余图标钮使用 UiIconButton。 */
 .icon-btn {
   width: var(--control-height);
   height: var(--control-height);
@@ -1359,7 +1360,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   justify-content: flex-end;
 }
 
-/* ── 批量操作栏（底部浮动胶囊；按钮用 EP 变体，不再逐个覆写） ── */
+/* ── 批量操作栏（底部浮动胶囊；按钮使用 UiButton 变体） ── */
 
 .rq-bulk-action-bar-container {
   display: flex;
@@ -1448,7 +1449,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   }
 }
 
-/* 列表头过滤胶囊(el-radio-button → 原生按钮组) */
+/* 列表头过滤胶囊（原生按钮组）。 */
 .seg-filter {
   display: flex;
   gap: var(--spacing-xs);
@@ -1477,7 +1478,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   }
 }
 
-/* 多选过滤 chip(el-select multiple → 开组) */
+/* 多选过滤 chip 开关组。 */
 .chip-filter {
   display: flex;
   gap: var(--spacing-xs);
@@ -1571,7 +1572,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   max-width: 480px;
 }
 
-.rule-title-input :deep(.el-input__inner) {
+.rule-title-input :deep(.ui-input) {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-medium);
 }
@@ -1710,7 +1711,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
 }
 
 /* 目标输入框贴在 raised 面板上：用卡片底色，避免在面板里出现第二层「输入框色块」 */
-.dest-input :deep(.el-input__wrapper) {
+.dest-input :deep(.ui-input) {
   background: var(--color-raised);
 }
 
@@ -1721,7 +1722,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   margin-left: var(--spacing-md);
 }
 
-.request-body-mode-group :deep(.el-radio__label) {
+.request-body-mode-group :deep(.ui-radio-text) {
   font-size: var(--font-size-sm);
 }
 
@@ -1730,7 +1731,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   margin-top: var(--spacing-md);
 }
 
-/* 虚线新增钮：EP 按钮 + 虚线边框（添加新条件 / 添加参数修改同构） */
+/* 虚线新增钮：UiButton + 虚线边框（添加新条件 / 添加参数修改同构） */
 .dashed-add-btn {
   border-style: dashed;
   border-color: var(--color-border);
@@ -1810,7 +1811,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   margin-top: var(--spacing-sm);
 }
 
-/* 原生输入件(替换 el-input / el-input-number 处):与 UiInput 同一套令牌 */
+/* 原生输入件：与 UiInput 同一套令牌。 */
 .ctl-input,
 .ctl-num,
 textarea.body-input {
@@ -1841,7 +1842,7 @@ textarea.body-input {
 
 <style>
 /* 新建规则下拉(UiPopover 传送至 body,非 scoped) */
-.rule-picker-popover.el-popover.el-popper {
+.rule-picker-popover.ui-popover-content {
   padding: 0;
   overflow: hidden;
   background: var(--color-raised);
@@ -1850,10 +1851,6 @@ textarea.body-input {
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
-}
-
-.rule-picker-popover .el-popper__arrow {
-  display: none;
 }
 
 .rule-picker-popover .rule-picker-list {
