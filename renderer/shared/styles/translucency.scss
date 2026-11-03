@@ -38,6 +38,7 @@
    系统已做一次强模糊，CSS 只需抹平「应用内部」滚到卡片背后的内容，
    模糊半径比纯 transparent 模式小；saturate 抬高，避免磨平后发灰。 */
 @include mode('is-acrylic') {
+  --alpha-rail: 0.62; /* 左侧导航轨 */
   --alpha-raised: 0.78; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.88; /* 其余非弹出层控件（树 / 上传 / 搜索框） */
   --alpha-field: 0.3; /* 通用表单输入框（UiInput / textarea / UiSelect） */
@@ -53,6 +54,7 @@
   --alpha-switch-knob: 0.94; /* 开关滑块 */
 
   --glass-saturate: 135%; /* 强透光下补回被磨掉的色彩 */
+  --glass-rail: blur(20px) saturate(var(--glass-saturate));
   --glass-raised: blur(18px) saturate(var(--glass-saturate));
   --glass-input: blur(14px) saturate(var(--glass-saturate));
   --glass-header: blur(16px) saturate(var(--glass-saturate));
@@ -65,6 +67,7 @@
    否则卡片会与壁纸糊在一起、文字对比度下降。CSS 只做很轻的一层
    （滚动内容仍会从卡片底下经过，完全不糊会看到文字在卡片里「游动」）。 */
 @include mode('is-mica') {
+  --alpha-rail: 0.95;
   --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.97; /* 非弹出层 el 控件 */
   --alpha-field: 0.97; /* 通用表单输入框 */
@@ -80,8 +83,10 @@
   --alpha-switch-knob: 0.98;
 
   --glass-saturate: 115%;
+  --glass-rail: blur(10px) saturate(var(--glass-saturate));
   --glass-raised: blur(10px) saturate(var(--glass-saturate));
   --glass-input: blur(8px) saturate(var(--glass-saturate));
+  --glass-header: blur(10px) saturate(var(--glass-saturate));
   --glass-pop: blur(16px) saturate(var(--glass-saturate));
   --glass-overlay: blur(18px) saturate(var(--glass-saturate));
 }
@@ -89,6 +94,7 @@
 /* ── tabbed：带页签标题栏的弱化材质 ──
    与 mica 同源，取色更弱，故比 mica 再实一档、再轻一档模糊。 */
 @include mode('is-tabbed') {
+  --alpha-rail: 0.97;
   --alpha-raised: 0.98; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.99; /* 非弹出层 el 控件 */
   --alpha-field: 0.99; /* 通用表单输入框 */
@@ -104,9 +110,11 @@
   --alpha-switch-knob: 1;
 
   --glass-saturate: 105%;
+  --glass-rail: blur(8px) saturate(var(--glass-saturate));
   /* 浮层已不透明，模糊对它没有意义；只留卡片 / 控件的一层极轻模糊 */
   --glass-raised: blur(8px) saturate(var(--glass-saturate));
   --glass-input: blur(6px) saturate(var(--glass-saturate));
+  --glass-header: blur(8px) saturate(var(--glass-saturate));
   --glass-pop: none;
   --glass-overlay: none;
 }
@@ -114,6 +122,7 @@
 /* ── vibrancy（macOS）：系统轻模糊材质 ──
    与 mica 同级：透得少，保持接近实色的稳重感；系统已模糊，CSS 略补一层。 */
 @include mode('is-vibrancy') {
+  --alpha-rail: 0.95;
   --alpha-raised: 0.96; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.97; /* 非弹出层 el 控件 */
   --alpha-field: 0.97; /* 通用表单输入框 */
@@ -129,8 +138,10 @@
   --alpha-switch-knob: 0.98;
 
   --glass-saturate: 120%;
+  --glass-rail: blur(12px) saturate(var(--glass-saturate));
   --glass-raised: blur(12px) saturate(var(--glass-saturate));
   --glass-input: blur(10px) saturate(var(--glass-saturate));
+  --glass-header: blur(12px) saturate(var(--glass-saturate));
   --glass-pop: blur(18px) saturate(var(--glass-saturate));
   --glass-overlay: blur(20px) saturate(var(--glass-saturate));
 }
@@ -139,6 +150,7 @@
    没有系统模糊兜底，全部由 CSS 自己压：表面尽量稳，只让画布透，
    模糊半径给到最大——这里 CSS 是唯一的磨砂来源。 */
 @include mode('is-transparent-only') {
+  --alpha-rail: 0.86;
   --alpha-raised: 0.88; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 0.93; /* 非弹出层 el 控件 */
   --alpha-field: 0.93; /* 通用表单输入框 */
@@ -154,8 +166,10 @@
   --alpha-switch-knob: 0.96;
 
   --glass-saturate: 110%;
+  --glass-rail: blur(20px) saturate(var(--glass-saturate));
   --glass-raised: blur(20px) saturate(var(--glass-saturate));
   --glass-input: blur(16px) saturate(var(--glass-saturate));
+  --glass-header: blur(16px) saturate(var(--glass-saturate));
   --glass-pop: blur(24px) saturate(var(--glass-saturate));
   --glass-overlay: blur(28px) saturate(var(--glass-saturate));
 }
@@ -175,6 +189,7 @@
    不会像 srgb 那样在中低 alpha 处掉饱和度；纯白 / 冷灰这类无彩基准色两种空间结果一致。 */
 :root {
   --color-canvas: transparent; /* 画布：恒透明，工具页与主页同一观感（透出窗口 / 桌面） */
+  --color-rail: color-mix(in oklab, var(--color-rail-base) calc(var(--alpha-rail) * 100%), transparent); /* 左侧导航轨 */
   --color-raised: color-mix(in oklab, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent); /* 卡片 / 面板 / 浮岛 */
   --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent); /* 非弹出层控件底 */
   --color-field: color-mix(in oklab, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent); /* 通用表单输入框底 */
@@ -198,11 +213,22 @@
   box-shadow: var(--shadow-window-frame); /* 窗口浮起感 */
 }
 
-/* 标题栏：仅 acrylic 铺半透明表面 + 玻璃（其余模式不铺，见 DESIGN.md §7.1.1）——
-   acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，
-   需压一层 --color-header 稳住原生窗口按钮与页签文字的对比度，
-   再靠 --glass-header 把滚到标题栏底下的内容磨平。 */
-.app-shell.is-acrylic .app-header {
+/* 左侧导航轨与顶部工作区栏：acrylic 强透光时需要自己的玻璃，
+   其他材质也沿用同一结构，但由模式变量决定模糊半径。 */
+.app-shell.is-acrylic .app-rail,
+.app-shell.is-mica .app-rail,
+.app-shell.is-tabbed .app-rail,
+.app-shell.is-vibrancy .app-rail,
+.app-shell.is-transparent-only .app-rail {
+  background: var(--color-rail);
+  backdrop-filter: var(--glass-rail);
+}
+
+.app-shell.is-acrylic .app-topbar,
+.app-shell.is-mica .app-topbar,
+.app-shell.is-tabbed .app-topbar,
+.app-shell.is-vibrancy .app-topbar,
+.app-shell.is-transparent-only .app-topbar {
   background: var(--color-header); /* 标题栏半透明表面 */
   backdrop-filter: var(--glass-header); /* 玻璃：补偿 acrylic 强透光下的壁纸细节 */
 }
@@ -214,16 +240,19 @@
    --color-border / --color-primary，随暗色基调自动适配，无需单独覆写。 */
 html.is-night,
 .app-shell.is-night {
-  --color-raised-base: #12161f;
-  --color-header-base: #0f131b;
-  --color-input-base: #131824;
-  --color-field-base: #131824;
-  --color-table-base: #12161f;
-  --color-button-base: #1a2130;
-  --color-fill-base: #161b26;
-  --color-pop-base: #141926;
-  --color-overlay-base: #10141d;
+  color-scheme: dark;
+  --color-rail-base: #111c28;
+  --color-raised-base: #121d29;
+  --color-header-base: #0e1721;
+  --color-input-base: #172330;
+  --color-field-base: #172330;
+  --color-table-base: #121d29;
+  --color-button-base: #1a2837;
+  --color-fill-base: #172330;
+  --color-pop-base: #121d29;
+  --color-overlay-base: #0e1721;
 
+  --color-rail: color-mix(in oklab, var(--color-rail-base) calc(var(--alpha-rail) * 100%), transparent);
   --color-raised: color-mix(in oklab, var(--color-raised-base) calc(var(--alpha-raised) * 100%), transparent);
   --color-input: color-mix(in oklab, var(--color-input-base) calc(var(--alpha-input) * 100%), transparent);
   --color-field: color-mix(in oklab, var(--color-field-base) calc(var(--alpha-field) * 100%), transparent);
@@ -235,16 +264,16 @@ html.is-night,
   --color-overlay: color-mix(in oklab, var(--color-overlay-base) calc(var(--alpha-overlay) * 100%), transparent);
 
   --color-app-bg: #0d1017;
-  --color-text-primary: #eef1f6;
-  --color-text-secondary: #a7b0bd;
-  --color-text-tertiary: #6d7684;
-  --color-border-light: #232a38;
-  --color-border: #2a3242;
+  --color-text-primary: #eef4fb;
+  --color-text-secondary: #aab9c8;
+  --color-text-tertiary: #75879a;
+  --color-border-light: #253647;
+  --color-border: #30465b;
 
-  --color-primary: #6ba1ff;
-  --color-primary-strong: #8db4ff;
-  --color-primary-soft: color-mix(in srgb, var(--color-primary) 16%, transparent);
-  --color-primary-light: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  --color-primary: #67a9ff;
+  --color-primary-strong: #a9ccff;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 22%, transparent);
 
   --alpha-highlight: 0.14;
   --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.4);
@@ -259,6 +288,7 @@ html.is-night,
 @media (prefers-reduced-transparency: reduce) {
   html:is(.is-acrylic, .is-mica, .is-tabbed, .is-vibrancy, .is-transparent-only),
   .app-shell:is(.is-acrylic, .is-mica, .is-tabbed, .is-vibrancy, .is-transparent-only) {
+    --alpha-rail: 1;
     --alpha-raised: 1;
     --alpha-input: 1;
     --alpha-field: 1;
@@ -272,6 +302,7 @@ html.is-night,
     --alpha-switch-track: 1;
     --alpha-switch-knob: 1;
 
+    --glass-rail: none;
     --glass-raised: none;
     --glass-input: none;
     --glass-header: none;

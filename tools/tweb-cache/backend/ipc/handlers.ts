@@ -40,10 +40,7 @@ export function registerTwebCacheHandlers(): void {
 
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_INFO, () => getTwebCacheSiteStatus())
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_ACQUIRE, () => ensureTwebCacheSiteStarted())
-  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_RELEASE, () => {
-    releaseTwebCacheSite()
-    return true
-  })
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.SITE_RELEASE, () => releaseTwebCacheSite())
 
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.LIBRARY_LIST, async () => {
     const entries = await getTelegramArchiveEngine().listLibrary(SCOPE)

@@ -98,6 +98,7 @@ export async function initializeTelegramSite(): Promise<void> {
 }
 
 export function disposeTelegramSite(): void {
+  if (getTelegramSiteServerInfo()) logger.info('Telegram site server stopped')
   stopTelegramSiteServer()
   setTelegramLocalOrigin(null)
   siteStatus = { ...EMPTY_SITE }

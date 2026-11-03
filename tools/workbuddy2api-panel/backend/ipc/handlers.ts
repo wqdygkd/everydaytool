@@ -18,11 +18,22 @@ import {
   buildState,
   publishStateNow,
   setLastError,
+  startStatePublisher,
+  stopStatePublisher,
 } from '../services/state-service.ts'
 import { ensureWb2apiDirs, getWb2apiRootDir } from '../utils/paths.ts'
 import { WB2API_PANEL_IPC_CHANNELS } from './channels.ts'
 
 export function registerWb2apiPanelHandlers(): void {
+  safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.RUNTIME_ACTIVATE, async () => {
+    startStatePublisher()
+    return publishStateNow()
+  })
+  safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.RUNTIME_DEACTIVATE, () => {
+    stopStatePublisher()
+    return true
+  })
+
   safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.GET_STATE, async () => buildState())
 
   safeHandle(ipcMain, WB2API_PANEL_IPC_CHANNELS.INSTALL, async () => {

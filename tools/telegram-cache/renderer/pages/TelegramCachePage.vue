@@ -3,6 +3,9 @@ import type { WebviewTag } from '../webview'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { toast } from 'vue-sonner'
+import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
+import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
+import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { TELEGRAM_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import DiagnosticsPanel from '../components/DiagnosticsPanel.vue'
 import LibraryPanel from '../components/LibraryPanel.vue'
@@ -26,6 +29,7 @@ const initError = ref('')
 const canGoBack = ref(false)
 const canGoForward = ref(false)
 const devtoolsOpen = ref(false)
+const inspectorOpen = ref(false)
 
 const site = computed(() => store.site)
 const pageSrc = computed(() => site.value?.url ?? '')
@@ -46,11 +50,25 @@ const PANELS = {
   library: LibraryPanel,
 } as const
 const activePanel = computed(() => PANELS[activeTab.value])
+const inspectorTitle = computed(() =>
+  TELEGRAM_CACHE_TABS.find(tab => tab.key === activeTab.value)?.label ?? '工具详情',
+)
 
 const displayUrl = computed(() => sanitizePageUrl(pageUrl.value) || pageSrc.value)
 
 /** 「进度」页签的角标 = 还没归档完的消息数（与 TasksPanel 的口径一致） */
 const pendingArchives = computed(() => store.library.filter(entry => entry.state !== 'complete').length)
+const statusLabel = computed(() => {
+  if (initError.value) return '后端未就绪'
+  if (loadError.value) return '页面加载失败'
+  if (!site.value?.url) return siteError.value ? '站点未就绪' : '正在启动'
+  return originNotice.value ? '登录态已重置' : '本地站点已就绪'
+})
+const statusTone = computed<'neutral' | 'success' | 'warning' | 'danger'>(() => {
+  if (initError.value || loadError.value) return 'danger'
+  if (!site.value?.url || originNotice.value) return 'warning'
+  return 'success'
+})
 
 const menuItems = computed(() => TELEGRAM_CACHE_TABS.map(tab => ({
   value: tab.key as string,
@@ -190,8 +208,19 @@ function openInBrowser(): void {
 function switchTab(key: string): void {
   if (key === activeTab.value) return
   const tab = TELEGRAM_CACHE_TABS.find(item => item.key === key)
-  if (tab) router.push({ name: tab.routeName })
+  if (tab) {
+    inspectorOpen.value = true
+    router.push({ name: tab.routeName })
+  }
 }
+
+function openInspector(): void {
+  inspectorOpen.value = true
+}
+
+watch(activeTab, (tab) => {
+  if (tab !== 'overview') inspectorOpen.value = true
+}, { immediate: true })
 
 onMounted(async () => {
   if (!isElectron) return
@@ -205,101 +234,141 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  const wv = webviewRef.value
+  if (wv && devtoolsOpen.value) safeCall(() => wv.closeDevTools(), undefined)
+  webviewRef.value = null
   store.dispose()
 })
 </script>
 
 <template>
   <div class="tool-page telegram-page">
-    <UiToolbar class="topbar" surface bordered padding="var(--spacing-sm) var(--spacing-md)" gap="sm" flush>
-      <UiIconButton icon="arrowLeft" label="后退" :disabled="!canGoBack" @click="goBack" />
-      <UiIconButton icon="arrowRight" label="前进" :disabled="!canGoForward" @click="goForward" />
-      <UiIconButton icon="refresh" label="刷新页面" @click="reload" />
-      <span class="url-pill mono" :title="displayUrl">{{ displayUrl }}</span>
-      <span v-if="loading" class="loading-dot" aria-label="加载中" />
-
-      <template #end>
-        <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
-        <UiButton size="small" :disabled="!isElectron" @click="openInBrowser">
+    <WorkspaceHeader
+      icon="telegram"
+      title="Telegram 网络优化"
+      description="内嵌 Telegram 页面；任务、诊断与影库按需展开"
+      :status-label="statusLabel"
+      :status-tone="statusTone"
+    >
+      <template #actions>
+        <UiButton size="small" @click="openInspector">
+          工具详情
+        </UiButton>
+        <UiButton size="small" type="primary" :disabled="!displayUrl" @click="openInBrowser">
           外部打开
         </UiButton>
       </template>
-    </UiToolbar>
+    </WorkspaceHeader>
 
-    <div class="page-body">
-      <section class="browser-pane">
-        <UiAlert
-          v-if="initError"
-          class="pane-alert"
-          type="warning"
-          :closable="false"
-          show-icon
-          title="后端未就绪"
-          :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
-        />
-        <UiAlert
-          v-else-if="!isElectron"
-          class="pane-alert"
-          type="info"
-          :closable="false"
-          show-icon
-          title="网页预览不支持内嵌 Telegram"
-          description="请使用 everydaytool 桌面端打开本工具。"
-        />
+    <div class="embedded-stage">
+      <ToolSurface class="telegram-surface">
+        <template #toolbar>
+          <UiToolbar gap="sm" flush>
+            <UiIconButton icon="arrowLeft" label="后退" :disabled="!canGoBack" @click="goBack" />
+            <UiIconButton icon="arrowRight" label="前进" :disabled="!canGoForward" @click="goForward" />
+            <UiIconButton icon="refresh" label="刷新页面" @click="reload" />
+            <span class="url-pill mono" :title="displayUrl">{{ displayUrl }}</span>
+            <span v-if="loading" class="loading-dot" aria-label="加载中" />
 
-        <UiAlert
-          v-else-if="!pageSrc"
-          class="pane-alert"
-          type="warning"
-          :closable="false"
-          show-icon
-          title="本地 Telegram 客户端未就绪"
-          :description="siteError || '正在启动本地站点…'"
-        />
+            <template #end>
+              <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
+              <UiIconButton
+                icon="info"
+                label="工具详情"
+                :active="inspectorOpen"
+                @click="openInspector"
+              />
+            </template>
+          </UiToolbar>
+        </template>
 
-        <UiAlert
-          v-else-if="originNotice && !originNoticeDismissed"
-          class="pane-alert"
-          type="warning"
-          show-icon
-          title="本地站点端口已变化：页面登录态已重置"
-          :description="originNotice"
-          @close="originNoticeDismissed = true"
-        />
+        <div class="browser-stage">
+          <UiAlert
+            v-if="initError"
+            class="pane-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="后端未就绪"
+            :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
+          />
+          <UiAlert
+            v-else-if="!isElectron"
+            class="pane-alert"
+            type="info"
+            :closable="false"
+            show-icon
+            title="网页预览不支持内嵌 Telegram"
+            description="请使用 everydaytool 桌面端打开本工具。"
+          />
+          <UiAlert
+            v-else-if="!pageSrc"
+            class="pane-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="本地 Telegram 客户端未就绪"
+            :description="siteError || '正在启动本地站点…'"
+          />
+          <UiAlert
+            v-else-if="originNotice && !originNoticeDismissed"
+            class="pane-alert"
+            type="warning"
+            show-icon
+            title="本地站点端口已变化：页面登录态已重置"
+            :description="originNotice"
+            @close="originNoticeDismissed = true"
+          />
 
-        <webview
-          v-if="isElectron && pageSrc"
-          :ref="bindWebview"
-          :partition="TELEGRAM_WEBVIEW_PARTITION"
-          :src="pageSrc"
-          class="telegram-webview"
-        />
+          <webview
+            v-if="isElectron && pageSrc"
+            :ref="bindWebview"
+            :partition="TELEGRAM_WEBVIEW_PARTITION"
+            :src="pageSrc"
+            class="telegram-webview"
+          />
 
-        <div v-if="loading && pageSrc && !loadError" class="browser-overlay">
-          <span class="muted">正在加载 Telegram…</span>
+          <div v-if="loading && pageSrc && !loadError" class="browser-overlay">
+            <span class="muted">正在加载 Telegram…</span>
+          </div>
+
+          <div v-if="loadError" class="browser-overlay is-error">
+            <span class="error-text">{{ loadError }}</span>
+            <UiGroup gap="sm">
+              <UiButton size="small" type="primary" @click="reload">
+                重试
+              </UiButton>
+              <UiButton size="small" @click="openInBrowser">
+                在系统浏览器打开
+              </UiButton>
+            </UiGroup>
+          </div>
         </div>
 
-        <div v-if="loadError" class="browser-overlay is-error">
-          <span class="error-text">{{ loadError }}</span>
-          <UiGroup gap="sm">
-            <UiButton size="small" type="primary" @click="reload">
-              重试
-            </UiButton>
-            <UiButton size="small" @click="openInBrowser">
-              在系统浏览器打开
-            </UiButton>
-          </UiGroup>
-        </div>
-      </section>
+        <template #statusline>
+          <span>TELEGRAM LOCAL</span>
+          <span v-if="store.site?.port" class="mono">PORT {{ store.site.port }}</span>
+          <span v-if="pendingArchives > 0">{{ pendingArchives }} 个归档进行中</span>
+          <span class="status-spacer" />
+          <span>{{ inspectorOpen ? 'INSPECTOR ON' : 'WEBVIEW ONLY' }}</span>
+        </template>
+      </ToolSurface>
 
-      <aside class="side-pane">
-        <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
-        <div class="side-scroll">
-          <KeepAlive>
-            <component :is="activePanel" />
-          </KeepAlive>
+      <ToolSideInspector
+        :open="inspectorOpen"
+        :title="inspectorTitle"
+        :width="360"
+        @close="inspectorOpen = false"
+      >
+        <div class="inspector-content">
+          <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
+          <div class="side-scroll">
+            <KeepAlive>
+              <component :is="activePanel" />
+            </KeepAlive>
+          </div>
         </div>
-      </aside>
+      </ToolSideInspector>
     </div>
   </div>
 </template>
@@ -308,13 +377,20 @@ onUnmounted(() => {
 .telegram-page {
   display: flex;
   flex-direction: column;
-  padding: 0;
+  padding: 0 18px 18px;
   overflow: hidden;
 }
 
-.topbar {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--color-border-light);
+.embedded-stage {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.telegram-surface {
+  min-width: 0;
+  min-height: 0;
 }
 
 .url-pill {
@@ -351,29 +427,18 @@ onUnmounted(() => {
   }
 }
 
-.page-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 460px;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-}
-
-.browser-pane {
+.browser-stage {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  min-width: 0;
   min-height: 0;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  background: var(--color-raised);
   overflow: hidden;
 }
 
 .pane-alert {
-  margin: var(--spacing-md);
+  flex: none;
+  margin: 12px;
 }
 
 .telegram-webview {
@@ -408,25 +473,22 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-.side-pane {
+.inspector-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  min-width: 0;
+  height: 100%;
   min-height: 0;
+  gap: var(--spacing-sm);
 }
 
 .side-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 var(--spacing-xs) var(--spacing-sm) 0;
+  padding-right: 2px;
 }
 
-@media (max-width: 1080px) {
-  .page-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(280px, 55%) minmax(0, 1fr);
-  }
+.status-spacer {
+  flex: 1;
 }
 </style>

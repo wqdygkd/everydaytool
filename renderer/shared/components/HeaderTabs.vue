@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--spacing-xs);
   width: max-content;
-  height: 34px;
+  height: 32px;
   -webkit-app-region: no-drag;
   user-select: none;
 
@@ -591,8 +591,9 @@ onBeforeUnmount(() => {
   align-items: center;
   flex: none;
   gap: 6px;
-  height: 34px;
-  padding: 0 13px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -608,7 +609,8 @@ onBeforeUnmount(() => {
   /* 选中 = 品牌色淡底 + 中性黑标签：亮档蓝当 12px 文字只有 3.31:1，
      所以强调色只负责「哪一格」，可读性交给中性文本 */
   &.is-active {
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 17%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 9%, transparent);
     color: var(--color-text-primary);
   }
 
@@ -632,8 +634,8 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     padding: 0;
     border: none;
     border-radius: 999px;
@@ -669,10 +671,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 13px;
+  height: 32px;
+  padding: 0 11px;
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: var(--color-raised);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 17%, transparent);
   color: var(--color-text-secondary);
   box-shadow: var(--shadow-md);
   font-size: var(--font-size-sm);
@@ -684,7 +688,7 @@ onBeforeUnmount(() => {
   will-change: transform;
 
   &.is-active {
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 9%, transparent);
     color: var(--color-text-primary);
   }
 

@@ -65,33 +65,26 @@ function headersText(headers?: Record<string, string>): string {
 </script>
 
 <template>
-  <UiPanel>
-    <template #title>
-      <UiGroup gap="xs">
-        <span>流量</span>
-        <UiChip mono>
-          {{ store.traffic.length }}
-        </UiChip>
-      </UiGroup>
-    </template>
-    <template #actions>
-      <UiGroup gap="sm">
-        <UiInput v-model="filter" class="ctl-md" placeholder="按 URL 过滤" clearable size="small" />
-        <UiButton size="small" :disabled="!store.traffic.length" @click="clearAll">
-          清空
-        </UiButton>
-      </UiGroup>
-    </template>
-    <UiHint>
-      只记录处理名单命中的请求（含规则改写 / Mock 短路）；内存保留最近 1000 条，body 超 64KB 截断。
-      「强制回源」是<strong>处理名单里每条自己的开关</strong>（默认开）：开了的 origin 响应会去掉缓存头，重复访问也会真的发请求；关掉则回到正常缓存。
-      条数仍可能比浏览器控制台少：<span class="mono">data:</span> / <span class="mono">blob:</span> /
-      <span class="mono">chrome-extension:</span> 不走代理，其它 origin 不在名单里也不记录。
-    </UiHint>
+  <div class="traffic-pane">
+    <header class="traffic-toolbar">
+      <UiSearchInput
+        v-model="filter"
+        variant="box"
+        placeholder="按 URL 过滤"
+        clearable
+        class="traffic-search"
+      />
+      <span class="traffic-count">{{ filteredTraffic.length }} / {{ store.traffic.length }} 条</span>
+      <span class="toolbar-spacer" />
+      <UiButton size="small" :disabled="!store.traffic.length" @click="clearAll">
+        清空
+      </UiButton>
+    </header>
 
     <UiTable
+      class="traffic-table"
       :data="filteredTraffic"
-      height="460"
+      height="100%"
       empty-text="暂无流量：只有命中处理名单的请求才会记录（未命中按透传处理）。先确认目标 origin 已在名单里、且浏览器已挂上代理"
       row-clickable
       @row-click="openDetail"
@@ -155,7 +148,11 @@ function headersText(headers?: Record<string, string>): string {
         </template>
       </UiTableColumn>
     </UiTable>
-  </UiPanel>
+    <footer class="traffic-footnote">
+      <span>只记录命中处理名单的请求；内存保留最近 1000 条，body 超 64KB 截断。</span>
+      <span class="mono">data: / blob: / chrome-extension: 不走代理</span>
+    </footer>
+  </div>
 
   <UiDialog v-model="detailVisible" title="流量详情" width="min(860px, 94vw)" destroy-on-close>
     <UiGroup v-if="detail" direction="column" gap="sm">
@@ -258,6 +255,64 @@ function headersText(headers?: Record<string, string>): string {
 </template>
 
 <style scoped>
+.traffic-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.traffic-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 0 0 48px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.traffic-search {
+  width: 280px;
+}
+
+.traffic-count {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.traffic-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.traffic-table :deep(.ui-table-wrap) {
+  height: 100%;
+  border-radius: 0;
+}
+
+.traffic-footnote {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex: 0 0 31px;
+  height: 31px;
+  padding: 0 14px;
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+
+  .mono {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+}
+
 .url-cell {
   font-size: var(--font-size-sm);
 }

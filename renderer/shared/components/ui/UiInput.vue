@@ -45,11 +45,11 @@ const value = computed({
   min-width: 0;
   padding: 0 11px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-field);
   color: var(--color-text-primary);
   font-family: inherit;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 
   &.is-small {
@@ -67,8 +67,8 @@ const value = computed({
 
   &:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary) inset;
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
 
   &:disabled {

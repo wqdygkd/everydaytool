@@ -8,6 +8,9 @@ import { registerTabCloseGuard } from '@renderer/shared/composables/useTabCloseG
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { toast } from 'vue-sonner'
+import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
+import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
+import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { WB2API_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import {
   buildWb2apiAnthropicBaseUrl,
@@ -33,6 +36,17 @@ const cancelling = ref(false)
 const cancelRequested = ref(false)
 const progress = ref<Wb2apiProgressEvent | null>(null)
 const apiKeyVisible = ref(false)
+const inspectorOpen = ref(false)
+type InspectorTab = 'run' | 'install' | 'diagnostics'
+const inspectorTab = ref<InspectorTab>('run')
+const inspectorMenu = [
+  { value: 'run', label: '运行' },
+  { value: 'install', label: '安装' },
+  { value: 'diagnostics', label: '诊断' },
+]
+const inspectorTitle = computed(() =>
+  inspectorMenu.find(tab => tab.value === inspectorTab.value)?.label ?? '运行',
+)
 
 // 检查更新的结果缓存在主进程（state.update）：重开页签 / 刷新都在，渲染层不再自留一份副本。
 // 已安装版本来自 manifest（state.version），与检查结果里的 currentVersion 同源现算。
@@ -248,6 +262,12 @@ const progressText = computed(() => {
   return p.message || p.error || p.phase
 })
 
+const progressPercent = computed(() => {
+  const p = progress.value
+  if (!p || p.phase !== 'download' || p.totalBytes <= 0) return null
+  return Math.min(100, Math.max(0, Math.round((p.downloadedBytes / p.totalBytes) * 100)))
+})
+
 /**
  * 取消只在下载阶段开放：校验 / 解压 / 晋升不可中断，这几段继续显示按钮只会骗人。
  * 判据不看 loading —— 下载期间 INSTALL 调用还没返回，loading 恒为 true。
@@ -256,19 +276,38 @@ const canCancelDownload = computed(() =>
   state.value?.updating === true && progress.value?.phase === 'download',
 )
 
+function openInspector(tab: InspectorTab = 'run') {
+  inspectorTab.value = tab
+  inspectorOpen.value = true
+}
+
+function selectInspectorTab(value: string) {
+  if (value === 'run' || value === 'install' || value === 'diagnostics') {
+    inspectorTab.value = value
+  }
+}
+
+function openPanelInBrowser() {
+  if (panelSrc.value) openExternal(panelSrc.value)
+}
+
 let offState: (() => void) | null = null
 let offProgress: (() => void) | null = null
 let unguard: (() => void) | null = null
 
 onMounted(() => {
   if (!channels.value) return
-  void refresh()
   offState = onWb2apiIpc(channels.value.EVENT_STATE, (payload) => {
     applyState(payload as Wb2apiPanelState)
   })
   offProgress = onWb2apiIpc(channels.value.EVENT_PROGRESS, (payload) => {
     progress.value = payload as Wb2apiProgressEvent
   })
+  void invokeWb2apiIpc(channels.value.RUNTIME_ACTIVATE)
+    .then(() => refresh())
+    .catch((error: unknown) => {
+      toast.error(error instanceof Error ? error.message : String(error))
+    })
 
   // 关页签 = 停服务（可短确认）
   unguard = registerTabCloseGuard(WB2API_TOOL_ID, async () => {
@@ -301,172 +340,286 @@ onUnmounted(() => {
   offState?.()
   offProgress?.()
   unguard?.()
+  const shouldStop = isRunning.value || state.value?.updating === true
+  if (shouldStop && channels.value) {
+    void invokeWb2apiIpc(channels.value.STOP).catch(() => undefined)
+  }
+  if (channels.value) {
+    void invokeWb2apiIpc(channels.value.RUNTIME_DEACTIVATE).catch(() => undefined)
+  }
 })
 </script>
 
 <template>
   <div class="tool-page wb2api-page">
-    <div class="wb2api-layout">
-      <section class="wb2api-main">
-        <webview
-          v-if="showWebview && panelSrc"
-          class="wb2api-webview"
-          :src="panelSrc"
-          :partition="WB2API_WEBVIEW_PARTITION"
-          allowpopups
-        />
-        <UiEmpty
+    <WorkspaceHeader
+      icon="wb2api"
+      title="WorkBuddy2API"
+      description="内嵌上游管理面板；安装、启停与诊断按需展开"
+      :status-label="statusLabel"
+      :status-tone="statusTone"
+    >
+      <template #actions>
+        <UiButton size="small" @click="openInspector('run')">
+          运行详情
+        </UiButton>
+        <UiButton
+          v-if="!isRunning"
+          size="small"
+          type="primary"
+          :disabled="busy || !installed || state?.orphanLikely"
+          @click="onStart"
+        >
+          启动
+        </UiButton>
+        <UiButton
           v-else
-          class="wb2api-empty"
-          center
-          icon="wb2api"
-          :text="emptyText"
-        />
-      </section>
+          size="small"
+          type="warning"
+          plain
+          :disabled="busy"
+          @click="onStop"
+        >
+          停止
+        </UiButton>
+      </template>
+    </WorkspaceHeader>
 
-      <aside class="wb2api-ops">
-        <UiPanel title="状态" padding="var(--spacing-md)">
-          <template #actions>
-            <UiButton size="small" text :disabled="loading" @click="refresh">
-              刷新
-            </UiButton>
-          </template>
-          <div class="wb2api-status-row">
+    <div class="wb2api-layout">
+      <ToolSurface class="wb2api-surface">
+        <template #toolbar>
+          <UiToolbar gap="sm" flush>
             <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
             <span class="wb2api-status-label">{{ statusLabel }}</span>
-            <div class="wb2api-status-actions">
-              <!-- 三个动作互斥：未运行只给「启动」，运行中（含 unhealthy）只给「停止 / 重启」 -->
-              <UiButton
-                v-if="!isRunning"
-                size="small"
-                type="primary"
-                :disabled="busy || !installed || state?.orphanLikely"
-                @click="onStart"
-              >
-                启动
+            <UiChip v-if="state?.version" mono>
+              v{{ state.version }}
+            </UiChip>
+            <UiChip v-if="state?.orphanLikely" tone="warning">
+              端口被外部进程占用
+            </UiChip>
+            <template #end>
+              <UiIconButton icon="refresh" label="刷新状态" :disabled="loading" @click="refresh" />
+              <UiIconButton icon="external" label="在浏览器打开面板" :disabled="!panelSrc" @click="openPanelInBrowser" />
+              <UiIconButton icon="info" label="运行详情" :active="inspectorOpen" @click="openInspector('run')" />
+            </template>
+          </UiToolbar>
+        </template>
+
+        <div class="wb2api-stage">
+          <UiAlert
+            v-if="state?.orphanLikely"
+            class="wb2api-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="端口被非本工具托管的进程占用"
+            description="可以结束占用进程后重试，工具不会接管外部服务。"
+          />
+          <UiAlert
+            v-else-if="state?.lastError && !showWebview"
+            class="wb2api-alert"
+            type="error"
+            :closable="false"
+            show-icon
+            title="服务启动失败"
+            :description="state.lastError"
+          />
+
+          <webview
+            v-if="showWebview && panelSrc"
+            class="wb2api-webview"
+            :src="panelSrc"
+            :partition="WB2API_WEBVIEW_PARTITION"
+            allowpopups
+          />
+          <UiEmpty
+            v-else
+            class="wb2api-empty"
+            center
+            icon="wb2api"
+            :text="emptyText"
+          >
+            <template #actions>
+              <UiButton size="small" @click="openInspector(installed ? 'run' : 'install')">
+                {{ installed ? '查看运行详情' : '安装上游二进制' }}
               </UiButton>
-              <template v-if="isRunning">
-                <UiButton size="small" :disabled="busy" @click="onStop">
-                  停止
+            </template>
+          </UiEmpty>
+        </div>
+
+        <template #statusline>
+          <span>WORKBUDDY2API</span>
+          <span class="mono">127.0.0.1:{{ endpointPort }}</span>
+          <span v-if="state?.version">v{{ state.version }}</span>
+          <span class="status-spacer" />
+          <span>{{ isRunning ? 'SERVICE RUNNING' : 'SERVICE STOPPED' }}</span>
+        </template>
+      </ToolSurface>
+
+      <ToolSideInspector
+        :open="inspectorOpen"
+        :title="inspectorTitle"
+        :width="360"
+        body-padding="12px"
+        @close="inspectorOpen = false"
+      >
+        <div class="inspector-content">
+          <UiMenuHorizontal
+            :model-value="inspectorTab"
+            :items="inspectorMenu"
+            @update:model-value="selectInspectorTab"
+          />
+
+          <div class="side-scroll">
+            <div v-if="inspectorTab === 'run'" class="inspector-sections">
+              <section class="inspector-section">
+                <header class="inspector-section-head">
+                  <div>
+                    <strong>服务状态</strong>
+                    <span>{{ statusLabel }}</span>
+                  </div>
+                  <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
+                </header>
+                <div class="inspector-actions">
+                  <UiButton
+                    v-if="!isRunning"
+                    size="small"
+                    type="primary"
+                    :disabled="busy || !installed || state?.orphanLikely"
+                    @click="onStart"
+                  >
+                    启动
+                  </UiButton>
+                  <template v-else>
+                    <UiButton size="small" :disabled="busy" @click="onStop">
+                      停止
+                    </UiButton>
+                    <UiButton size="small" :disabled="busy || !installed" @click="onRestart">
+                      重启
+                    </UiButton>
+                  </template>
+                  <UiButton v-if="state?.orphanLikely" size="small" type="warning" :disabled="busy" @click="onKillOrphan">
+                    结束占用
+                  </UiButton>
+                </div>
+                <UiKeyValue label="版本" mono label-width="74px">
+                  {{ state?.version ?? '—' }}
+                </UiKeyValue>
+                <UiKeyValue class="wb2api-kv-inline" label="面板" mono label-width="74px">
+                  <span class="wb2api-endpoint" :title="panelUrl">{{ panelUrl }}</span>
+                  <template #actions>
+                    <UiCopyButton :text="panelUrl" label="面板地址" />
+                  </template>
+                </UiKeyValue>
+                <UiKeyValue class="wb2api-kv-inline" label="OpenAI" mono label-width="74px">
+                  <span class="wb2api-endpoint" :title="openAiBaseUrl">{{ openAiBaseUrl }}</span>
+                  <template #actions>
+                    <UiCopyButton :text="openAiBaseUrl" label="OpenAI Base URL" />
+                  </template>
+                </UiKeyValue>
+                <UiKeyValue class="wb2api-kv-inline" label="Anthropic" mono label-width="74px">
+                  <span class="wb2api-endpoint" :title="anthropicBaseUrl">{{ anthropicBaseUrl }}</span>
+                  <template #actions>
+                    <UiCopyButton :text="anthropicBaseUrl" label="Anthropic Base URL" />
+                  </template>
+                </UiKeyValue>
+                <UiKeyValue class="wb2api-kv-inline" label="API Key" mono label-width="74px">
+                  <span class="wb2api-api-key" :title="apiKeyVisible ? (state?.apiKey ?? '') : ''">{{ apiKeyDisplay }}</span>
+                  <template v-if="state?.apiKey" #actions>
+                    <UiButton size="small" text @click="apiKeyVisible = !apiKeyVisible">
+                      {{ apiKeyVisible ? '隐藏' : '显示' }}
+                    </UiButton>
+                    <UiCopyButton :text="state.apiKey" label="API Key" />
+                  </template>
+                </UiKeyValue>
+              </section>
+            </div>
+
+            <div v-else-if="inspectorTab === 'install'" class="inspector-sections">
+              <section class="inspector-section">
+                <header class="inspector-section-head">
+                  <div>
+                    <strong>安装 / 更新</strong>
+                    <span>{{ state?.version ? `当前 v${state.version}` : '尚未安装' }}</span>
+                  </div>
+                </header>
+                <div class="inspector-actions">
+                  <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
+                    GitHub 安装
+                  </UiButton>
+                  <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
+                    本地 ZIP
+                  </UiButton>
+                </div>
+                <div class="inspector-actions">
+                  <UiButton size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
+                    检查更新
+                  </UiButton>
+                  <UiButton
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="busy || !installed || !updateInfo?.hasUpdate || state?.orphanLikely"
+                    @click="onApplyUpdate"
+                  >
+                    应用更新
+                  </UiButton>
+                  <UiButton
+                    v-if="canCancelDownload"
+                    size="small"
+                    :loading="cancelling"
+                    @click="onCancelDownload"
+                  >
+                    取消下载
+                  </UiButton>
+                </div>
+                <UiProgress
+                  v-if="progressPercent !== null"
+                  :percentage="progressPercent"
+                />
+                <UiHint v-if="updateInfo" block>
+                  最新 {{ updateInfo.latestTag }}
+                  <span v-if="updateInfo.hasUpdate">（可更新）</span>
+                  <span v-else>（已最新）</span>
+                </UiHint>
+                <UiHint v-if="progressText" block>
+                  {{ progressText }}
+                </UiHint>
+                <UiButton size="small" text @click="onOpenDataDir">
+                  打开数据目录
                 </UiButton>
-                <UiButton size="small" :disabled="busy || !installed" @click="onRestart">
-                  重启
+              </section>
+            </div>
+
+            <div v-else class="inspector-sections">
+              <section class="inspector-section">
+                <header class="inspector-section-head">
+                  <div>
+                    <strong>诊断</strong>
+                    <span>本机托管进程与最近错误</span>
+                  </div>
+                </header>
+                <UiHint block>
+                  二进制不随 edt 安装包分发；打开页签不会自动启动，切换工具、返回首页或关闭页签都会停止服务。
+                </UiHint>
+                <UiHint v-if="state?.orphanLikely" block>
+                  端口被其它进程占用。工具可以结束它，但不会接管。
+                </UiHint>
+                <div v-if="state?.lastError" class="wb2api-diagnostic-error">
+                  <span>最近错误</span>
+                  <pre class="mono">{{ state.lastError }}</pre>
+                </div>
+                <UiHint v-else block>
+                  暂无错误记录。
+                </UiHint>
+                <UiButton size="small" text @click="openUpstreamRepo">
+                  打开上游仓库
                 </UiButton>
-              </template>
+              </section>
             </div>
           </div>
-          <UiHint v-if="state?.orphanLikely" class="wb2api-hint">
-            检测到端口被其它进程占用（非本工具托管）。可结束占用，不会接管该进程。
-          </UiHint>
-          <UiButton
-            v-if="state?.orphanLikely"
-            class="full-width"
-            size="small"
-            type="warning"
-            :disabled="busy"
-            @click="onKillOrphan"
-          >
-            结束占用
-          </UiButton>
-          <UiKeyValue label="版本" mono label-width="72px">
-            {{ state?.version ?? '—' }}
-          </UiKeyValue>
-          <UiKeyValue class="wb2api-kv-inline" label="OpenAI" mono label-width="72px">
-            <span class="wb2api-endpoint" :title="openAiBaseUrl">{{ openAiBaseUrl }}</span>
-            <template #actions>
-              <UiCopyButton :text="openAiBaseUrl" label="OpenAI Base URL" />
-            </template>
-          </UiKeyValue>
-          <UiKeyValue class="wb2api-kv-inline" label="Anthropic" mono label-width="72px">
-            <span class="wb2api-endpoint" :title="anthropicBaseUrl">{{ anthropicBaseUrl }}</span>
-            <template #actions>
-              <UiCopyButton :text="anthropicBaseUrl" label="Anthropic Base URL" />
-            </template>
-          </UiKeyValue>
-          <UiKeyValue class="wb2api-kv-inline" label="面板" mono label-width="72px">
-            <span class="wb2api-endpoint" :title="panelUrl">{{ panelUrl }}</span>
-            <template #actions>
-              <UiCopyButton :text="panelUrl" label="面板地址" />
-            </template>
-          </UiKeyValue>
-          <UiKeyValue class="wb2api-kv-inline" label="API Key" mono label-width="72px">
-            <span class="wb2api-api-key" :title="apiKeyVisible ? (state?.apiKey ?? '') : ''">{{ apiKeyDisplay }}</span>
-            <template v-if="state?.apiKey" #actions>
-              <UiButton size="small" text @click="apiKeyVisible = !apiKeyVisible">
-                {{ apiKeyVisible ? '隐藏' : '显示' }}
-              </UiButton>
-              <UiCopyButton :text="state.apiKey" label="API Key" />
-            </template>
-          </UiKeyValue>
-        </UiPanel>
-
-        <UiPanel title="安装 / 更新" padding="var(--spacing-md)">
-          <!-- 已安装版本（来自 manifest）：不用点「检查更新」也知道当前装的是哪一版。
-               没装出这一行——否则标签「已安装」配值「未安装」会自相矛盾。 -->
-          <UiKeyValue v-if="state?.version" class="wb2api-installed" label="已安装" label-width="72px" mono muted>
-            {{ state.version }}
-          </UiKeyValue>
-          <div class="wb2api-actions">
-            <!-- 运行中 / 端口被占用时不允许换版本：旧二进制还在执行，Windows 下 current/ 换不掉 -->
-            <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
-              GitHub 安装
-            </UiButton>
-            <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
-              本地 ZIP
-            </UiButton>
-          </div>
-          <div class="wb2api-actions">
-            <!-- 检查 / 应用更新只对「已安装」开放（applyUpdate 在没有 current 时等于重装）；
-                 运行中只禁「检查更新」，用禁用态表达，不额外堆提示文案。 -->
-            <UiButton size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
-              检查更新
-            </UiButton>
-            <UiButton
-              size="small"
-              type="primary"
-              plain
-              :disabled="busy || !installed || !updateInfo?.hasUpdate || state?.orphanLikely"
-              @click="onApplyUpdate"
-            >
-              应用更新
-            </UiButton>
-            <UiButton
-              v-if="canCancelDownload"
-              size="small"
-              :loading="cancelling"
-              @click="onCancelDownload"
-            >
-              取消下载
-            </UiButton>
-          </div>
-          <UiHint v-if="updateInfo" class="wb2api-hint">
-            最新 {{ updateInfo.latestTag }}
-            <span v-if="updateInfo.hasUpdate">（可更新）</span>
-            <span v-else>（已最新）</span>
-          </UiHint>
-          <UiHint v-if="progressText" class="wb2api-hint">
-            {{ progressText }}
-          </UiHint>
-          <UiButton class="full-width" size="small" text @click="onOpenDataDir">
-            打开数据目录
-          </UiButton>
-        </UiPanel>
-
-        <UiPanel title="说明" padding="var(--spacing-md)">
-          <UiHint block>
-            本地托管上游
-            <a class="wb2api-link" :href="upstreamRepoUrl" @click.prevent="openUpstreamRepo">workbuddy2api-panel</a>。
-            二进制不随 edt 安装包分发，需从 GitHub 或本地 ZIP 装到数据目录；打开页签不会自动启动，关闭页签会停止服务。
-            启动时强制只监听 127.0.0.1 并关闭上游自更新；账号与配置在本机 run/，换版本不丢。
-          </UiHint>
-        </UiPanel>
-
-        <UiPanel v-if="state?.lastError" title="最近错误" padding="var(--spacing-md)">
-          <p class="wb2api-error mono">
-            {{ state.lastError }}
-          </p>
-        </UiPanel>
-      </aside>
+        </div>
+      </ToolSideInspector>
     </div>
   </div>
 </template>
@@ -475,30 +628,36 @@ onUnmounted(() => {
 .wb2api-page {
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
-  padding: var(--spacing-md);
-  box-sizing: border-box;
+  padding: 0 18px 18px;
+  overflow: hidden;
 }
 
 .wb2api-layout {
   display: flex;
   flex: 1;
+  gap: 12px;
   min-height: 0;
-  gap: var(--spacing-md);
 }
 
-.wb2api-main {
-  flex: 1;
+.wb2api-surface {
   min-width: 0;
   min-height: 0;
+}
+
+.wb2api-stage {
+  position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  min-height: 0;
   overflow: hidden;
-  background: var(--color-raised);
-  backdrop-filter: var(--glass-raised);
+  background: color-mix(in srgb, var(--color-fill) 24%, transparent);
+}
+
+.wb2api-alert {
+  flex: none;
+  margin: 12px;
 }
 
 .wb2api-webview {
@@ -512,48 +671,77 @@ onUnmounted(() => {
 .wb2api-empty {
   flex: 1;
   justify-content: center;
-}
-
-.wb2api-ops {
-  width: 380px;
-  flex-shrink: 0;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.wb2api-status-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-.wb2api-status-actions {
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
+  padding: 28px;
 }
 
 .wb2api-status-label {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
-.wb2api-actions {
+.inspector-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: var(--spacing-sm);
+}
+
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.inspector-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-light);
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+
+.inspector-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+
+  > div {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+  }
+}
+
+.inspector-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-/* 「已安装」行（UiKeyValue muted 无内边距）与提示行同构：统一与下一段拉开间距 */
-.wb2api-installed,
-.wb2api-hint {
-  margin-bottom: var(--spacing-sm);
 }
 
 .wb2api-kv-inline {
@@ -571,22 +759,31 @@ onUnmounted(() => {
   display: inline;
 }
 
-.wb2api-link {
-  /* 链接是文字：取墨档蓝（5.05:1），亮档只有 3.31:1 */
-  color: var(--color-primary-strong);
-  text-decoration: none;
-  cursor: pointer;
+.wb2api-diagnostic-error {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 24%, var(--color-border-light));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-error) 6%, transparent);
 
-  &:hover {
-    text-decoration: underline;
+  span {
+    color: var(--color-error);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
   }
 }
 
-.wb2api-error {
+.wb2api-diagnostic-error pre {
   margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-error);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.status-spacer {
+  flex: 1;
 }
 </style>

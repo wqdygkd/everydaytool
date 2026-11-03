@@ -90,7 +90,7 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
   }
 
   // 上次会话残留的 id（工具被移除 / 应用页改名）在此清理：页签必须能解析出名字与路由，
-  // 否则常驻挂载会去渲染一个不存在的组件。
+  // 否则用户点击页签时会落到不存在的组件。
   const validIds = openIds.value.filter(id => resolveTab(id) !== null)
   if (validIds.length !== openIds.value.length) {
     openIds.value = validIds

@@ -49,6 +49,7 @@ const resolvedVariant = computed<Exclude<ChipVariant, 'auto'>>(() => {
 
   display: inline-flex;
   align-items: center;
+  min-height: 20px;
   padding: 2px var(--spacing-sm);
   border: 1px solid var(--color-border-light);
   border-radius: 999px;

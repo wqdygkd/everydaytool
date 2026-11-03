@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDownIcon } from '@lucide/vue'
+import { CheckIcon, ChevronDownIcon } from '@lucide/vue'
 import {
   SelectContent,
   SelectIcon,
@@ -44,14 +44,30 @@ const emit = defineEmits<{
 
 const attrs = useAttrs()
 
-const selectedKey = computed(() =>
-  props.modelValue === undefined || props.modelValue === null || props.modelValue === ''
-    ? undefined
-    : String(props.modelValue),
-)
+// Reka 用空字符串表示「未选择」，不能作为 SelectItem.value。
+// 消费方确实需要空值选项时（如身份证的「随机全国」）在组件内核换成内部哨兵，
+// 对外仍只发射原始空字符串，占位符语义保持不变。
+const EMPTY_OPTION_VALUE = '__edt_select_empty__'
+
+const normalizedOptions = computed(() => props.options.map((option) => {
+  const value = String(option.value)
+  return {
+    ...option,
+    key: value === '' ? EMPTY_OPTION_VALUE : value,
+  }
+}))
+
+const hasEmptyOption = computed(() => props.options.some(option => String(option.value) === ''))
+
+const selectedKey = computed(() => {
+  if (props.modelValue === undefined || props.modelValue === null) return undefined
+  const value = String(props.modelValue)
+  if (value === '') return hasEmptyOption.value ? EMPTY_OPTION_VALUE : undefined
+  return value
+})
 
 function onUpdate(value: string) {
-  emit('update:modelValue', value)
+  emit('update:modelValue', value === EMPTY_OPTION_VALUE ? '' : value)
 }
 </script>
 
@@ -75,12 +91,17 @@ function onUpdate(value: string) {
       <SelectContent :side-offset="4" position="popper" class="ui-select-content">
         <SelectViewport class="ui-select-viewport">
           <SelectItem
-            v-for="option in options"
-            :key="String(option.value)"
-            :value="String(option.value)"
+            v-for="option in normalizedOptions"
+            :key="option.key"
+            :value="option.key"
             class="ui-select-item"
           >
-            <SelectItemText>{{ option.label }}</SelectItemText>
+            <span class="ui-select-check" aria-hidden="true">
+              <CheckIcon :size="13" />
+            </span>
+            <SelectItemText class="ui-select-option-label">
+              {{ option.label }}
+            </SelectItemText>
           </SelectItem>
         </SelectViewport>
       </SelectContent>
@@ -100,18 +121,28 @@ function onUpdate(value: string) {
   min-width: 0;
   padding: 0 11px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--color-field);
   color: var(--color-text-primary);
   font-family: inherit;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   cursor: pointer;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 
   &:focus-visible {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary) inset;
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+
+  &:hover:not(:disabled, [data-disabled]) {
+    border-color: var(--color-border);
+    background: color-mix(in srgb, var(--color-field) 82%, var(--color-on-solid));
+  }
+
+  &[data-state='open'] {
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
 
   &[data-disabled],
@@ -124,6 +155,10 @@ function onUpdate(value: string) {
   &.is-small {
     height: 24px;
     font-size: var(--font-size-sm);
+  }
+
+  &[data-state='open'] .ui-select-caret {
+    transform: rotate(180deg);
   }
 }
 
@@ -142,50 +177,97 @@ function onUpdate(value: string) {
 .ui-select-caret {
   flex: none;
   color: var(--color-text-tertiary);
+  transition: transform var(--transition-fast);
 }
 
-/* 浮层:pop 角色(bg-pop)+ 阴影,popper 定位由 reka 处理 */
-.ui-select-content {
-  z-index: 2000;
-  min-width: var(--reka-select-trigger-width);
-  max-height: 320px;
+/* SelectContent 由 Reka Portal 到 body，拿不到 SFC scopeId；
+   pop 表面必须用 global 选择器，否则会退化成透明无边框的裸列表。 */
+:global(.ui-select-content) {
+  z-index: 2100;
+  width: max(var(--reka-select-trigger-width), 220px);
+  max-width: min(360px, var(--reka-select-content-available-width));
+  max-height: min(320px, var(--reka-select-content-available-height));
   overflow: hidden;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-lg);
   background: var(--color-pop);
+  backdrop-filter: var(--glass-pop);
   box-shadow: var(--shadow-md);
+  overscroll-behavior: contain;
 }
 
-.ui-select-viewport {
-  max-height: 304px;
-  padding: var(--spacing-xs);
+:global(.ui-select-viewport) {
+  padding: 5px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .ui-select-item {
   display: flex;
   align-items: center;
-  padding: 7px 10px;
-  border-radius: var(--radius-xs);
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px 7px 8px;
+  border-radius: 7px;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-control);
   cursor: pointer;
   outline: none;
   user-select: none;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+
+  /* Listbox 的可键盘焦点由 data-highlighted 底色表达；
+     全局 [role=option]:focus-visible 的按钮式外环会让下拉项像第二个输入框。 */
+  &:focus-visible {
+    box-shadow: none;
+  }
 
   &[data-highlighted] {
     background: var(--color-fill);
   }
 
   &[data-state='checked'] {
-    color: var(--color-primary-strong);
+    background: var(--color-primary-soft);
+    color: var(--color-text-primary);
     font-weight: var(--font-weight-medium);
+  }
+
+  &[data-state='checked'][data-highlighted] {
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
   }
 
   &[data-disabled] {
     color: var(--color-text-tertiary);
     cursor: not-allowed;
   }
+}
+
+.ui-select-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--color-primary-strong);
+  opacity: 0;
+  transform: scale(0.82);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.ui-select-item[data-state='checked'] .ui-select-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ui-select-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

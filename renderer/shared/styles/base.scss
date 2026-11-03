@@ -108,16 +108,20 @@ textarea,
 button:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-.ui-button:focus-visible {
+.ui-button:focus-visible,
+[role='button']:focus-visible,
+[role='tab']:focus-visible,
+[role='option']:focus-visible {
   outline: none;
   box-shadow: var(--shadow-focus);
 }
 
 ::selection {
-  background: var(--color-primary-light);
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  color: var(--color-text-primary);
 }
 
-/* telegram 细滚动条：透明轨道 + 细圆角拇指(rgba(90,90,90,.3)) */
+/* 桌面端细滚动条：透明轨道 + 中性圆角拇指；夜色下自动换成可读的冷灰。 */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -128,14 +132,18 @@ select:focus-visible,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(90, 90, 90, 0.3);
+  background: color-mix(in srgb, var(--color-text-tertiary) 34%, transparent);
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
 
   &:hover {
-    background-color: rgba(90, 90, 90, 0.45);
+    background-color: color-mix(in srgb, var(--color-text-secondary) 52%, transparent);
   }
+}
+
+html.is-night {
+  accent-color: var(--color-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -76,27 +76,30 @@ function onEsc() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  height: 42px;
-  padding: 0 var(--spacing-lg);
-  border-radius: var(--radius-control);
+  height: 54px;
+  padding: 0 17px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-lg);
   background: var(--color-input);
   /* 玻璃：搜索框直接浮在画布上（没有卡片兜底），背后就是壁纸，
        故走 input 角色自己的玻璃档，不与卡片共用模糊半径 */
   backdrop-filter: var(--glass-input);
-  box-shadow: 0 0 0 2px var(--color-border-light) inset;
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 
   &:hover {
-    box-shadow: 0 0 0 2px var(--color-border) inset;
+    border-color: var(--color-border);
   }
 
   &:focus-within {
-    box-shadow: 0 0 0 2px var(--color-primary) inset;
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
 }
 
 /* 图标色与全站输入框一致 */
 .ui-search-pill > :first-child {
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   flex: none;
 }
 
@@ -107,15 +110,15 @@ function onEsc() {
   height: var(--control-height);
   padding: 0 var(--spacing-md);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-control);
   background: var(--color-input);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 
   &:hover { border-color: color-mix(in oklab, var(--color-border) 60%, var(--color-text-tertiary)); }
 
   &:focus-within {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 1px var(--color-primary) inset;
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
   }
 }
 
@@ -133,7 +136,7 @@ input {
   background: transparent;
   color: var(--color-text-primary);
   font-family: inherit;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
 
   &::placeholder { color: var(--color-text-tertiary); }
 }

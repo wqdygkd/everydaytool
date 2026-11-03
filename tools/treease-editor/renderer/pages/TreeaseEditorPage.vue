@@ -3,6 +3,8 @@ import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus 
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { toast } from 'vue-sonner'
+import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
+import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { getTreeaseEditorApi } from '../ipc'
@@ -89,6 +91,17 @@ const webviewRef = ref<HTMLElement | null>(null)
 
 let currentWebContentsId: number | null = null
 let offLog: (() => void) | null = null
+
+const statusLabel = computed(() => {
+  if (attached.value) {
+    return `拦截中 · ${ruleCount.value} 个接口${hits.value > 0 ? ` · 命中 ${hits.value}` : ''}`
+  }
+  return isOnline.value ? '未拦截' : '离线 · 缓存模式'
+})
+const statusTone = computed<'neutral' | 'success' | 'warning'>(() => {
+  if (attached.value) return 'success'
+  return isOnline.value ? 'neutral' : 'warning'
+})
 
 function parseValue(text: string): unknown {
   const trimmed = text.trim()
@@ -382,19 +395,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="treease-page">
-    <UiToolbar bordered surface gap="sm" padding="8px 12px">
-      <span class="muted toolbar-src">{{ SRC }}</span>
-      <template #end>
-        <UiChip v-if="attached" tone="success" variant="soft">
-          拦截中 · {{ ruleCount }} 个接口{{ hits > 0 ? ` · 命中 ${hits} 次` : '' }}
-        </UiChip>
-        <UiChip v-else tone="info" variant="soft">
-          未拦截
-        </UiChip>
-        <UiChip v-if="!isOnline" tone="warning" variant="soft">
-          离线 · 缓存模式
-        </UiChip>
+  <div class="treease-page tool-page">
+    <WorkspaceHeader
+      icon="treease"
+      title="Treease 编辑器"
+      description="内嵌编辑器，按接口规则实时改写或屏蔽响应"
+      :status-label="statusLabel"
+      :status-tone="statusTone"
+    >
+      <template #actions>
         <UiButton size="small" :disabled="!isElectron" @click="showDialog = true">
           拦截设置
         </UiButton>
@@ -402,25 +411,47 @@ onUnmounted(() => {
           刷新
         </UiButton>
       </template>
-    </UiToolbar>
-    <div class="treease-body">
-      <webview
-        v-if="isElectron"
-        ref="webviewRef"
-        :src="SRC"
-        :partition="TREEASE_WEBVIEW_PARTITION"
-        allowpopups
-        class="tool-frame"
-        @dom-ready="handleWebviewReady"
-      />
-      <iframe
-        v-else
-        id="treease-frame"
-        :src="SRC"
-        class="tool-frame"
-        allow="fullscreen; clipboard-read; clipboard-write"
-      />
-    </div>
+    </WorkspaceHeader>
+
+    <ToolSurface class="treease-surface">
+      <template #toolbar>
+        <UiToolbar gap="sm" flush>
+          <span class="toolbar-src mono">{{ SRC }}</span>
+          <UiChip v-if="!isOnline" tone="warning" variant="soft">
+            离线 · 缓存模式
+          </UiChip>
+          <template #end>
+            <span class="toolbar-hint">规则由子路由与配置层恢复，页面关闭即释放</span>
+          </template>
+        </UiToolbar>
+      </template>
+
+      <div class="treease-body">
+        <webview
+          v-if="isElectron"
+          ref="webviewRef"
+          :src="SRC"
+          :partition="TREEASE_WEBVIEW_PARTITION"
+          allowpopups
+          class="tool-frame"
+          @dom-ready="handleWebviewReady"
+        />
+        <iframe
+          v-else
+          id="treease-frame"
+          :src="SRC"
+          class="tool-frame"
+          allow="fullscreen; clipboard-read; clipboard-write"
+        />
+      </div>
+
+      <template #statusline>
+        <span>TREEASE EDITOR</span>
+        <span v-if="attached" class="mono">{{ ruleCount }} RULES · {{ hits }} HITS</span>
+        <span class="status-spacer" />
+        <span>{{ isOnline ? 'ONLINE' : 'CACHE ONLY' }}</span>
+      </template>
+    </ToolSurface>
 
     <UiDialog v-model="showDialog" title="接口响应拦截" width="680px" destroy-on-close>
       <UiAlert
@@ -517,22 +548,35 @@ onUnmounted(() => {
 .treease-page {
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-height: 0;
-  background: var(--color-raised);
+  padding: 0 18px 18px;
+  overflow: hidden;
+}
+
+.treease-surface {
+  min-height: 0;
 }
 
 .toolbar-src {
-  font-size: var(--font-size-sm);
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.toolbar-hint {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
 .treease-body {
+  display: flex;
   flex: 1;
   min-height: 0;
-  display: flex;
 }
 
 .tool-frame {
@@ -541,6 +585,11 @@ onUnmounted(() => {
   min-height: 0;
   width: 100%;
   border: 0;
+  background: var(--color-on-solid);
+}
+
+.status-spacer {
+  flex: 1;
 }
 
 .intercept-alert {

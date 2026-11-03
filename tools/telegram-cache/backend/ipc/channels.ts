@@ -4,6 +4,8 @@ import { TELEGRAM_ARCHIVE_LIBRARY_EVENT_CHANNEL } from '../../../../shared/teleg
 
 export const TELEGRAM_CACHE_IPC_CHANNELS = {
   // 状态 / 配置
+  RUNTIME_ACTIVATE: 'telegram-cache:runtime:activate',
+  RUNTIME_DEACTIVATE: 'telegram-cache:runtime:deactivate',
   SNAPSHOT_GET: 'telegram-cache:snapshot:get',
   CONFIG_SET: 'telegram-cache:config:set',
   OBSERVATION_SET_ENABLED: 'telegram-cache:observation:set-enabled',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 通用按钮内核：原生 button。几何与状态色统一走设计令牌；
-// 主钮为 Aurora 渐变底 + 光晕。
+// 通用按钮内核：原生 button。几何与状态色统一走设计令牌。
+// 主按钮只承担当前工具的主要前进动作：墨蓝实底、白字、无渐变、无彩色光晕。
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
@@ -54,9 +54,9 @@ const isDisabled = computed(() => props.disabled || props.loading)
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xs);
-  border: 1px solid color-mix(in oklab, var(--color-border) 65%, transparent);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: color-mix(in oklab, var(--color-button) 80%, transparent);
+  background: var(--color-button);
   color: var(--color-text-primary);
   font-family: inherit;
   font-weight: var(--font-weight-medium);
@@ -64,8 +64,8 @@ const isDisabled = computed(() => props.disabled || props.loading)
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
 
   &.is-small { height: 24px; padding: 0 11px; font-size: var(--font-size-sm); }
-  &.is-default { height: var(--control-height); padding: 0 15px; font-size: var(--font-size-base); }
-  &.is-large { height: 40px; padding: 0 19px; font-size: var(--font-size-base); }
+  &.is-default { height: var(--control-height); padding: 0 13px; font-size: var(--font-size-sm); }
+  &.is-large { height: 38px; padding: 0 16px; font-size: var(--font-size-base); }
 
   &:hover:not(:disabled) {
     background: var(--color-button);
@@ -123,10 +123,8 @@ const isDisabled = computed(() => props.disabled || props.loading)
 
   &.is-primary:not(.is-text):not(.is-link) {
     background: var(--color-primary-strong);
-    background-image: linear-gradient(135deg, color-mix(in oklab, var(--color-primary-strong) 78%, #4d8dff) 0%, var(--color-primary-strong) 100%);
     border-color: var(--color-primary-strong);
     color: var(--color-on-solid);
-    box-shadow: 0 4px 14px rgba(88, 145, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 
     &:hover:not(:disabled) { background: color-mix(in oklab, var(--color-primary-strong) 86%, #000); }
     &:active:not(:disabled) { background: color-mix(in oklab, var(--color-primary-strong) 74%, #000); }

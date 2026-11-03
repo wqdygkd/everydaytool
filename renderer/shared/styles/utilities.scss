@@ -16,6 +16,22 @@
   color: var(--color-text-secondary);
 }
 
+/* 单行截断 / 两行截断：文本容器必须先具备可收缩宽度（flex 子项配 min-width: 0）。 */
+.text-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-clamp-2 {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 /* 等宽数字字体 */
 .mono {
   font-family: var(--font-mono);

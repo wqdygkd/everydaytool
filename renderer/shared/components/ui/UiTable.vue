@@ -199,13 +199,14 @@ th {
   padding: var(--spacing-xs) 12px;
   background: var(--color-fill);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   text-align: left;
   line-height: var(--line-height-control);
 }
 
 td {
+  height: 42px;
   padding: var(--spacing-xs) 12px;
   background: var(--color-table);
   color: var(--color-text-primary);
@@ -215,6 +216,11 @@ td {
 
 tbody tr:hover td {
   background: var(--color-fill);
+}
+
+tbody tr.is-selected td,
+tbody tr[aria-selected='true'] td {
+  background: color-mix(in srgb, var(--color-primary) 7.5%, var(--color-table));
 }
 
 .ui-cell.is-clip {

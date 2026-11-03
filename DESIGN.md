@@ -1,640 +1,878 @@
+---
+name: everydaytool
+description: A desktop command deck for focused, local-first everyday tools.
+colors:
+  brand-blue: "#3390ec"
+  brand-blue-strong: "#006dc3"
+  launcher-canvas: "#edf3f8"
+  glass-surface: "#fbfdff"
+  ink: "#0b1724"
+  ink-secondary: "#526273"
+  ink-tertiary: "#5f6f80"
+  border-light: "#dfe8ef"
+  border: "#cbd8e3"
+  success: "#007b54"
+  warning: "#975f00"
+  error: "#cf1c28"
+  night-surface: "#121d29"
+  night-ink: "#eef4fb"
+typography:
+  launcher-title:
+    fontFamily: "Roboto, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "25px"
+    fontWeight: 500
+    lineHeight: 1.18
+    letterSpacing: "-0.03em"
+  page-title:
+    fontFamily: "Roboto, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "17px"
+    fontWeight: 500
+    lineHeight: 1.25
+  body:
+    fontFamily: "Roboto, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "Roboto, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "11px"
+    fontWeight: 500
+    lineHeight: 1.5
+rounded:
+  xs: "7px"
+  sm: "10px"
+  control: "11px"
+  md: "12px"
+  lg: "16px"
+  xl: "22px"
+spacing:
+  xs: "4px"
+  sm: "8px"
+  md: "12px"
+  lg: "16px"
+  xl: "20px"
+  "2xl": "24px"
+  "3xl": "32px"
+components:
+  app-rail:
+    backgroundColor: "{colors.glass-surface}"
+    textColor: "{colors.ink-secondary}"
+    rounded: "{rounded.md}"
+    width: "68px"
+  launcher-surface:
+    backgroundColor: "{colors.glass-surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "7px"
+  primary-action:
+    backgroundColor: "{colors.brand-blue-strong}"
+    textColor: "#ffffff"
+    rounded: "{rounded.control}"
+    height: "32px"
+    padding: "0 13px"
+  tool-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    height: "78px"
+    padding: "4px 6px"
+  workspace-surface:
+    backgroundColor: "{colors.glass-surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+---
+
 # everydaytool UI 设计文档
 
-> 本文档描述 everydaytool（edt）的视觉语言、设计令牌与 UI 组件规范，是界面开发与评审的单一权威参考。实现细节（令牌定义、全局样式）位于 [`renderer/shared/styles/`](renderer/shared/styles/)（入口 `main.scss`，令牌 `tokens.scss`，半透明层 `translucency.scss`），组件源码位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)。
+> 本文件是 everydaytool（`edt`）当前及下一版 UI 的唯一视觉权威。它以 **Command Deck（工具指挥台）** 为设计世界，替换“卡片仪表盘 + 多面板堆叠”的旧首页与工具页观感。实现令牌位于 [`renderer/shared/styles/`](renderer/shared/styles/)，平台组件位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)，可交互视觉预览位于 [`docs/redesign-preview.html`](docs/redesign-preview.html)，机器可读侧车位于 [`.impeccable/design.json`](.impeccable/design.json)，逐阶段落地清单位于 [`docs/redesign-implementation-plan.md`](docs/redesign-implementation-plan.md)。
+>
+> 迁移要求：**先令牌与外壳，再首页，再工具页**。不得跳过基础组件直接给单页堆局部样式。新增页面先复用 §4，再读 §8 选择工作区骨架。
 
-## 1. 设计原则与视觉语言
+## 1. 设计方向与非协商项
 
-- **冷灰底 + 品牌蓝强调**：冷灰画布、玻璃卡片、圆角友好，以品牌蓝作为**唯一**的强调色
-  （动作与选中同色、不同档：图形用亮档、文字用墨档），语义色只讲状态。
-- **浅色为默认 + 「夜色玻璃」暗色轴**：夜色（`WindowAppearance.night`）是纯 CSS 的暗色主题轴，
-  只覆写表面基准色 / 文本色阶 / 强调档 / 阴影（见 translucency.scss 的 `html.is-night` 块），
-  alpha 与玻璃仍由材质轴决定；组件零改动，颜色一律走语义令牌，禁止硬编码。
-- **令牌优先**：所有组件通过 `var(--token)` 引用设计令牌，禁止硬编码颜色 / 圆角 / 阴影。
-- **颜色先分档再分色**：每支色相先确定「它是图形（亮档，≥3:1）还是文字（墨档，≥4.5:1）」，
-  再决定用哪个颜色——不要把一支亮色同时当底色和字色（见 §3.1）。
-- **圆角与浮岛**：按钮、页签为圆角矩形；头像、徽章保持圆形/胶囊；卡片与面板为浮岛，靠细边框与轻阴影分层。
-- **组件减法**：能用 `renderer/shared/components/ui/` 的平台组件或 Reka UI 原语的不自造，样式与状态交给设计令牌。
-- **反过度设计**：间距、宽度、圆角严格取令牌阶梯，不为一两像素差异新增魔法数字。
+### 1.1 Creative North Star：Command Deck
 
-## 2. 主题
+everydaytool 不是监控台，也不是把每个工具变成一页“状态卡”的后台系统。它是一个**常驻桌面的工具指挥台**：左侧窄轨提供随时可达的工具入口；中央只承载当前任务；工具打开才加载，关闭即释放；所有辅助信息在需要时出现，不长期占版面。
 
-默认浅色主题，核心色板如下（每支色相先分「图形 / 文字」两档，见 §3.1）：
+**一句话**：一条导航轨、一个搜索入口、一个当前工作区。
+
+视觉气质是“冷雾玻璃上的蓝色信号”：透明表面负责空间层次，细线负责结构，品牌蓝只负责动作、选中与焦点。装饰不制造层级，层级由位置、留白、字号和透明度完成。
+
+**Key Characteristics**
+
+- 工具优先，状态次之；首页不出现运行状态、版本号、分类徽章与说明面板。
+- 单工具、单运行时；切走或关闭时组件卸载，停止轮询、webview guest 与工具级后端会话。
+- 左侧 68px 导航轨 + 顶部 48px 工作区栏 + 单一 16px 主工作区表面。
+- 冷白玻璃、淡蓝环境光、1px 半透明边线；无重阴影堆积，无多层卡片嵌套。
+- 品牌蓝 `#3390ec` / 墨蓝 `#006dc3` 是唯一强调色；语义色只用于状态。
+- 沿用现有 Roboto / Nunito / Cascadia Mono 字体体系与全部 `Ui*` 基础组件。
+
+### 1.2 明确反例
+
+- 不做首页工具统计看板、欢迎标语墙、运行状态总览、版本徽章矩阵。
+- 不做“卡片里再放面板、面板里再放卡片”的嵌套表面。
+- 不把设置、诊断、帮助、版本和路径默认铺在工具首屏。
+- 不给每个工具分配独立品牌色；工具差异由图标、名称与内容表达。
+- 不用紫色、渐变文字、彩色左边条、发光边框或无意义的玻璃装饰。
+- 不保留“切到后台但页面仍挂载”的多工具常驻模型。
+
+### 1.3 成功判据
+
+1. 用户从任意位置最多两步打开任一工具：左轨点击一次，或 `Ctrl/Cmd + K` 后回车。
+2. 首页首屏能在 3 秒内读完 8 个工具及其用途；无滚动才能读完的信息不属于首页。
+3. 工具首屏 70% 以上面积用于当前任务内容，而不是状态卡与说明。
+4. 关闭工具后，DOM、轮询、IPC 订阅、webview 与工具级后台任务均被释放；需要保护的任务在关闭前统一确认。
+5. 半透明在 acrylic / mica / tabbed / vibrancy / transparent-only 与夜色玻璃下均保持文字可读。
+
+## 2. 主题与色彩
+
+### 2.1 浅色默认主题
 
 | 角色 | 值 | 用途 |
-| ------ | ----- | ------ |
-| 品牌蓝（Primary · 亮档） | `#3390ec` | 品牌标底、焦点环、选中浅底的来源、状态圆点、进度条 |
-| 品牌蓝（Strong · 墨档） | `#006dc3` | 链接、主按钮实底、选中项文字 |
-| 画布（App BG） | `#f4f4f5` | 应用背景、工具页底色 |
-| 表面（Surface） | `#ffffff` | 卡片、面板、输入框、表格 |
-| 主文本 | `#000000` | 正文 |
-| 次级文本 | `#5f646b` | 说明文字、弱化内容 |
-| 三级文本 | `#6b7077` | 元信息、时间戳、占位符 |
-| 边框 | `#dadce0` | 输入边框、分隔线 |
-| 成功绿 | `#007b54` | 运行中、已启用、未读徽章 |
-| 警告琥珀 | `#975f00` | 警示、固定标记、收藏星 |
-| 错误红 | `#cf1c28` | 错误、危险操作 |
+| --- | --- | --- |
+| 品牌蓝（图形） | `#3390ec` | 焦点环、选中轨、图标、进度、浅底来源 |
+| 品牌墨蓝（文字 / 实底） | `#006dc3` | 链接、主按钮、选中文字、可读图标 |
+| 品牌浅底 | `color-mix(in srgb, #3390ec 10%, transparent)` | 选中行、当前页签、rail 激活态 |
+| 玻璃表面基准 | `#fbfdff` | 主工作区、launcher、浮层 |
+| 冷雾画布 | `#edf3f8` | 不支持透明时的兜底；真实画布仍透明 |
+| 主文本 | `#0b1724` | 标题、正文、表格主值 |
+| 次级文本 | `#526273` | 描述、辅助行、表单标签 |
+| 三级文本 | `#5f6f80` | 元信息、时间戳、占位符 |
+| 细边线 | `#dfe8ef` | 表面边线、分隔线 |
+| 输入边线 | `#cbd8e3` | 输入框、可交互控件 |
+| 成功 | `#007b54` | 完成、健康、在线 |
+| 警告 | `#975f00` | 待处理、风险、置顶星 |
+| 错误 | `#cf1c28` | 失败、危险动作 |
+| 实底前景 | `#ffffff` | 主按钮与实底徽章上的文字 |
+
+**颜色分档规则**
+
+- **图形档** `--color-primary` 只用于圆点、焦点、描边、图标线、进度和浅底；不得用作 11–14px 小字。
+- **墨档** `--color-primary-strong` 才可用于文字、图标与承载白字的实底。
+- 选中态使用 **品牌浅底 + 中性深色文字**，不使用高饱和大面积蓝底。
+- 语义色只有一档，同时满足文字、图标、实底与自身 10% 浅底上的可读性。
+- 三级文本在玻璃表面上的实际对比必须 ≥ 4.5:1；`#5f6f80` 是下限，不允许再调浅。
+
+### 2.2 夜色玻璃
+
+夜色玻璃是独立主题轴，与材质轴正交。开启后主进程同步 `nativeTheme.themeSource = 'dark'`；只覆写颜色与前景，不改变透明 alpha 与模糊半径。
+
+| 角色 | 夜色值 |
+| --- | --- |
+| 画布兜底 | `#0d1017` |
+| rail / surface 基准 | `#111c28` |
+| header / pop 基准 | `#0e1721` |
+| fill 基准 | `#172330` |
+| 控件基准 | `#1a2837` |
+| 主文本 | `#eef4fb` |
+| 次级文本 | `#aab9c8` |
+| 三级文本 | `#75879a` |
+| 细边线 | `#253647` |
+| 输入边线 | `#30465b` |
+| 品牌图形蓝 | `#67a9ff` |
+| 品牌文字蓝 | `#a9ccff` |
+
+**禁止**：夜色模式使用纯黑 `#000` 作为文字、纯白作为大面积底、或把语义色直接反相。
+
+### 2.3 品牌蓝使用边界
+
+**The One Signal Rule.** 一个界面里只有品牌蓝承担“动作 / 当前 / 焦点”，其余强调交给字号、间距和中性色阶。品牌蓝覆盖面积目标 ≤ 画面 8%。
+
+**The Neutral Label Rule.** 除链接、主按钮与图标外，页签、行选中和 rail 激活态的文字保持中性主文本色，避免亮蓝小字对比不足。
 
 ## 3. 设计令牌
 
-令牌定义在 `renderer/shared/styles/tokens.scss`（基础令牌）与 `translucency.scss`（半透明 alpha 层），由 `main.scss` 按 tokens → base → utilities → translucency 的顺序引入。令牌是「语义基线」：未引用令牌应删除、纯别名令牌应合并、重命名需同步全部引用。
+### 3.1 颜色与透明表面
 
-### 3.1 颜色
+以下为 `renderer/shared/styles/tokens.scss` 的目标值。旧变量名尽量保留，新增 `rail` 角色。
 
-**色阶规则（每支色相先回答「它是图形还是文字」）**
+```scss
+:root {
+  --color-primary: #3390ec;
+  --color-primary-strong: #006dc3;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-primary-light: color-mix(in srgb, var(--color-primary) 20%, transparent);
 
-| 档 | 令牌 | 对白底的对比 | 允许做的事 | 禁止做的事 |
-| ------ | ------------------- | ---------- | ---------------------------- | ---------------------- |
-| 亮档 | `--color-<tone>` | ≥ 3:1 | 圆点、浅底、描边、焦点环、进度条、品牌标底 | 11–14px 小字（亮蓝只有 3.31:1） |
-| 墨档 | `--color-<tone>-strong` | ≥ 4.5:1 | 文字、图标、**以及承载白字的实底**（白字对它同样 ≥ 4.5:1） | 大面积装饰 |
-| 语义 | `--color-success / warning / error` | ≥ 4.5:1（自身 10% 浅底上同样 ≥ 4.6:1） | 圆点、文字、实底、浅底来源 | — |
+  --color-success: #007b54;
+  --color-warning: #975f00;
+  --color-error: #cf1c28;
+  --color-on-solid: #ffffff;
 
-- **语义色只有一档**：它既要当 10px 状态圆点，也要当 11px 状态文字、实底徽章与提示条底色，
-  所以取值直接站在墨档上。**同一支色还会淡成自己的浅底**（`color-mix(<tone> 10%, transparent)`），
-  每个值都验算过「白底 + 自身浅底」两个落点——只验白底会漏掉整类提示条 / 徽章的不可读。
-- **浅底两档**：`--color-primary-soft`（10%）可以压墨档蓝文字；`--color-primary-light`（20%）
-  只能配中性黑文字或图形（墨档蓝压 20% 浅底只有 4.06:1）。
-- **不按工具换色**：工具定义里没有 `color`，页签选中浅底、首页卡片头像与 hover 描边、
-  页内分段菜单（`UiMenuHorizontal`）与分段钮（`UiRadioGroup` + `UiRadio`）、列表卡选中态一律取 `--color-primary`。
-  强调色只做**图形**（14% 浅底、描边、指示条），文字一律留中性黑或墨档蓝。
-- **三种色各管一件事**，同一个界面里不会有两只色抢同一个含义：
-  **动作 / 注意 = 品牌蓝**（主按钮、链接、计数徽章）、**选中 = 品牌蓝浅底 + 中性黑文字**、
-  **状态 = 语义色**。表格行选中与下拉项 hover 同属品牌浅底。
-- **数值在 OKLCH 里反解**（保持色相，压亮度 / 收彩度），不要肉眼调；改色先在白底 + 自身 10% 浅底上验算。
+  --color-app-bg: #edf3f8;
+  --color-text-primary: #0b1724;
+  --color-text-secondary: #526273;
+  --color-text-tertiary: #5f6f80;
+  --color-border-light: #dfe8ef;
+  --color-border: #cbd8e3;
 
-| 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--color-primary` | `#3390ec` | 亮档蓝（图形 / 浅底 / 焦点环 / 圆点） |
-| `--color-primary-strong` | `#006dc3` | 墨档蓝（链接 / 主按钮 / 选中项文字） |
-| `--color-primary-soft` | `color-mix(in srgb, primary 10%, transparent)` | 选中行 / 选中项浅底（可压墨档蓝字） |
-| `--color-primary-light` | `color-mix(in srgb, primary 20%, transparent)` | 选区块 / 文本选区（只配中性黑） |
-| `--color-success` | `#007b54` | 成功 / 运行态 |
-| `--color-warning` | `#975f00` | 警告 / 固定标记 / 收藏星 |
-| `--color-error` | `#cf1c28` | 错误 / 危险操作 |
-| `--color-app-bg` | `#f4f4f5` | 画布兜底色（实际画布为透明，见 7.1.1） |
-| `--color-on-solid` | `#ffffff` | 实底上的前景白（绿底徽章白字 / 头像字母 / 白分隔线），不随透明度变 |
-| `--color-border-light` | `#e4e4e5` | 细分隔线、卡片描边 |
-| `--color-border` | `#dadce0` | 输入边框 |
-| `--color-text-primary` | `#000000` | 主文本 |
-| `--color-text-secondary` | `#5f646b` | 次级文本 / 弱化（白底 5.96 / 灰调填充 5.42） |
-| `--color-text-tertiary` | `#6b7077` | 元信息 / 时间戳 / 占位符（白底 4.99 / 灰调填充 4.54） |
+  --color-rail-base: #f7fbff;
+  --color-raised-base: #fbfdff;
+  --color-input-base: #ffffff;
+  --color-field-base: #ffffff;
+  --color-table-base: #fbfdff;
+  --color-button-base: #ffffff;
+  --color-fill-base: #edf3f8;
+  --color-header-base: #f9fcff;
+  --color-pop-base: #fbfdff;
+  --color-overlay-base: #fbfdff;
+}
+```
 
-> **三级文本必须单调**：次级比三级深。曾经的 `#707579` / `#686c72` 是反的，且两者压在
-> `--color-fill`（表头 / hover 行）上都掉到 4.2–4.5 之间——改色阶时一并按两种落点重算。
+**表面角色**
 
-### 3.1.1 半透明表面角色（颜色 × alpha 两层）
+| 角色 | 用途 | 变量 |
+| --- | --- | --- |
+| `rail` | 左侧导航轨 | `--color-rail`、`--alpha-rail`、`--glass-rail` |
+| `header` | 顶部工作区栏 | `--color-header`、`--alpha-header`、`--glass-header` |
+| `raised` | 主工作区、launcher、抽屉 | `--color-raised`、`--alpha-raised`、`--glass-raised` |
+| `input` | 浮在画布上的搜索框 / 导航控件 | `--color-input`、`--alpha-input`、`--glass-input` |
+| `field` | 表面内的输入框 | `--color-field`、`--alpha-field` |
+| `table` | 表格行底 | `--color-table`、`--alpha-table` |
+| `button` | 普通玻璃按钮 | `--color-button`、`--alpha-button` |
+| `fill` | 表头、hover 行、分段控件槽 | `--color-fill`、`--alpha-fill` |
+| `pop` | 下拉、菜单、命令面板候选层 | `--color-pop`、`--alpha-pop`、`--glass-pop` |
+| `overlay` | dialog / toast / 模态 | `--color-overlay`、`--alpha-overlay`、`--glass-overlay` |
+| `canvas` | 页面画布 | 恒 `transparent` |
 
-每个表面角色拆成「基准色（`--color-<role>-base`）× 透明度（`--alpha-<role>`）」，
-两者在 `translucency.scss` 里用 `color-mix` 合成出 `--color-<role>` 供组件引用。
-**新增角色需同时改四处**：`tokens.scss` 的 `--color-<role>-base` + `--alpha-<role>` + `--glass-<role>`，
-以及 `translucency.scss` 的合成与各模式取值。新增模式只加一条模式规则（alpha + glass 两组），组件零改动。
+**不透明默认模式**
 
-| 角色 | 用途 | 独立调节入口 |
-| ------ | ------ | ------------- |
-| `raised` | 卡片 / 面板 / 浮岛 | `--alpha-raised` · `--glass-raised` |
-| `input` | 其余非弹出层 el 控件（树 / 上传 / 日历 / 搜索框 UiSearchInput） | `--alpha-input` · `--glass-input` |
-| `field` | 通用表单输入框（UiInput / textarea / UiSelect） | `--alpha-field` |
-| `table` | 表格行（UiTable 的 tr） | `--alpha-table` |
-| `button` | 普通按钮（玻璃钮；primary/danger 实心钮不走此角色） | `--alpha-button` |
-| `fill` | 灰调填充（表头 / 行 hover / 灰底面版） | `--alpha-fill` |
-| `header` | 标题栏 | `--alpha-header` · `--glass-header` |
-| `pop` | 下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） | `--alpha-pop` · `--glass-pop` |
-| `overlay` | 其它弹层（dialog / message / notification / message-box 确认框） | `--alpha-overlay` · `--glass-overlay` |
-| `canvas` | 画布 | 不参与 alpha，恒为 `transparent` |
+所有 alpha = `1`，所有 glass = `none`。不透明窗口不产生 `backdrop-filter` 合成开销。
 
-> 所有基准色除 `fill` 为 `#f4f4f5` 外均为 `#ffffff`；默认（不透明）模式下 alpha 全为 `1`、玻璃全为 `none`。
-> 各模式的 alpha / 玻璃取值见 §7.1.1。
+**acrylic 模式**
 
-### 3.1.2 玻璃（backdrop-filter）体系
+| rail | raised | input | field | table | button | fill | header | pop | overlay |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| .62 | .78 | .88 | .30 | .88 | .88 | .80 | .60 | .94 | .92 |
 
-**透明度与模糊是两件事**：alpha 决定「能看见多少背后内容」，`--glass-*` 决定「背后被磨平多少」。
-只调 alpha 会得到一块半透明塑料（文字与背后的表格线互相打架），只加模糊则变成不透明毛玻璃。
-两者按同一套表面角色分档，因此每种窗口模式、每类控件都能独立调，互不牵连。
+对应玻璃：
 
-| 令牌 | 默认值 | 用途 |
-| ------ | -------- | ------ |
-| `--glass-saturate` | `100%` | 玻璃饱和度增益（模式级旋钮，被各角色 `saturate()` 共享） |
-| `--glass-raised` | `none` | 卡片 / 面板 / 浮岛 |
-| `--glass-input` | `none` | 浮在画布上的非弹出层控件（搜索框等） |
-| `--glass-header` | `none` | 标题栏 |
-| `--glass-pop` | `none` | 下拉类浮层 |
-| `--glass-overlay` | `none` | dialog / message / notification / message-box |
-| `--glass-veil` | `blur(2px)` | 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 |
+| 角色 | 值 |
+| --- | --- |
+| rail | `blur(20px) saturate(135%)` |
+| raised | `blur(18px) saturate(135%)` |
+| input | `blur(14px) saturate(135%)` |
+| header | `blur(16px) saturate(135%)` |
+| pop | `blur(24px) saturate(135%)` |
+| overlay | `blur(28px) saturate(135%)` |
 
-**只给「表面层」玻璃，不给嵌套控件**：卡片、浮层、标题栏的背后是别的内容或画布，需要磨平；
-`field` / `table` / `button` / `fill` 始终嵌在卡片内部，背后就是卡片表面本身，
-再糊一层既看不出效果、又为每个元素创建 backdrop root（合成开销）。它们的差异化仍然靠 alpha。
+**mica / tabbed / vibrancy / transparent-only**
 
-> 组件一律写 `backdrop-filter: var(--glass-<role>)`，**禁止写死 `blur(Npx)`**；
-> 默认模式下玻璃为 `none`，即不透明窗口零额外开销（不加 backdrop root）。
+| 模式 | rail | raised | header | rail glass | raised glass |
+| --- | --- | --- | --- | --- | --- |
+| mica | .95 | .96 | .96 | 10px | 10px |
+| tabbed | .97 | .98 | .98 | 8px | 8px |
+| vibrancy | .95 | .96 | .96 | 12px | 12px |
+| transparent-only | .86 | .88 | .88 | 20px | 20px |
 
-### 3.1.3 玻璃细节旋钮（高光 / 开关轨道 / 滑块）
+其余角色继续沿用现行 `translucency.scss` 的 mica / tabbed / vibrancy / transparent-only 数值。新增 `rail` 时必须同时更新 `tokens.scss`、`translucency.scss` 的模式覆写、夜色重算与 `prefers-reduced-transparency` 降级。
 
-这三档不是「表面角色」——它们不新增基准色，而是在现有基准色上做着色与高光，
-但同样按窗口模式独立覆写，保证每类玻璃元素都能单独调：
+**The Glass Boundary Rule.** 玻璃只做“表面 ↔ 背景”一层。`field`、`table`、`button`、`fill` 永不加 `backdrop-filter`；抽屉压工作区时用 `overlay`，不要玻璃叠玻璃。
 
-| 令牌 | 默认值 | 取色基准 | 用途 |
-| ------ | -------- | -------- | ------ |
-| `--alpha-highlight` → `--color-highlight` | `0` | `--color-on-solid` | 卡片 / 开关的 1px 内高光（镜面边）。0 = 不出现，不透明模式下视觉与旧版一致 |
-| `--alpha-switch-track` → `--color-switch-track` / `--color-switch-track-off` | `1` | `--color-primary` / `--color-border` | 开关轨道着色（开 / 关），轨道本身可半透明 |
-| `--alpha-switch-knob` → `--color-switch-knob` | `1` | `--color-on-solid` | 开关滑块（小体积「透镜」） |
-
-- **高光是低 alpha 元件的「形状保险」**：填充越透，越要靠 1px 内描边读出边界；
-  它同时用在开关轨道（顶部）、滑块（整圈）与卡片顶边（`UiPanel` / `ToolCard` / `UiListCard` 的 box-shadow 第一段）。
-- **开关不借用 `input` / `field`**：轨道是品牌色表面、滑块是前景件，两者对透明的容忍度完全不同——
-  **轨道可以透（.82~.98），滑块必须近实（≥ .9）**。滑块调到 .3 时，关态会和浅灰轨道糊在一起、
-  开态只剩一块被轨道染色的圆点；各模式取值见 §7.1.1。
-- 高光与轨道都**不加 `backdrop-filter`**：滑块背后是轨道、轨道背后是卡片，没有「背后的内容」可磨。
+**The Content Is Opaque Rule.** 文字、图标、状态点、进度条和滑块始终不透明。透明只属于大面积表面。
 
 ### 3.2 字体与字阶
 
-#### 3.2.1 字体栈
+**字体**
 
-| 用途 | 字体 |
-| ------ | ------ |
-| 拉丁正文 | `Roboto`（自托管，**只有 400 / 500 两个切面**） |
-| 中文正文 | 系统中文面：`PingFang SC`（mac）/ `Microsoft YaHei`（win），**只有 Regular / Bold** |
-| 等宽 / 数字 | `--font-mono`：Cascadia Mono / Roboto Mono / SF Mono / Menlo / Consolas |
-| 字母头像 / 品牌标 | `--font-brand`：`Nunito` ExtraBold 800（Roboto / sans-serif 兜底） |
+- 拉丁正文与 UI：`Roboto` 400 / 500（自托管）。
+- 中文正文：`PingFang SC` / `Microsoft YaHei`。
+- 品牌标与字母头像：`Nunito` ExtraBold 800。
+- 数字、ID、路径、代码、快捷键：`Cascadia Mono` / `Roboto Mono` / `SF Mono` / `Menlo` / `Consolas`。
 
-**栈的语义**：`Roboto` 打头负责拉丁与数字，中文按字形缺失逐字落到 `PingFang SC` / `Microsoft YaHei`；
-`-apple-system` / `Segoe UI` 夹在中间只为补齐符号（箭头、项目符号）。顺序**不要**改成中文面打头——
-那会把拉丁也交给雅黑，字宽与字形都变粗变方。
-
-> 等宽只通过 `.mono` 工具类使用（`--font-mono` + `font-variant-numeric: tabular-nums`），
-> **禁止硬编码 `Consolas` / `ui-monospace`**；品牌标与字母头像用 `--font-brand` + `--font-weight-brand`。
-
-#### 3.2.2 字阶：5 档，唯一字号来源
-
-| 令牌 | 值 | 角色 | 典型用法 |
-| ------ | ----- | ------ | ------ |
-| `--font-size-xs` | `11px` | 元信息 | 时间戳、徽章（`UiChip`）、表格辅助列、代码、计数 |
-| `--font-size-sm` | `12px` | 辅助正文 | 说明 / 提示（`UiHint`）、键值、表格正文、次级按钮（`size="small"`）、下拉项 |
-| `--font-size-base` | `14px` | 正文 | 正文、控件文字、面板标题（`UiPanel` 默认）、卡片名、目录树 |
-| `--font-size-lg` | `16px` | 区块标题 | `UiSectionHeader`、`UiPanel titleSize="lg"`、状态名、设置页分区标题 |
-| `--font-size-xl` | `18px` | 页面标题 | 工具页 / 设置页一级标题、规则编辑器标题（**全站上限**） |
-
-**规则**
-
-- 字号**只引用令牌**，禁止 `font-size: 13px` 这类字面量，也不用 `em/rem` 做页面缩放（桌面壳不支持缩放）。
-- **18px 是上限**：本应用没有营销型大标题，不再出现 20 / 24 / 28px 的散值；需要强调时用层级（间距 + 字号）与色阶，不放大字号。
-- **18px 目前只有规则编辑器在用**：工具页 / 设置页**不放页面大标题**——页签已经写着工具名，
-  再压一行标题是重复（见 `SettingsPage` 顶部注释）。`--font-size-xl` 留给需要"独立成篇"的编辑器标题。
-- 平台组件统一使用本表的字号档位；业务样式不得另起一套字号。
-- 数字看板与计数**不放大字号**，靠 `.mono` + `--font-weight-bold` 提升可读性。
-
-#### 3.2.3 字重：只有两个真切面
+**字阶**
 
 | 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--font-weight-regular` | 400 | 正文、表格正文、说明 |
-| `--font-weight-medium` | 500 | **唯一的强调档**：标题、按钮、页签、标签、卡片名、面板标题 |
-| `--font-weight-bold` | 700 | 只给正文里的 `<strong>`（中文有真粗体）与数字看板 |
-| `--font-weight-brand` | 800 | 只给 Nunito 品牌标与字母头像（拉丁专用面） |
+| --- | --- | --- |
+| `--font-size-xs` | 11px | 元信息、表头、徽章、快捷键 |
+| `--font-size-sm` | 12px | 工具描述、辅助正文、表格正文、次级按钮 |
+| `--font-size-base` | 14px | 正文、控件、工具名、行主文本 |
+| `--font-size-lg` | 16px | 分区标题、状态名 |
+| `--font-size-xl` | 18px | 文档页标题、独立编辑器标题 |
+| `--font-size-display` | 25px | 仅首页“工具台”标题；不进入工具页 |
 
-**为什么没有 600**（实测，Chromium + 本机字体栈）：
+**字重**
 
-| 声明的 weight | 拉丁（Roboto 有 400/500） | 中文（雅黑有 Regular/Bold） | 结果 |
-| -------------- | ------------------------- | --------------------------- | ------------------------------------ |
-| 400 | Regular | Regular | 一致 |
-| 500 | Medium | Regular | 基本一致（拉丁略重） |
-| **600** | **Medium（不变）** | **Bold** | **同一行里中文突然变粗，右半句更重** |
-| 700 | Medium（不变） | Bold | 中文可读作强调，拉丁不动 → 靠色阶补 |
+- 400：正文、表格、说明。
+- 500：标题、按钮、标签、页签、强调。全站唯一常规强调档。
+- 700：正文 `<strong>` 与数字看板；不用于 UI 标题。
+- 800：仅 Nunito 品牌标与字母头像。
 
-- 所以层级**不靠字重**：字号 + 色阶 + 间距承担；500 是全站唯一的"这里要重一点"。
-- `<strong>` 的强调由 base.scss 补一条色阶（正文说明是次级灰 → 强调抬到主文本黑），
-  中文再多一层真粗体；拉丁即使不加粗也读得出强调。
-- 正文与 UI 禁用 300 / 600 / 800；`font-synthesis-weight: none` 全局关掉合成粗体
-  （合成加粗在 11–12px 上会发虚）。
+**行高**
 
-#### 3.2.4 行高
+- 单行控件 / 表格：`20px`。
+- 正文与说明：`1.5`。
+- 长文：`1.6`。
+- 首页标题：`1.18`。
 
-| 场景 | 取值 |
-| ------ | ------ |
-| 单行控件 / 表格 / 徽标 | `--line-height-control`（`20px`） |
-| 正文 / 列表项 | `1.5`（`body` 全局默认） |
-| 紧凑说明（11–12px 提示，可能折行） | `1.5` |
-| 长文段落（步骤、说明块） | `1.6` |
-| 图标 / 纯图形 / 单行窄标签 | `1`（或等值 px，如 mono 徽标 `14px`） |
+**The No Micro Type Rule.** 生产界面不得使用 9–10px 文本；最小字号为 11px。表头、状态行、快捷键也必须遵守。
 
-> 行高不得低于 `1.5`（**含 11–12px 的说明**：中文在这个字号下的字形框接近满格，
-> 1.4 只有 15.4px 行距，两三行就糊成一段）；不再出现 `1.7` 以上的散值。
-> 单行元素（按钮文字、徽标）用 `1` 或控制行高，不参与这条规则。
-> 表格的实际行高 = `.ui-cell` 上下内边距（§7.5）+ `--line-height-control`。
+**The One Display Size Rule.** 25px 只属于首页标题；工具页标题 17px，分区标题 16px，不靠继续放大字号建立层级。
 
-#### 3.2.5 字距
+### 3.3 间距与节奏
 
-- 正文与标题：`0`，**不加字距**。
-- 小号全大写 / 等宽短标签：`0.25–0.5px`（如 interceptor 规则类型标签、品牌标 `0.05em` ≈ `0.6px`），仅限短标签。
-- 禁止在长文本 / 段落上使用 `letter-spacing`。
+基础间距保持：`4 / 8 / 12 / 16 / 20 / 24 / 32`。
 
-#### 3.2.6 标题标签（`h1–h6`）
+| 结构常数 | 值 |
+| --- | --- |
+| rail 宽 | 68px |
+| topbar 高 | 48px |
+| rail 控件 | 42 × 42px |
+| 首页左右内边距 | 42px |
+| 首页内容最大宽 | 1160px |
+| 搜索坞高 | 54px |
+| launcher 行高 | 78px |
+| 工具页左右内边距 | 18px |
+| 工具页 header 高 | 70px |
+| surface toolbar 高 | 48px |
+| statusline 高 | 31px |
+| 表单工作区左栏 | 360px |
+| 处理型 inspector | 268px |
 
-- 已全局 reset：`margin: 0` + `font-size: inherit` + `font-weight: var(--font-weight-medium)` + `text-wrap: balance`。
-- 因此**标题必须显式取令牌字号**（例：`UiSectionHeader` 用 `lg`、工具卡名用 `base`）；
-  禁止依赖浏览器默认的 h1–h6 字号（21 / 18 / 16px，会直接越过 18px 上限）。
-- 标题与正文之间**上方间距必须大于下方**（区块间距 32 / 标题到内容 12）：标题属于它下面的那一块。
+**节奏**
 
-#### 3.2.7 数字与等宽
+- 同一组：`8–12px`。
+- 标题到内容：`12–16px`。
+- 同级区块：`20–24px`。
+- 页面边缘：`18–42px`，按区域宽度决定，不用相同值机械铺满。
+- 标题上方空间必须大于标题与内容之间空间。
 
-- 数字 / ID / 字节 / 时间 / 代码统一 `.mono`；表格数字列右对齐，计数不放大字号。
-- 等宽字号跟随上下文令牌（表格里 `sm`、徽章里 `xs`），不为等宽单开档位。
-- 全局 `font-variant-numeric: tabular-nums`：表里的数字纵向对齐优先于正文里的数字美观。
-- **唯一例外**：`UiAvatar` 的字母字号按头像直径计算（`size × 0.43`，内联 style），因为它是图形元素而非文本。
-
-#### 3.2.8 排版细节（浏览器表面）
-
-这些是「不画也属于设计」的部分，统一在 `base.scss` 里声明，业务文件不要各自覆写：
-
-| 项 | 值 | 理由 |
-| ---- | ------------------------- | ------------------------------------------------------------ |
-| 中英自动间距 | `text-autospace: normal` | CJK 与拉丁 / 数字相邻时补光学距离（「端口8080」不再糊成一团）；不支持的浏览器忽略 |
-| 折行 | 标题 `balance`、正文 `pretty` | 避免中文提示把最后一个字甩到下一行；两者都是渐进增强 |
-| 光标 | `caret-color: --color-primary-strong` | 默认黑竖线在浅底卡片上很扎眼 |
-| 选区 | `::selection` = `--color-primary-light` | 与品牌浅底同一档 |
-| 字形渲染 | 不设 `text-rendering` | Chromium 的 `geometricPrecision` 会关掉 hinting，小字号在 Windows 上更糊，且实测排版宽度完全一致 |
-| 合成字重 | `font-synthesis-weight: none` | 没有真切面就不加粗，避免发虚 |
-
-### 3.3 间距
-
-`--spacing-*` 阶梯（唯一间距来源，禁止魔法数字）：
-
-| 令牌 | 值 | 令牌 | 值 |
-| ------ | ----- | ------ | ----- |
-| `--spacing-xs` | `4px` | `--spacing-xl` | `20px` |
-| `--spacing-sm` | `8px` | `--spacing-2xl` | `24px` |
-| `--spacing-md` | `12px` | `--spacing-3xl` | `32px` |
-| `--spacing-lg` | `16px` | | |
-
-> 取值规则：魔法数字就近向上取整到最近阶梯（6→sm、10→md、14→lg、18→xl、22px 行高→`--line-height-control`、28~42→2xl/3xl）。
->
-> **豁免项**（结构常数，不受阶梯约束）：边框宽度、图标 / svg 尺寸（12–20px）、1–2px 微内边距、999px 胶囊圆角、
-> 表格列宽 / `min-width`、内容栏 `max-width`、组件几何（如 `UiMenuHorizontal` 条高 48 / 项高 40）。
->
-> **同一模式只写一次**：卡片 / 灰底面版 / 虚线新增钮等同构模式合并为「单一类 + 修饰类」，
-> 宽度一律走 `.ctl-*` 阶梯或 `flex` 填充，不为一点差异新增魔法数字。
-
-#### 3.3.1 节奏：四档，按「关系远近」选，不按「好看」选
-
-同一个间距值如果被用在两种关系上，两种关系就读成了一种。全站只用四档纵向节奏：
-
-| 档 | 值 | 关系 | 落点 |
-| ---- | -------- | ------------------ | ------------------------------------------------------ |
-| 分区 | `32px`（3xl） | 互不相干的大块 | 首页「我的收藏 / 所有工具」之间 |
-| 区块 | `24px`（2xl） | 同级区块（并列） | 设置页七个面板之间、WXP 状态卡 / 设置 / 说明之间、离线包页签条 / 工作区 / 历史之间 |
-| 块内 | `16px`（lg） | 同一块里的不同部分 | 面板标题→内容、卡片之间的网格间距、页面内边距 |
-| 行内 | `8px`（sm） | 同一件事的相邻行 | 键值行、按钮组、说明与它解释的控件 |
-
-- **标题的上方间距必须大于下方**：分区 32 / 区块 24 在上，块内 16 在下——标题属于它下面那一块。
-- **不要用 16 当「同级区块」的间距**：设置页曾经七个面板全用 16，与「标题→内容」同值，
-  结果七个分区读成一整条长列表。
-- 横向内边距（页面边距）不在节奏里，见 §3.4 与 §7.3 的页面骨架。
-
-### 3.4 几何外壳
+### 3.4 圆角、边线与深度
 
 | 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--control-height` | `32px` | 表单控件 / 图标按钮统一高度 |
-| `--line-height-control` | `20px` | 控件 / 表格 / 徽标统一行高 |
-| `--content-max-width` | `1360px` | 首页内容最大宽 |
-| `--column-document` | `760px` | 文档型页面的内容栏宽（设置 / 离线包），见 §7.3 |
-| `--measure-prose` | `62em` | 长文行宽上限（CJK ≈ 60 字；12px 下 744px，略窄于文档栏） |
-| `--titlebar-height` | `44px` | 自定义标题栏行高 |
+| --- | --- | --- |
+| `--radius-xs` | 7px | 小图标钮、键帽 |
+| `--radius-sm` | 10px | 页签、次级按钮、分段钮 |
+| `--radius-control` | 11px | 主 / 次按钮、搜索输入 |
+| `--radius-md` | 12px | 工具行、rail 激活、列表卡 |
+| `--radius-lg` | 16px | launcher、主工作区、抽屉 |
+| `--radius-xl` | 22px | 命令面板、dialog |
 
-### 3.5 圆角
+边线：
 
-圆角阶梯：
+- 玻璃表面外缘：`1px solid rgba(255,255,255,.58)`。
+- 内部结构线：`1px solid var(--color-border-light)`。
+- 禁止在同一个表面同时使用“实色边框 + 大阴影”形成 ghost card；玻璃边缘高光不算第二层 elevation。
 
-| 令牌 | 值 | 对应 |
-| ------ | ----- | ------ |
-| `--radius-xs` | `8px` | 小件（图标钮 hover 底、代码块） |
-| `--radius-sm` | `12px` | 控件（输入框、编辑器卡片、弹层菜单） |
-| `--radius-control` | `14px` | 圆角矩形控件（按钮、页签、搜索框） |
-| `--radius-md` | `16px` | 行 / 菜单（弹层、消息） |
-| `--radius-lg` | `20px` | 浮岛（卡片、面板、表格容器） |
-| `--radius-xl` | `28px` | 模态（对话框） |
+阴影：
 
-> 按钮、页签为**圆角矩形**（`--radius-control` 14px / `--radius-sm` 12px）；头像、徽章保持圆形 / 胶囊（`999px`）。
+```scss
+--shadow-sm: 0 10px 34px rgba(27, 57, 87, 0.10);
+--shadow-md: 0 18px 48px rgba(29, 62, 94, 0.10);
+--shadow-lg: 0 24px 70px rgba(22, 50, 78, 0.16);
+--shadow-focus: 0 0 0 1px var(--color-on-solid), 0 0 0 3px var(--color-primary-strong);
+--shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28);
+```
 
-### 3.6 阴影
+静止的主工作区只使用 `--shadow-sm` 或仅边线；只有浮层使用 `--shadow-md/lg`。hover 不靠大幅位移，最多 `translateY(-1px)`。
 
-| 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,.05)` | 浮岛卡片 / 面板 |
-| `--shadow-md` | `0 8px 22px rgba(0,0,0,.08)` | 菜单、消息 |
-| `--shadow-lg` | `0 16px 32px rgba(0,0,0,.12)` | 对话框、批量操作栏 |
-| `--shadow-focus` | `0 0 0 1px #fff, 0 0 0 3px var(--color-primary-strong)` | 键盘焦点环（1px 白隔断 + 墨档蓝实环，对任意底色 ≥3:1） |
-| `--shadow-window-frame` | `0 12px 48px rgba(0,0,0,.28)` | 半透明窗口的外阴影（补偿丢失的系统投影） |
+### 3.5 动效
 
-### 3.7 过渡
+```scss
+--duration-fast: 140ms;
+--duration-base: 190ms;
+--duration-overlay: 220ms;
+--ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+```
 
-| 令牌 | 值 | 用途 |
-| ------ | ----- | ------ |
-| `--transition-fast` | `0.15s cubic-bezier(.25,1,.5,1)` | 微交互（图标钮、页签、chip） |
-| `--transition-base` | `0.25s cubic-bezier(.33,1,.68,1)` | 卡片 hover、边框过渡 |
+- 视图切换：透明度 + `translateY(4px)`，190ms。
+- 命令面板：透明度 + 上移 8px + `scale(.985)`，220ms。
+- hover：背景 / 边线 / 文字颜色，140ms。
+- rail 激活条：150ms 的 `scaleY` 或高度过渡。
+- 页面进入时不编排多段动画；工具是工作界面，不是品牌宣传页。
+- 尊重 `prefers-reduced-motion`，全部降为 0.01ms。
 
 ## 4. 组件内核
 
-平台组件以 `renderer/shared/components/ui/` 为唯一业务入口；交互原语统一使用 Reka UI（弹层、下拉、选择、滑块、单选等）。组件对外只暴露语义 props 与插槽，不暴露第三方类名。
+### 4.1 复用优先
 
-- 颜色、边框、阴影、圆角和字阶一律引用设计令牌，不在组件内另建主题变量。
-- 无行为差异的几何覆写留在组件内部；业务页面通过 `class` 只做布局与间距调整。
-- 弹层统一挂到 `body`，并从 `<html>` 读取主题变量，确保半透明与夜色模式一致。
-- 禁止重新引入 Element Plus 或 shadcn 生成组件目录；新增交互原语优先复用 Reka UI。
+| 需求 | 使用 |
+| --- | --- |
+| 按钮 | `UiButton`、`UiIconButton` |
+| 搜索 | `UiSearchInput` |
+| 分段 / 页内切换 | `UiMenuHorizontal`；少量选项可用 `UiRadioGroup` + `UiRadio` |
+| 表格 | `UiTable`、`UiTableColumn` |
+| 状态 | `UiStatusTag`、`UiChip`；只在工具内使用 |
+| 表单 | `UiFormField`、`UiInput`、`UiSelect`、`UiSwitchField`、`UiPathField`、`UiSlider` |
+| 进度 | `UiProgress` |
+| 空态 | `UiEmpty` |
+| 提示 | `UiHint`、`UiAlert` |
+| 弹层 | `UiDialog`、Reka UI Popover / Dropdown |
+| 详情 | `UiDetailGrid`、`UiDetailItem`、`UiKeyValue` |
+| 反馈 | `renderer/shared/feedback/`、`vue-sonner` |
+| 图标底板 | `UiIconTile`；`sm` 31px / `md` 38px / `lg` 40px |
 
-## 5. UI 组件库
+### 4.2 新增的“组合型”组件
 
-平台级组件库（25 个组件 + `icons.ts` 图标名表），源码在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板内直接用，无需 import；composable 需显式 import）。以下是完整规范。
+这些组件只负责布局与交互编排，不复制 `Ui*` 的视觉内核：
 
-**使用约定（硬性）**
+| 组件 | 职责 | 约束 |
+| --- | --- | --- |
+| `AppRail.vue` | 68px 左侧导航；品牌、首页、置顶工具、搜索、设置 | 不读工具业务状态；置顶 id 来自 `UiPreferences` |
+| `CommandPalette.vue` | `Ctrl/Cmd+K` 工具检索与打开 | 只读工具注册表；键盘完整；无状态面板 |
+| `WorkspaceHeader.vue` | 工具图标、名称、单行状态、主操作、更多 | 状态只显示一行；不承载配置表单 |
+| `ToolSurface.vue` | 主工作区玻璃表面、toolbar、body、statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel` |
+| `LauncherRow.vue` | 首页工具入口行 | 图标 / 名称 / 最多两行描述 / 置顶 / 箭头；打开与置顶是两个并列按钮 |
+| `ToolSideInspector.vue` | 右侧可收起检查器 | 与主内容同表面分隔；宽度 268 / 320 / 360 |
 
-- **新工具页优先用组件**：卡片 / 分组 / 键值 / 提示 / 空态 / 表格 / 进度 / 徽章 / 对话框等模式一律走本库，禁止在业务文件里重写同类通用样式；组件确不满足时写局部样式并在注释说明原因。
-- **表格与进度条必须走 `UiTable` / `UiProgress`**；状态标签用 `UiChip`（`variant="soft"`）。
-- 第三方类名知识只允许存在于本库组件内部；组件对外只暴露语义 props（`tone` / `variant` / `padding` …）。
-- `main.scss` 原 `.surface-card` / `.detail-grid` / `.detail-item` / `.kv-row` / `.form-hint` / `.chip` / `.inline-group` 已全部由本库取代并删除，**不得恢复**。
+### 4.3 按钮
 
-### 5.1 布局
+- **主按钮**：高 32px，圆角 11px，墨蓝实底，白字；仅用于当前工具的主要前进动作（启动代理、启动 WXP、生成、下载）。
+- **次按钮**：玻璃底 `var(--color-button)`，边线 `var(--color-border)`；用于重置、外部打开、暂停。
+- **图标按钮**：28px 点击区，圆角 8px；hover 为白色 48% 或 `--color-fill`。
+- **危险按钮**：只在确会发生删除 / 停止的操作中使用实底红或红字；不要用红色装饰。
+- 焦点：统一 `--shadow-focus`。禁用：降低文字与图标对比，不给容器写 `opacity`。
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiPanel` | `title`、`variant`（`raised` 浮岛 / `outlined` 描边）、`padding`、`titleSize`（`sm`/`lg`）、`shadow`（`sm`/`md`）、`#title` / `#actions` 插槽 | 基础卡片 / 面板。`raised` = surface-raised + radius-lg + shadow；`outlined` = surface-raised + border-light + radius-lg |
-| `UiGroup` | `gap`（xs/sm/md/lg）、`align`、`justify`、`block`、`direction`（row/column）、`wrap` | 行内 / 纵向控件组，替代裸 `display:flex` 布局 |
-| `UiToolbar` | `bordered`、`surface`、`wrap`、`gap`、`padding`、`flush`、`#end` 插槽 | 工具条：默认插槽放左，`#end` 放右；`flush` 去除按钮间原生左边距 |
-| `UiDetailGrid` | `columns`（2） | 详情卡片网格，≤760px 折为单列 |
-| `UiSectionHeader` | `title`、`count`、`#actions` 插槽 | 区块标题（无分隔线，仅计数） |
-| `UiMenuHorizontal` | `modelValue`、`items`（`{ value, label, badge?, icon? }[]`）、`update:modelValue` | 横向分段菜单：选中胶囊 + 滑动指示条（`transform`/`width` 过渡）+ 横向滚动（滚动条隐藏）+ 选中项自动滚入视野。复刻 Telegram Web K 的 `.menu-horizontal-div`；条高 48、项高 40、字号取平台 14px；条容器走 `--radius-lg`，与卡片 / 面板圆角一致；`icon` 传 SVG 资源 URL（16px，与 label 间距 `--spacing-xs`，如离线包下载的品牌 logo）。**选中胶囊取品牌色 `--color-primary` 14% 浅底 + 中性黑标签**，计数徽章仍是墨档蓝（同一支蓝，两个职责：图形用亮档、文字用墨档） |
+### 4.4 输入与表单
 
-### 5.2 数据展示
+- 高 32px，圆角 9–11px，玻璃底，1px 中性边线。
+- 标签 11px / 500 / 次级文本色；输入正文 12px / 主文本色。
+- focus：品牌蓝 1px 边线 + 3px 9% 外环；不发光。
+- 错误：错误色边线 + 同组错误文案，不只靠颜色。
+- 表单工作区不把每个字段放进小卡片；字段直接排在左栏。
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiKeyValue` | `label`、`labelWidth`（64px）、`mono`、`wrap`、`muted`、`#actions` 插槽 | 键值行（顶部分隔线式，label 左 / value 右） |
-| `UiDetailItem` | `label`、`mono`、`wrap`、`size`（sm/xs） | 详情卡片单项（label 上 / value 下，描边卡片） |
-| `UiCodeBlock` | `maxHeight`（200px）、`wrap` | 等宽代码块（app-bg 底 + radius-sm + 滚动） |
-| `UiEmpty` | `text`、`variant`（plain/bordered）、`center`、`icon`、`padding` | 空状态（纯文本 / 虚线框） |
-| `UiTable` | `data`、`loading`、`emptyText`、`height`、`maxHeight`、`rowKey`、`mono`、`rowClickable`、`#empty` 插槽；默认插槽放 `UiTableColumn` | 表格基座：原生 `<table>`，统一 loading、空态（渲染 `UiEmpty`）、整表等宽与可点行手型。支持行点击、排序、行类名、树形展开与最大高度 |
-| `UiProgress` | `percentage`、`strokeWidth`（6）、`status`（success/warning/exception）、`showText` | 进度条：百分比自动收敛 0–100；颜色与轨道使用语义令牌，两端胶囊圆角 |
-| `UiBreadcrumb` | `items`、`navigate` 事件 | 面包屑导航 |
+### 4.5 表格
 
-### 5.3 徽章 / 状态
+- 表格只放在主工作区表面内，容器的圆角由 `ToolSurface` 提供，内部不再套一层圆角卡片。
+- 表头 11px / 500 / 中性三级；表体 12px；行高 39–44px。
+- 表头底 `--color-fill`；行 hover 白色 36%；选中行品牌蓝 7.5%。
+- 数字、ID、URL、状态码使用 `.mono`；数字列右对齐或按扫描需要对齐。
+- 表格空态用 `UiEmpty`，文案必须说明下一步。
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiChip` | `tone`（neutral/primary/success/warning/danger/info）、`variant`（auto/soft/solid/outline）、`mono` | 小胶囊徽章。`variant="auto"`（默认）按 tone 取历史外观：neutral→描边、success→实底绿白字、其余→浅底彩字；`soft` 浅底彩字、`outline` 透明底彩边、`solid` 实底反白（计数徽章）。**底色取亮档、文字与实底取墨档**（`--chip-tone` / `--chip-ink`）：11px 状态胶囊永远是可读档 |
-| `UiStatusTag` | `tone`（neutral/success/warning/danger）、`pulsing` | 状态点（10px 圆点）；`pulsing` 呼吸光环 |
+### 4.6 状态与徽章
 
-### 5.4 表单与输入
+- `UiStatusTag` 只出现在工具 header 或状态行，不能出现在首页工具入口。
+- 状态必须“点 + 文字”同时出现，不能只靠颜色。
+- `UiChip` 用于计数、筛选、轻量标签；不得承载价格、版本等首页元信息。
+- 全局同一时刻只允许一个 live 脉冲点；没有真实任务时不脉冲。
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiPathField` | `modelValue`、`placeholder`、`disabled`、`mono`、`#actions` 插槽 | 路径输入（等宽 + 右侧动作） |
-| `UiSwitchField` | `modelValue`、`disabled`、`align`（`center` 单行 / `start` 多行） | 开关 + 说明文字的组合。两种模式都把**轨道中线对到说明文字首行中线**；`center`（默认）整块居中——单行说明用；`start` 从首行起排、后续行向下——多行说明用，否则开关会漂到段落中间 |
-| `UiSearchInput` | `modelValue`、`placeholder`、`variant`（pill/box）、`width`、`clearable`、`trim` | 搜索框：`pill` 圆角（42px 大搜索），`box` 方形（32px 面板内搜索） |
-| `UiCodeArea` | `modelValue`、`rows`（8）、`placeholder`、`disabled`、`meta` | 等宽多行输入 + 右下角元信息 |
+### 4.7 浮层
 
-### 5.5 图标 / 按钮 / 头像
+- 命令面板 `CommandPalette`：宽 `min(650px, calc(100vw - 48px))`，圆角 22px，`--color-overlay` + `--glass-overlay`，上方 13vh。
+- 下拉用 Reka / `UiSelect`，必须 teleport；不得被父级 `overflow:hidden` 裁剪。**Reka 的 `SelectContent` 会被传送到 `body`，其表面 / viewport 样式必须使用 `:global(.ui-select-content)` / `:global(.ui-select-viewport)`，否则 scoped 样式不会命中，浮层会退化为透明裸列表。**
+- 下拉表面：`pop` 表面 + `--glass-pop`，圆角 16px，5px 内边距，阴影 `--shadow-md`；宽度取 `max(触发器宽, 220px)` 并封顶 360px / 可用宽度，最大高度 320px。
+- 选项：最小高度 34px，圆角 7px，字号 12px；hover / 键盘高亮用 `--color-fill`，选中用品牌 10% 浅底 + 中性主文本 + 左侧 13px 勾选图标。选项获得键盘焦点时不再叠加按钮式 `--shadow-focus` 外环，避免出现第二个输入框轮廓。
+- 设置抽屉宽 360–420px；展示为右侧 inspector，避免把所有配置堆进主区域。
+- 关闭 dialog 后必须销毁内部状态（`destroyOnClose`），除非该工具仍在活动页签内且用户正在编辑草稿。
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiIcon` | `name`、`size`（16）、`strokeWidth` | 线性 stroke 图标（`icons.ts` 统一名表） |
-| `UiIconButton` | `icon`、`size`（32）、`active`、`disabled`、`label` | 定宽方形图标按钮；hover 抬深 + 浅底，`active` 警示高亮，`disabled` 使用禁用色令牌 |
-| `UiCopyButton` | `text`、`label`、`size`、`type`、`textButton` | 剪贴板复制（空值警告 / 成功 / 失败统一提示） |
-| `UiAvatar` | `text`、`color`、`size`（42） | 字母头像（首字符 + 纵向渐变底） |
+## 5. 应用外壳
 
-### 5.6 反馈
+### 5.1 结构
 
-| 组件 | Props / 变体 | 说明 |
-| ------ | ------------- | ------ |
-| `UiDialog` | `modelValue`、`title`、`width`（560px）、`destroyOnClose`、`closeOnClickModal`、`#footer` 插槽 | 模态框（radius-xl + shadow-lg）；footer 使用统一按钮间距 |
-| `UiListCard` | `active` | 可点列表卡片。hover 只提描边（品牌色 45%），`active` 才铺浅底（品牌色 8% + 70% 描边）——鼠标路过与真正选中不再同一种视觉 |
+```text
+┌──────────────────────────────────────────────────────────┐
+│ 68px Rail │ 48px Topbar                                  │
+│           ├──────────────────────────────────────────────┤
+│  brand    │ Tabs / breadcrumb        Quick open  Win ctl  │
+│  home     ├──────────────────────────────────────────────┤
+│  pinned   │                                              │
+│  tools    │                Active workspace              │
+│           │                                              │
+│  search   │                                              │
+│  settings │                                              │
+└──────────────────────────────────────────────────────────┘
+```
 
-### 5.7 通用状态约定
+### 5.2 左侧导航轨
+
+- 宽 68px，整列玻璃，右缘 1px 白色高光；不铺纯白实底。
+- 顶部品牌钮 42×42，圆角 13，`edt` 使用 Nunito 800、12px、0.05em 字距。
+- 首页按钮固定第一项，下方 1px 分隔线。
+- 置顶工具最多 4 个；用户可在首页星标调整。图标钮 42×42，激活态品牌 10% 浅底 + 蓝色图标 + 左侧 3×18px 指示条。
+- 有可取消的短任务时显示 5px 蓝点；不使用持续呼吸动画。无任务不显示任何状态。
+- 底部固定“搜索工具”（打开命令面板）与“设置”。
+- 图标必须来自统一 SVG 图标集，线宽 1.6–1.8px；不得用 emoji 或临时文字代替。
+- 悬停 180ms 后显示名称 tooltip；tooltip 使用深色玻璃，不阻挡指针。
+- 所有控件 `-webkit-app-region: no-drag`；rail 空白区域可拖动窗口。
+
+### 5.3 顶部工作区栏
+
+- 高 48px，玻璃 header；整行可拖拽。
+- 首页：左侧为“工具台”面包屑；右侧为“打开工具 Ctrl K”和原生窗口控件预留区。
+- 工具页：隐藏面包屑，直接显示已打开的页签；激活页签使用品牌 9% 浅底 + 17% 边线。
+- **工具页不显示“打开工具 / Ctrl K”按钮**：顶栏右端只保留页签溢出、必要的工具级动作与原生窗口控件预留。全局快速入口始终由左轨搜索按钮和 `Ctrl/Cmd + K` 提供。
+- 页签高 32px，圆角 10px，水平内边距 11px；关闭钮 16px，只在 hover / active 时完全显现。
+- 页签过多时横向滚动，不换行；拖拽排序沿用现有 `HeaderTabs` 行为。
+- Windows / Linux 右侧为原生窗口按钮预留 148px；macOS 左侧红绿灯预留 88px。
+- “打开工具”按钮在 1280px 以下只保留图标和 `Ctrl K`；在 1024px 以下只保留图标。
+
+### 5.4 工具生命周期（硬约束）
+
+这是本次改版的产品行为核心，不只是视觉：
+
+1. **只有活动页签挂载组件。** `App.vue` 的 `tools-host` 不再 `v-show` 所有已打开页签；只渲染 `activeId` 对应组件。切换到另一页签时，旧组件卸载、新组件挂载。
+2. **首页不挂载任何工具运行时。** 回到 `/` 时卸载当前工具；不能为了“返回更快”保留隐藏 webview / store 轮询。
+3. **关闭页签 = 销毁。** `close` 后组件根节点、webview guest、IPC 订阅、定时器与工具级后端会话全部释放；现有 `onUnmounted` / `dispose` 必须逐一核对。
+4. **打开页签 ≠ 预热。** 会话恢复时可以恢复页签列表，但不实例化组件；用户点击页签后才加载。
+5. **后台任务必须显式。** 若某工具关闭后仍需继续下载 / 服务，必须在关闭前明确询问；默认策略是“停止并释放”。WorkBuddy2API 关闭页签停止服务，WXP 关闭时停止其托管的 CDP 会话。
+6. **草稿可以保留数据，不可以保留运行时。** 草稿写入 JSON store；重新打开时恢复数据，但组件、轮询和子进程从头初始化。
+7. **子视图 KeepAlive 仅限工具内部。** `UiMenuHorizontal` 的子视图在工具仍打开时可以 KeepAlive；切走活动工具时整棵子树必须卸载。
+
+推荐实现：保留 `useToolTabsStore` 的页签持久化，但 `App.vue` 改为：
+
+```vue
+<Transition name="workspace" mode="out-in">
+  <component
+    :is="tabComponents[activeId]"
+    v-if="activeId && currentTool"
+    :key="activeId"
+  />
+</Transition>
+```
+
+并用 `onBeforeUnmount` / `onUnmounted` 统一清理工具资源。`KeepAlive` 不得包住跨工具容器。
+
+## 6. 首页 / 工具启动台
+
+### 6.1 版面
+
+- 页面左右内边距 42px，顶部 34px；内容最大宽 1160px，居中。
+- 标题“工具台”25px / 500 / -0.03em；下一行 12px 说明使用真实工具数：“8 个本地工具；打开时运行，关闭即释放”。
+- 不在标题右侧重复工具数量或 `LOCAL-FIRST` 元信息；顶栏只承载产品名与工作区语境。
+- 搜索坞高 54px；下方 22px 为工具列表。
+- `launcher` 是**一个**玻璃表面：圆角 16px、内边距 7px、顶栏 44px；内部工具行两列排列。
+
+### 6.2 搜索坞
+
+- 高 54px，圆角 16px，玻璃表面，左内边距 17px。
+- 左：搜索图标 18px，三级文本色。
+- 中：输入框 14px；占位“搜索工具、能力或关键词”。
+- 右：`快速打开` 11px + `Ctrl K` 键帽。
+- 聚焦时边线变品牌蓝 38%，外环品牌蓝 12%；不使用发光。
+- 点击、聚焦或 `Ctrl/Cmd+K` 都打开 `CommandPalette`，输入内容同步到命令面板。
+
+### 6.3 工具行
+
+每行展示**只展示完成任务所需的信息**：
+
+1. 38×38 图标底，圆角 11px，品牌 10–24% 浅底，蓝色 SVG 图标。
+2. 工具名 14px / 500 / 主文本。
+3. 12px 描述最多两行，超出省略；两列布局下优先展示完整用途，而不是截成同一句前缀。
+4. 右侧置顶按钮与进入箭头；置顶按钮默认 58% 可见，行 hover 100%。
+5. 不展示版本号、分类、创建时间、“新”徽章、运行状态、路径或进程信息。
+
+行高 78px，圆角 12px，间距 4/8px；hover 白色 46%，上移 1px；不出现卡片描边堆叠。
+
+### 6.4 置顶与排序
+
+- 收藏语义改为“置顶”：星标工具排到列表前部，并最多取前 4 个显示在左侧 rail。
+- 置顶操作即时写入 `UiPreferences.favoriteToolIds`；LocalStorage 仍只做镜像。
+- 保留拖拽排序与 `tool-order.ts` 的纯函数；拖拽时使用当前行样式，不新增独立拖拽卡片。
+- “恢复默认排序”放在 launcher 顶栏右侧，使用 28px 图标按钮，仅在存在自定义顺序时出现。
+
+### 6.5 空态
+
+- 搜索无结果：在 launcher 内显示 `UiEmpty`，文案“没有匹配的工具”，副文案“试试工具名、能力或关键词”。
+- 工具注册为空：显示“还没有可用工具”，提供“打开设置 / 检查安装”的次按钮。
+- 加载：3 条 78px 骨架行，保持两列布局；不使用中央 spinner。
+
+## 7. 命令面板
+
+- 入口：`Ctrl/Cmd + K`、rail 搜索按钮、首页搜索坞。
+- 宽 `min(650px, calc(100vw - 48px))`，位置距顶 13vh。
+- 遮罩：`rgba(23,42,61,.16)` + `blur(8px)`；面板使用 `overlay` 表面。
+- 搜索框高 59px，15px 正文；右端 `Esc` 键帽。
+- 默认展示全部可用工具（当前 8 条，上限 8 条）；每条最小 58px，图标 31px，名称 12px，描述 11px 且最多两行。
+- 结果区最大高度随视口收敛并在内部滚动；键盘移动时当前项保持在可视区内。
+- 分组标签只有“所有工具”；不按分类切分，不展示运行状态。
+- 键位：`↑/↓` 移动，`Enter` 打开，`Esc` 关闭；点击遮罩关闭。
+- 打开后焦点自动进入输入；关闭后焦点回到触发元素。
+- 结果匹配名称、描述、关键词与分类 key；排序优先级：名称前缀 > 名称包含 > 关键词 > 描述。
+- 关闭面板不改变当前工具；选择结果才触发路由与组件挂载。
+
+## 8. 工具页
+
+### 8.1 四种工作区骨架
+
+| 骨架 | 判据 | 结构 | 工具 |
+| --- | --- | --- | --- |
+| 流式工作台 | 持续扫读表格 / 流量 | header + 子视图导航 + 单一大表格表面 | 拦截器 |
+| 内嵌工作区 | 主体是 webview / 浏览器页面 | header + 浏览器工具条 + 全幅 webview + 可收起 inspector | Telegram 网络优化、tweb、Treease、WorkBuddy2API |
+| 表单工作室 | 左侧参数，右侧结果 | header + 左 360px 表单 / 右侧结果表 | 身份证号生成器 |
+| 处理控制台 | 启动 / 下载 / 同步 + 检查结果 | header + 左 268px inspector + 主任务表面 | WXP 增强、离线包下载 |
+
+### 8.2 工具页 header
+
+- 高 70px，无 `UiPanel` 包裹。
+- 左：40×40 工具图标、17px 标题、12px 一句用途；状态以 10–11px 内联显示在标题旁，仅一行。
+- 右：最多一个主按钮 + 一个次按钮 + 一个“更多”；不显示版本、数据路径或帮助长文。
+- 工具详情 header 右上角不出现“打开工具 / Ctrl K”框；避免与全局命令面板、左轨搜索形成三入口重复。
+- 主按钮只对应工具的主要动作：启动、生成、下载、打开等。
+- 状态卡、说明卡和安装卡不得进入 header。
+
+### 8.3 子视图导航
+
+- 使用 `UiMenuHorizontal` 或等价 30px 分段按钮。
+- 激活态：品牌蓝 9% 浅底 + 17% 边线 + 主文本。
+- 路由驱动，保留深链与前进后退；不要用仅本地 ref。
+- 子视图内的 KeepAlive 可保留草稿与筛选，但跨工具不得常驻。
+
+### 8.4 主工作区表面
+
+- 一个工具只有一个主 `ToolSurface`，圆角 16px，玻璃 raised。
+- 顶部 `surface-toolbar` 高 48px：搜索、筛选、次要动作；底部 `statusline` 高 31px：记录数 / 进程 / 路径等低频信息。
+- 表格、webview、表单结果都直接占用表面；不额外套 `UiPanel`。
+- 详细设置、安装、说明、错误日志进入右侧 inspector 或按需抽屉。
+- 背景透明，工具页不得再铺整页 `--color-app-bg`；画布统一透明。
+
+## 9. 每个工具的落地方案
+
+| 工具 | 骨架 | 首屏必须突出 | 必须移出首屏 | 交互与状态 |
+| --- | --- | --- | --- | --- |
+| 拦截器 | 流式工作台 | 启动 / 停止、当前流量表、规则命中 | 设置说明、CA 证书长文、诊断卡 | 状态改为 header 内联一行；4 个子路由不变；规则编辑器用右侧抽屉；表格始终占满剩余高度 |
+| Telegram 网络优化 | 内嵌工作区 | Telegram webview、页面导航、影库入口 | 概览三卡、站点详情、缓存说明 | 主区域 webview 全幅；右侧 inspector 默认收起；任务 / 影库 / 诊断按需展开 |
+| Telegram 缓存（tweb） | 内嵌工作区 | tweb 页面、影库入口、缓存操作 | 站点 / 归档 / 媒体缓存的概览卡 | 与 Telegram 同构；侧栏页签保留，但不再堆三张概览面板 |
+| Treease 编辑器 | 内嵌工作区 | 全幅编辑器页面、拦截状态 | 拦截规则弹窗外的状态文案 | 顶栏只保留来源、状态 chip、设置、刷新；规则编辑继续用 dialog |
+| 离线包下载 | 处理控制台 | 来源选择、下载参数、进度 | 大段说明、历史列表 | 左侧 5 个来源切换；主表面单一下载器；历史收进底部抽屉 |
+| WXP 增强 | 处理控制台 | 启动 / 停止、路径与端口、缓存结果 | 三块并列面板、长说明 | header 内联状态；左 inspector 放启动设置；主区放缓存 / 收藏表 |
+| WorkBuddy2API | 内嵌工作区 | 上游面板 webview、启动 / 停止 | 安装、更新、说明、错误四块并列 | header 单行状态与启停；右 inspector 分“运行 / 安装 / 诊断”三段；关闭页签停止服务 |
+| 身份证号生成器 | 表单工作室 | 参数、生成动作与生成结果同时可见 | 外层面板、重复标题、说明卡、页面 header 操作 | 左 360px 表单；主按钮紧贴参数并显示“生成 N 条”；右结果表按内容收缩、最高 320px，超出时表内滚动；复制全部位于结果标题；生成后自动选中首行 |
+
+### 9.1 身份证号生成器
+
+**结构**
+
+```text
+WorkspaceHeader（仅图标 / 标题 / 一句用途）
+└─ ToolSurface
+   ├─ 左 config-pane（360px）
+   │  ├─ 出生方式 → 年龄或出生日期 → 性别 → 地区 → 生成数量
+   │  ├─ 1px 分隔线 + “生成 N 条”主按钮
+   │  └─ 免责声明（贴左栏底部）
+   └─ 右 result-pane
+      ├─ 48px 结果标题：说明 + 结果数 chip + “复制全部”
+      └─ UiTable（内容自适应，max-height 320px）
+```
+
+**参数列**
+
+- 左栏固定 `360px`；宽度不足 `1180px` 时收至 `320px`。表单字段间距 `17px`，标签宽 `72px`，全部复用 `UiFormField` / `UiRadioGroup` / `UiSlider` / `UiSelect`。
+- 字段顺序固定为出生方式、年龄范围或出生日期、性别、地区、生成数量。按年龄显示一个双滑块 slider，轨道上方两端分别显示当前“最小 / 最大”年龄值（如“18 岁 / 60 岁”）；数值行使用 11px 次级文本、tabular-nums，距轨道 5px。双滑块圆点为 16px，圆心必须与 6px 轨道中心线重合。按出生日期显示两个原生 date input，中间用“至”连接。
+- 地区使用省 / 市 / 区三级 `UiSelect` 级联；未选省级时不显示市级，未选市级时不显示区级。每个 select 在左栏内独占一行，不并排压窄。
+- 生成数量限制 `1–20`，右侧显示“最多 20 条”。主按钮文案实时显示 `生成 {{ count }} 条`，数量与动作必须处于同一视觉组。
+- 主按钮在全宽参数列内占满一行，高 `32px`，使用 `UiButton type="primary"`。按钮上方是 `12px` 间距 + `12px` 内边距 + `1px` 分隔线；从数量输入框底部到按钮顶部保持约 `25px`，不得再放回页面 header。
+- 免责声明使用 `UiHint size="xs"`，贴参数列底部；它不是主操作，不占用字段之间的节奏。
+
+**结果列**
+
+- 结果标题固定 `48px` 高。左侧为“生成结果 + 点击号码行即可复制”；右侧依次为结果数 `UiChip` 与 `UiButton size="small"` 的“复制全部”。结果数为零时复制按钮 disabled。
+- 表格复用 `UiTable`，使用 `max-height="320"`，不再使用 `height="100%"`。单条结果时表格约 `70px` 高；20 条时表格停在 `320px` 并在表内滚动。
+- 结果表与 `ToolSurface` 左右边缘各保留 `16px` 呼吸空间，表格自身使用 `--radius-md` 圆角；不额外套 `UiPanel`。列顺序固定为身份证号、地区、出生日期、性别、操作；号码与日期使用 mono / tabular-nums。
+- 生成后选中第一条；点击整行或行内“复制”都复制该号码并保持选中。复制全部复制换行分隔的全部号码。
+- 空结果保持紧凑空态，不撑满整个工作区；不得用大块空白或说明卡填补右侧。
+
+**表面与状态**
+
+- 只使用一个玻璃 `ToolSurface`；参数列、结果标题、表格都是实色内容面，不再叠加 backdrop-filter。
+- 年龄 / 日期切换、地区级联和数量变化不得使生成按钮离开首屏；1280 / 1440 / 1600 宽均不得出现页面级横向溢出。
+- 行 hover 使用 `--color-fill`，选中行使用品牌蓝 `7.5%` 与 `--color-table` 混合；焦点、disabled、空态与滚动条沿用全局组件令牌。
+
+**迁移落点**
+
+- 修改 `tools/id-card-generator/renderer/pages/IdCardGeneratorPage.vue`：删除 `WorkspaceHeader` 的 actions / status 槽位；把主按钮移入 `config-pane`；把复制全部移入 `result-head`；将 `UiTable` 从 `height="100%"` 改为 `:max-height="320"`。
+- 不改生成算法、JSON 配置恢复、选中首行、行点击复制与 IPC；不新增工具级 store 或独立设计令牌。
+- 样式只落在页面 scoped SCSS；公共 `UiButton` / `UiChip` / `UiTable` 的视觉内核不改。
+
+### 9.2 设置页
+
+- 继续作为应用级页签，入口固定在 rail 底部；不再使用标题栏设置按钮。
+- 使用单列文档栏 `760px`，与工具工作区区分。
+- 区块顺序：数据目录 → 分层用量 → 缓存清理 → 窗口外观 → 窗口大小与位置。
+- 设置项仍使用 `UiFormField` / `UiSwitchField` / `UiButton`，不引入新的配置卡样式。
+
+## 10. 交互、状态与无障碍
+
+### 10.1 状态矩阵
 
 | 状态 | 表现 |
-| ------ | ------ |
-| hover | 卡片浮岛 hover 变浅底或抬描边（工具卡描边取**品牌色** 42%）；按钮 hover 变浅（主按钮）/ 浅底（次按钮）；图标钮 hover 抬深 + 浅底 |
-| active / 选中 | 品牌色浅底（14%）+ 中性黑文字 + 品牌色描边（页签 / 分段菜单 / 分段钮 / 列表卡同一套）；收藏星为**实底琥珀 + 白星**（与 hover 的浅底琥珀区分） |
-| focus | `--shadow-focus` 蓝色内环（亮档蓝，3.31:1 ≥ 图形 3:1；输入框为蓝边框 + 无外发光） |
-| disabled | 使用禁用色令牌，图标/文字按钮降低透明度——**不**调容器 opacity |
+| --- | --- |
+| hover | 玻璃行 / 按钮变亮；边线轻微转品牌色；最多上移 1px |
+| focus | 统一 `--shadow-focus`；命令面板与工具行必须可按 Tab 到达 |
+| active / selected | 品牌 9–10% 浅底 + 17–22% 边线 + 中性主文本 |
+| loading | 表格 / 列表使用 3 行骨架；按钮显示内置 spinner；不替换整页 |
+| empty | `UiEmpty` + 下一步动作；不写“暂无数据”了事 |
+| error | 就地显示问题、原因、重试动作；日志进 inspector |
+| disabled | 颜色降对比，保留可读标签；不给容器 opacity |
 
-## 6. 通用工具类
+### 10.2 键盘
 
-| 类 | 用途 |
-| ---- | ------ |
-| `.tool-page` | 工具页容器：填充主区域并在内部滚动 |
-| `.muted` | 弱化文本（`--color-text-secondary`） |
-| `.mono` | 等宽数字字体（`--font-mono` + tabular-nums） |
-| `.ctl-xs/sm/md/lg` | 表单控件定宽阶梯（90/140/200/280px） |
-| `.ctl-fill` | 弹性填充剩余宽度 |
-| `.btn-flush` | 消除按钮间原生 12px 左边距 |
-| `.radio-flush` | 消除单选钮原生 `margin-right` 与固定行高（单选用 `gap` 排版时加） |
-| `.full-width` | 占满容器宽度 |
+- `Ctrl/Cmd+K`：命令面板。
+- `Esc`：关闭命令面板 / 抽屉 / dialog；若处于拖拽则取消拖拽。
+- `Enter`：打开高亮工具 / 确认当前主操作。
+- `↑/↓`：命令面板与列表导航。
+- `Tab/Shift+Tab`：焦点顺序保持“rail → topbar → tool header → nav → content → statusline”。
+- 首页工具行使用真实按钮语义；打开与置顶必须是两个并列按钮，不得把置顶按钮嵌套进工具行按钮。
 
-**使用约定**
+### 10.3 无障碍
 
-- 弱化说明文字用 `.muted` 或 `--color-text-secondary`；**排版统一用语义色**。
-- 卡片 / 网格 / 键值 / 提示 / 行内组等通用模式一律用组件库（见 §5），不得在 `main.scss` 恢复旧通用类。
-- **组件减法优先于样式微调**：手搓 `<table>` / 分段钮 / 侧栏菜单 / 输入框 / 下拉，先用平台组件（`UiTable` / `UiRadioGroup` / `UiMenuHorizontal` / `UiInput` / `UiDropdown`）再谈覆写。
-- **层级靠字号与色阶，不靠字重**：拉丁面只有 Regular / Medium 两个切面（§3.2.3），
-  600 会让中英混排半边变粗。需要更强的标题时，加字号、加间距、抬色阶，不要换字重。
-- 结构性间距 / 宽度 / 圆角见 §3.3–§3.5 的阶梯与豁免项，不要为一点差异新增魔法数字。
+- 正文、标签与占位符 ≥ 4.5:1；图形 / 焦点环 ≥ 3:1。
+- 状态不仅靠颜色，必须同时有文字或图标。
+- 所有图标按钮提供 `aria-label` / tooltip。
+- 文字缩放 125–150% 时，表格可横向滚动，rail 与 topbar 不重叠。
+- `prefers-reduced-transparency: reduce` 时 alpha 全部回 1、玻璃回 `none`。
+- `prefers-reduced-motion: reduce` 时过渡降到 0.01ms。
 
-## 7. 布局模式
+## 11. 工程迁移计划
 
-### 7.1 应用外壳
+> 目标：不改产品功能与 IPC 边界，只重构外壳、首页、工具页布局与运行时挂载策略。每个阶段单独可运行、可回滚。
 
-- 自定义标题栏（`titleBarStyle: hidden` + `titleBarOverlay`）：左侧品牌标 `edt`（Nunito 圆角，10% 品牌浅底 + 墨档蓝字）+ 工具页签。
-- **页签只靠「选中浅底」区分**（品牌色 14% + 中性黑标签），不再带身份圆点：
-  名称本身就是主线索，多一枚点只会把 34px 高的页签切碎。
-  同一套「选中 = 浅底 + 中性黑」语言在首页卡片头像与 hover 描边、页内 `UiMenuHorizontal` 选中胶囊上复用——
-  全站只有一个强调色，工具之间的区分交给图标与名称（工具定义里没有 `color`）。
-  强调色只做图形，标签文字永远是中性黑：亮档蓝压浅底当 12px 文字只有 2.66:1。
-- 无打开页签时仅显示品牌标。
-- **设置入口固定在标题栏右端**（`.header-settings`，34px 方形图标钮，齿轮图标）：Windows / Linux 上正好落在原生「最小化」按钮左侧（右侧 148px 原生按钮区之外），mac 上落在标题栏右端、红绿灯在另一侧。点击**打开一个「设置」页签**（不是弹窗），与工具页签同构：可关闭、可切换、常驻挂载；设置页签处于激活态时入口同步高亮（primary-light 底 + primary 字）。**首页不再有右下角悬浮设置按钮**。
-- **工具页签支持浏览器式拖拽排序**：拖拽中实时重排并用 FLIP 过渡，顺序随 `edt:tool-tabs` 持久化；拖拽浮层始终被钳在页签条可视区内（拖出边缘只停在首 / 尾槽，不会飞出页签区），`Esc` 取消；触屏保留横向滚动，不触发拖拽（指针类型不是鼠标 / 触笔时只滚动）。
-- 标题栏整行 `-webkit-app-region: drag`，页签区与设置入口 no-drag。
-- **标题栏默认无背景色**：不铺实色、不加分隔线，透出窗口画布；分层靠内容区上边界与原生窗口按钮。Windows 的 `titleBarOverlay` 底色同样设 `#00000000`，避免右上角露出一块实色矩形（见 `electron/main.ts` 的 `TITLEBAR_COLORS`）。
-- **仅 acrylic 模式给标题栏铺半透明表面**（`.app-shell.is-acrylic .app-header`）：acrylic 是「强模糊 + 透光」的临时浮层材质，壁纸细节直接透上来，需压一层 `--color-header`（白 85%）+ `backdrop-filter: var(--glass-header)`（16px）稳住原生按钮与页签文字的对比度。mica / tabbed（壁纸取色）与 mac 的 vibrancy（轻模糊）都不铺——叠了反而糊成一片。
-- 平台适配：mac 红绿灯左预留 88px，win/linux 右预留 148px（窗口按钮）。
-- 页内菜单已移除，菜单动作由主进程系统菜单提供；底部状态栏已删除，主区直抵窗口底缘。
-- 主区 `flex:1; min-height:0`，滚动只发生在内容区。
-- **页签机制是工程约定**：应用级页面（设置等）与工具页共享同一套页签（`APP_TABS` 注册、`electronOnly` 裁剪、`subRoutes` 拍平），注册方式与命名约定见 [AGENTS.md](./AGENTS.md)「布局与页签机制」。
+### Phase 0 — 基线与保护
 
-#### 7.1.1 半透明窗口
+1. 读取并记录当前首页、设置页、8 个工具页在 1280 / 1440 / 1600 宽度的截图。
+2. 标记所有工具页的 `onUnmounted`、`dispose`、`onBeforeUnmount`、IPC 取消订阅与 webview 清理。
+3. 保留 `git status` 中与本任务无关的用户改动，不覆盖 `TODO.md`、`telegram-tt/`、`tweb/`。
+4. 在 `docs/redesign-preview.html` 对照本文档逐项验收视觉，不先改业务组件。
 
-窗口外观（半透明 / 系统材质）由用户在「设置页签 → 窗口外观」切换，主进程是唯一事实来源
-（`<data>/app/window-appearance.json`），渲染层只镜像状态用于挂 CSS 类。
+### Phase 1 — 令牌、玻璃与基础组件
 
-##### 透明度与玻璃统一控制（`renderer/shared/styles/translucency.scss`）
+1. 更新 `renderer/shared/styles/tokens.scss`：新色阶、rail 角色、圆角、display 字号、阴影与动效。
+2. 更新 `renderer/shared/styles/translucency.scss`：合成 rail、各材质 alpha/glass、夜色重算与 reduced-transparency。
+3. 更新 `renderer/shared/styles/base.scss`：文本色阶、滚动条、选区、focus-visible 与最小字号检查。
+4. 调整基础组件，但不改 API：
+   - `UiButton`：32px 高、11px 圆角、主按钮改为墨蓝实底，移除过强光晕。
+   - `UiSearchInput` / `UiInput` / `UiSelect`：9–11px 圆角、玻璃底、focus 外环。
+   - `UiPanel`：圆角 16px；只在设置与辅助区使用，不再作为工具主容器。
+   - `UiTable`：表头 11px，表体 12px，行高 39–44px，表头 fill。
+   - `UiChip` / `UiStatusTag`：保持单档语义色，字号不低于 11px。
+5. 运行 `pnpm typecheck`、`pnpm lint`，并检查不透明 / acrylic / 夜色三态。
 
-**颜色 / 透明度 / 模糊三者分离**：`tokens.scss` 定义各表面角色的不透明基准色（`--color-<role>-base`）、
-默认 alpha 与默认玻璃（`--glass-* = none`）；`translucency.scss` 按窗口模式覆写 alpha（`--alpha-*`）
-与玻璃（`--glass-*`），并在 `:root` 用 `color-mix(in oklab, …)` 合成出 `--color-<role>` 供组件引用。
+### Phase 2 — 应用外壳与运行时
 
-- 九个透明角色：`raised` / `input` / `field` / `table` / `button` / `fill` / `header` / `pop` / `overlay`，
-  各自的职责与调节入口见 §3.1.1。
-- 五个玻璃角色：`raised` / `input` / `header` / `pop` / `overlay`（另加恒定的 `veil`），
-  见 §3.1.2。**同一个角色名同时管透视与模糊**，因此「让卡片更透一点」和「让卡片更糊一点」是同一个入口下的两个旋钮。
-- **画布不参与 alpha**：`--color-canvas` 恒为 `transparent`——工具页与主页同一观感，透出窗口 / 桌面；
-  半透明窗口的「透」由画布承担，各模式只在其余角色上做区分。
-- **组件只引用合成变量 / 玻璃变量**，永远不写死 `rgba` 或 `blur(Npx)`，也不关心当前是哪种模式。
-- **新增模式 = 加一条模式规则**覆写该模式的 alpha + glass 两组，组件零改动。
-- 默认（不透明）模式 alpha 全为 `1`、玻璃全为 `none`，视觉与旧版完全一致。
+1. 新增 `renderer/shared/components/AppRail.vue`，移除 `HeaderTabs` 的品牌标与设置入口依赖。
+2. 重构 `renderer/App.vue`：
+   - 68px rail + 48px topbar；
+   - 只挂载 `activeId`；
+   - 首页不挂载工具；
+   - 关闭页签执行 destroy；
+   - 保留 `runTabCloseGuard`。
+3. 新增 `renderer/shared/components/CommandPalette.vue`，接入工具注册表与 `Ctrl/Cmd+K`。
+4. `renderer/shared/components/HeaderTabs.vue` 改为 32px 紧凑页签，保留拖拽、键盘与横向滚动逻辑。
+5. 将设置入口移到 rail 底部；标题栏右侧只保留窗口控件预留。
+6. 验证：
+   - 首页零工具实例；
+   - 切换 tab 时旧工具 `onUnmounted` 必达；
+   - 关闭 tab 后无 webview / 定时器 / IPC 残留。
 
-> `field` / `table` / `button` / `input` 四档**刻意分开**：单独调某一类控件时不必牵动其它控件。
-> 其中 `field` 已被单独调低（acrylic 下 .30）：它只服务「卡片内的表单输入」，
-> 与卡片叠加后的有效白 ≈ `.30 + .70×.78 ≈ .85`；贴画布（没有卡片托底）的控件走 `input`（.88）。
+### Phase 3 — 首页 / 启动台
 
-各模式 alpha 取值：
+1. 重写 `renderer/pages/HomePage.vue`：搜索坞 + 单一 launcher 表面 + 两列工具行。
+2. 新建 `renderer/shared/components/LauncherRow.vue`；`ToolCard.vue` 进入弃用状态，待全部引用移除后删除。
+3. 保留 `tool-order.ts` 的排序逻辑；收藏改名置顶，默认取前 4 个进入 rail。
+4. 搜索直接打开命令面板；首页行内搜索可选保留，但不能出现两套互不一致的结果。
+5. 移除版本号、分类、运行状态、`isNew` 徽章与右侧说明；保留最多两行的 `description`。
+6. 回归 `UiPreferences` 同步、LocalStorage 镜像、拖拽排序与恢复默认。
 
-| 模式 | raised | input | field | table | button | fill | header | pop | overlay |
-| ------ | -------- | ------- | ------- | ------- | -------- | ------ | -------- | ----- | --------- |
-| 默认（不透明） | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| acrylic | .78 | .88 | .30 | .88 | .88 | .80 | .60 | .94 | .92 |
-| mica | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
-| tabbed | .98 | .99 | .99 | .99 | .99 | .98 | .98 | 1 | 1 |
-| vibrancy（mac） | .96 | .97 | .97 | .97 | .97 | .95 | .96 | .98 | .98 |
-| 纯 transparent（无材质） | .88 | .93 | .93 | .93 | .93 | .90 | .88 | .96 | .96 |
+### Phase 4 — 工具工作区框架与逐工具迁移
 
-各模式玻璃细节旋钮（`--alpha-highlight` / `--alpha-switch-track` / `--alpha-switch-knob`，见 §3.1.3）：
+1. 新增 `WorkspaceHeader.vue`、`ToolSurface.vue`、`ToolSideInspector.vue`。
+2. 按风险从低到高迁移：
+   1. 身份证号生成器 → 验证表单工作室。
+   2. 拦截器 → 验证流式工作台与路由子视图。
+   3. Telegram 网络优化、tweb → 验证 webview + inspector。
+   4. Treease 编辑器 → 验证全幅 webview。
+   5. 离线包下载 → 验证处理控制台与历史抽屉。
+   6. WXP 增强 → 验证进程状态、设置与缓存表。
+   7. WorkBuddy2API → 验证安装 / 启停 / 关闭销毁。
+3. 每个工具迁移时只允许保留一个主 `ToolSurface`；删除首屏 `UiPanel` 堆叠。
+4. 页面级滚动仍只发生在 `.app-main` 或工具自身主区域；任何 `flex:1` 子项必须配 `min-height:0`。
+5. 替换后运行对应工具的实际操作：启动、停止、生成、下载、打开外部、关闭页签。
 
-| 模式 | highlight | switch-track | switch-knob |
-| ------ | ----------- | ------------ | ----------- |
-| 默认（不透明） | 0 | 1 | 1 |
-| acrylic | .60 | .82 | .94 |
-| mica | .35 | .95 | .98 |
-| tabbed | .25 | .98 | 1 |
-| vibrancy（mac） | .40 | .95 | .98 |
-| 纯 transparent（无材质） | .60 | .88 | .96 |
+### Phase 5 — 设置、反馈与边界状态
 
-各模式玻璃取值（`saturate` 为共享增益，模糊半径单位 px）：
+1. 设置页改用新表单令牌与 rail 入口。
+2. `UiDialog` 圆角 22px，遮罩 `blur(8px)`，按钮顺序保持“取消 / 危险动作 / 主操作”。
+3. toast 使用 `vue-sonner`，圆角 12px，深色玻璃，不遮挡 statusline。
+4. 检查 125% / 150% 缩放、1024px 宽、页签溢出、长工具名、搜索空态、错误态。
 
-| 模式 | saturate | raised | input | header | pop | overlay |
-| ------ | ---------- | -------- | ------- | -------- | ----- | --------- |
-| 默认（不透明） | 100% | none | none | none | none | none |
-| acrylic | 135% | 18 | 14 | 16 | 24 | 28 |
-| mica | 115% | 10 | 8 | none | 16 | 18 |
-| tabbed | 105% | 8 | 6 | none | none | none |
-| vibrancy（mac） | 120% | 12 | 10 | none | 18 | 20 |
-| 纯 transparent（无材质） | 110% | 20 | 16 | none | 24 | 28 |
+### Phase 6 — 视觉与行为验收
 
-取值原则：控件类（input / field / table / button）比卡片（raised）更实，避免边框与背后内容打架；
-`pop` 最实，因为下拉贴在输入框下方、底下压着密集表单内容；`header` 在 acrylic 下最透（材质效果最强）。
-玻璃半径与 alpha 反相关：越透的表面越需要糊（纯 transparent 没有系统模糊兜底，半径最大）；
-`tabbed` 的浮层已不透明，模糊对它没有意义，故为 `none`——**只在真的能看出来时才付合成开销**。
+必须全部通过：
 
-##### 嵌套表面与玻璃层级（Tahoe / Liquid Glass）
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm data-layers:check`
+- `pnpm vite build`
+- `pnpm web`：首页、命令面板、3 个工具骨架在浏览器可见
+- `pnpm dev`：Electron 外壳、半透明、设置页、关闭销毁
+- 1280 / 1440 / 1600 宽度截图
+- 不透明 / acrylic / mica / 夜色玻璃 / reduced-transparency 截图
+- `Ctrl/Cmd+K`、Tab、Enter、Esc、方向键全键盘路径
+- 关闭工具后检查：
+  - DOM 中无该工具根节点；
+  - webview guest 计数回落；
+  - store 订阅 / 定时器 / 子进程已停止；
+  - 重新打开时从头初始化；
+  - 草稿与配置仍从 JSON store 恢复。
 
-玻璃只负责「表面 ↔ 背景」这一层，**不要给相邻的每一层都做玻璃**：
+### 文件落点
 
-1. **分层**：壁纸 → 画布（`transparent`）→ 表面（唯一一层 blur）→ 控件（无 blur）→ 浮层（可再有一层）。
-   一个视觉表面只做一次 `backdrop-filter`；`field` / `table` / `button` / `fill` 永远没有玻璃。
-2. **合成不是叠加**：控件看到的是父表面合成后的颜色，不是壁纸。
-   `控件实际 = α控·白 + (1−α控)·卡片`，`壁纸残留 = (1−α卡)(1−α控)`。
-   文字处的壁纸残留 ≤ 15%（≈ 4.5:1 对比度的经验值），控件边界 ≥ 3:1。
-3. **alpha 阶梯**：有内容的卡片 .82–.88 → 卡片内控件的**表面** .3–.6（叠加后有效 ~85%）→
-   贴画布的控件 ≥ .8 → 浮层 .92–.96；文字 / 图标 / 状态指示件恒为 1（内容永远不透明）。
-4. **前景件保持近实，靠高光读边界**：开关滑块、图标钮这类小体积元素，填充始终 ≥ .9，
-   1px 高光只负责在透明轨道上把边界提亮；**真正参与透明的是轨道 / 卡片，不是滑块**
-   （滑块调透会直接消失——不要把「透」用在承载状态指示的元件上）。
-5. **禁用态用颜色降对比**，不要给容器写 `opacity`——那会把文字、图标、可点区域一起弄淡。
-6. **避免 glass-on-glass**：确需叠加（弹层压卡片）时抬 alpha 到 .92+、降模糊半径，或合并成一层。
-7. **圆角同心**：内层圆角 = 外层圆角 − 内边距（例如卡片 16 / 控件 10），一眼像一块材料。
-8. **跟随系统「降低透明度」**：`@media (prefers-reduced-transparency: reduce)` 已把全部 alpha 退回 1、
-   玻璃退回 `none`（见 `translucency.scss` 末尾）。
-9. **每种窗口模式独立控制**：acrylic / mica / tabbed / vibrancy / transparent-only 各自有一份 alpha 与
-   三档细节旋钮（highlight / switch-track / switch-knob）。调整顺序固定：
-   先 alpha 定透视 → 再 `--glass-*` 定模糊 → 最后用 highlight 补边界。
+| 工作 | 文件 |
+| --- | --- |
+| 设计令牌 | `renderer/shared/styles/tokens.scss` |
+| 玻璃 / 夜色 | `renderer/shared/styles/translucency.scss` |
+| 基础排版 / focus / 滚动条 | `renderer/shared/styles/base.scss` |
+| 应用外壳 | `renderer/App.vue` |
+| 左侧导航 | `renderer/shared/components/AppRail.vue`（新增） |
+| 命令面板 | `renderer/shared/components/CommandPalette.vue`（新增） |
+| 紧凑页签 | `renderer/shared/components/HeaderTabs.vue` |
+| 首页 | `renderer/pages/HomePage.vue` |
+| 工具入口行 | `renderer/shared/components/LauncherRow.vue`（新增） |
+| 工具 header / surface / inspector | `renderer/shared/components/workspace/`（新增） |
+| 设置页 | `renderer/pages/SettingsPage.vue` |
+| 工具页 | `tools/<tool>/renderer/pages/*.vue` |
+| 可交互预览 | `docs/redesign-preview.html` |
 
-其他约定：
+## 12. Do's and Don'ts
 
-- **必须同时放行 alpha**：`html` / `body` 的默认底色会盖住原生透明通道，
-  `base.scss` 已把它们设为 `transparent`；漏掉这一步界面看起来毫无变化（最常见的坑）。
-- **弹层必须靠 `<html>` 拿变量**：弹层全部 teleport 到 body，不在 `.app-shell` 内。
-  模式类因此由 `App.vue` 同时挂到 `.app-shell` 与 `<html>`，`translucency.scss` 的 `mode()` mixin
-  匹配这两处落点；`--color-*` 合成变量也定义在 `:root` 而非 `.app-shell`。
-  只在 `.app-shell` 上定义会导致下拉 / 弹窗全部变成透明（曾踩过的坑）。
-  mixin 只写 `html.is-x` 与 `.app-shell.is-x` 两种形态：前者是弹层唯一能继承到的来源，
-  后者是 html 同步失效时的兜底；**`html.is-x .app-shell` 不写**——html 上已有类时它纯属重复。
-  玻璃变量同理：它们由模式类覆写，因此同样同时挂在 `<html>` 与 `.app-shell`。
-- **系统投影补偿**：透明窗口没有原生阴影，用 `--shadow-window-frame` 补回浮起感。
-- **首页与工具页画布一律透明**，不再有「只铺工具页」的区别。
-- **平台能力**（见 `shared/appearance.ts`）：win32 走 `backgroundMaterial`
-  （mica / acrylic / tabbed，需 22H2+），darwin 走 `vibrancy`，二者与 `transparent` 互斥；
-  Linux 不声明支持（依赖合成器）。能力表同时驱动设置页里选项的禁用态。
-- **生效时机**：`transparent` / `vibrancy` / `backgroundMaterial` 只在窗口构造时生效，
-  因此外观必须先于 `createWindow` 读盘；运行期切换只能改 CSS 与部分原生 setter。
+### Do
 
-### 7.2 首页工具网格
+- **Do** 让一个工具页只有一个主工作区表面。
+- **Do** 把设置、诊断、说明和安装收进 inspector / 抽屉 / 子路由。
+- **Do** 让首页工具行只保留图标、名称、一句描述、置顶与进入箭头。
+- **Do** 使用 `Ctrl/Cmd+K` 和左轨保证任意位置快速打开工具。
+- **Do** 使用品牌蓝表达“当前、可操作、聚焦”，并让选中文字保持中性主文本。
+- **Do** 在所有材质和夜色下检查玻璃上的文字对比。
+- **Do** 在关闭前只对真实的未完成任务弹确认，完成后直接释放。
 
-- 内容最大宽 `--content-max-width`，居中。
-- **首页不再按分类分组**：所有工具一张平铺网格（收藏单独一块，顺序与「所有工具」一致）。
-- 默认顺序按工具 `createdAt` 倒序（最新在前）；拖拽卡片可自定义顺序，落配置层 `app/ui-preferences.json`
-  （LocalStorage 仅镜像），区块头提供「恢复默认排序」。
-- 拖拽排序用「固定槽位 + transform 实时预览」：拖拽中 DOM 顺序不动，卡片用 CSS `transform`
-  滑入目标槽位，松开后再一次性提交顺序；避免过渡动画与原生拖拽互相打断。
-- 工具卡片：白底浮岛 + 字母头像行，hover 浅底提示；收藏星标为绝对定位浮层。
-- **全站唯一强调色**：头像渐变、hover 描边（品牌色 42%）、拖拽源虚线都取 `--color-primary`
-  ——工具之间的区分交给图标与名称，不再按工具配色。
-  收藏星是全站唯一的琥珀：静息灰描边星 → hover 浅底琥珀星 → 已收藏实底琥珀 + 白星（4.89:1）。
-  「我的收藏」区块标题前用同一支琥珀星，让这一区一眼可认。
+### Don't
 
-### 7.3 工具页：两种骨架
+- **Don't** 在首页展示运行状态、版本、分类、进程、路径或统计卡片。
+- **Don't** 用 `UiPanel` 堆出工具首屏的三四块并列面板。
+- **Don't** 保留所有打开页签的隐藏挂载或跨工具 `KeepAlive`。
+- **Don't** 在工具之间使用不同强调色或给工具定义 `color`。
+- **Don't** 把 9–10px 文本、亮蓝小字、彩色左边条或渐变文字带入生产界面。
+- **Don't** 给每一层表面都加 `backdrop-filter` 或阴影。
+- **Don't** 用弹窗承载可以直接在工作区内完成的任务。
 
-工具页只有两种骨架。**选错骨架**（把表单铺满 1600px、或把数据网格塞进 760 栏）是这一层最常见的返工。
+## 13. Agent 维护地图
 
-| 骨架 | 判据 | 页面骨架 | 谁 |
-| ------ | ---------------- | ---------------------------------------------- | ------------------------------------------ |
-| **文档型** | 读完 → 填 → 确认 | 内容栏 `--column-document`（760）居中；页面内边距 `24 / 32 / 32`（≤760 收 16）；同级区块 24 | 设置、离线包、身份证生成器 |
-| **工作区型** | 边看边操作、多区域并行 | 铺满窗口，**不设内容栏**；面板 / 侧栏 / 表格可贴边，贴边时由各 pane 自己的内边距负责呼吸（≥12） | interceptor、telegram-cache、workbuddy2api |
+本设计系统刻意拆成四层，后续 agent 不应把所有内容重新塞回一个文件：
 
-- **文档型为什么要有栏**：不设栏时窗口一宽，「标签 → 输入框」能拉出 1500px，扫读要转头；
-  说明文字又会因为 `--measure-prose` 在半途截断，右边缘和输入框对不齐。
-  栏宽固定后，标题、正文、控件、说明的左右边缘落在**同一条线**上。
-- **WXP 走「文档型」的全宽变体**：结构不变（状态 → 填 → 确认，标签 + 控件），但内容栏从 760 改为**铺满窗口**——
-  它的 WXP 路径、启动参数、登录信息键值与收藏表格都靠宽度换可读性，居中窄栏在宽窗口下两侧空一大片。
-  页面内边距仍取 `24 / 32 / 32`（≤760 收 16），面板自身内边距与内部节奏不变。
-- **工作区型为什么不能有栏**：表格列、webview、双栏面板靠宽度换信息密度；加栏等于把可用区砍掉一截。
-  它们只守一条：**页面级内边距 0–16，且内容不贴死窗口边**——pane 内部自己负责 12–16 的呼吸。
-- 具体实现：
-  - 页签 + 面板（interceptor / telegram-cache / offline-pack）：`tool-page` + `UiMenuHorizontal` + `KeepAlive` 包裹的 `<component :is>`，子视图由路由驱动；需要品牌图标时给 `items` 传 `icon`。
-  - 顶栏 + 内容（treease / wxp）：`UiToolbar` 顶栏 + 下方内容（wxp 的内容全宽铺满，见上方全宽变体）。
-  - 居中卡片（id-card-generator）：`tool-page` 内居中一张卡片（720），不铺栏。
+| 层 | 文件 | 权威范围 | 更新时机 |
+| --- | --- | --- | --- |
+| 人读设计契约 | `DESIGN.md` | 视觉世界、令牌语义、组件规则、布局骨架、生命周期硬约束、验收标准 | 任何设计方向、令牌、组件 API 或工具骨架变化 |
+| 机器可读侧车 | `.impeccable/design.json` | 颜色、字体、圆角、间距、核心组件契约 | 与 DESIGN 的 frontmatter / 令牌表同步 |
+| 可执行迁移计划 | `docs/redesign-implementation-plan.md` | Phase 0–6 复选框、证据路径、未完成项、回归方法 | 每完成一个阶段或一次验收 |
+| 交互视觉预览 | `docs/redesign-preview.html` | 首页、命令面板、工具工作区、夜色玻璃与材质状态 | 视觉方向变更前先改预览，再改产品代码 |
 
-### 7.4 面板与详情
+**实现索引**
 
-- 面板内部节奏固定：标题→内容 16（`UiPanel` 自带 header 下边距 + 分隔线）、行与行 8；
-  面板自身的内边距 16。**不要**在面板里再用 24 / 32 分隔同级内容——那是区块层的事（§3.3.1）。
-- 详情用 `UiDetailGrid` + `UiDetailItem`（label + value 卡片，≤760px 单列）。
-- 键值清单用 `UiKeyValue`（顶部分隔线式）。
-- 分区用 `UiPanel variant="outlined"`（描边分区块）。
+- 设计令牌：`renderer/shared/styles/tokens.scss`
+- 玻璃与夜色：`renderer/shared/styles/translucency.scss`
+- 全局浏览器表面：`renderer/shared/styles/base.scss`
+- 平台组件：`renderer/shared/components/ui/`
+- 组合型工作区组件：`renderer/shared/components/workspace/`
+- 应用壳与生命周期：`renderer/App.vue`、`renderer/shared/components/AppRail.vue`、`renderer/shared/components/HeaderTabs.vue`
+- 首页与启动台：`renderer/pages/HomePage.vue`、`renderer/shared/components/LauncherRow.vue`
 
-### 7.5 表格
+**维护顺序（不可跳步）**
 
-- 统一用 `UiTable`（原生 `<table>`：表头 / 行 hover 取 `--color-fill`、行底取 `--color-table`、容器 `radius-lg`、表体 12px、单元格行高 `--line-height-control`）。
-- 列定义写 `UiTableColumn`；整表等宽传 `mono`（ID / 摘要 / 字节列），行可点击传 `rowClickable`，空态用 `emptyText`（内部渲染 `UiEmpty`）。
-- 数字列用 `.mono`，时间列用 `.muted`，状态列用 `UiChip`（`variant="soft"`）。
-
-## 8. 交互与动效
-
-- **入场动画**：应用外壳顶栏下滑淡入；工具页侧栏左滑、状态面板右淡入（gsap）。
-- **路由过渡**：`.page-*` 类实现淡入淡出 + 轻微位移。
-- **卡片 hover 抬高**：列表卡 / 工具卡 hover 抬描边或浅底；标题栏设置入口 hover 铺 `--color-fill` 浅底。
-- **prefers-reduced-motion**：全局降级（动画时长压缩到 0.01ms），已在 `main.scss` 处理。
-
-## 9. 无障碍
-
-- 图标按钮提供 `aria-label` / `title`。
-- 键盘焦点统一 `--shadow-focus` 焦点环。
-- 交互元素可键盘触发（列表卡支持 Enter / Space）。
-- 文本对比遵循主/次级/三级分层：**文字只用墨档与中性文本令牌**，
-  正文/小字 ≥ 4.5:1、`≥18.66px` 或粗体大字 ≥ 3:1、图形与图标线 ≥ 3:1。
-- 改颜色后按「白底 + `--color-fill` 灰调底 + 自身 10% 浅底」三处验算，
-  并在真实渲染的 DOM 上量（`getComputedStyle` + 混合透明度后的实际底色），不要只看色值。
-- 状态不靠颜色单独表达：`UiStatusTag` 永远与文字标签同行，`UiChip` 带文字，拖拽态仍有虚线边框与缩放。
-- **强调不只靠字重**：`<strong>` 同时抬色阶（正文说明是次级灰 → 主文本黑），
-  这样只有 Regular/Medium 拉丁面的环境下，加粗不生效时仍读得出强调（§3.2.3）。
-- **可缩放**：字号全部是 px 令牌，Chromium 缩放（Ctrl +/-）按比例放大，不写 `user-scalable=no`。
+1. 先改本文件或预览，明确是“重构世界”还是“保真细化”。
+2. 同步 `.impeccable/design.json` 与令牌表；令牌名不改语义，旧名保留兼容。
+3. 先生成 / 更新 `Ui*` 基础组件，再迁移应用壳，再迁移首页，最后迁移单工具页。
+4. 单工具页只能选择 §8.1 的四种骨架之一；辅助信息进入 inspector、抽屉或子路由。
+5. 修改运行时挂载或关闭路径时，必须验证“切走、关闭页签、回首页、退出应用”四条路径，并在实施计划里记录端口 / DOM / 进程证据。
+6. 每个阶段完成后更新 `docs/redesign-implementation-plan.md` 的复选框与证据路径；只改产品代码、不改契约视为未完成。
 
 ---
 
-*本文档随 UI 演进维护；令牌与组件变更需同步本文件与 [AGENTS.md](./AGENTS.md)。*
+*本文档是 Command Deck 改版的实现契约。任何令牌、外壳或工具页视觉变更必须同步本文件；预览文件 [`docs/redesign-preview.html`](docs/redesign-preview.html) 用于在正式改代码前确认方向。*

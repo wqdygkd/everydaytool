@@ -1,4 +1,4 @@
-// 应用自带页面（非工具）：与工具页共享同一套页签 / 常驻挂载机制，
+// 应用自带页面（非工具）：与工具页共享同一套页签 / 活动页挂载机制，
 // 区别只是「没有工具元数据、不出现在首页网格」——设置就是第一个这样的页面。
 //
 // 为什么单独一张表而不是塞进 tools：工具是「首页可浏览的功能」，设置是应用本身的一部分；
@@ -11,7 +11,7 @@ import { defineAsyncComponent } from 'vue'
 import { isElectronEnvironment } from '../shared/environment'
 
 export interface AppTab {
-  /** 页签 id，同时作为路由 meta.toolId（页签高亮与常驻挂载依赖它） */
+  /** 页签 id，同时作为路由 meta.toolId（页签高亮与活动组件解析依赖它） */
   id: string
   /** 页签标题 */
   name: string

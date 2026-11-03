@@ -52,24 +52,10 @@ function selectRuleType(type: RuleType | null): void {
   router.push(type ? { name: ruleTypeRouteName(type) } : { name: 'tool-interceptor-rules' })
 }
 
-/** 面包屑「规则」：清空本地过滤并回到全部类型路由 */
-function resetToList(): void {
-  activeFilter.value = 'all'
-  searchValue.value = ''
-  if (activeType.value) router.push({ name: 'tool-interceptor-rules' })
-}
-
-/** 面包屑仅第一级（规则）可点；末级为当前视图 */
-function onBreadcrumbNavigate(index: number): void {
-  if (index === 0) resetToList()
-}
-
 /** 编辑器面包屑仅「规则」可点：返回列表 */
 function onEditorCrumbNavigate(index: number): void {
   if (index === 0) closeEditor()
 }
-
-const activeFilterLabel = computed(() => filterOptions.find(option => option.key === activeFilter.value)?.label ?? '全部')
 
 const filterCounts = computed<Record<FilterKey, number>>(() => ({
   all: store.rules.length,
@@ -709,12 +695,6 @@ async function remove(rule: InterceptorRule): Promise<void> {
 <template>
   <div v-if="view === 'list'">
     <div>
-      <UiBreadcrumb
-        class="rq-breadcrumb"
-        :items="[{ label: '规则' }, { label: activeType ? RULE_TYPE_LABELS[activeType] : activeFilterLabel }]"
-        @navigate="onBreadcrumbNavigate"
-      />
-
       <div class="rq-content-list-header">
         <div class="rq-content-list-header-filters">
           <UiSearchInput
@@ -1243,11 +1223,6 @@ async function remove(rule: InterceptorRule): Promise<void> {
 
 <style scoped>
 /* ── 列表屏（UiTable + 语义令牌，与全应用表格一致） ── */
-
-/* 面包屑用 UiBreadcrumb；仅保留原列表屏的底部间距 */
-.rq-breadcrumb {
-  margin: 0 0 var(--spacing-sm);
-}
 
 .rq-content-list-header {
   display: flex;
