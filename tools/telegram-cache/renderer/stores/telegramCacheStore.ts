@@ -98,7 +98,7 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
     }))
 
     const [initialSnapshot, initialMtproto] = await Promise.all([
-      invoke<TelegramSnapshot>(ch.SNAPSHOT_GET),
+      invoke<TelegramSnapshot>(ch.RUNTIME_ACTIVATE),
       invoke<TelegramMtprotoStatus>(ch.MT_STATUS),
     ])
     applySnapshot(initialSnapshot)
@@ -107,6 +107,7 @@ export const useTelegramCacheStore = defineStore('telegramCache/state', () => {
   }
 
   function dispose(): void {
+    void invoke(channels().RUNTIME_DEACTIVATE).catch(() => undefined)
     for (const off of disposers) off()
     disposers = []
     if (libraryRefreshTimer !== undefined) {

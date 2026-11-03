@@ -39,7 +39,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="scss">
-/* 图标按钮：定宽无内边距，弱化描边；hover 抬深 + 浅底，active 高亮为警示色 */
+/* 图标按钮：定宽无内边距；hover 用 fill，active 只表达真实选中。 */
 .ui-icon-button {
   display: grid;
   place-items: center;
@@ -51,16 +51,16 @@ const emit = defineEmits<{
   transition: color var(--transition-fast), background var(--transition-fast);
 
   flex-shrink: 0;
-  padding: 0;
   color: var(--color-text-secondary);
 
   &:hover {
     color: var(--color-text-primary);
-    background: var(--color-border-light);
+    background: var(--color-fill);
   }
 
   &.is-active {
-    color: var(--color-warning);
+    color: var(--color-primary-strong);
+    background: var(--color-primary-soft);
   }
 
   &.is-danger {

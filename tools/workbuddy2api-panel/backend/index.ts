@@ -4,7 +4,7 @@ import { logger } from '../../../backend/utils/logger.ts'
 import { registerWb2apiPanelHandlers } from './ipc/handlers.ts'
 import { installWb2apiGuestGuards } from './services/guest-guards.ts'
 import { stopManagedProcess } from './services/process-service.ts'
-import { publishStateNow, startStatePublisher, stopStatePublisher } from './services/state-service.ts'
+import { publishStateNow, stopStatePublisher } from './services/state-service.ts'
 import { ensureWb2apiDirs } from './utils/paths.ts'
 
 export const workbuddy2apiPanelBackend = {
@@ -21,8 +21,6 @@ export const workbuddy2apiPanelBackend = {
     }
     installWb2apiGuestGuards()
     registerWb2apiPanelHandlers()
-    // 运行中定时探活推送（加账号后 health 会变）；默认仍不自动 start
-    startStatePublisher()
 
     // 清缓存会删掉 runtime/ 里的二进制：manifest 还在，但「已安装」必须重算（= 二进制真的存在）
     registerCacheIntegrityHandler(async () => {

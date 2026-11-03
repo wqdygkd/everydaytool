@@ -49,6 +49,7 @@ function emit(channel: string, payload: unknown): void {
 }
 
 let initialized = false
+let lifecycleQueue: Promise<void> = Promise.resolve()
 let extensionDir: string | null = null
 let caStatusCache: { at: number, status: CaStatus } | null = null
 /** 代理端口降级说明（配置端口不可用时改用随机端口的原因，供 UI 如实展示） */
@@ -105,6 +106,12 @@ wsBridge = createWsBridge({
 
 function emitRuntimeStatus(): void {
   emit(INTERCEPTOR_IPC_CHANNELS.EVENT_STATUS, buildRuntimeStatus())
+}
+
+function enqueueLifecycle(task: () => Promise<void>): Promise<void> {
+  const run = lifecycleQueue.then(task, task)
+  lifecycleQueue = run.catch(() => undefined)
+  return run
 }
 
 function emitTargetsChanged(): void {
@@ -572,25 +579,44 @@ export async function exportCaCert(destPath: string): Promise<void> {
 
 export const interceptorService = {
   async initialize(): Promise<void> {
-    if (initialized) return
-    initialized = true
-    await loadConfig()
-    await loadRules()
-    await migrateLegacyScripts()
-    try {
-      await ensureRootCa()
-    } catch (error) {
-      logger.warn('Root CA init failed (will retry on demand)', { error: (error as Error).message })
-    }
-    extensionDir = await prepareExtensionDirectory()
-    await startProxyOnConfiguredPort()
-    await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE)
-    logger.info('Browser bridge started', { proxyPort: proxyService.getPort(), wsPort: wsBridge.getPort() })
+    return enqueueLifecycle(async () => {
+      if (initialized) return
+      initialized = true
+      try {
+        await loadConfig()
+        await loadRules()
+        await migrateLegacyScripts()
+        try {
+          await ensureRootCa()
+        } catch (error) {
+          logger.warn('Root CA init failed (will retry on demand)', { error: (error as Error).message })
+        }
+        extensionDir = await prepareExtensionDirectory()
+        await startProxyOnConfiguredPort()
+        await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE)
+        logger.info('Browser bridge started', { proxyPort: proxyService.getPort(), wsPort: wsBridge.getPort() })
+        emitRuntimeStatus()
+      } catch (error) {
+        await wsBridge.stop().catch(() => undefined)
+        await proxyService.stop().catch(() => undefined)
+        initialized = false
+        emitRuntimeStatus()
+        throw error
+      }
+    })
   },
 
   async dispose(): Promise<void> {
-    await wsBridge.stop()
-    await proxyService.stop()
+    return enqueueLifecycle(async () => {
+      try {
+        await wsBridge.stop()
+        await proxyService.stop()
+        logger.info('Browser bridge stopped')
+      } finally {
+        initialized = false
+        emitRuntimeStatus()
+      }
+    })
   },
 
   getRuntimeStatus: buildRuntimeStatus,

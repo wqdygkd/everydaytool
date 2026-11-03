@@ -87,13 +87,14 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 0 1 auto;
   width: 100%;
-  height: 48px;
-  padding: var(--spacing-xs) 0;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--color-border-light);
   overflow-x: auto;
   overflow-y: hidden;
-  background: var(--color-raised);
+  background: color-mix(in srgb, var(--color-fill) 72%, transparent);
   /* 与卡片 / 面板同一圆角（--radius-lg），避免并排时观感不一致 */
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   scrollbar-width: none;
 }
 
@@ -103,13 +104,14 @@ onBeforeUnmount(() => {
 
 .ui-menu-horizontal-indicator {
   position: absolute;
-  top: var(--spacing-xs);
+  top: 2px;
   left: 0;
-  height: 40px;
-  border-radius: 999px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 17%, transparent);
+  border-radius: calc(var(--radius-sm) - 2px);
   /* 选中态用**品牌色**淡底：与页签、列表卡、分段钮共用同一支强调色，
      同一个界面里只有一套「选中 = 浅底 + 中性黑文字」的语言。 */
-  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
   opacity: 0;
   pointer-events: none;
 }
@@ -127,15 +129,15 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-xs);
-  height: 40px;
-  margin: 0 var(--spacing-xs);
-  padding: 0 var(--spacing-lg);
+  height: 28px;
+  margin: 0 1px;
+  padding: 0 var(--spacing-md);
   border: none;
-  border-radius: 999px;
+  border-radius: calc(var(--radius-sm) - 2px);
   background: transparent;
   color: var(--color-text-secondary);
   font-family: inherit;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-control);
   white-space: nowrap;

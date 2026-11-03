@@ -28,10 +28,13 @@ let siteStatus: TwebCacheSiteInfo = { ...EMPTY_SITE }
 let siteHandle: { url: string, port: number, token: string, stop: () => void } | null = null
 /** 打开的 tweb-cache 页签数：>0 时站点保持运行，归零后闲置停站点 */
 let siteRefCount = 0
-let idleStopTimer: NodeJS.Timeout | undefined
+let lifecycleQueue: Promise<void> = Promise.resolve()
 
-/** 站点闲置停机延迟：最后一个页签关闭后等这段时间再停，避免快速重开时反复换端口 */
-const SITE_IDLE_STOP_DELAY_MS = 5 * 60 * 1000
+function enqueueLifecycle<T>(task: () => Promise<T>): Promise<T> {
+  const run = lifecycleQueue.then(task, task)
+  lifecycleQueue = run.then(() => undefined, () => undefined)
+  return run
+}
 
 function resolveSiteRoot(): string {
   return path.join(app.getAppPath(), 'tweb', 'dist')
@@ -57,30 +60,19 @@ export async function initializeTwebCacheSite(): Promise<void> {
 
 /** 懒启动入口：页签打开时才真正拉起站点；幂等，重复调用只增加引用计数 */
 export async function ensureTwebCacheSiteStarted(): Promise<TwebCacheSiteInfo> {
-  cancelIdleStopTimer()
-  siteRefCount++
-  if (siteHandle) return getTwebCacheSiteStatus()
-  await startSite()
-  return getTwebCacheSiteStatus()
+  return enqueueLifecycle(async () => {
+    siteRefCount++
+    if (!siteHandle) await startSite()
+    return getTwebCacheSiteStatus()
+  })
 }
 
-/** 页签卸载时释放引用；归零后延迟停站点（快速重开不重启） */
-export function releaseTwebCacheSite(): void {
-  siteRefCount = Math.max(0, siteRefCount - 1)
-  if (siteRefCount > 0 || !siteHandle) return
-  cancelIdleStopTimer()
-  idleStopTimer = setTimeout(() => {
-    idleStopTimer = undefined
-    stopSite('idle')
-  }, SITE_IDLE_STOP_DELAY_MS)
-  idleStopTimer.unref()
-}
-
-function cancelIdleStopTimer(): void {
-  if (idleStopTimer !== undefined) {
-    clearTimeout(idleStopTimer)
-    idleStopTimer = undefined
-  }
+/** 页签卸载时释放引用；归零即停站点，关闭工具不保留后台服务 */
+export function releaseTwebCacheSite(): Promise<void> {
+  return enqueueLifecycle(async () => {
+    siteRefCount = Math.max(0, siteRefCount - 1)
+    if (siteRefCount === 0 && siteHandle) stopSite('idle')
+  })
 }
 
 function stopSite(reason: 'idle' | 'dispose'): void {
@@ -148,6 +140,5 @@ async function startSite(): Promise<void> {
 }
 
 export function disposeTwebCacheSite(): void {
-  cancelIdleStopTimer()
   stopSite('dispose')
 }

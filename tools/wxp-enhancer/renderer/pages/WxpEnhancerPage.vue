@@ -3,6 +3,9 @@ import type { WxpRunningStatus } from '../../../../shared/wxp'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { toast } from 'vue-sonner'
+import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
+import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
+import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
@@ -31,6 +34,7 @@ const launching = ref(false)
 const stopping = ref(false)
 const saving = ref(false)
 const clearing = ref(false)
+const settingsOpen = ref(true)
 
 let syncingForm = false
 
@@ -265,45 +269,23 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unsubscribeStatus?.()
+  if (isRunning.value) void store.stop().catch(() => undefined)
 })
 </script>
 
 <template>
   <div class="wxp-enhancer-page tool-page">
-    <!-- 运行状态 -->
-    <UiPanel class="status-card">
-      <div class="status-info">
-        <!-- 状态卡只有这一行：状态点 + 状态名 / 运行事实 / 过程说明 / 待清除提示都排在同行，
-             任何状态都不额外增行，避免启动过程中卡片高度跳动。 -->
-        <div class="status-line">
-          <!-- aria-live 只包状态文字：PID / 端口 / 页面随轮询变动，不该被反复朗读 -->
-          <div class="status-head" role="status" aria-live="polite">
-            <UiStatusTag :tone="statusTone" :pulsing="statusTone === 'success'" />
-            <span class="status-name">{{ statusLabel }}</span>
-          </div>
-          <!-- 运行事实（已连上 CDP 才给）：PID / 端口 / 页面 -->
-          <UiGroup v-if="isConnected" gap="xs" wrap>
-            <UiChip mono>
-              PID {{ store.running?.pid ?? '-' }}
-            </UiChip>
-            <UiChip mono>
-              端口 {{ store.running?.port }}
-            </UiChip>
-            <UiChip mono>
-              页面 {{ store.running?.targetCount ?? 0 }}
-            </UiChip>
-          </UiGroup>
-          <UiGroup v-else-if="store.loginCacheClearPending" gap="xs" wrap>
-            <UiChip tone="warning">
-              登录缓存待清除：下次启动时自动执行
-            </UiChip>
-          </UiGroup>
-          <span v-if="statusDetail" class="status-detail">{{ statusDetail }}</span>
-        </div>
-      </div>
-      <UiGroup gap="sm" wrap class="status-actions">
-        <!-- 启动 / 停止互斥：同一时刻只露出一个（未启动只有启动，运行中只有停止）。
-             两个按钮都是两字 + 同尺寸，「!」跟着启动钮一起出现，切换时按钮不跳动。 -->
+    <WorkspaceHeader
+      icon="wxpEnhancer"
+      title="WXP 增强"
+      description="启动 WXP、注入增强脚本，并把登录信息与收藏缓存在本机"
+      :status-label="statusLabel"
+      :status-tone="statusTone"
+    >
+      <template #actions>
+        <UiButton size="small" @click="settingsOpen = !settingsOpen">
+          {{ settingsOpen ? '收起设置' : '启动设置' }}
+        </UiButton>
         <UiGroup v-if="!isRunning" gap="xs">
           <UiButton
             type="primary"
@@ -313,8 +295,6 @@ onUnmounted(() => {
           >
             启动
           </UiButton>
-          <!-- 单实例约束紧贴启动钮：原正文里的那句说明收在这里，只在 hover / 聚焦时展开 -->
-          <!-- 单条静态提示使用原生 title，不额外挂浮层组件。 -->
           <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP" title="启动前请先退出已打开的 WXP">
             <UiIcon name="alert" :size="16" />
           </span>
@@ -328,270 +308,367 @@ onUnmounted(() => {
         >
           停止
         </UiButton>
-      </UiGroup>
-    </UiPanel>
+      </template>
+    </WorkspaceHeader>
 
-    <!-- 启动设置 -->
-    <UiPanel title="启动设置">
-      <template #actions>
-        <UiButton
-          size="small"
-          type="primary"
-          plain
-          :loading="saving"
-          :disabled="settingsLocked || !settingsDirty || saving"
-          @click="saveSettings"
+    <ToolSurface class="wxp-surface">
+      <template #toolbar>
+        <UiToolbar gap="sm" flush>
+          <span class="surface-label" role="status" aria-live="polite">
+            {{ statusLabel }}
+          </span>
+          <UiGroup v-if="isConnected" gap="xs" wrap>
+            <UiChip mono>
+              PID {{ store.running?.pid ?? '-' }}
+            </UiChip>
+            <UiChip mono>
+              端口 {{ store.running?.port }}
+            </UiChip>
+            <UiChip mono>
+              页面 {{ store.running?.targetCount ?? 0 }}
+            </UiChip>
+          </UiGroup>
+          <UiChip v-else-if="store.loginCacheClearPending" tone="warning">
+            登录缓存待清除
+          </UiChip>
+          <span v-if="statusDetail" class="status-detail">{{ statusDetail }}</span>
+          <template #end>
+            <UiButton
+              size="small"
+              type="primary"
+              plain
+              :loading="collecting"
+              :disabled="!isConnected"
+              @click="handleCollect"
+            >
+              从 WXP 读取
+            </UiButton>
+            <UiButton
+              size="small"
+              type="danger"
+              plain
+              :loading="clearing"
+              @click="handleClearLoginCache"
+            >
+              清除登录缓存
+            </UiButton>
+          </template>
+        </UiToolbar>
+      </template>
+
+      <div class="wxp-studio">
+        <ToolSideInspector
+          :open="settingsOpen"
+          title="启动设置"
+          :width="320"
+          side="left"
+          body-padding="14px"
+          @close="settingsOpen = false"
         >
-          保存设置
-        </UiButton>
-      </template>
-      <div class="config-form">
-        <UiFormField label-width="110px" label="WXP 路径" required>
-          <UiPathField
-            v-model="settingsForm.executablePath"
-            placeholder="选择 WxP Client 可执行文件（如 WxP Client.exe）"
-            :disabled="settingsLocked"
-            class="path-row"
-            mono
-          >
-            <template #actions>
-              <UiButton :disabled="settingsLocked" @click="pickExecutable">
-                浏览
-              </UiButton>
-              <UiButton :disabled="settingsLocked" @click="detectExecutable">
-                自动检测
-              </UiButton>
-            </template>
-          </UiPathField>
-        </UiFormField>
-        <UiFormField label-width="110px" label="调试端口">
-          <input
-            v-model="settingsForm.debugPort"
-            type="number"
-            :min="1024"
-            :max="65535"
-            :disabled="settingsLocked"
-            class="ui-port-input"
-            @change="settingsForm.debugPort = Math.min(65535, Math.max(1024, Math.round(Number(settingsForm.debugPort) || 1024)))"
-          >
-        </UiFormField>
-        <UiFormField label-width="110px" label="状态角标">
-          <UiSwitchField
-            v-model="settingsForm.showStatusBadge"
-            align="start"
-            :disabled="settingsLocked"
-          >
-            在 WXP 顶栏页签后、用户名前显示「增强中」呼吸灯
-          </UiSwitchField>
-        </UiFormField>
-        <UiFormField label-width="110px" label="缓存登录状态">
-          <UiSwitchField
-            v-model="settingsForm.cacheLogin"
-            align="start"
-            :disabled="settingsLocked"
-          >
-            登录一次后整体缓存会话
-          </UiSwitchField>
-        </UiFormField>
-        <UiFormField label-width="110px" label="额外启动参数" class="form-item--last">
-          <UiInput
-            v-model="settingsForm.extraArgs"
-            placeholder="可选，空格分隔，如 --lang=zh-CN；调试端口会自动附加"
-            :disabled="settingsLocked"
-            class="mono"
-            spellcheck="false"
-          />
-        </UiFormField>
-      </div>
-    </UiPanel>
-
-    <!-- 数据缓存（来自 WXP） -->
-    <UiPanel title="数据缓存（来自 WXP）">
-      <template #actions>
-        <UiGroup gap="sm" wrap>
-          <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
-          <UiButton
-            size="small"
-            type="danger"
-            plain
-            :loading="clearing"
-            @click="handleClearLoginCache"
-          >
-            清除登录缓存
-          </UiButton>
-          <UiButton
-            size="small"
-            type="primary"
-            plain
-            :loading="collecting"
-            :disabled="!isConnected"
-            @click="handleCollect"
-          >
-            从 WXP 读取
-          </UiButton>
-        </UiGroup>
-      </template>
-      <UiHint class="section-hint">
-        WXP 登录后自动把登录信息与收藏缓存到 <span class="mono">data-cache.json</span>（收藏变化或每 5 分钟刷新）；
-        WXP 未运行时仍显示上次结果。收藏备份会在 WXP 重装 / 清缓存后自动补回。
-      </UiHint>
-      <UiHint v-if="loading" block>
-        正在读取本地缓存…
-      </UiHint>
-      <template v-else-if="dataLogin">
-        <div class="kv-list">
-          <UiKeyValue label="登录账号" label-width="88px">
-            {{ dataLogin.username || '—' }}
-          </UiKeyValue>
-          <UiKeyValue label="登录密码" label-width="88px" mono>
-            <span class="muted">应用 RSA 加密存储，工具不读取</span>
-          </UiKeyValue>
-          <UiKeyValue label="访问令牌" label-width="88px" mono>
-            {{ maskToken(dataLogin.accessToken) }}
-            <template #actions>
-              <UiButton link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
-                复制
-              </UiButton>
-            </template>
-          </UiKeyValue>
-          <UiKeyValue label="访问有效期至" label-width="88px">
-            {{ fmtTime(dataLogin.accessExpiresAt) }}
-          </UiKeyValue>
-          <UiKeyValue label="刷新令牌" label-width="88px" mono>
-            {{ maskToken(dataLogin.refreshToken) }}
-            <template #actions>
-              <UiButton link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
-                复制
-              </UiButton>
-            </template>
-          </UiKeyValue>
-          <UiKeyValue label="刷新有效期至" label-width="88px">
-            {{ fmtTime(dataLogin.refreshExpiresAt) }}
-          </UiKeyValue>
-          <UiKeyValue label="用户编码" label-width="88px">
-            {{ userCode }}
-          </UiKeyValue>
-          <UiKeyValue label="用户名称" label-width="88px">
-            {{ userName }}
-          </UiKeyValue>
-          <UiKeyValue label="NameNode" label-width="88px" mono>
-            {{ dataLogin.nameNodeAddrs || '—' }}
-          </UiKeyValue>
-          <UiKeyValue label="会话快照" label-width="88px">
-            {{ dataLogin.snapshotExists ? '存在' : '无' }}
-          </UiKeyValue>
-        </div>
-        <UiCollapse v-if="dataLogin.user" class="user-json">
-          <UiCollapseItem name="user" title="用户信息 JSON">
-            <UiCodeBlock max-height="240px">
-              {{ JSON.stringify(dataLogin.user, null, 2) }}
-            </UiCodeBlock>
-          </UiCollapseItem>
-        </UiCollapse>
-        <template v-if="favCount">
-          <div class="fav-head">
-            <h4 class="fav-title">
-              收藏的转发（{{ favCount }}）
-            </h4>
-            <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted fav-backup">
-              工具侧备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
-            </span>
+          <template #actions>
+            <UiButton
+              size="small"
+              type="primary"
+              plain
+              :loading="saving"
+              :disabled="settingsLocked || !settingsDirty || saving"
+              @click="saveSettings"
+            >
+              保存
+            </UiButton>
+          </template>
+          <div class="config-form">
+            <UiFormField label-width="82px" label="WXP 路径" required>
+              <UiPathField
+                v-model="settingsForm.executablePath"
+                placeholder="选择 WxP Client 可执行文件"
+                :disabled="settingsLocked"
+                class="path-row"
+                mono
+              >
+                <template #actions>
+                  <UiButton size="small" :disabled="settingsLocked" @click="pickExecutable">
+                    浏览
+                  </UiButton>
+                  <UiButton size="small" :disabled="settingsLocked" @click="detectExecutable">
+                    检测
+                  </UiButton>
+                </template>
+              </UiPathField>
+            </UiFormField>
+            <UiFormField label-width="82px" label="调试端口">
+              <input
+                v-model="settingsForm.debugPort"
+                type="number"
+                :min="1024"
+                :max="65535"
+                :disabled="settingsLocked"
+                class="ui-port-input"
+                @change="settingsForm.debugPort = Math.min(65535, Math.max(1024, Math.round(Number(settingsForm.debugPort) || 1024)))"
+              >
+            </UiFormField>
+            <UiFormField label-width="82px" label="状态角标">
+              <UiSwitchField
+                v-model="settingsForm.showStatusBadge"
+                align="start"
+                :disabled="settingsLocked"
+              >
+                WXP 顶栏显示「增强中」呼吸灯
+              </UiSwitchField>
+            </UiFormField>
+            <UiFormField label-width="82px" label="缓存登录">
+              <UiSwitchField
+                v-model="settingsForm.cacheLogin"
+                align="start"
+                :disabled="settingsLocked"
+              >
+                登录一次后缓存会话
+              </UiSwitchField>
+            </UiFormField>
+            <UiFormField label-width="82px" label="额外参数" class="form-item--last">
+              <UiInput
+                v-model="settingsForm.extraArgs"
+                placeholder="如 --lang=zh-CN；端口会自动附加"
+                :disabled="settingsLocked"
+                class="mono"
+                spellcheck="false"
+              />
+            </UiFormField>
+            <UiHint block>
+              启动前请先退出已打开的 WXP；关闭本工具会停止由 edt 托管的会话。
+            </UiHint>
           </div>
-          <UiTable
-            class="fav-table"
-            :data="favTree"
-            row-key="id"
-            :tree-props="{ children: 'children' }"
-            default-expand-all
-            max-height="420"
-            :row-class-name="favRowClass"
-          >
-            <UiTableColumn prop="name" label="医院 / 转发" min-width="200" show-overflow-tooltip />
-            <UiTableColumn prop="sceneformal" label="环境" width="90" />
-            <UiTableColumn prop="accessPoint" label="接入点" min-width="140" show-overflow-tooltip />
-            <UiTableColumn prop="targetPoint" label="原地址" min-width="140" show-overflow-tooltip />
-          </UiTable>
-        </template>
-        <UiHint v-else block>
-          暂无收藏数据。
-        </UiHint>
+        </ToolSideInspector>
+
+        <section class="wxp-main">
+          <header class="cache-head">
+            <div>
+              <strong>WXP 数据缓存</strong>
+              <span v-if="store.dataCache">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
+              <span v-else>登录后自动采集，也可手动读取</span>
+            </div>
+            <UiChip :tone="dataLogin ? 'success' : 'neutral'">
+              {{ dataLogin ? '已有缓存' : '暂无缓存' }}
+            </UiChip>
+          </header>
+
+          <div class="cache-scroll">
+            <UiHint v-if="loading" block>
+              正在读取本地缓存…
+            </UiHint>
+            <template v-else-if="dataLogin">
+              <div class="kv-list">
+                <UiKeyValue label="登录账号" label-width="88px">
+                  {{ dataLogin.username || '—' }}
+                </UiKeyValue>
+                <UiKeyValue label="登录密码" label-width="88px" mono>
+                  <span class="muted">应用 RSA 加密存储，工具不读取</span>
+                </UiKeyValue>
+                <UiKeyValue label="访问令牌" label-width="88px" mono>
+                  {{ maskToken(dataLogin.accessToken) }}
+                  <template #actions>
+                    <UiButton link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
+                      复制
+                    </UiButton>
+                  </template>
+                </UiKeyValue>
+                <UiKeyValue label="访问有效期至" label-width="88px">
+                  {{ fmtTime(dataLogin.accessExpiresAt) }}
+                </UiKeyValue>
+                <UiKeyValue label="刷新令牌" label-width="88px" mono>
+                  {{ maskToken(dataLogin.refreshToken) }}
+                  <template #actions>
+                    <UiButton link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
+                      复制
+                    </UiButton>
+                  </template>
+                </UiKeyValue>
+                <UiKeyValue label="刷新有效期至" label-width="88px">
+                  {{ fmtTime(dataLogin.refreshExpiresAt) }}
+                </UiKeyValue>
+                <UiKeyValue label="用户编码" label-width="88px">
+                  {{ userCode }}
+                </UiKeyValue>
+                <UiKeyValue label="用户名称" label-width="88px">
+                  {{ userName }}
+                </UiKeyValue>
+                <UiKeyValue label="NameNode" label-width="88px" mono>
+                  {{ dataLogin.nameNodeAddrs || '—' }}
+                </UiKeyValue>
+                <UiKeyValue label="会话快照" label-width="88px">
+                  {{ dataLogin.snapshotExists ? '存在' : '无' }}
+                </UiKeyValue>
+              </div>
+              <UiCollapse v-if="dataLogin.user" class="user-json">
+                <UiCollapseItem name="user" title="用户信息 JSON">
+                  <UiCodeBlock max-height="200px">
+                    {{ JSON.stringify(dataLogin.user, null, 2) }}
+                  </UiCodeBlock>
+                </UiCollapseItem>
+              </UiCollapse>
+              <template v-if="favCount">
+                <div class="fav-head">
+                  <h3 class="fav-title">
+                    收藏的转发
+                  </h3>
+                  <UiChip>{{ favCount }}</UiChip>
+                  <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted fav-backup">
+                    备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
+                  </span>
+                </div>
+                <UiTable
+                  class="fav-table"
+                  :data="favTree"
+                  row-key="id"
+                  :tree-props="{ children: 'children' }"
+                  default-expand-all
+                  max-height="440"
+                  :row-class-name="favRowClass"
+                >
+                  <UiTableColumn prop="name" label="医院 / 转发" min-width="220" show-overflow-tooltip />
+                  <UiTableColumn prop="sceneformal" label="环境" width="90" />
+                  <UiTableColumn prop="accessPoint" label="接入点" min-width="150" show-overflow-tooltip />
+                  <UiTableColumn prop="targetPoint" label="原地址" min-width="150" show-overflow-tooltip />
+                </UiTable>
+              </template>
+              <UiHint v-else block>
+                暂无收藏数据。
+              </UiHint>
+            </template>
+            <UiEmpty
+              v-else
+              class="cache-empty"
+              title="还没有 WXP 缓存"
+              text="启动 WXP 并登录后自动采集，也可以点击「从 WXP 读取」手动刷新。"
+              center
+              icon="layers"
+            />
+          </div>
+        </section>
+      </div>
+
+      <template #statusline>
+        <span>WXP ENHANCER</span>
+        <span v-if="store.dataCache?.favoritesUpdatedAt">收藏备份 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}</span>
+        <span class="status-spacer" />
+        <span>{{ settingsOpen ? 'SETTINGS OPEN' : 'SETTINGS HIDDEN' }}</span>
       </template>
-      <UiHint v-else block>
-        尚未读取，启动 WXP 并登录后自动采集，也可点击「从 WXP 读取」手动刷新。
-      </UiHint>
-    </UiPanel>
+    </ToolSurface>
   </div>
 </template>
 
 <style scoped lang="scss">
-/* 全宽铺满窗口，不设 760 内容栏：本页的 WXP 路径、启动参数、登录信息键值与收藏表格
-   都吃宽度，居中窄栏在宽窗口下两侧空一大片。面板宽度跟随窗口，面板内部的呼吸仍由
-   各面板自己的 16 内边距负责（DESIGN §7.3 的「文档型全宽变体」）。 */
 .wxp-enhancer-page {
   display: flex;
   flex-direction: column;
-  /* 区块之间 2xl：状态卡 / 设置面板 / 说明是**同级区块**，
-     要和面板内部的标题→内容（12）与字段间距（8）拉开层级 */
-  gap: var(--spacing-2xl);
-  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
+  min-height: 0;
+  padding: 0 18px 18px;
+  overflow: hidden;
 }
 
-/* 状态卡：UiPanel 根上的左右分栏；窄窗口由媒体查询改成上下 */
-.status-card {
+.wxp-surface {
+  min-height: 0;
+}
+
+.surface-label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.status-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wxp-studio {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.wxp-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-fill) 28%, transparent);
+}
+
+.cache-head {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
+  flex: 0 0 50px;
+  min-height: 50px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--color-border-light);
+
+  > div {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  strong {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+  }
 }
 
-.status-info {
+.cache-scroll {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  overflow: auto;
 }
 
-/* 面板里最后一个表单项清掉默认的 18px 底 margin：它会叠在 UiPanel 的 16px
-   内边距上，底部比顶部多空出一块（表单本身没有收尾间隔的需要） */
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
 .form-item--last {
   margin-bottom: 0;
 }
 
-.status-line {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-/* 状态点 + 文案作为一个整体（aria-live 作用域），与后面的 PID / 端口 / 页面同行 */
-.status-head {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.status-name {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-medium);
-}
-
-/* 状态行尾的过程 / 错误说明：跟在状态文字后面同行，过长时在本行内折行，
-   不再单独占一行（错误信息可能好几行：1.5 行距才读得下去，DESIGN §3.2.4 的说明档） */
-.status-detail {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--color-text-secondary);
+.ui-port-input {
+  width: 120px;
+  height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-field);
+  color: var(--color-text-primary);
+  font-family: inherit;
   font-size: var(--font-size-sm);
-  line-height: 1.5;
-  word-break: break-word;
+
+  &:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
 }
 
-.status-actions {
-  flex-shrink: 0;
-}
-
-/* 启动钮后的「!」：只做可 hover / 可聚焦的提示标记，不抢主按钮的注意力。
-   图标是 16px 的线性 SVG，色取 warning（白底 5.28，达标）；聚焦时给同款焦点环。 */
 .launch-warn {
   display: inline-flex;
   align-items: center;
@@ -611,27 +688,19 @@ onUnmounted(() => {
   box-shadow: var(--shadow-focus);
 }
 
-.section-hint {
-  margin: 0 0 var(--spacing-md);
-}
-
-/* 登录信息分两栏：按行配对（账号|密码、令牌|有效期…），窄窗口回退单栏。
-   UiKeyValue 自带 top 分隔线 + padding，行间不再加 gap，保持原列表节奏；
-   列间距取页面级 24px，让两栏之间有明确的呼吸感。 */
 .kv-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: var(--spacing-3xl);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 14px;
 }
 
-/* 原 .kv-value.break：长令牌 / 地址在窄容器内断行 */
 .kv-list :deep(.ui-kv-value) {
   word-break: break-all;
 }
 
 .user-json {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 14px;
 }
 
 .fav-head {
@@ -639,12 +708,12 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--spacing-sm);
-  margin: var(--spacing-md) 0 var(--spacing-sm);
+  margin: 16px 0 8px;
 }
 
 .fav-title {
   margin: 0;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
@@ -656,24 +725,11 @@ onUnmounted(() => {
   font-weight: var(--font-weight-medium);
 }
 
-@media (max-width: 760px) {
-  .wxp-enhancer-page {
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg);
-  }
+.cache-empty {
+  min-height: 240px;
+}
 
-  .status-card {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .path-row {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .kv-list {
-    grid-template-columns: 1fr;
-  }
+.status-spacer {
+  flex: 1;
 }
 </style>

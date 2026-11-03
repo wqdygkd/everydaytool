@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
+import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import InterceptorStatusPanel from '../components/InterceptorStatusPanel.vue'
 import RulesPanel from '../components/RulesPanel.vue'
 import TargetsPanel from '../components/TargetsPanel.vue'
@@ -10,7 +12,6 @@ const route = useRoute()
 const router = useRouter()
 const store = useInterceptorStore()
 
-// 视图状态仍由路由驱动（/tools/interceptor/:tab）：URL 可深链，前进后退可用
 const activeTab = computed(() => tabKeyFromPath(route.path))
 
 const PANELS = {
@@ -22,12 +23,21 @@ const PANELS = {
 
 const activePanel = computed(() => PANELS[activeTab.value])
 
-// 视图切换走 UiMenuHorizontal（复刻 Telegram Web K 的横向菜单）：流量条数用徽章显示
 const menuItems = computed(() => INTERCEPTOR_TABS.map(tab => ({
   value: tab.key as string,
   label: tab.label,
   badge: tab.key === 'traffic' ? store.traffic.length : undefined,
 })))
+
+const statusLabel = computed(() => {
+  if (store.status?.proxyRunning) return '代理运行中'
+  return store.status?.connections.length ? '等待挂载' : '未连接浏览器'
+})
+
+const statusTone = computed<'neutral' | 'success' | 'warning'>(() => {
+  if (store.status?.proxyRunning) return 'success'
+  return store.status?.connections.length ? 'warning' : 'neutral'
+})
 
 function switchTab(key: string): void {
   if (key === activeTab.value) return
@@ -41,6 +51,7 @@ function goToRules(): void {
 
 onMounted(async () => {
   try {
+    await store.activateRuntime()
     await store.init()
   } catch {
     // 网页预览（非 Electron）无 IPC：保持空态即可
@@ -49,28 +60,93 @@ onMounted(async () => {
 
 onUnmounted(() => {
   store.dispose()
+  void store.deactivateRuntime().catch(() => undefined)
 })
 </script>
 
 <template>
-  <div class="tool-page interceptor-page">
-    <div class="view-switcher">
-      <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
-    </div>
+  <div class="interceptor-page tool-page">
+    <WorkspaceHeader
+      icon="intercept"
+      title="拦截器"
+      description="本地 MITM 代理：改包、Mock、注入与流量日志"
+      :status-label="statusLabel"
+      :status-tone="statusTone"
+    />
 
-    <!-- 切换保留各视图状态（规则草稿 / 流量筛选不因切走而丢） -->
-    <KeepAlive>
-      <component :is="activePanel" @create-rule="goToRules" />
-    </KeepAlive>
+    <ToolSurface class="interceptor-surface">
+      <template #toolbar>
+        <UiMenuHorizontal
+          class="interceptor-tabs"
+          :model-value="activeTab"
+          :items="menuItems"
+          @update:model-value="switchTab"
+        />
+        <span class="toolbar-spacer" />
+        <span class="toolbar-summary mono">
+          {{ store.targets.length }} origins · {{ store.rules.length }} rules
+        </span>
+      </template>
+
+      <div class="panel-host" :class="{ 'is-scroll': activeTab === 'rules' }">
+        <KeepAlive>
+          <component :is="activePanel" @create-rule="goToRules" />
+        </KeepAlive>
+      </div>
+    </ToolSurface>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .interceptor-page {
-  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 18px 18px;
+  overflow: hidden;
 }
 
-.view-switcher {
-  margin-bottom: var(--spacing-md);
+.interceptor-surface {
+  min-height: 0;
+}
+
+.interceptor-tabs {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 520px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.toolbar-summary {
+  flex: none;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.panel-host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  > :deep(*) {
+    flex: 1;
+    min-height: 0;
+  }
+
+  &.is-scroll {
+    overflow-y: auto;
+
+    > :deep(*) {
+      flex: 0 0 auto;
+      min-height: min-content;
+      padding: 14px;
+    }
+  }
 }
 </style>

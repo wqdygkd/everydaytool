@@ -103,7 +103,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section v-if="api">
+  <section v-if="api" class="history-section">
     <UiSectionHeader title="下载历史" :count="items.length">
       <template #actions>
         <UiButton size="small" @click="openDir">
@@ -115,51 +115,60 @@ onUnmounted(() => {
       </template>
     </UiSectionHeader>
 
-    <!-- padding="" ：表格自带 radius-lg 与描边，直接贴住面板边缘，避免「卡片里再套一层圆角」 -->
-    <UiPanel padding="">
-      <UiTable
-        :data="items"
-        :loading="loading"
-        row-key="id"
-        empty-text="暂无下载记录"
-      >
-        <UiTableColumn prop="filename" label="文件名" min-width="220" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span>{{ row.filename }}</span>
-            <!-- 下载产物在缓存层：清缓存后文件没了，记录还在，必须显式标出来 -->
-            <UiChip v-if="row.exists === false" tone="warning" variant="outline" class="missing-chip">
-              文件已缺失
-            </UiChip>
-          </template>
-        </UiTableColumn>
-        <UiTableColumn label="来源" width="90">
-          <template #default="{ row }">
-            {{ KIND_LABELS[row.kind as OfflinePackTabKey] ?? row.kind }}
-          </template>
-        </UiTableColumn>
-        <UiTableColumn label="大小" width="100">
-          <template #default="{ row }">
-            <span class="mono">{{ formatBytes(row.size) }}</span>
-          </template>
-        </UiTableColumn>
-        <UiTableColumn label="时间" width="170">
-          <template #default="{ row }">
-            <span class="muted">{{ formatDateTime(row.createdAt) }}</span>
-          </template>
-        </UiTableColumn>
-        <UiTableColumn label="操作" width="80" align="right">
-          <template #default="{ row }">
-            <UiButton size="small" type="danger" link @click="remove(row)">
-              删除
-            </UiButton>
-          </template>
-        </UiTableColumn>
-      </UiTable>
-    </UiPanel>
+    <UiTable
+      class="history-table"
+      :data="items"
+      :loading="loading"
+      row-key="id"
+      empty-text="暂无下载记录"
+    >
+      <UiTableColumn prop="filename" label="文件名" min-width="220" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span>{{ row.filename }}</span>
+          <!-- 下载产物在缓存层：清缓存后文件没了，记录还在，必须显式标出来 -->
+          <UiChip v-if="row.exists === false" tone="warning" variant="outline" class="missing-chip">
+            文件已缺失
+          </UiChip>
+        </template>
+      </UiTableColumn>
+      <UiTableColumn label="来源" width="90">
+        <template #default="{ row }">
+          {{ KIND_LABELS[row.kind as OfflinePackTabKey] ?? row.kind }}
+        </template>
+      </UiTableColumn>
+      <UiTableColumn label="大小" width="100">
+        <template #default="{ row }">
+          <span class="mono">{{ formatBytes(row.size) }}</span>
+        </template>
+      </UiTableColumn>
+      <UiTableColumn label="时间" width="170">
+        <template #default="{ row }">
+          <span class="muted">{{ formatDateTime(row.createdAt) }}</span>
+        </template>
+      </UiTableColumn>
+      <UiTableColumn label="操作" width="80" align="right">
+        <template #default="{ row }">
+          <UiButton size="small" type="danger" link @click="remove(row)">
+            删除
+          </UiButton>
+        </template>
+      </UiTableColumn>
+    </UiTable>
   </section>
 </template>
 
 <style scoped lang="scss">
+.history-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.history-table {
+  flex: 1;
+  min-height: 0;
+}
+
 .missing-chip {
   margin-left: var(--spacing-sm);
 }

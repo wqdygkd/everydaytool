@@ -76,6 +76,11 @@ export function useOfflinePackDownload() {
   }
 
   onUnmounted(() => {
+    const activeTaskId = taskId.value
+    const api = getOfflinePackApi()
+    if (api && activeTaskId && downloading.value) {
+      void api.invoke(api.channels.CANCEL_DOWNLOAD, activeTaskId).catch(() => undefined)
+    }
     offProgress?.()
     offProgress = null
   })

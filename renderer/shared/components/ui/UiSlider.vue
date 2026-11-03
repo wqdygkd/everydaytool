@@ -72,9 +72,11 @@ function onChange(next: number[] | undefined) {
 }
 
 .ui-slider-thumb {
+  top: 50%;
   display: block;
   width: 16px;
   height: 16px;
+  margin-top: -8px;
   border-radius: 50%;
   background: var(--color-on-solid);
   border: 2px solid var(--color-primary);

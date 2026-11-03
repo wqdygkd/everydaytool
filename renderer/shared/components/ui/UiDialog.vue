@@ -64,7 +64,7 @@ const visible = computed({
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(23, 42, 61, 0.16);
   backdrop-filter: var(--glass-veil);
 }
 
@@ -76,6 +76,8 @@ const visible = computed({
   z-index: 2001;
   border-radius: var(--radius-xl);
   background: var(--color-overlay);
+  backdrop-filter: var(--glass-overlay);
+  border: 1px solid color-mix(in srgb, var(--color-on-solid) 58%, transparent);
   box-shadow: var(--shadow-lg);
   padding: var(--spacing-lg) var(--spacing-xl);
 }

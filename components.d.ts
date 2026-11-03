@@ -11,7 +11,9 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AppRail: typeof import('./renderer/shared/components/AppRail.vue')['default']
     ChromeDownloader: typeof import('./tools/offline-pack/renderer/components/ChromeDownloader.vue')['default']
+    CommandPalette: typeof import('./renderer/shared/components/CommandPalette.vue')['default']
     DiagnosticsPanel: typeof import('./tools/telegram-cache/renderer/components/DiagnosticsPanel.vue')['default']
     DockerDownloader: typeof import('./tools/offline-pack/renderer/components/DockerDownloader.vue')['default']
     DownloaderFrame: typeof import('./tools/offline-pack/renderer/components/DownloaderFrame.vue')['default']
@@ -20,6 +22,7 @@ declare module 'vue' {
     HeaderTabs: typeof import('./renderer/shared/components/HeaderTabs.vue')['default']
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']
+    LauncherRow: typeof import('./renderer/shared/components/LauncherRow.vue')['default']
     LibraryPanel: typeof import('./tools/telegram-cache/renderer/components/LibraryPanel.vue')['default']
     MSStoreDownloader: typeof import('./tools/offline-pack/renderer/components/MSStoreDownloader.vue')['default']
     OverviewPanel: typeof import('./tools/telegram-cache/renderer/components/OverviewPanel.vue')['default']
@@ -29,7 +32,8 @@ declare module 'vue' {
     RulesPanel: typeof import('./tools/interceptor/renderer/components/RulesPanel.vue')['default']
     TargetsPanel: typeof import('./tools/interceptor/renderer/components/TargetsPanel.vue')['default']
     TasksPanel: typeof import('./tools/telegram-cache/renderer/components/TasksPanel.vue')['default']
-    ToolCard: typeof import('./renderer/shared/components/ToolCard.vue')['default']
+    ToolSideInspector: typeof import('./renderer/shared/components/workspace/ToolSideInspector.vue')['default']
+    ToolSurface: typeof import('./renderer/shared/components/workspace/ToolSurface.vue')['default']
     TrafficPanel: typeof import('./tools/interceptor/renderer/components/TrafficPanel.vue')['default']
     UiAlert: typeof import('./renderer/shared/components/ui/UiAlert.vue')['default']
     UiAvatar: typeof import('./renderer/shared/components/ui/UiAvatar.vue')['default']
@@ -52,6 +56,7 @@ declare module 'vue' {
     UiHint: typeof import('./renderer/shared/components/ui/UiHint.vue')['default']
     UiIcon: typeof import('./renderer/shared/components/ui/UiIcon.vue')['default']
     UiIconButton: typeof import('./renderer/shared/components/ui/UiIconButton.vue')['default']
+    UiIconTile: typeof import('./renderer/shared/components/ui/UiIconTile.vue')['default']
     UiInput: typeof import('./renderer/shared/components/ui/UiInput.vue')['default']
     UiKeyValue: typeof import('./renderer/shared/components/ui/UiKeyValue.vue')['default']
     UiLink: typeof import('./renderer/shared/components/ui/UiLink.vue')['default']
@@ -75,5 +80,6 @@ declare module 'vue' {
     UiToaster: typeof import('./renderer/shared/components/ui/UiToaster.vue')['default']
     UiToolbar: typeof import('./renderer/shared/components/ui/UiToolbar.vue')['default']
     VSCodeDownloader: typeof import('./tools/offline-pack/renderer/components/VSCodeDownloader.vue')['default']
+    WorkspaceHeader: typeof import('./renderer/shared/components/workspace/WorkspaceHeader.vue')['default']
   }
 }

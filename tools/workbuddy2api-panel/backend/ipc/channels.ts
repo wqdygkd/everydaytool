@@ -1,4 +1,6 @@
 export const WB2API_PANEL_IPC_CHANNELS = {
+  RUNTIME_ACTIVATE: 'workbuddy2api-panel:runtime:activate',
+  RUNTIME_DEACTIVATE: 'workbuddy2api-panel:runtime:deactivate',
   GET_STATE: 'workbuddy2api-panel:get-state',
   INSTALL: 'workbuddy2api-panel:install',
   INSTALL_FROM_ZIP: 'workbuddy2api-panel:install-from-zip',

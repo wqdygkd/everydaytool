@@ -28,24 +28,26 @@
      分段菜单 / 分段钮的选中态统一取 --color-primary（见 DESIGN §2 的「三种色各管一件事」）。 */
 
   /* ── surfaces（冷灰） ── */
-  --color-app-bg: #f4f4f5; /* 工具页 / 内容区底色（兜底用，画布多为透明） */
+  --color-app-bg: #edf3f8; /* 冷雾画布：不支持透明时的兜底；真实画布仍透明 */
   --color-on-solid: #ffffff; /* 实底上的前景白：绿底徽章白字 / 头像字母 / 白分隔线，不随透明度变 */
 
   /* ── 半透明窗口的 alpha 体系（基准色） ──
      每个表面角色拆成「基准色(*-base) × alpha(--alpha-*)」两层：
      本文件定义基准色，translucency.scss 按窗口模式覆写 alpha，
      消费端用 --color-<role> 合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
-  --color-raised-base: #ffffff; /* 角色 raised：卡片 / 面板 / 浮岛的表面色 */
-  --color-input-base: #ffffff; /* 角色 input：其余非弹出层控件底（树 / 上传 / 日历 / 搜索框 UiSearchInput） */
-  --color-field-base: #ffffff; /* 角色 field：通用表单输入框底（UiInput / textarea / UiSelect 输入区） */
-  --color-table-base: #ffffff; /* 角色 table：表格行底（UiTable 的 tr），与其它控件分开以便单独调透明度 */
-  --color-button-base: #ffffff; /* 角色 button：普通按钮底（非 primary / danger 等实心按钮），单独一档 */
-  --color-fill-base: #f4f4f5; /* 角色 fill：灰调填充（表头 / 行 hover / 灰底面版），与控件同档 alpha 但取冷灰以拉开层次 */
-  --color-header-base: #ffffff; /* 角色 header：标题栏（原生窗口按钮 + 页签文字的底） */
-  --color-pop-base: #ffffff; /* 角色 pop：下拉类浮层（select / cascader / dropdown / date-picker / autocomplete） */
-  --color-overlay-base: #ffffff; /* 角色 overlay：其它弹层（dialog / message / notification） */
+  --color-rail-base: #f7fbff; /* 角色 rail：左侧 68px 导航轨 */
+  --color-raised-base: #fbfdff; /* 角色 raised：主工作区 / launcher / 抽屉 */
+  --color-input-base: #ffffff; /* 角色 input：浮在画布上的搜索框 / 导航控件 */
+  --color-field-base: #ffffff; /* 角色 field：表面内的通用表单输入框 */
+  --color-table-base: #fbfdff; /* 角色 table：表格行底 */
+  --color-button-base: #ffffff; /* 角色 button：普通玻璃按钮 */
+  --color-fill-base: #edf3f8; /* 角色 fill：表头 / hover 行 / 分段控件槽 */
+  --color-header-base: #f9fcff; /* 角色 header：顶部工作区栏 */
+  --color-pop-base: #fbfdff; /* 角色 pop：下拉 / 菜单 / 命令面板候选层 */
+  --color-overlay-base: #fbfdff; /* 角色 overlay：dialog / toast / 模态 */
 
   /* 默认（不透明窗口）：全部实色，与旧版一致；各角色 1 = 完全不透明 */
+  --alpha-rail: 1; /* 左侧导航轨 */
   --alpha-raised: 1; /* 卡片 / 面板 / 浮岛 */
   --alpha-input: 1; /* 其余非弹出层控件 */
   --alpha-field: 1; /* 通用表单输入框（UiInput / textarea / UiSelect） */
@@ -76,53 +78,59 @@
      各窗口模式在 translucency.scss 按角色独立覆写；消费端一律写
      backdrop-filter: var(--glass-<role>)，禁止在组件里写死 blur(Npx)。 */
   --glass-saturate: 100%; /* 玻璃饱和度增益：模式级旋钮，各角色共享 */
+  --glass-rail: none; /* 左侧导航轨 */
   --glass-raised: none; /* 卡片 / 面板 / 浮岛 */
   --glass-input: none; /* 非弹出层控件（UiSearchInput 等浮在画布上的控件） */
   --glass-header: none; /* 标题栏 */
+  --glass-fill: none; /* fill 不承担背景模糊 */
   --glass-pop: none; /* 下拉类浮层 */
   --glass-overlay: none; /* 其它弹层：dialog / message */
   --glass-veil: blur(2px); /* 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 */
 
   /* ── lines ── */
-  --color-border-light: #e4e4e5; /* 细分隔线 / 卡片描边 */
-  --color-border: #dadce0; /* 输入边框 / 强分隔线 */
+  --color-border-light: #dfe8ef; /* 细分隔线 / 表面描边 */
+  --color-border: #cbd8e3; /* 输入边框 / 强分隔线 */
 
   /* ── text ──
      三级阶梯必须单调：次级比三级深（原先是反的：三级 #686c72 比次级 #707579 还深）。
      每级都按「白底 + 灰调填充（表头 / hover 行 #f4f4f5）」两种落点校验过，
      次级 5.96 / 5.42，三级 4.99 / 4.54——两处都不低于 4.5:1。 */
-  --color-text-primary: #000000; /* 主文本 / 正文 */
-  --color-text-secondary: #5f646b; /* 次级文本 / 说明 / 弱化 */
-  --color-text-tertiary: #6b7077; /* 三级文本 / 元信息 / 时间戳 */
+  --color-text-primary: #0b1724; /* 主文本 / 正文 */
+  --color-text-secondary: #526273; /* 次级文本 / 说明 / 弱化 */
+  --color-text-tertiary: #5f6f80; /* 三级文本 / 元信息 / 时间戳 */
 
-  /* ── shape(阶梯:小件 8 / 控件 12 / 卡片 16 / 浮岛 20 / 模态 28) ── */
-  --radius-xs: 8px; /* 小件：图标钮 hover 底 / 代码块 / 键盘提示 */
-  --radius-sm: 12px; /* 控件：输入框 / 编辑器卡片 / 弹层菜单 */
+  /* ── shape(小件 7 / 控件 11 / 行 12 / 表面 16 / 浮层 22) ── */
+  --radius-xs: 7px; /* 小件：图标钮 hover 底 / 键帽 */
+  --radius-sm: 10px; /* 页签 / 次级按钮 / 分段钮 */
   /* 圆角矩形控件（按钮 / 页签 / 搜索框）：DESIGN §3.5 的既定设计值，偏离主阶梯故单独命名 */
-  --radius-control: 14px;
-  --radius-md: 16px; /* 行 / 菜单：弹层 / 消息 */
-  --radius-lg: 20px; /* 浮岛：卡片 / 面板 / 表格容器 */
-  --radius-xl: 28px; /* 模态：对话框 */
+  --radius-control: 11px;
+  --radius-md: 12px; /* 工具行 / rail 激活 / 列表卡 */
+  --radius-lg: 16px; /* launcher / 主工作区 / 抽屉 */
+  --radius-xl: 22px; /* 命令面板 / dialog */
 
-  /* ── shadows(柔和低对比 + 品牌色焦点环) ── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05); /* 浮岛卡片 / 面板 */
-  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.08); /* 菜单 / 消息 */
-  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.12); /* 对话框 / 批量操作栏 */
+  /* ── shadows(冷蓝软阴影 + 品牌色焦点环) ── */
+  --shadow-sm: 0 10px 34px rgba(27, 57, 87, 0.10); /* 主工作区 / launcher */
+  --shadow-md: 0 18px 48px rgba(29, 62, 94, 0.10); /* 菜单 / 命令面板 */
+  --shadow-lg: 0 24px 70px rgba(22, 50, 78, 0.16); /* 对话框 / 批量操作栏 */
   --shadow-focus: 0 0 0 1px var(--color-on-solid), 0 0 0 3px var(--color-primary-strong); /* 键盘焦点环：1px 白隔断 + 3px 墨档蓝实环（对任意底色都 ≥3:1） */
   --shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28); /* 半透明窗口的外阴影：补偿丢失的系统投影 */
 
-  --transition-fast: 0.15s cubic-bezier(0.25, 1, 0.5, 1); /* 微交互：图标钮 / 页签 / chip */
-  --transition-base: 0.25s cubic-bezier(0.33, 1, 0.68, 1); /* 卡片 hover / 边框 / 背景过渡 */
+  --duration-fast: 140ms;
+  --duration-base: 190ms;
+  --duration-overlay: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: var(--duration-fast) var(--ease-out); /* 微交互：图标钮 / 页签 / chip */
+  --transition-base: var(--duration-base) var(--ease-out); /* 行 hover / 边框 / 背景过渡 */
 
   /* ── 字阶 / 字重 / 间距 ──
-     字阶 5 档是全站唯一字号来源（DESIGN §3.2）：11 元信息 / 12 辅助正文 /
-     14 正文与控件 / 16 区块标题 / 18 页面标题。18px 就是上限——本应用没有
-     「营销型大标题」，不要再引入 20/24/28px 的散值。 */
+     11 元信息 / 12 辅助正文 / 14 正文与控件 / 16 区块标题 / 18 独立页标题 /
+     25 仅首页“工具台”。工具页标题上限 17px。 */
   --font-size-xs: 11px; /* 元信息：时间戳 / 徽章 / 表格辅助列 / 代码 */
   --font-size-sm: 12px; /* 辅助正文：说明 / 键值 / 表格正文 / 次级按钮 */
   --font-size-base: 14px; /* 正文 / 控件文字 / 面板标题 / 卡片名 */
   --font-size-lg: 16px; /* 区块标题 / 面板大标题 / 状态名 */
   --font-size-xl: 18px; /* 页面标题 / 编辑器标题（全站上限） */
+  --font-size-display: 25px; /* 仅首页“工具台”标题 */
 
   /* 字重只有**两个真切面**可用：自托管 Roboto 有 Regular(400) / Medium(500)，
      中文面（PingFang SC / 微软雅黑）有 Regular / Bold。于是：
@@ -147,7 +155,14 @@
   /* ── 控件 / 外壳尺寸（全应用统一，禁止一处一个 px） ── */
   --control-height: 32px; /* 表单控件与 ghost 按钮同高 */
   --line-height-control: 20px; /* 控件 / 表格 / 徽标统一行高 */
-  --content-max-width: 1360px; /* 首页内容最大宽 */
+  --content-max-width: 1160px; /* 首页内容最大宽 */
+  --rail-width: 68px;
+  --topbar-height: 48px;
+  --rail-control-size: 42px;
+  --launcher-row-height: 78px;
+  --workspace-header-height: 70px;
+  --workspace-toolbar-height: 48px;
+  --workspace-statusline-height: 31px;
   /* 长文行宽上限：中文一行 ~60 字最舒服（CJK 每字 1em，所以用 em 而不是 ch——
      ch 是 "0" 的宽度，在中文里会算出 1.8 倍的错觉）。
      取 62em ≈ 744px @12px，略窄于设置页 760px 的内容栏：**栏内的面板本来就被内边距
@@ -158,7 +173,7 @@
      栏宽固定后，左边缘、说明的右边缘、输入框的右边缘才会落在同一条线上。
      数据 / 工作区型页面（telegram、环境浏览器、沙箱、拦截器）不设栏，铺满窗口。 */
   --column-document: 760px;
-  --titlebar-height: 44px; /* 自定义标题栏行高 */
+  --titlebar-height: 48px; /* 自定义顶部工作区栏高 */
 
   color-scheme: light; /* 固定浅色：禁用系统深色表单控件 */
   /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */

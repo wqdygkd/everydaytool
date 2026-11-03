@@ -38,6 +38,7 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
   const rules = ref<InterceptorRule[]>([])
   const traffic = ref<TrafficEntry[]>([])
   const ready = ref(false)
+  const runtimeActive = ref(false)
 
   /** 流量一键建规则：TrafficPanel 投递草稿，RulesPanel 监听后打开编辑器 */
   const ruleEditorDraft = ref<InterceptorRule | null>(null)
@@ -81,6 +82,28 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     for (const off of disposers) off()
     disposers = []
     initialized = false
+    runtimeActive.value = false
+    status.value = null
+    ca.value = null
+    targets.value = []
+    rules.value = []
+    traffic.value = []
+    ready.value = false
+  }
+
+  async function activateRuntime(): Promise<void> {
+    const channels = api().channels
+    status.value = (await api().invoke(channels.RUNTIME_START)) as InterceptorRuntimeStatus
+    runtimeActive.value = true
+  }
+
+  async function deactivateRuntime(): Promise<void> {
+    try {
+      const channels = api().channels
+      status.value = (await api().invoke(channels.RUNTIME_STOP)) as InterceptorRuntimeStatus
+    } finally {
+      runtimeActive.value = false
+    }
   }
 
   async function refreshCa(force = false): Promise<void> {
@@ -191,9 +214,12 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     rules,
     traffic,
     ready,
+    runtimeActive,
     ruleEditorDraft,
     init,
     dispose,
+    activateRuntime,
+    deactivateRuntime,
     refreshCa,
     installCa,
     uninstallCa,

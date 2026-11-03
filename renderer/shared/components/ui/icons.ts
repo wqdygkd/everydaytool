@@ -13,6 +13,11 @@ export interface IconDef {
 }
 
 export const icons = {
+  'home': {
+    vb: 20,
+    paths: ['M3.5 9.2 10 3.5l6.5 5.7', 'M5.5 8v8.5h9V8', 'M8.4 16.5v-4.2h3.2v4.2'],
+    sw: 1.6,
+  },
   'search': { vb: 20, paths: ['M13.2 13.2L17 17'], circles: [[9, 9, 5.5]], sw: 1.6 },
   'plus': { vb: 20, paths: ['M10 4v12M4 10h12'], sw: 1.8 },
   'close': { vb: 20, paths: ['M5 5l10 10M15 5L5 15'], sw: 1.6 },
