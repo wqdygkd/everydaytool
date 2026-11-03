@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TelegramLibraryEntry, TelegramTrashEntry } from '../../../../shared/telegram-cache'
 import type { LibraryMediaItem } from '../stores/telegramCacheStore'
+import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { confirm } from '@renderer/shared/feedback'
 import { toast } from 'vue-sonner'
 import { useTelegramCacheStore } from '../stores/telegramCacheStore'
@@ -69,12 +70,7 @@ function jumpToMessage(entry: TelegramLibraryEntry): void {
 }
 
 async function copyLink(entry: TelegramLibraryEntry): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(entry.messageLink)
-    toast.success('消息链接已复制')
-  } catch {
-    toast.error(`复制失败：${entry.messageLink}`)
-  }
+  await useCopy(entry.messageLink, '消息链接')
 }
 
 async function refresh(): Promise<void> {

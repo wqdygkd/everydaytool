@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
-  modelValue: string
   placeholder?: string
   /** pill = 胶囊搜索框（HomePage 同款）；box = 方形输入框（规则面板同款） */
   variant?: 'pill' | 'box'
@@ -18,25 +17,28 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'enter': [value: string]
+  enter: [value: string]
 }>()
 
+const modelValue = defineModel<string>({ required: true })
+
 const value = computed({
-  get: () => props.modelValue,
-  set: (v: string) => emit('update:modelValue', props.trim ? v.trim() : v),
+  get: () => modelValue.value,
+  set: (v: string) => {
+    modelValue.value = props.trim ? v.trim() : v
+  },
 })
 
 /** pill 图标 18px 重笔画；box 图标 14px 默认笔画 */
 const iconSize = computed(() => props.size ?? (props.variant === 'pill' ? 18 : 14))
 
 function onEnter() {
-  emit('enter', props.modelValue)
+  emit('enter', modelValue.value)
 }
 
 function onEsc() {
-  if (props.clearable && props.modelValue) {
-    emit('update:modelValue', '')
+  if (props.clearable && modelValue.value) {
+    modelValue.value = ''
   }
 }
 </script>

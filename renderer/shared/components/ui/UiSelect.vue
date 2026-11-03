@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CheckIcon, ChevronDownIcon } from '@lucide/vue'
+import { useVModel } from '@vueuse/core'
 import {
   SelectContent,
   SelectIcon,
@@ -42,6 +43,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
+const modelValue = useVModel(props, 'modelValue', emit)
+
 const attrs = useAttrs()
 
 // Reka 用空字符串表示「未选择」，不能作为 SelectItem.value。
@@ -60,14 +63,14 @@ const normalizedOptions = computed(() => props.options.map((option) => {
 const hasEmptyOption = computed(() => props.options.some(option => String(option.value) === ''))
 
 const selectedKey = computed(() => {
-  if (props.modelValue === undefined || props.modelValue === null) return undefined
-  const value = String(props.modelValue)
+  if (modelValue.value === undefined || modelValue.value === null) return undefined
+  const value = String(modelValue.value)
   if (value === '') return hasEmptyOption.value ? EMPTY_OPTION_VALUE : undefined
   return value
 })
 
 function onUpdate(value: string) {
-  emit('update:modelValue', value === EMPTY_OPTION_VALUE ? '' : value)
+  modelValue.value = value === EMPTY_OPTION_VALUE ? '' : value
 }
 </script>
 

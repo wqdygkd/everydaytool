@@ -1,21 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-const props = withDefaults(defineProps<{
-  modelValue?: string
+defineProps<{
   placeholder?: string
   disabled?: boolean
   mono?: boolean
-}>(), {})
-
-const emit = defineEmits<{
-  'update:modelValue': [value: string]
 }>()
 
-const value = computed({
-  get: () => props.modelValue,
-  set: (v: string) => emit('update:modelValue', v),
-})
+const value = defineModel<string>()
 </script>
 
 <template>

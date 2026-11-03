@@ -1,10 +1,8 @@
 <script setup lang="ts">
 // 通用输入框内核：原生 input。
 // 带搜索图标 / 清空的场景用 UiSearchInput;路径 + 前置块用 UiPathField。
-import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{
-  modelValue?: string
+withDefaults(defineProps<{
   placeholder?: string
   disabled?: boolean
   /** small = 24px 高;default = 控件同高 */
@@ -15,17 +13,9 @@ const props = withDefaults(defineProps<{
   disabled: false,
   size: 'default',
   inputType: 'text',
-  modelValue: '',
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: string]
-}>()
-
-const value = computed({
-  get: () => props.modelValue,
-  set: v => emit('update:modelValue', v),
-})
+const value = defineModel<string>({ default: '' })
 </script>
 
 <template>

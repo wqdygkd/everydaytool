@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
-import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{
-  modelValue: boolean
+withDefaults(defineProps<{
   title?: string
   width?: string
   /** 仅保持 API 兼容：reka-ui 关闭即卸载内容，行为与 true 一致 */
@@ -17,18 +15,11 @@ const props = withDefaults(defineProps<{
   appendToBody: true,
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
-
-const visible = computed({
-  get: () => props.modelValue,
-  set: (value: boolean) => emit('update:modelValue', value),
-})
+const value = defineModel<boolean>({ required: true })
 </script>
 
 <template>
-  <DialogRoot :open="visible" @update:open="visible = $event">
+  <DialogRoot :open="value" @update:open="value = $event">
     <DialogPortal>
       <DialogOverlay
         class="data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 ui-dialog-overlay"

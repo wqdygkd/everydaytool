@@ -1,25 +1,16 @@
 <script setup lang="ts">
 // 折叠组内核：受控多开列表（modelValue 为展开的 name 数组）。
 // 未传 modelValue 时内部自管(全部收起)。
-import { provide, ref } from 'vue'
+import { provide } from 'vue'
 
-const props = defineProps<{
-  modelValue?: Array<string | number>
-}>()
-
-const emit = defineEmits<{
-  'update:modelValue': [value: Array<string | number>]
-}>()
-
-const internal = ref<Array<string | number>>([])
+const modelValue = defineModel<Array<string | number>>({ default: () => [] })
 
 function isOpen(name: string | number) {
-  const list = props.modelValue ?? internal.value
-  return list.includes(name)
+  return modelValue.value.includes(name)
 }
 
 function toggle(name: string | number) {
-  const list = [...(props.modelValue ?? internal.value)]
+  const list = [...modelValue.value]
   const i = list.indexOf(name)
   if (i >= 0) {
     list.splice(i, 1)
@@ -27,12 +18,7 @@ function toggle(name: string | number) {
   else {
     list.push(name)
   }
-  if (props.modelValue) {
-    emit('update:modelValue', list)
-  }
-  else {
-    internal.value = list
-  }
+  modelValue.value = list
 }
 
 provide('uiCollapse', { isOpen, toggle })
