@@ -144,6 +144,15 @@ export function registerInterceptorHandlers(): void {
     return true
   })
 
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.RUNTIME_START, async () => {
+    await interceptorService.initialize()
+    return interceptorService.getRuntimeStatus()
+  })
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.RUNTIME_STOP, async () => {
+    await interceptorService.dispose()
+    return interceptorService.getRuntimeStatus()
+  })
+
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.PROXY_SET_DESIRED, (_event, enabled: unknown) => setProxyDesired(requireBoolean(enabled, 'enabled')))
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.PROXY_PORT_SET, async (_event, port: number): Promise<ProxyPortUpdateResult> => {

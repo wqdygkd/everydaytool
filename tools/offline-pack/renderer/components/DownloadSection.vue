@@ -20,7 +20,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
 
 <template>
   <!-- 下载中：说明 + 取消 + 进度条（进度条颜色走 UiProgress 令牌） -->
-  <UiPanel v-if="downloading" variant="outlined" padding="var(--spacing-md)">
+  <div v-if="downloading" class="download-feedback">
     <UiGroup direction="column" gap="sm" block>
       <UiGroup justify="between" gap="sm" align="center">
         <UiHint class="download-progress-message">
@@ -39,7 +39,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
         :percentage="percentage(progress)"
       />
     </UiGroup>
-  </UiPanel>
+  </div>
 
   <UiAlert
     v-if="progress?.status === 'error' && progress.error"
@@ -50,7 +50,7 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
   />
 
   <!-- 结果：文件名（超长省略）+ 打开目录 -->
-  <UiPanel v-if="result" variant="outlined" padding="var(--spacing-md)">
+  <div v-if="result" class="download-feedback">
     <UiGroup gap="md" align="center">
       <UiIcon name="offline-pack" :size="18" class="download-result-icon" />
       <UiGroup direction="column" gap="xs" class="download-result-meta">
@@ -63,10 +63,17 @@ function percentage(progress: OfflinePackDownloadProgress | null): number {
         打开目录
       </UiButton>
     </UiGroup>
-  </UiPanel>
+  </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
+.download-feedback {
+  padding: 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-fill) 52%, transparent);
+}
+
 /* 下载文件名可能很长：占满剩余宽度并单行省略，避免撑破结果面板 */
 .download-result-icon {
   flex-shrink: 0;

@@ -27,6 +27,10 @@ import {
   setTelegramObservationEnabled,
 } from '../services/observation-service.ts'
 import { attachTelegramPage, probeTelegramPage } from '../services/probe-service.ts'
+import {
+  activateTelegramCacheRuntime,
+  deactivateTelegramCacheRuntime,
+} from '../services/runtime-service.ts'
 import { runTelegramSelfTest } from '../services/self-test-service.ts'
 import { getTelegramSiteServerInfo } from '../services/site-server.ts'
 import { getTelegramSiteStatus } from '../services/site-service.ts'
@@ -79,6 +83,15 @@ function parseAcquirePayload(value: unknown): { resourceKey: string, kind: Teleg
 export function registerTelegramCacheHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
+
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.RUNTIME_ACTIVATE, async () => {
+    await activateTelegramCacheRuntime()
+    return buildTelegramSnapshot()
+  })
+  safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.RUNTIME_DEACTIVATE, async () => {
+    await deactivateTelegramCacheRuntime()
+    return true
+  })
 
   safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.SNAPSHOT_GET, () => buildTelegramSnapshot())
   safeHandle(ipcMain, TELEGRAM_CACHE_IPC_CHANNELS.TRAFFIC_GET, () => getTelegramTraffic())

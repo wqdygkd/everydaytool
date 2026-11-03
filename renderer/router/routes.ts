@@ -5,11 +5,10 @@ import { getAppTabs } from '../config/app-tabs'
 import { allToolRegistry } from '../config/tools'
 import HomePage from '../pages/HomePage.vue'
 
-// 工具页全部常驻挂载（App.vue 里按 tab 做 v-show 显隐，webview 不离文档、不重建），
-// 因此路由拍平为顶层，不再经过 ToolLayout 的嵌套 router-view + keep-alive
-// （keep-alive 会把 DOM 移出文档，导致 webview guest 被销毁、切回重载）。
+// 工具页按活动页签即时挂载：App.vue 只渲染当前 meta.toolId 对应组件，
+// 切走或关闭时整棵工具子树卸载，webview guest、IPC 订阅与工具级服务随页面销毁。
 // 工具可用 subRoutes 声明页签 / 列表分类等深链：子路由继承主路由的组件与
-// meta.toolId（页签高亮与常驻挂载依赖它），主路由重定向到第一个子路由，
+// meta.toolId（页签高亮与活动组件解析依赖它），主路由重定向到第一个子路由，
 // 保证同一状态只有一个规范 URL。
 function toolRoutes(tool: ToolDefinition): RouteRecordRaw[] {
   const basePath = `/tools/${tool.route.path.replace(/^\//, '')}`
@@ -42,7 +41,7 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: 'everydaytool' },
   },
   ...allToolRegistry.flatMap(toolRoutes),
-  // 应用自带页面（设置等）：与工具页同样常驻挂载，因此统一带 meta.toolId，
+  // 应用自带页面（设置等）：与工具页一样按活动页签挂载，因此统一带 meta.toolId，
   // 页签系统（toolTabs）据此当作普通页签处理，路由不进 /tools 命名空间。
   // 按目标平台裁剪（electronOnly）：网页预览下设置页不注册，深链 /settings 落到兜底回首页。
   ...getAppTabs().map((tab): RouteRecordRaw => ({

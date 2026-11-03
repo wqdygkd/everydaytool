@@ -72,50 +72,35 @@ function formatTime(iso: string): string {
 </script>
 
 <template>
-  <UiPanel title="处理名单">
-    <template #actions>
-      <UiChip tone="success" variant="soft">
-        启用 {{ enabledCount }} / {{ store.targets.length }}
-      </UiChip>
-    </template>
-
-    <UiHint block>
-      处理名单是<strong>白名单闸门</strong>：只有请求的 origin（协议 + 域名 + 端口）命中条目，请求才会被拆包、记录，
-      并交给<strong>规则</strong>去匹配；没命中就整条透传——不改包、不记录、规则一条都不跑。
-      这份名单只决定"进不进规则"，"这个地址怎么处理"（改请求 / 改响应 / 重定向 / Mock）全在规则页配。
-    </UiHint>
-    <UiHint block>
-      一个条目 = 一个 origin。<span class="mono">https://www.a.com</span> 只匹配 https + 443；
-      <span class="mono">http://127.0.0.1:8089</span> 只匹配该端口。默认端口会省略，纯域名默认按
-      <span class="mono">https</span> 处理（回环 / localhost 默认 <span class="mono">http</span>），要 http 站点就带上协议。
-    </UiHint>
-    <UiHint block>
-      「强制回源」（默认开）= 该 origin 的响应去掉 <span class="mono">cache-control</span> / <span class="mono">etag</span> 等缓存头，
-      浏览器每次都会真的发请求，流量页才看得到重复访问的资源；关掉即恢复正常缓存（重复请求可能不再出现）。
-      开关打开前已经缓存进浏览器的资源，还要强刷一次才会回源。
-    </UiHint>
-
-    <UiGroup class="add-row" gap="sm" wrap>
+  <div class="targets-pane">
+    <header class="targets-toolbar">
       <UiInput
         v-model="originInput"
-        class="ctl-fill"
+        class="target-input"
         placeholder="origin，如 https://www.a.com（粘整条 URL 会自动取 origin）"
         @keyup.enter="add"
       />
       <UiButton type="primary" :disabled="invalidInput" @click="add">
         加入名单
       </UiButton>
-    </UiGroup>
-    <UiHint v-if="previewOrigin && previewOrigin !== originInput.trim()" block>
+      <span class="toolbar-spacer" />
+      <UiChip tone="success" variant="soft">
+        启用 {{ enabledCount }} / {{ store.targets.length }}
+      </UiChip>
+    </header>
+
+    <div v-if="previewOrigin && previewOrigin !== originInput.trim()" class="input-note">
       将存为 <span class="mono">{{ previewOrigin }}</span>
-    </UiHint>
-    <UiHint v-else-if="invalidInput" block>
-      只支持 http / https 的 origin（不支持通配符、路径、正则——按路径 / 正则筛请在规则里配）。
-    </UiHint>
+    </div>
+    <div v-else-if="invalidInput" class="input-note is-error">
+      只支持 http / https 的 origin，不支持通配符、路径或正则。
+    </div>
 
     <UiTable
+      class="targets-table"
       :data="store.targets"
       row-key="id"
+      height="100%"
       empty-text="名单为空（全部透传，规则不会跑）"
     >
       <UiTableColumn label="origin" min-width="260">
@@ -151,12 +136,76 @@ function formatTime(iso: string): string {
         </template>
       </UiTableColumn>
     </UiTable>
-  </UiPanel>
+    <footer class="targets-footnote">
+      <span>处理名单是白名单闸门：只有命中的 origin 才会记录并进入规则匹配。</span>
+      <span class="mono">一个条目 = 一个 origin</span>
+    </footer>
+  </div>
 </template>
 
 <style scoped>
-.add-row {
-  margin-bottom: var(--spacing-sm);
+.targets-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.targets-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 0 0 48px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.target-input {
+  flex: 1;
+  min-width: 240px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.input-note {
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-fill);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+
+  &.is-error {
+    color: var(--color-error);
+  }
+}
+
+.targets-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.targets-table :deep(.ui-table-wrap) {
+  height: 100%;
+  border-radius: 0;
+}
+
+.targets-footnote {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex: 0 0 31px;
+  height: 31px;
+  padding: 0 14px;
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+
+  .mono {
+    margin-left: auto;
+  }
 }
 
 .origin-text {

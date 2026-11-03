@@ -32,10 +32,10 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 
 ## 布局与页签机制（工程侧）
 
-- **设置是页签，不是弹窗**：入口在标题栏右端（`.header-settings`），点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 用同一张表常驻挂载。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
+- **设置是页签，不是弹窗**：入口在左侧导航轨底部，点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 只挂载当前活动页签。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
   桌面端专属页面（如设置：数据目录 / 分层用量 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
   命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
-- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与常驻挂载依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
+- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
 - 主壳标题栏、首页网格、工具页布局、页签外观与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §7、§8（动效尊重 `prefers-reduced-motion`）。
 
 ## 窗口外观（半透明 / 系统材质 · 工程侧）
@@ -121,7 +121,7 @@ export default defineTool({
 ```
 
 - 路由由 `renderer/config/tools.ts` 的注册表自动汇总，无需手工登记路由。
-- `meta.toolId` 必填：页签高亮与常驻挂载依赖它。
+- `meta.toolId` 必填：页签高亮与活动组件解析依赖它。
 - 工具内多视图（页签 / 分类）用 `subRoutes` + 路由驱动状态，不要用纯本地 ref（详见「布局与页签机制」）。
 - **UI 一律先读 [DESIGN.md](./DESIGN.md)**：新页面优先复用 §5 的组件与 §6 的工具类，不要在业务文件里重写卡片 / 分组 / 表格 / 提示的通用样式。
 

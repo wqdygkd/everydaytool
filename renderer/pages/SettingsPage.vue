@@ -404,8 +404,8 @@ function formatBytes(bytes: number): string {
   return `${text} ${units[exponent]}`
 }
 
-// 页签常驻挂载（切走只是 v-show 隐藏），因此只在首次挂载时拉一次数据；
-// 之后由各操作自己触发刷新（改目录 / 清缓存后各刷一次）。
+// 设置页只作为当前活动页签挂载；每次重新进入都重新拉取主进程状态，
+// 页内操作完成后再按需刷新对应数据。
 onMounted(() => {
   void loadInfo()
   void loadAssetsInfo()
@@ -511,6 +511,16 @@ onMounted(() => {
       </UiHint>
     </UiPanel>
 
+    <UiPanel title="清理缓存">
+      <UiHint block>
+        只清「缓存」层（含沙箱浏览器与各工具的下载 / 运行产物）和「会话」层内部的浏览器缓存目录。
+        不会删除账号、规则、证书、登录态与归档；运行中的沙箱会自动跳过。
+      </UiHint>
+      <UiButton :loading="cleaning" @click="clearCache">
+        清除缓存
+      </UiButton>
+    </UiPanel>
+
     <UiPanel title="窗口外观">
       <UiSwitchField :model-value="transparentOn" :disabled="!isTransparentEnabled" align="start" @update:model-value="toggleTransparent">
         半透明窗口
@@ -575,16 +585,6 @@ onMounted(() => {
           重置为默认大小
         </UiButton>
       </UiGroup>
-    </UiPanel>
-
-    <UiPanel title="清理缓存">
-      <UiHint block>
-        只清「缓存」层（含沙箱浏览器与各工具的下载 / 运行产物）和「会话」层内部的浏览器缓存目录。
-        不会删除账号、规则、证书、登录态与归档；运行中的沙箱会自动跳过。
-      </UiHint>
-      <UiButton :loading="cleaning" @click="clearCache">
-        清除缓存
-      </UiButton>
     </UiPanel>
 
     <UiPanel title="备份与恢复">

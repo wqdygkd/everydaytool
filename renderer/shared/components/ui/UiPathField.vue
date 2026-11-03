@@ -52,13 +52,13 @@ const value = computed({
     display: flex;
     align-items: stretch;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     background: var(--color-field);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 
     &:focus-within {
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 1px var(--color-primary) inset;
+      border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
     }
 
     input {
@@ -70,7 +70,7 @@ const value = computed({
       outline: none;
       background: transparent;
       color: var(--color-text-primary);
-      font-size: var(--font-size-base);
+      font-size: var(--font-size-sm);
 
       &::placeholder { color: var(--color-text-tertiary); }
 
@@ -90,7 +90,7 @@ const value = computed({
   align-items: center;
   padding: 0 var(--spacing-md);
   border-right: 1px solid var(--color-border);
-  border-radius: calc(var(--radius-sm) - 1px) 0 0 calc(var(--radius-sm) - 1px);
+  border-radius: calc(var(--radius-control) - 1px) 0 0 calc(var(--radius-control) - 1px);
   background: var(--color-fill);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);

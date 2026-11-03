@@ -51,6 +51,7 @@ withDefaults(defineProps<{
     background: var(--color-raised);
     border: 1px solid var(--color-border-light);
     border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 0 var(--color-highlight);
   }
 
   &.is-raised.is-shadow-sm {

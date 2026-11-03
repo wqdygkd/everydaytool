@@ -10,10 +10,6 @@ const connections = computed(() => store.status?.connections ?? [])
 const proxyEnabled = computed(() => connections.value.some(connection => connection.proxyEnabled))
 const proxyEndpoint = computed(() => (store.status?.proxyPort ? `127.0.0.1:${store.status.proxyPort}` : ''))
 
-// ---------------------------------------------------------------------------
-// HTTPS 根证书（解密名单内 HTTPS 的前提）
-// ---------------------------------------------------------------------------
-
 const caState = computed(() => store.ca?.trustState ?? 'not-found')
 const caBusy = ref(false)
 
@@ -71,7 +67,6 @@ async function refreshCertificate(): Promise<void> {
   }
 }
 
-/** 代理端口修改弹窗 */
 const portDialogVisible = ref(false)
 const portDraft = ref('')
 const portSaving = ref(false)
@@ -115,170 +110,180 @@ function formatTime(at: number): string {
 </script>
 
 <template>
-  <div class="bridge-panels">
-    <UiPanel>
-      <template #title>
-        运行状态
-      </template>
-      <template #actions>
-        <UiChip :tone="store.status?.proxyRunning ? 'success' : 'info'" variant="soft">
-          {{ store.status?.proxyRunning ? '代理运行中' : '未运行' }}
-        </UiChip>
-      </template>
-      <UiKeyValue label="代理端口" mono>
-        {{ store.status?.proxyPort ?? '—' }}
-        <template #actions>
-          <UiButton size="small" text type="primary" :disabled="!proxyEndpoint" @click="useCopy(proxyEndpoint, '代理地址')">
-            复制地址
+  <div class="status-board">
+    <section class="status-main">
+      <div class="summary-row">
+        <div class="summary-state">
+          <span class="live-dot" :class="{ 'is-running': store.status?.proxyRunning }" />
+          <div>
+            <strong>{{ store.status?.proxyRunning ? '代理运行中' : '代理未运行' }}</strong>
+            <span>{{ proxyEndpoint || '等待浏览器扩展连接' }}</span>
+          </div>
+        </div>
+        <div class="summary-actions">
+          <UiButton
+            size="small"
+            :disabled="!connections.length"
+            @click="applyDesired(true)"
+          >
+            挂载代理
           </UiButton>
-          <UiButton size="small" text type="primary" @click="openPortDialog">
-            修改
+          <UiButton
+            size="small"
+            :disabled="!connections.length || !proxyEnabled"
+            @click="applyDesired(false)"
+          >
+            恢复直连
           </UiButton>
-        </template>
-      </UiKeyValue>
-      <UiKeyValue label="控制端口">
-        <span class="mono">{{ store.status?.wsPort ?? '—' }}</span>
-        <span class="muted"> 扩展自动探测</span>
-      </UiKeyValue>
-      <UiKeyValue label="已连接浏览器">
-        {{ connections.length }}
-      </UiKeyValue>
-      <UiAlert
-        v-if="store.status?.proxyPortNote"
-        class="port-note"
-        type="warning"
-        :closable="false"
-        show-icon
-        :title="store.status.proxyPortNote"
-      />
-      <UiHint block>
-        代理端口首次启动随机分配并固定，可随时修改（改了会自动通知已连接的浏览器重挂）；控制端口是扩展在本机固定端口段内自动探测的通道，无需填写。
-      </UiHint>
-      <UiHint block>
-        「强制回源」按<strong>处理名单里的每条</strong>单独控制（默认开）：开了的 origin 响应去掉 <span class="mono">cache-control</span> /
-        <span class="mono">etag</span> 等缓存头，浏览器每次都会真的发请求，流量页才看得到重复访问的资源。
-      </UiHint>
+        </div>
+      </div>
 
-      <div v-for="connection in connections" :key="connection.clientId" class="connection-item">
-        <UiGroup gap="sm">
-          <UiChip variant="outline">
-            {{ connection.appId }}
-          </UiChip>
-          <span class="mono muted">#{{ connection.clientId.slice(0, 8) }}</span>
+      <div class="metric-grid">
+        <div class="metric">
+          <span>代理端口</span>
+          <div>
+            <strong class="mono">{{ store.status?.proxyPort ?? '—' }}</strong>
+            <UiIconButton
+              icon="copy"
+              :size="26"
+              label="复制代理地址"
+              :disabled="!proxyEndpoint"
+              @click="useCopy(proxyEndpoint, '代理地址')"
+            />
+            <UiButton size="small" text type="primary" @click="openPortDialog">
+              修改
+            </UiButton>
+          </div>
+        </div>
+        <div class="metric">
+          <span>控制端口</span>
+          <div>
+            <strong class="mono">{{ store.status?.wsPort ?? '—' }}</strong>
+            <span class="metric-note">扩展自动探测</span>
+          </div>
+        </div>
+        <div class="metric">
+          <span>已连接浏览器</span>
+          <div>
+            <strong>{{ connections.length }}</strong>
+            <span class="metric-note">{{ proxyEnabled ? '代理已挂载' : '直连中' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="store.status?.proxyPortNote" class="inline-note">
+        {{ store.status.proxyPortNote }}
+      </div>
+
+      <div class="connection-list">
+        <div class="section-label">
+          浏览器连接
+        </div>
+        <div v-if="connections.length === 0" class="connection-empty">
+          还没有扩展连入。按右侧步骤加载扩展后，这里会出现连接。
+        </div>
+        <div v-for="connection in connections" :key="connection.clientId" class="connection-row">
+          <span class="connection-app">{{ connection.appId }}</span>
+          <span class="mono connection-id">#{{ connection.clientId.slice(0, 8) }}</span>
           <UiChip :tone="connection.proxyEnabled ? 'success' : 'warning'" variant="soft">
             {{ connection.proxyEnabled ? '代理已挂载' : '未挂载' }}
           </UiChip>
-        </UiGroup>
-        <UiHint block>
-          连接于 {{ formatTime(connection.connectedAt) }}
-          <template v-if="connection.proxyError">
-            · {{ connection.proxyError }}
-          </template>
-        </UiHint>
+          <span class="connection-time">{{ formatTime(connection.connectedAt) }}</span>
+          <span v-if="connection.proxyError" class="connection-error">{{ connection.proxyError }}</span>
+        </div>
       </div>
 
-      <UiGroup class="actions" gap="sm">
-        <UiButton size="small" :disabled="!connections.length" @click="applyDesired(true)">
-          让浏览器挂载代理
-        </UiButton>
-        <UiButton size="small" :disabled="!connections.length || !proxyEnabled" @click="applyDesired(false)">
-          恢复直连
-        </UiButton>
-      </UiGroup>
-      <UiHint block>
-        代理挂载由浏览器扩展控制；edt 断开时代理会自动撤销（fail-open，不阻断日常上网）。
-      </UiHint>
-    </UiPanel>
+      <p class="status-footnote">
+        代理挂载由浏览器扩展控制；edt 断开时自动撤销（fail-open，不阻断日常上网）。
+        「强制回源」在处理名单中逐条控制。
+      </p>
+    </section>
 
-    <UiPanel title="浏览器扩展接入">
-      <ol class="steps">
-        <li>在 Chrome 打开 <span class="mono">chrome://extensions</span>，开启右上角「开发者模式」。</li>
-        <li>点「加载已解压的扩展程序」，选择下面的扩展目录。</li>
-        <li>点浏览器工具栏的扩展图标，打开「挂载代理」开关即可。</li>
-      </ol>
-      <UiKeyValue label="扩展目录">
-        <span class="mono path">{{ store.status?.extensionDir ?? '—' }}</span>
-        <template #actions>
-          <UiButton size="small" text type="primary" @click="useCopy(store.status?.extensionDir ?? '', '路径')">
-            复制
-          </UiButton>
-          <UiButton size="small" text type="primary" @click="openExtensionDir">
-            打开
-          </UiButton>
-        </template>
-      </UiKeyValue>
-      <UiHint block>
-        扩展启动后自动连上 edt（来源校验通过即建立会话）；代理端口由 edt 下发。扩展只放通用原语（代理开关 / 控制通道 / 脚本注入），规则、mock、日志全部在 edt 侧。
-      </UiHint>
-    </UiPanel>
+    <aside class="status-side">
+      <section class="side-section">
+        <div class="section-label">
+          浏览器扩展接入
+        </div>
+        <ol class="steps">
+          <li>打开 <span class="mono">chrome://extensions</span> 并启用开发者模式。</li>
+          <li>加载已解压的扩展程序，选择下方目录。</li>
+          <li>打开扩展图标，启用「挂载代理」。</li>
+        </ol>
+        <div class="path-row">
+          <span class="mono path">{{ store.status?.extensionDir ?? '—' }}</span>
+          <UiIconButton
+            icon="copy"
+            :size="27"
+            label="复制扩展目录"
+            @click="useCopy(store.status?.extensionDir ?? '', '路径')"
+          />
+          <UiIconButton icon="external" :size="27" label="打开扩展目录" @click="openExtensionDir" />
+        </div>
+      </section>
 
-    <UiPanel title="HTTPS 根证书">
-      <template #actions>
-        <UiChip :tone="caTagType" variant="soft">
-          {{ caLabel }}
-        </UiChip>
-      </template>
-      <UiKeyValue label="证书名" mono>
-        {{ store.ca?.commonName || '—' }}
-      </UiKeyValue>
-      <UiKeyValue label="指纹" mono>
-        <span class="mono path">{{ store.ca?.fingerprint || '—' }}</span>
-      </UiKeyValue>
-      <UiAlert
-        v-if="store.ca?.detail"
-        class="diag-alert"
-        type="info"
-        :closable="false"
-        show-icon
-        :title="store.ca.detail"
-      />
-      <UiHint block>
-        只有解密名单内 HTTPS 才需要它：浏览器不信任这张根证书时，HTTPS 请求会在 TLS 握手阶段就失败，
-        表现为「流量页空白 + 站点证书报错」。装到系统信任库对 Chrome / Edge 生效（装完重启浏览器）；
-        Firefox 等自带证书库的浏览器请「导出 .crt」后手动导入。
-      </UiHint>
-      <UiGroup class="actions" gap="sm" wrap>
-        <UiButton
-          size="small"
-          type="primary"
-          :loading="caBusy"
-          :disabled="store.ca?.platform === 'unsupported'"
-          @click="installCertificate"
-        >
-          安装到系统信任库
-        </UiButton>
-        <UiButton size="small" @click="exportCertificate">
-          导出 .crt
-        </UiButton>
-        <UiButton size="small" text :loading="caBusy" @click="refreshCertificate">
-          刷新状态
-        </UiButton>
-        <UiButton
-          size="small"
-          text
-          type="danger"
-          :disabled="!store.ca?.generated || caState === 'not-found'"
-          @click="uninstallCertificate"
-        >
-          卸载
-        </UiButton>
-      </UiGroup>
-      <UiHint v-if="store.ca?.platform === 'unsupported'" block>
-        当前平台不支持自动写入系统信任库，请用「导出 .crt」手动导入浏览器。
-      </UiHint>
-      <UiHint block>
-        只有加入「处理名单」的站点才会出现在流量日志里，其它站点按透传处理（能上网但看不到正文）。
-      </UiHint>
-    </UiPanel>
+      <section class="side-section">
+        <div class="section-head">
+          <div class="section-label">
+            HTTPS 根证书
+          </div>
+          <UiChip :tone="caTagType" variant="soft">
+            {{ caLabel }}
+          </UiChip>
+        </div>
+        <div class="detail-line">
+          <span>证书名</span>
+          <strong class="mono">{{ store.ca?.commonName || '—' }}</strong>
+        </div>
+        <div class="detail-line">
+          <span>指纹</span>
+          <strong class="mono fingerprint">{{ store.ca?.fingerprint || '—' }}</strong>
+        </div>
+        <div v-if="store.ca?.detail" class="inline-note">
+          {{ store.ca.detail }}
+        </div>
+        <div class="cert-actions">
+          <UiButton
+            size="small"
+            type="primary"
+            :loading="caBusy"
+            :disabled="store.ca?.platform === 'unsupported'"
+            @click="installCertificate"
+          >
+            安装信任
+          </UiButton>
+          <UiButton size="small" @click="exportCertificate">
+            导出 .crt
+          </UiButton>
+          <UiButton size="small" text :loading="caBusy" @click="refreshCertificate">
+            刷新
+          </UiButton>
+          <UiButton
+            size="small"
+            text
+            type="danger"
+            :disabled="!store.ca?.generated || caState === 'not-found'"
+            @click="uninstallCertificate"
+          >
+            卸载
+          </UiButton>
+        </div>
+        <p class="side-footnote">
+          只有处理名单内的 HTTPS 才需要证书；安装后重启浏览器生效。
+        </p>
+      </section>
+    </aside>
 
     <UiDialog v-model="portDialogVisible" title="修改代理端口" width="440px">
       <div class="port-form" @submit.prevent>
         <UiFormField label-width="80px" label="代理端口">
-          <UiInput v-model="portDraft" :placeholder="`${INTERCEPTOR_PROXY_PORT_MIN} - ${INTERCEPTOR_PROXY_PORT_MAX}`" inputmode="numeric" />
+          <UiInput
+            v-model="portDraft"
+            :placeholder="`${INTERCEPTOR_PROXY_PORT_MIN} - ${INTERCEPTOR_PROXY_PORT_MAX}`"
+          />
         </UiFormField>
       </div>
       <UiHint block>
-        改端口会重启代理，已挂载代理的浏览器会自动改用新端口；正在进行的请求会中断。
+        改端口会重启代理；正在进行的请求会中断，已连接的浏览器会自动改用新端口。
       </UiHint>
       <template #footer>
         <UiButton @click="portDialogVisible = false">
@@ -292,42 +297,253 @@ function formatTime(at: number): string {
   </div>
 </template>
 
-<style scoped>
-.bridge-panels {
+<style scoped lang="scss">
+.status-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: minmax(0, 1fr) 360px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.status-main,
+.status-side {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.status-main {
+  padding: 20px;
+}
+
+.status-side {
+  border-left: 1px solid var(--color-border-light);
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-lg);
 }
 
-.connection-item {
-  padding: var(--spacing-sm) 0;
-  border-top: 1px solid var(--color-border-light);
+.summary-state {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+  }
+
+  span {
+    color: var(--color-text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+  }
 }
 
-.actions {
-  margin-top: var(--spacing-sm);
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-text-tertiary) 12%, transparent);
+
+  &.is-running {
+    background: var(--color-success);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 13%, transparent);
+  }
+}
+
+.summary-actions,
+.cert-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 20px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-border-light);
+}
+
+.metric {
+  min-width: 0;
+  padding: 12px 13px;
+  background: var(--color-raised);
+
+  > span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+  }
+
+  > div {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 28px;
+    margin-top: 4px;
+  }
+
+  strong {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+  }
+}
+
+.metric-note {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.inline-note {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-left: 1px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 7%, transparent);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+}
+
+.connection-list {
+  margin-top: 22px;
+}
+
+.section-label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.connection-empty {
+  padding: 18px 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: var(--font-size-xs);
+}
+
+.connection-app {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.connection-id,
+.connection-time,
+.connection-error {
+  color: var(--color-text-tertiary);
+}
+
+.connection-time {
+  margin-left: auto;
+}
+
+.connection-error {
+  color: var(--color-error);
+}
+
+.status-footnote,
+.side-footnote {
+  margin: 16px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+}
+
+.side-section {
+  padding: 17px 16px;
+
+  & + & {
+    border-top: 1px solid var(--color-border-light);
+  }
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
 }
 
 .steps {
-  margin: 0 0 var(--spacing-sm);
-  padding-left: var(--spacing-xl);
+  margin: 10px 0;
+  padding-left: 17px;
   color: var(--color-text-secondary);
-  line-height: 1.6;
+  font-size: var(--font-size-xs);
+  line-height: 1.65;
 }
 
-.port-note {
-  margin-top: var(--spacing-sm);
-}
-
-.diag-alert {
-  margin-top: var(--spacing-sm);
+.path-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 9px;
+  border-top: 1px solid var(--color-border-light);
 }
 
 .path {
-  display: block;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.detail-line {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  font-size: var(--font-size-xs);
+
+  span {
+    color: var(--color-text-tertiary);
+  }
+
+  strong {
+    overflow: hidden;
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-regular);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.fingerprint {
+  font-size: 10px;
+}
+
+.cert-actions {
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .status-board {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
 }
 </style>

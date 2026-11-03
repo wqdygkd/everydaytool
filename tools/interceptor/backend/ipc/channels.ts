@@ -14,6 +14,8 @@ export const INTERCEPTOR_IPC_CHANNELS = {
   RULES_DELETE: 'interceptor:rules:delete',
   TRAFFIC_GET: 'interceptor:traffic:get',
   TRAFFIC_CLEAR: 'interceptor:traffic:clear',
+  RUNTIME_START: 'interceptor:runtime:start',
+  RUNTIME_STOP: 'interceptor:runtime:stop',
   PROXY_SET_DESIRED: 'interceptor:proxy:set-desired',
   PROXY_PORT_SET: 'interceptor:proxy:port:set',
   EXTENSION_OPEN_DIR: 'interceptor:extension:open-dir',
