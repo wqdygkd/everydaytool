@@ -3,8 +3,7 @@ import { SliderRange, SliderRoot, SliderThumb, SliderTrack } from 'reka-ui'
 // 滑块内核：Reka UI Slider（单值 / 双值 range 均支持）。
 import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{
-  modelValue: number | number[]
+withDefaults(defineProps<{
   min?: number
   max?: number
   step?: number
@@ -14,18 +13,16 @@ const props = withDefaults(defineProps<{
   step: 1,
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: number | number[]]
-}>()
+const modelValue = defineModel<number | number[]>({ required: true })
 
-const isRange = computed(() => Array.isArray(props.modelValue))
-const values = computed(() => Array.isArray(props.modelValue) ? props.modelValue : [props.modelValue])
+const isRange = computed(() => Array.isArray(modelValue.value))
+const values = computed(() => Array.isArray(modelValue.value) ? modelValue.value : [modelValue.value])
 
 function onChange(next: number[] | undefined) {
   if (!next) {
     return
   }
-  emit('update:modelValue', isRange.value ? next : next[0])
+  modelValue.value = isRange.value ? next : next[0]
 }
 </script>
 

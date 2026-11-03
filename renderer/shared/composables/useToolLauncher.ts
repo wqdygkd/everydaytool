@@ -1,6 +1,7 @@
 import type { UiPreferences } from '../../../shared/app'
 import type { ToolDefinition } from '../types/tool'
-import { computed, ref } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { computed } from 'vue'
 import { STORAGE_KEYS } from '../../../shared/storage-keys'
 import { getToolRegistry } from '../../config/tools'
 import { appIpcChannels, invokeAppIpc } from '../ipc/useAppIpc'
@@ -20,26 +21,21 @@ function sanitizeIds(value: unknown): string[] {
   return ids
 }
 
-function readIdList(storageKey: string): string[] {
-  try {
-    return sanitizeIds(JSON.parse(localStorage.getItem(storageKey) ?? '[]'))
-  } catch {
-    return []
-  }
-}
-
-function writeMirror(storageKey: string, ids: string[]) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(ids))
-  } catch {
-    // 网页预览或配额受限时，配置层仍是 Electron 中的事实来源。
-  }
+function createStoredIdList(storageKey: string) {
+  return useLocalStorage<string[]>(storageKey, [], {
+    serializer: {
+      read: raw => sanitizeIds(JSON.parse(raw)),
+      write: ids => JSON.stringify(sanitizeIds(ids)),
+    },
+    writeDefaults: false,
+    onError: () => {},
+  })
 }
 
 // 模块级单例：AppRail、HomePage 与命令面板共享同一份置顶 / 排序状态。
 const allTools = computed(() => getToolRegistry())
-const favoriteIds = ref<string[]>(readIdList(FAVORITE_STORAGE_KEY))
-const savedToolOrder = ref<string[]>(readIdList(TOOL_ORDER_STORAGE_KEY))
+const favoriteIds = createStoredIdList(FAVORITE_STORAGE_KEY)
+const savedToolOrder = createStoredIdList(TOOL_ORDER_STORAGE_KEY)
 let syncPromise: Promise<void> | null = null
 
 const orderedTools = computed(() => resolveToolOrder(allTools.value, savedToolOrder.value))
@@ -62,20 +58,17 @@ function toggleFavorite(toolId: string) {
   favoriteIds.value = isFavorite(toolId)
     ? favoriteIds.value.filter(id => id !== toolId)
     : [...favoriteIds.value, toolId]
-  writeMirror(FAVORITE_STORAGE_KEY, favoriteIds.value)
   void persistPreferences({ favoriteToolIds: favoriteIds.value })
 }
 
 function commitToolOrder(visibleOrder: string[]) {
   const next = mergeVisibleToolOrder(savedToolOrder.value, visibleOrder)
   savedToolOrder.value = next
-  writeMirror(TOOL_ORDER_STORAGE_KEY, next)
   void persistPreferences({ toolOrder: next })
 }
 
 function resetToolOrder() {
   savedToolOrder.value = []
-  writeMirror(TOOL_ORDER_STORAGE_KEY, [])
   void persistPreferences({ toolOrder: [] })
 }
 
@@ -88,7 +81,6 @@ async function syncPreferencesWithConfigLayer() {
       const remoteFavorites = sanitizeIds(stored?.favoriteToolIds)
       if (remoteFavorites.length > 0) {
         favoriteIds.value = remoteFavorites
-        writeMirror(FAVORITE_STORAGE_KEY, remoteFavorites)
       } else if (favoriteIds.value.length > 0) {
         void persistPreferences({ favoriteToolIds: favoriteIds.value })
       }
@@ -96,7 +88,6 @@ async function syncPreferencesWithConfigLayer() {
       const remoteOrder = sanitizeIds(stored?.toolOrder)
       if (remoteOrder.length > 0) {
         savedToolOrder.value = remoteOrder
-        writeMirror(TOOL_ORDER_STORAGE_KEY, remoteOrder)
       } else if (savedToolOrder.value.length > 0) {
         void persistPreferences({ toolOrder: savedToolOrder.value })
       }

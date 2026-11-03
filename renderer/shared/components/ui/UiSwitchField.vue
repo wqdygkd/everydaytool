@@ -1,22 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-const props = withDefaults(defineProps<{
-  modelValue: boolean
+withDefaults(defineProps<{
   disabled?: boolean
   align?: 'center' | 'start'
 }>(), {
   align: 'center',
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
-
-const value = computed({
-  get: () => props.modelValue,
-  set: (v: boolean) => emit('update:modelValue', v),
-})
+const value = defineModel<boolean>({ required: true })
 </script>
 
 <template>

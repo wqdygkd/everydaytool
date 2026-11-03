@@ -2,7 +2,8 @@
 import type { OfflinePackEdgeDetail, OfflinePackEdgeSearchItem } from '@shared/offline-pack'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { parseEdgeQuery } from '@shared/offline-pack'
-import { onUnmounted, ref } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
+import { onScopeDispose, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
@@ -16,9 +17,9 @@ const searchResults = ref<OfflinePackEdgeSearchItem[]>([])
 const searching = ref(false)
 const detail = ref<OfflinePackEdgeDetail | null>(null)
 const loading = ref(false)
-let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 const { progress, downloading, result, start, cancel, openDir } = useOfflinePackDownload()
+const debouncedSearch = useDebounceFn((value: string) => search(value), 400)
 
 const EXAMPLES = [
   { label: '试试 uBlock Origin Lite', value: 'cimighlppcgcoapaliogpjjdehbnofhn' },
@@ -39,10 +40,10 @@ function useExample(value: string): void {
 function onInput(value: string): void {
   input.value = value
   detail.value = null
-  if (searchTimer) clearTimeout(searchTimer)
   searchResults.value = []
+  debouncedSearch.cancel()
   if (shouldSkipSearch(value)) return
-  searchTimer = setTimeout(search, 400, value)
+  void debouncedSearch(value)
 }
 
 async function search(query: string): Promise<void> {
@@ -59,12 +60,14 @@ async function search(query: string): Promise<void> {
 }
 
 function selectResult(item: OfflinePackEdgeSearchItem): void {
+  debouncedSearch.cancel()
   input.value = item.id
   detail.value = { id: item.id, storeProductId: item.storeProductId, name: item.name, developer: item.developer }
   searchResults.value = []
 }
 
 async function handleSubmit(): Promise<void> {
+  debouncedSearch.cancel()
   if (!api) {
     toast.warning('离线包下载 仅在 Electron 桌面端可用')
     return
@@ -94,9 +97,7 @@ async function handleDownload(format: 'crx' | 'zip'): Promise<void> {
   })
 }
 
-onUnmounted(() => {
-  if (searchTimer) clearTimeout(searchTimer)
-})
+onScopeDispose(() => debouncedSearch.cancel())
 </script>
 
 <template>

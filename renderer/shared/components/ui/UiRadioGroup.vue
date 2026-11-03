@@ -2,17 +2,13 @@
 // 单选组内核：原生 role=radiogroup + provide/inject。
 import { provide } from 'vue'
 
-const props = defineProps<{
-  modelValue: string | number
-}>()
-
-const emit = defineEmits<{
-  'update:modelValue': [value: string | number]
-}>()
+const modelValue = defineModel<string | number>({ required: true })
 
 provide('uiRadioGroup', {
-  value: () => props.modelValue,
-  select: (v: string | number) => emit('update:modelValue', v),
+  value: () => modelValue.value,
+  select: (v: string | number) => {
+    modelValue.value = v
+  },
 })
 </script>
 
