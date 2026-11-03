@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import ConfirmHost from '@renderer/shared/feedback/ConfirmHost.vue'
+import { useEventListener } from '@vueuse/core'
 import { findAppTab, getAppTabs } from './config/app-tabs'
 import { getToolRegistry } from './config/tools'
 import AppRail from './shared/components/AppRail.vue'
@@ -111,21 +112,20 @@ function onGlobalKeydown(event: KeyboardEvent) {
   }
 }
 
+useEventListener(window, 'keydown', onGlobalKeydown)
+useEventListener(document, 'fullscreenchange', syncDomFullscreen)
+
 onMounted(() => {
-  window.addEventListener('keydown', onGlobalKeydown)
   try {
     const channel: string = appIpcChannels().EVENT_FULLSCREEN_CHANGED
     offFullscreenIpc = onAppIpc<boolean>(channel, fullscreen => isFullscreen.value = fullscreen === true)
   } catch {
     // 纯浏览器预览没有 preload。
   }
-  document.addEventListener('fullscreenchange', syncDomFullscreen)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', onGlobalKeydown)
   offFullscreenIpc?.()
-  document.removeEventListener('fullscreenchange', syncDomFullscreen)
 })
 
 function goHome() {

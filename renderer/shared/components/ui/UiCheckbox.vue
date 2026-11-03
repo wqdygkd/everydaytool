@@ -3,7 +3,6 @@
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
-  modelValue: boolean
   indeterminate?: boolean
   disabled?: boolean
 }>(), {
@@ -11,11 +10,9 @@ const props = withDefaults(defineProps<{
   disabled: false,
 })
 
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
+const modelValue = defineModel<boolean>({ required: true })
 
-const checked = computed(() => props.indeterminate ? false : props.modelValue)
+const checked = computed(() => props.indeterminate ? false : modelValue.value)
 </script>
 
 <template>
@@ -26,7 +23,7 @@ const checked = computed(() => props.indeterminate ? false : props.modelValue)
       :checked="checked"
       :indeterminate="indeterminate"
       :disabled="disabled"
-      @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
+      @change="modelValue = ($event.target as HTMLInputElement).checked"
     >
     <span class="ui-checkbox-box" aria-hidden="true">{{ indeterminate ? '–' : '✓' }}</span>
     <span v-if="$slots.default" class="ui-checkbox-text"><slot /></span>

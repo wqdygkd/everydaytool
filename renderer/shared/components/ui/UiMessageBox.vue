@@ -1,64 +1,58 @@
 <script setup lang="ts">
 // 消息框：基于平台 UiDialog 的确认 / 输入弹窗。
 // 命令式入口见 shared/feedback/useConfirm.ts。
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import UiDialog from './UiDialog.vue'
 
-const props = withDefaults(defineProps<{
-  /** 可见性(v-model) */
-  modelValue?: boolean
+withDefaults(defineProps<{
   title?: string
   message?: string
   type?: 'success' | 'warning' | 'error' | 'info'
   showInput?: boolean
   inputType?: 'text' | 'password'
   inputPlaceholder?: string
-  inputValue?: string
   confirmText?: string
   cancelText?: string
 }>(), {
-  modelValue: false,
   title: '',
   message: '',
   type: 'info',
   showInput: false,
   inputType: 'text',
   inputPlaceholder: '',
-  inputValue: '',
   confirmText: '确定',
   cancelText: '取消',
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-  'confirm': [inputValue: string]
-  'cancel': []
-  'update:inputValue': [value: string]
+  confirm: [inputValue: string]
+  cancel: []
 }>()
 
-const inputModel = ref(props.inputValue)
+const modelValue = defineModel<boolean>({ default: false })
+const inputValue = defineModel<string>('inputValue', { default: '' })
 
-watch(() => props.modelValue, (open) => {
+const inputModel = ref(inputValue.value)
+
+watch(modelValue, (open) => {
   if (open) {
-    inputModel.value = props.inputValue
+    inputModel.value = inputValue.value
   }
 })
 
-watch(() => props.inputValue, (v) => {
+watch(inputValue, (v) => {
   inputModel.value = v
 })
 
-const inputPassthroughType = computed(() => props.inputType)
-
 function onConfirm() {
-  emit('update:inputValue', inputModel.value)
+  inputValue.value = inputModel.value
   emit('confirm', inputModel.value)
-  emit('update:modelValue', false)
+  modelValue.value = false
 }
 
 function onCancel() {
   emit('cancel')
-  emit('update:modelValue', false)
+  modelValue.value = false
 }
 </script>
 
@@ -77,7 +71,7 @@ function onCancel() {
       v-if="showInput"
       v-model="inputModel"
       class="ui-message-box-input"
-      :input-type="inputPassthroughType"
+      :input-type="inputType"
       :placeholder="inputPlaceholder"
       @keydown.enter="onConfirm()"
     />

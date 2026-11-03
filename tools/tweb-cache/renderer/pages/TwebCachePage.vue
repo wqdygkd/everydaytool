@@ -4,6 +4,7 @@ import type { TwebWebviewTag } from '../webview'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
+import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
@@ -193,7 +194,12 @@ const mediaCacheLoading = ref(false)
 const mediaCacheClearing = ref(false)
 const mediaCacheBusy = ref(false)
 const thumbnailBackfillRunning = ref(false)
-let mediaCacheTimer: number | undefined
+const documentVisibility = useDocumentVisibility()
+const mediaCacheAutoRefresh = useIntervalFn(() => {
+  if (documentVisibility.value === 'visible' && inspectorOpen.value && activeTab.value === 'overview') {
+    void refreshMediaCache(true)
+  }
+}, 5000, { immediate: false })
 
 async function runMediaCacheBridge<T>(script: string): Promise<T | null> {
   const wv = webviewRef.value
@@ -286,12 +292,8 @@ watch(() => store.siteReady, (ready) => {
 }, { immediate: true })
 
 function startMediaCacheAutoRefresh(): void {
-  if (mediaCacheTimer !== undefined || !isElectron) return
-  mediaCacheTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible' && inspectorOpen.value && activeTab.value === 'overview') {
-      void refreshMediaCache(true)
-    }
-  }, 5000)
+  if (!isElectron || mediaCacheAutoRefresh.isActive.value) return
+  mediaCacheAutoRefresh.resume()
 }
 
 watch(activeTab, (tab) => {
@@ -485,10 +487,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (mediaCacheTimer !== undefined) {
-    window.clearInterval(mediaCacheTimer)
-    mediaCacheTimer = undefined
-  }
   const wv = webviewRef.value
   if (wv && devtoolsOpen.value) safeCall(() => wv.closeDevTools(), undefined)
   webviewRef.value = null

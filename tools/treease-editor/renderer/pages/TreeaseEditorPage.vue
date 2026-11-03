@@ -2,6 +2,7 @@
 import type { TreeaseInterceptLog, TreeaseInterceptRule, TreeaseInterceptStatus } from '../../../../shared/treease'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
+import { useOnline } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
@@ -71,15 +72,7 @@ function readStoredRules(): TreeaseInterceptRule[] {
 const ruleForms = ref<RuleForm[]>(readStoredRules().map(toForm))
 const expanded = ref<string[]>(ruleForms.value.map(f => f.id))
 // navigator.onLine 反映主机网络状态：离线时禁止清缓存刷新，避免删掉唯一可用的本地副本
-function readOnline(): boolean {
-  return typeof navigator === 'undefined' ? true : navigator.onLine
-}
-
-const isOnline = ref(readOnline())
-
-function updateOnlineStatus() {
-  isOnline.value = readOnline()
-}
+const isOnline = useOnline()
 // 默认启用：除非用户之前手动关闭过
 const interceptEnabled = ref(localStorage.getItem(ENABLED_STORAGE_KEY) !== '0')
 const attached = ref(false)
@@ -378,15 +371,11 @@ onMounted(() => {
   ensureLogSubscription()
   // 规则以配置层文件为准：晚一步加载，避免与首屏镜像渲染互相覆盖
   void syncRulesWithConfigLayer()
-  window.addEventListener('online', updateOnlineStatus)
-  window.addEventListener('offline', updateOnlineStatus)
 })
 
 onUnmounted(() => {
   offLog?.()
   offLog = null
-  window.removeEventListener('online', updateOnlineStatus)
-  window.removeEventListener('offline', updateOnlineStatus)
   const api = getIpc()
   if (api && currentWebContentsId !== null && attached.value) {
     void api.invoke(api.channels.INTERCEPT_STOP, currentWebContentsId).catch(() => {})

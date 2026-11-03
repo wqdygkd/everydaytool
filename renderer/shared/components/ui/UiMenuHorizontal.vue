@@ -1,16 +1,16 @@
 <script setup lang="ts">
 // 横向菜单（分段按钮组）：复刻 Telegram Web K 的 `.menu-horizontal-div`
 // —— 药丸选中态（滑动指示条）、整条横向滚动、滚动条隐藏、徽章计数、可选品牌图标。
+import { useResizeObserver } from '@vueuse/core'
+
 const props = defineProps<{
-  modelValue: string
   items: { value: string, label: string, badge?: number | string, icon?: string }[]
 }>()
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const modelValue = defineModel<string>({ required: true })
 
 const scroller = ref<HTMLElement | null>(null)
 const indicator = reactive({ left: 0, width: 0, ready: false })
-let observer: ResizeObserver | null = null
 
 function showBadge(badge?: number | string): badge is number | string {
   return badge !== undefined && badge !== null && badge !== '' && badge !== 0
@@ -39,21 +39,14 @@ async function refresh(): Promise<void> {
   measure()
 }
 
-watch(() => [props.modelValue, props.items], refresh, { deep: true })
+watch(() => [modelValue.value, props.items], refresh, { deep: true })
 
 onMounted(async () => {
   await refresh()
   indicator.ready = true
-  if (scroller.value && typeof ResizeObserver !== 'undefined') {
-    observer = new ResizeObserver(() => measure())
-    observer.observe(scroller.value)
-  }
 })
 
-onBeforeUnmount(() => {
-  observer?.disconnect()
-  observer = null
-})
+useResizeObserver(scroller, measure)
 </script>
 
 <template>
@@ -72,7 +65,7 @@ onBeforeUnmount(() => {
       class="ui-menu-horizontal-item"
       :class="{ 'is-active': item.value === modelValue }"
       :aria-selected="item.value === modelValue"
-      @click="emit('update:modelValue', item.value)"
+      @click="modelValue = item.value"
     >
       <img v-if="item.icon" :src="item.icon" alt="" class="ui-menu-horizontal-icon">
       <span class="ui-menu-horizontal-label">{{ item.label }}</span>

@@ -2,6 +2,7 @@
 import type { IconName } from '../../../../renderer/shared/components/ui/icons'
 import type { DelayRuleConfig, HeaderAction, HeaderOperation, HeadersRuleConfig, InterceptorRule, QueryParamAction, QueryParamModification, QueryParamRuleConfig, RedirectRuleConfig, ReplaceRuleConfig, RequestBodyMode, RequestRuleConfig, ResponseRuleConfig, RuleFilters, RuleOperator, RuleSourceKey, RuleType, ScriptRuleConfig, ScriptRunAt, ScriptWorld, UserAgentRuleConfig } from '../../../../shared/interceptor'
 import { confirm } from '@renderer/shared/feedback'
+import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { REQUEST_METHODS, RESOURCE_TYPE_LABELS, RULE_DELAY_MAX_MS, RULE_TYPE_LABELS } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
@@ -474,8 +475,7 @@ function handleEditorHotkey(event: KeyboardEvent): void {
   void save()
 }
 
-onMounted(() => window.addEventListener('keydown', handleEditorHotkey))
-onUnmounted(() => window.removeEventListener('keydown', handleEditorHotkey))
+useEventListener(window, 'keydown', handleEditorHotkey)
 
 watch(
   () => store.ruleEditorDraft,

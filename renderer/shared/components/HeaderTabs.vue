@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useEventListener, usePreferredReducedMotion, useTimeoutFn } from '@vueuse/core'
+
 interface HeaderTab {
   id: string
   name: string
@@ -78,10 +80,10 @@ let pending: {
 let dragStartX = 0
 let dragStartRect: DOMRect | null = null
 let dragBaseIds: string[] = []
-let settleTimer: number | null = null
 let previousUserSelect = ''
 let suppressClickUntil = 0
 const tabAnimations = new Set<Animation>()
+const preferredMotion = usePreferredReducedMotion()
 
 function getTabElements(): HTMLElement[] {
   return Array.from(barRef.value?.querySelectorAll<HTMLElement>('.tool-tab') ?? [])
@@ -170,7 +172,7 @@ function cancelTabAnimations() {
 }
 
 function prefersReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return preferredMotion.value === 'reduce'
 }
 
 function playTabMove(before: Map<string, DOMRect>, ids: string[]) {
@@ -274,7 +276,6 @@ function beginDrag(event: PointerEvent) {
       // 指针已失效（例如合成事件）时忽略：window 上的监听仍能兜底
     }
   }
-  window.addEventListener('keydown', onKeyDown)
 }
 
 function onPointerDown(event: PointerEvent) {
@@ -297,10 +298,6 @@ function onPointerDown(event: PointerEvent) {
     startY: event.clientY,
     element: tabElement,
   }
-  window.addEventListener('pointermove', onPointerMove)
-  window.addEventListener('pointerup', onPointerUp)
-  window.addEventListener('pointercancel', onPointerCancel)
-  window.addEventListener('blur', onWindowBlur)
 }
 
 function onPointerMove(event: PointerEvent) {
@@ -366,8 +363,17 @@ async function revertPreview(sourceId: string) {
   playTabMove(before, props.tabs.map(tab => tab.id))
 }
 
+const settleTimeout = useTimeoutFn(() => {
+  ghost.visible = false
+  ghost.tab = null
+  ghost.settling = false
+  settlingId.value = null
+  previewIds.value = []
+  restoreUserSelect()
+}, () => (prefersReducedMotion() ? 16 : SETTLE_MS), { immediate: false })
+
 function settleGhost(targetDx: number) {
-  if (settleTimer !== null) window.clearTimeout(settleTimer)
+  settleTimeout.stop()
 
   // 先让 is-settling（transition）生效，下一帧再改 transform，保证浮层是滑过去而不是瞬移
   ghost.settling = true
@@ -375,15 +381,7 @@ function settleGhost(targetDx: number) {
     ghost.dx = targetDx
     ghost.dy = 0
   })
-  settleTimer = window.setTimeout(() => {
-    ghost.visible = false
-    ghost.tab = null
-    ghost.settling = false
-    settlingId.value = null
-    previewIds.value = []
-    restoreUserSelect()
-    settleTimer = null
-  }, prefersReducedMotion() ? 16 : SETTLE_MS)
+  settleTimeout.start()
 }
 
 function restoreUserSelect() {
@@ -401,11 +399,6 @@ function cleanupPointerListeners() {
       // 指针已释放时忽略
     }
   }
-  window.removeEventListener('pointermove', onPointerMove)
-  window.removeEventListener('pointerup', onPointerUp)
-  window.removeEventListener('pointercancel', onPointerCancel)
-  window.removeEventListener('blur', onWindowBlur)
-  window.removeEventListener('keydown', onKeyDown)
 }
 
 function cancelActiveDrag() {
@@ -416,12 +409,14 @@ function cancelActiveDrag() {
 }
 
 function onPointerCancel() {
+  if (!pending && !draggingId.value) return
   cleanupPointerListeners()
   pending = null
   cancelActiveDrag()
 }
 
 function onWindowBlur() {
+  if (!pending && !draggingId.value) return
   cleanupPointerListeners()
   pending = null
   cancelActiveDrag()
@@ -434,6 +429,12 @@ function onKeyDown(event: KeyboardEvent) {
   pending = null
   cancelActiveDrag()
 }
+
+useEventListener(window, 'pointermove', onPointerMove, { passive: false })
+useEventListener(window, 'pointerup', onPointerUp)
+useEventListener(window, 'pointercancel', onPointerCancel)
+useEventListener(window, 'blur', onWindowBlur)
+useEventListener(window, 'keydown', onKeyDown)
 
 function selectTab(id: string) {
   if (draggingId.value || settlingId.value || Date.now() < suppressClickUntil) return
@@ -507,7 +508,6 @@ watch(
 onBeforeUnmount(() => {
   cleanupPointerListeners()
   cancelTabAnimations()
-  if (settleTimer !== null) window.clearTimeout(settleTimer)
   restoreUserSelect()
 })
 </script>

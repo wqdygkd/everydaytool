@@ -3,7 +3,6 @@
 // → 主 CTA → 默认插槽（结果面板 / 下载进度）。
 // 间距与控件外观全部交给 UiGroup / UiHint / Ui* 组件，各下载器不再复制输入框、示例与按钮样式。
 withDefaults(defineProps<{
-  modelValue: string
   placeholder: string
   /** 主按钮文案（loading 时替换为 loadingLabel） */
   submitLabel: string
@@ -19,10 +18,11 @@ withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'submit': []
-  'example': [value: string]
+  submit: []
+  example: [value: string]
 }>()
+
+const modelValue = defineModel<string>({ required: true })
 </script>
 
 <template>
@@ -34,11 +34,10 @@ const emit = defineEmits<{
     <slot name="before" />
 
     <UiSearchInput
-      :model-value="modelValue"
+      v-model="modelValue"
       :placeholder="placeholder"
       clearable
       variant="box"
-      @update:model-value="emit('update:modelValue', $event)"
       @enter="emit('submit')"
     />
 
