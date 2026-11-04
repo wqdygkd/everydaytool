@@ -41,8 +41,8 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: 'everydaytool' },
   },
   ...allToolRegistry.flatMap(toolRoutes),
-  // 应用自带页面（设置等）：与工具页一样按活动页签挂载，因此统一带 meta.toolId，
-  // 页签系统（toolTabs）据此当作普通页签处理，路由不进 /tools 命名空间。
+  // 应用自带页面（设置等）：与工具页一样按「活动页」挂载（meta.toolId 决定标题栏与活动组件），
+  // 但它们不进已打开工具列表（左轨运行列表 / 最近使用），路由也不进 /tools 命名空间。
   // 按目标平台裁剪（electronOnly）：网页预览下设置页不注册，深链 /settings 落到兜底回首页。
   ...getAppTabs().map((tab): RouteRecordRaw => ({
     path: tab.path,

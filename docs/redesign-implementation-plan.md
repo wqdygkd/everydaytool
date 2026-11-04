@@ -66,7 +66,7 @@
 - [x] 新增 `renderer/shared/components/AppRail.vue`：品牌、首页、最多 4 个置顶工具、搜索、设置。
 - [x] 重构 `renderer/App.vue` 为 68px rail + 48px topbar + 单一活动工作区。
 - [x] 设置入口移到 rail 底部；移除标题栏设置按钮。
-- [x] `HeaderTabs.vue` 改为 32px 紧凑页签，保留拖拽、键盘与横向滚动。
+- [x] ~~`HeaderTabs.vue` 改为 32px 紧凑页签~~ —— 已被后续「标题栏收敛」取代：页签整体移除，工具切换改由左轨运行列表 + 标题栏上下文块承担（见 DESIGN §5.2 / §5.3）。
 - [x] macOS 红绿灯与 Windows / Linux 原生窗口按钮预留不重叠 rail 和页签。
 
 ### 3.2 命令面板

@@ -19,7 +19,6 @@ declare module 'vue' {
     DownloaderFrame: typeof import('./tools/offline-pack/renderer/components/DownloaderFrame.vue')['default']
     DownloadSection: typeof import('./tools/offline-pack/renderer/components/DownloadSection.vue')['default']
     EdgeDownloader: typeof import('./tools/offline-pack/renderer/components/EdgeDownloader.vue')['default']
-    HeaderTabs: typeof import('./renderer/shared/components/HeaderTabs.vue')['default']
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']
     LauncherRow: typeof import('./renderer/shared/components/LauncherRow.vue')['default']
@@ -79,6 +78,7 @@ declare module 'vue' {
     UiTableColumn: typeof import('./renderer/shared/components/ui/UiTableColumn.vue')['default']
     UiToaster: typeof import('./renderer/shared/components/ui/UiToaster.vue')['default']
     UiToolbar: typeof import('./renderer/shared/components/ui/UiToolbar.vue')['default']
+    UiTooltip: typeof import('./renderer/shared/components/ui/UiTooltip.vue')['default']
     VSCodeDownloader: typeof import('./tools/offline-pack/renderer/components/VSCodeDownloader.vue')['default']
     WorkspaceHeader: typeof import('./renderer/shared/components/workspace/WorkspaceHeader.vue')['default']
   }

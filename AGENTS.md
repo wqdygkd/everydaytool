@@ -1,6 +1,6 @@
 # AGENTS.md
 
-everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程约定**：目录边界、编码规范、IPC 约束、页签 / 路由机制、窗口状态持久化、命令与文件定位。
+everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程约定**：目录边界、编码规范、IPC 约束、左轨 / 标题栏 / 路由机制、窗口状态持久化、命令与文件定位。
 
 > **UI 设计规范不在本文件**：设计令牌、组件库、布局与动效、半透明与玻璃的唯一权威是 [DESIGN.md](./DESIGN.md)。改任何 UI 之前先读它的 §3（令牌）、§5（组件库）、§6（工具类）、§7（布局）。
 
@@ -19,6 +19,8 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 - 本地数据一律是 JSON 文件（`backend/utils/json-store.ts`：进程内缓存 + 临时文件 rename 原子写入），**不引入数据库 / 原生依赖**。
 - **数据按层归位**：配置（不可再生）`<data>/config/<工具 id>/`、资产（用户归档）`<assets>/<工具 id>/`、会话（Chromium 拥有）`<data>/session/`、缓存（可再生）`<data>/cache/<工具 id>/`。判据与清单只在 `shared/data-layers.ts`；**路径一律经 `resolveLayerPath`**（`backend/utils/data-layers.ts`），不得自己拼 `getDataDirectory()`——`pnpm data-layers:check` 会拦（连 `const root = getDataDirectory()` 这种别名也拦）。新增落点先往 `DATA_LAYER_ENTRIES` 加一条；确实不能走层的（如用户自备 `<data>/.env`）必须写 `// data-layers:allow <原因>`，原因必填、逐行生效，没有别的豁免通道。详见 [docs/data-layers.md](./docs/data-layers.md)。
 - 高度链必须完整：`flex` 容器 + `flex:1` 子项需配 `min-height:0`，避免内容溢出。
+- 走 Teleport 的浮层（Reka 的 `TooltipContent` / `PopoverContent` 等）**不要把 scoped class 写在库组件上**：父组件的 scopeId 传不到 teleport 出去的元素，整条 scoped 规则会静默失效（曾让 rail 提示变成 16px 透明底裸文字）。把可样式化的结构放进**本组件模板里的内层元素**（范例 `UiTooltip.vue`），或改用 `:global(...)`。
+- Vue scoped 样式里的 `:global(...)` **必须把整条选择器包进去**：写 `:global(.a .b) { ... }`，不要写 `:global(.a) .b`——后者会被 scoped 编译器截断成 `.a { ... }`，样式命中祖先（例如 `.app-shell` 而不是 `.app-rail`），且不会报错。曾因此让 `.app-shell` 整体被顶下来 46px，窗口顶部出现一条既没内容、也不能拖拽的死区。
 
 ## UI 规范的落点（工程侧）
 
@@ -30,13 +32,16 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 - 平台组件库在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板直接用，无需 import）。
 - 组件用法硬约束（`UiTable` / `UiProgress` / `UiChip` 的强制范围）由评审与类型检查保证；业务页面优先复用平台组件。
 
-## 布局与页签机制（工程侧）
+## 布局、左轨与标题栏（工程侧）
 
-- **设置是页签，不是弹窗**：入口在左侧导航轨底部，点击打开 `/settings` 页签。应用自带页面（设置等）与工具页共享同一套页签机制——注册在 `renderer/config/app-tabs.ts`（含 `id` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`stores/toolTabs.ts` 把它当作普通页签解析，`App.vue` 只挂载当前活动页签。**新增应用级页面加一条 `APP_TABS` 记录即可**，不要再写独立弹窗或往首页塞入口。
-  桌面端专属页面（如设置：数据目录 / 分层用量 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、页签名解析与标题栏入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
+- **设置不是页签，也不是弹窗**：入口固定在左侧导航轨底部，点击打开 `/settings` 页。应用自带页面注册在 `renderer/config/app-tabs.ts`（含 `id` / `icon` / `description` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`App.vue` 只挂载当前路由对应的页面。**应用自带页面不进已打开工具列表**：不写 `toolTabs.openIds`，不出现在左轨运行列表与「最近使用」里，也不占运行名额。
+  桌面端专属页面（如设置：数据目录 / 分层用量 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、标题栏上下文与 rail 入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
   命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
-- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（页签高亮与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
-- 主壳标题栏、首页网格、工具页布局、页签外观与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §7、§8（动效尊重 `prefers-reduced-motion`）。
+- **左轨（`AppRail.vue`）** 从**整宽标题栏下方**开始（不再是贯穿到窗口顶部的整列，也不再用 `padding-top` 给红绿灯让位）= 首页 → 置顶工具（`useToolLauncher().pinnedTools`，常驻启动器：关闭只停止运行、图标留在原位）→ 已打开的非置顶工具（`toolTabs.openIds` 顺序，关闭即从列表移除）→ 底部固定搜索 / 设置。同一个工具只出现一次并永远取置顶位。运行列表区独立滚动（提示必须用 portal 的 `UiTooltip`，伪元素会被裁掉）；关闭钮是图标按钮的**兄弟节点**（HTML 不允许按钮嵌套），置顶项的 `aria-label` / tooltip 必须写“关闭 X（保留置顶）”。
+- **标题栏（`App.vue` 的 `.app-topbar`）铺满整宽**（`.app-shell` 是「标题栏 + `.app-body`（rail + 内容）」两行），只承载当前页面上下文：图标 + 名称 + 一行说明；macOS 红绿灯落在标题栏左侧，内容左内边距 84px 让开灯组（全屏时回到 16px）。首页用 `EDT` 字标 + `everydaytool` + “本地工具工作区”；工具 / 应用页取注册表元数据。**标题栏不含页签**：工具切换走左轨图标与 `Ctrl/Cmd + K`。旧的页签拖拽排序 / 键盘导航已随 `HeaderTabs.vue` 删除，不要复活。
+- **`stores/toolTabs.ts`** 的职责是「已打开的工具 + 最近使用顺序」：`openIds` 持久化到 localStorage（key 仍叫 `toolTabs`，不改名、不迁移），`recentIds` 只存在内存里，启动时用「打开顺序」播种（后打开的更新）。关闭当前工具时必须**先取 `recentFallback(toolId)` 再 `close()`**——close 会把该工具从两个列表里摘掉，顺序反了就永远只能回首页。
+- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（标题栏上下文与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
+- 主壳标题栏、左轨、首页网格、工具页布局与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §5.2、§5.3、§6、§8（动效尊重 `prefers-reduced-motion`）。
 
 ## 窗口外观（半透明 / 系统材质 · 工程侧）
 
@@ -52,7 +57,7 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 
 ## 窗口大小与位置（记住上次几何）
 
-- 主进程同样是唯一事实来源（`backend/utils/window-bounds-store.ts` → `<data>/config/app/window-bounds.json`），渲染层（设置页签 →「窗口大小与位置」）只经 IPC 读取状态、提交开关 / 重置，**不自己记几何**。
+- 主进程同样是唯一事实来源（`backend/utils/window-bounds-store.ts` → `<data>/config/app/window-bounds.json`），渲染层（设置页 →「窗口大小与位置」）只经 IPC 读取状态、提交开关 / 重置，**不自己记几何**。
 - **恢复判定是纯逻辑**：`shared/window-bounds.ts` 的 `resolveWindowPlacement` 只认「仍落在某块屏工作区内、且可见面积足够拖动」的记录；外接屏拔掉 / 分辨率变小时返回 `null`，主进程改用默认尺寸让 Electron 居中——绝不允许把窗口还原到屏幕外。坐标换算 / 越界收敛都写在这里，主进程只做传参。
 - `enabled` / `maximized` / `bounds` 三个字段：关闭开关即不记录也不恢复；最大化只记标记，几何恒取 `getNormalBounds()`（还原后的尺寸），下次先按普通态建窗再 `maximize()`。
 - 存储走**同步** JSON 存储（`backend/utils/json-store.ts`），不用外观那套异步写：`move` / `resize` 高频触发，关窗时还必须在进程退出前落盘。写入用 400ms debounce + 值不变不写，`close` 时立刻 flush。
@@ -121,8 +126,8 @@ export default defineTool({
 ```
 
 - 路由由 `renderer/config/tools.ts` 的注册表自动汇总，无需手工登记路由。
-- `meta.toolId` 必填：页签高亮与活动组件解析依赖它。
-- 工具内多视图（页签 / 分类）用 `subRoutes` + 路由驱动状态，不要用纯本地 ref（详见「布局与页签机制」）。
+- `meta.toolId` 必填：标题栏上下文与活动组件解析依赖它。
+- 工具内多视图（页签 / 分类）用 `subRoutes` + 路由驱动状态，不要用纯本地 ref（详见「布局、左轨与标题栏」）。
 - **UI 一律先读 [DESIGN.md](./DESIGN.md)**：新页面优先复用 §5 的组件与 §6 的工具类，不要在业务文件里重写卡片 / 分组 / 表格 / 提示的通用样式。
 
 ## 文件定位速查
@@ -136,18 +141,20 @@ export default defineTool({
 | Tailwind v4 入口 / 主题变量 | `renderer/shared/styles/tailwind.css` |
 | **反馈基座（confirm / alert / prompt）** | `renderer/shared/feedback/` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
-| **UI 组件库（面板/分组/键值/表格/进度/对话框等 27 组件）** | `renderer/shared/components/ui/` |
+| **UI 组件库（面板/分组/键值/表格/进度/对话框等 28 组件）** | `renderer/shared/components/ui/` |
 | UI 设计规范（令牌 / 组件 / 布局 / 动效） | `DESIGN.md` |
 
 ### 外壳与页面
 
 | 查找内容 | 位置 |
 | ---------- | ------ |
-| 应用外壳 / 标题栏（平台适配 / 页签 / 全屏） | `renderer/App.vue` |
-| **应用自带页面注册（设置等应用级页签）** | `renderer/config/app-tabs.ts` |
+| 应用外壳 / 标题栏上下文（平台适配 / 图标 + 名称 + 说明 / 全屏） | `renderer/App.vue` |
+| **应用自带页面注册（设置等，含标题栏 icon / description）** | `renderer/config/app-tabs.ts` |
 | 设置页（数据目录 / 数据分层用量 / 窗口外观 / 窗口大小与位置） | `renderer/pages/SettingsPage.vue` |
 | 首页工具网格 | `renderer/pages/HomePage.vue` |
-| 顶部工具页签（拖拽排序 / 关闭 / 键盘导航） | `renderer/shared/components/HeaderTabs.vue` |
+| 左轨（首页 / 置顶 / 已打开工具 / 关闭 / 运行圆点） | `renderer/shared/components/AppRail.vue` |
+| 已打开工具列表 + 最近使用（`openIds` / `recentIds`） | `renderer/stores/toolTabs.ts` |
+| 悬停提示（portal，rail 等 overflow 容器内唯一可用方案） | `renderer/shared/components/ui/UiTooltip.vue` |
 | 首页工具排序（创建时间 / 拖拽 / 合并保存顺序） | `renderer/shared/tool/tool-order.ts` |
 | 工具卡片组件 | `renderer/shared/components/ToolCard.vue` |
 | 工具注册 | `renderer/config/tools.ts` |

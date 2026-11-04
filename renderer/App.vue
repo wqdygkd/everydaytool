@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
+import type { IconName } from './shared/components/ui/icons'
 import ConfirmHost from '@renderer/shared/feedback/ConfirmHost.vue'
 import { useEventListener } from '@vueuse/core'
 import { findAppTab, getAppTabs } from './config/app-tabs'
-import { getToolRegistry } from './config/tools'
+import { getToolById, getToolRegistry } from './config/tools'
 import AppRail from './shared/components/AppRail.vue'
 import CommandPalette from './shared/components/CommandPalette.vue'
-import HeaderTabs from './shared/components/HeaderTabs.vue'
 import UiToaster from './shared/components/ui/UiToaster.vue'
 import { useAppearance } from './shared/composables/useAppearance'
 import { useCommandPalette } from './shared/composables/useCommandPalette'
@@ -16,7 +16,7 @@ import { useToolTabsStore } from './stores/toolTabs'
 
 const route = useRoute()
 const router = useRouter()
-const tabsStore = useToolTabsStore()
+const toolsStore = useToolTabsStore()
 
 const { appearance, load: loadAppearance, subscribe: subscribeAppearance } = useAppearance()
 const isTransparent = computed(() => appearance.value?.enabled === true)
@@ -52,12 +52,12 @@ const platform = detectPlatform()
 watch(
   () => route.meta?.toolId as string | undefined,
   (toolId) => {
-    tabsStore.syncFromRoute(toolId ?? null)
+    toolsStore.syncFromRoute(toolId ?? null)
   },
   { immediate: true },
 )
 
-const tabComponents: Record<string, Component> = {
+const pageComponents: Record<string, Component> = {
   ...Object.fromEntries(getToolRegistry().map(tool => [tool.id, tool.route.component as Component])),
   ...Object.fromEntries(getAppTabs().map(tab => [tab.id, tab.component])),
 }
@@ -65,9 +65,35 @@ const tabComponents: Record<string, Component> = {
 const currentTabId = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null))
 const activeComponent = computed(() => {
   const id = currentTabId.value
-  return id ? tabComponents[id] : undefined
+  return id ? pageComponents[id] : undefined
 })
-const isHome = computed(() => currentTabId.value === null)
+
+const activeTool = computed(() => (currentTabId.value ? getToolById(currentTabId.value) : undefined))
+const activeAppTab = computed(() => (currentTabId.value ? findAppTab(currentTabId.value) : undefined))
+
+interface TitlebarContext {
+  name: string
+  description: string
+}
+
+/** 标题栏图标：首页没有图标（用 EDT 字标），工具 / 应用页取注册表元数据 */
+const titlebarIcon = computed<IconName | null>(
+  () => activeTool.value?.icon ?? activeAppTab.value?.icon ?? null,
+)
+
+/**
+ * 标题栏是在描述「当前这块内容是什么」：首页讲应用本身，工具讲工具能力，应用页（设置）讲页面职责。
+ * 全部走注册表里的元数据，组件不再各写一份文案。
+ */
+const titlebar = computed<TitlebarContext>(() => {
+  if (activeTool.value) {
+    return { name: activeTool.value.name, description: activeTool.value.description }
+  }
+  if (activeAppTab.value) {
+    return { name: activeAppTab.value.name, description: activeAppTab.value.description }
+  }
+  return { name: 'everydaytool', description: '本地工具工作区' }
+})
 
 const settingsTab = findAppTab('settings')
 const isFullscreen = ref(false)
@@ -141,20 +167,23 @@ function selectPaletteTool(toolId: string) {
   openTool(toolId)
 }
 
-function handleTabClick(toolId: string) {
-  const tab = tabsStore.openTabs.find(item => item.id === toolId)
-  if (tab) router.push({ name: tab.routeName })
-}
-
-function handleTabReorder(ids: string[]) {
-  tabsStore.reorder(ids)
-}
-
-async function handleTabRemove(toolId: string) {
+/**
+ * 关闭工具：先过工具自己的关闭守卫（如「关闭将停止服务」），再决定落点。
+ * 关当前工具时切到最近使用过、此刻还开着的另一个工具；一个都没有才回首页。
+ */
+async function handleToolClose(toolId: string) {
   if (!(await runTabCloseGuard(toolId))) return
   const wasActive = currentTabId.value === toolId
-  tabsStore.close(toolId)
-  if (wasActive) goHome()
+  // 必须在 close 之前取：close 会把这个工具从 recentIds / openIds 里摘掉
+  const fallbackId = wasActive ? toolsStore.recentFallback(toolId) : null
+  toolsStore.close(toolId)
+  if (!wasActive) return
+
+  const fallback = fallbackId
+    ? toolsStore.openTools.find(tool => tool.id === fallbackId)
+    : undefined
+  if (fallback) router.push({ name: fallback.routeName })
+  else goHome()
 }
 
 function openSettings() {
@@ -167,31 +196,26 @@ function openSettings() {
     class="app-shell"
     :class="[`platform-${platform}`, modeClasses]"
   >
-    <AppRail
-      :active-id="currentTabId"
-      :show-settings="settingsTab !== undefined"
-      @home="goHome"
-      @search="openPalette()"
-      @settings="openSettings"
-      @select-tool="openTool"
-    />
+    <header class="app-topbar">
+      <div class="topbar-context">
+        <span v-if="titlebarIcon === null" class="topbar-brand" aria-hidden="true">EDT</span>
+        <UiIconTile v-else size="sm" :name="titlebarIcon" :icon-size="17" />
+        <span class="topbar-title">{{ titlebar.name }}</span>
+        <span class="topbar-meta">{{ titlebar.description }}</span>
+      </div>
+    </header>
 
-    <div class="app-workspace">
-      <header class="app-topbar">
-        <div v-if="isHome" class="topbar-context">
-          <span class="topbar-title">everydaytool</span>
-          <span class="topbar-meta">本地工具工作区</span>
-        </div>
-        <div v-else-if="tabsStore.openTabs.length" class="topbar-tabs">
-          <HeaderTabs
-            :tabs="tabsStore.openTabs"
-            :active-id="currentTabId"
-            @select="handleTabClick"
-            @close="handleTabRemove"
-            @reorder="handleTabReorder"
-          />
-        </div>
-      </header>
+    <div class="app-body">
+      <AppRail
+        :active-id="currentTabId"
+        :open-tools="toolsStore.openTools"
+        :show-settings="settingsTab !== undefined"
+        @home="goHome"
+        @search="openPalette()"
+        @settings="openSettings"
+        @select-tool="openTool"
+        @close="handleToolClose"
+      />
 
       <main class="app-main">
         <router-view v-slot="{ Component: RouteComponent, route: currentRoute }">
@@ -227,17 +251,19 @@ function openSettings() {
 </template>
 
 <style scoped lang="scss">
+/* 外壳是「整宽标题栏 + 下面一行（左轨 + 内容）」：标题栏铺满整宽，
+   macOS 的红绿灯直接落在标题栏左侧，左轨从标题栏下方开始，
+   不再需要给 rail 加顶部 padding 去让灯（那种做法会让标题栏断开、也挡不住分隔线穿过红绿灯）。 */
 .app-shell {
   display: flex;
+  flex-direction: column;
   height: 100dvh;
   overflow: hidden;
 }
 
-.app-workspace {
+.app-body {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  min-width: 0;
   min-height: 0;
 }
 
@@ -258,36 +284,60 @@ function openSettings() {
   -webkit-app-region: drag;
 }
 
+/* macOS：红绿灯落在标题栏里（trafficLightPosition 见 electron/main.ts），
+   内容整体让到灯组右侧；84px = 灯组右缘约 72px + 12px 间距，
+   也正好等于「左轨 68px + 16px」这个内容起点，视觉上与下方主区对齐。 */
+.platform-darwin .app-topbar {
+  padding-left: 84px;
+}
+
+/* 全屏时 macOS 隐藏红绿灯，标题栏回到普通左内边距 */
+.app-shell.is-fullscreen.platform-darwin .app-topbar {
+  padding-left: var(--spacing-lg);
+}
+
+/* 标题栏只剩一块「当前上下文」：图标 + 名称 + 一行说明。
+   整块不可交互（首页入口在左轨），因此整行仍是窗口拖拽区；说明是唯一可收缩的项，
+   窗口变窄时先省略说明，名称与图标不动。 */
 .topbar-context {
   display: flex;
   align-items: center;
+  flex: 1;
   gap: 9px;
   min-width: 0;
 }
 
+/* 首页字标与 UiIconTile（sm）同尺寸，保证三种状态的图标位对齐 */
+.topbar-brand {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 31px;
+  height: 31px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-strong);
+  font-family: var(--font-brand);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-brand);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
 .topbar-title {
-  font-size: var(--font-size-sm);
+  flex: none;
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
 }
 
 .topbar-meta {
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
-}
-
-.topbar-tabs {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  padding: 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-main {

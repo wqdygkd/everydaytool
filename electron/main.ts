@@ -418,12 +418,13 @@ async function createWindow(): Promise<void> {
     minHeight: MIN_WINDOW_SIZE.height,
     title: 'everydaytool',
     // 隐藏系统标题栏，网页头部即标题栏；
-    // Windows/Linux 右上角保留原生最小化/最大化/关闭按钮，高度与 .app-header(44px) 对齐
+    // Windows/Linux 右上角保留原生最小化/最大化/关闭按钮（titleBarOverlay），高度与 .app-topbar 顶栏对齐
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     ...(isMac
-      // 红绿灯位置钉死（44px 顶栏内垂直居中），与 App.vue 中
-      // .platform-darwin .app-header 的 padding-left 联动：改一处必须同步改另一处
-      ? { trafficLightPosition: { x: 20, y: 16 } }
+      // 红绿灯直接落在整宽标题栏（48px）里并垂直居中：y = (48 - 12) / 2。
+      // 标题栏内容的左内边距由 App.vue 的 `.platform-darwin .app-topbar`（84px）让开灯组：
+      // 改坐标必须同步改那处 padding，否则内容会被红绿灯压住。
+      ? { trafficLightPosition: { x: 20, y: 18 } }
       : {
           titleBarOverlay: {
             color: TITLEBAR_COLORS.color,
