@@ -5,10 +5,9 @@ import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { formatDateTime } from '@shared/offline-pack'
 import { computed, ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
+import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import DownloaderFrame from './DownloaderFrame.vue'
-import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
 
@@ -17,7 +16,7 @@ const resolveResult = ref<OfflinePackMsStoreResolveResult | null>(null)
 const selectedFile = ref('')
 const loading = ref(false)
 
-const { progress, downloading, result, start, cancel, openDir } = useOfflinePackDownload()
+const downloads = useOfflinePackDownloadsStore()
 
 const EXAMPLES = [
   { label: '试试 Windows Terminal', value: 'https://apps.microsoft.com/detail/9n0dx20hk701' },
@@ -65,7 +64,10 @@ async function handleSubmit(): Promise<void> {
 
 async function handleDownload(): Promise<void> {
   if (!selected.value) return
-  await start({ kind: 'msstore', url: selected.value.url, filename: selected.value.name })
+  await downloads.start(
+    { kind: 'msstore', url: selected.value.url, filename: selected.value.name },
+    resolveResult.value?.title || selected.value.name,
+  )
 }
 </script>
 
@@ -116,7 +118,7 @@ async function handleDownload(): Promise<void> {
         />
 
         <UiGroup v-if="selected" gap="sm" align="center" wrap class="btn-flush">
-          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
+          <UiButton type="primary" @click="handleDownload">
             下载到本地
           </UiButton>
           <UiButton @click="useCopy(selected.url, '下载链接')">
@@ -137,13 +139,5 @@ async function handleDownload(): Promise<void> {
         />
       </UiGroup>
     </UiPanel>
-
-    <DownloadSection
-      :progress="progress"
-      :downloading="downloading"
-      :result="result"
-      @cancel="cancel"
-      @open-dir="openDir"
-    />
   </DownloaderFrame>
 </template>

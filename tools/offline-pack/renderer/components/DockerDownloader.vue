@@ -5,15 +5,15 @@ import { extractDockerImageInfo, formatBytes } from '@shared/offline-pack'
 import { STORAGE_KEYS } from '@shared/storage-keys'
 import { computed, ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
+import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import DownloaderFrame from './DownloaderFrame.vue'
-import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
 
-// 加速服务（registry 镜像代理）：docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io
-type MirrorTarget = 'docker' | 'ghcr'
+// 加速服务（registry 镜像代理）：docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io，
+// gh-proxy.com/docker 同时代理 Docker Hub / GHCR / GCR / Quay
+type MirrorTarget = 'docker' | 'ghcr' | 'multi'
 interface MirrorOption {
   label: string
   value: string
@@ -21,10 +21,14 @@ interface MirrorOption {
 }
 
 const MIRRORS: MirrorOption[] = [
-  { label: 'dockerproxy.net（Docker Hub）', value: 'https://dockerproxy.net', target: 'docker' },
-  { label: 'docker.1ms.run（Docker Hub）', value: 'https://docker.1ms.run', target: 'docker' },
-  { label: 'docker.1panel.live（Docker Hub）', value: 'https://docker.1panel.live', target: 'docker' },
-  { label: 'ghcr.1ms.run（ghcr.io）', value: 'https://ghcr.1ms.run', target: 'ghcr' },
+  { label: 'dockerproxy.net（支持 Docker Hub）', value: 'https://dockerproxy.net', target: 'docker' },
+  { label: 'docker.1ms.run（支持 Docker Hub）', value: 'https://docker.1ms.run', target: 'docker' },
+  { label: 'docker.1panel.live（支持 Docker Hub）', value: 'https://docker.1panel.live', target: 'docker' },
+  { label: 'ghcr.1ms.run（支持 ghcr.io）', value: 'https://ghcr.1ms.run', target: 'ghcr' },
+  { label: 'gh-proxy.com（Docker Hub / GHCR / GCR / Quay）', value: 'https://gh-proxy.com/docker', target: 'multi' },
+  { label: 'v4.gh-proxy.org（支持 Docker Hub / GHCR / GCR / Quay）', value: 'https://v4.gh-proxy.org/docker', target: 'multi' },
+  { label: 'v6.gh-proxy.org（支持 Docker Hub / GHCR / GCR / Quay）', value: 'https://v6.gh-proxy.org/docker', target: 'multi' },
+  { label: 'cdn.gh-proxy.org（支持 Docker Hub / GHCR / GCR / Quay）', value: 'https://cdn.gh-proxy.org/docker', target: 'multi' },
 ]
 
 const MIRROR_STORAGE_KEY = STORAGE_KEYS.offlinePackRegistryMirror
@@ -60,7 +64,7 @@ const manifest = ref<OfflinePackDockerManifest | null>(null)
 const manifestLoading = ref(false)
 const loading = ref(false)
 
-const { progress, downloading, result, start, cancel, openDir } = useOfflinePackDownload()
+const downloads = useOfflinePackDownloadsStore()
 
 const EXAMPLES = [
   { label: '试试 Nginx', value: 'nginx:latest' },
@@ -213,16 +217,19 @@ function selectCandidate(item: OfflinePackDockerSearchItem): void {
 
 async function handleDownload(): Promise<void> {
   if (!info.value) return
-  await start({
-    kind: 'docker',
-    registry: registry.value,
-    namespace: namespace.value,
-    repository: info.value.repository,
-    tag: selectedTag.value,
-    platform: selectedPlatform.value || undefined,
-    mirror: mirror.value || undefined,
-    filename: buildFilename(),
-  })
+  await downloads.start(
+    {
+      kind: 'docker',
+      registry: registry.value,
+      namespace: namespace.value,
+      repository: info.value.repository,
+      tag: selectedTag.value,
+      platform: selectedPlatform.value || undefined,
+      mirror: mirror.value || undefined,
+      filename: buildFilename(),
+    },
+    `${registry.value}/${namespace.value}/${info.value.repository}:${selectedTag.value}`,
+  )
 }
 </script>
 
@@ -251,10 +258,6 @@ async function handleDownload(): Promise<void> {
     <template #before>
       <UiPanel variant="outlined" title="加速服务">
         <UiGroup direction="column" gap="md" align="stretch" block>
-          <UiHint size="xs">
-            docker.* 仅代理 Docker Hub（docker.io），ghcr.* 仅代理 ghcr.io
-          </UiHint>
-
           <UiSelect v-model="mirror" class="full-width" placeholder="直连（不使用加速）" :options="MIRRORS.map(m => ({ label: m.label, value: m.value }))" @update:model-value="onMirrorChange" />
 
           <UiGroup v-if="mirrorTarget" direction="column" gap="xs" block>
@@ -269,9 +272,23 @@ async function handleDownload(): Promise<void> {
                 apache/kafka → docker.io/apache/kafka → {{ mirrorHost }}/apache/kafka
               </UiHint>
             </template>
-            <UiHint v-else size="xs" class="mono">
+            <UiHint v-else-if="mirrorTarget === 'ghcr'" size="xs" class="mono">
               ghcr.io/immich-app/immich-server → {{ mirrorHost }}/ghcr.io/immich-app/immich-server
             </UiHint>
+            <template v-else>
+              <UiHint size="xs" class="mono">
+                nginx → {{ mirrorHost }}/nginx
+              </UiHint>
+              <UiHint size="xs" class="mono">
+                apache/kafka → {{ mirrorHost }}/apache/kafka
+              </UiHint>
+              <UiHint size="xs" class="mono">
+                ghcr.io/immich-app/immich-server → {{ mirrorHost }}/ghcr.io/immich-app/immich-server
+              </UiHint>
+              <UiHint size="xs" class="mono">
+                quay.io/prometheus/node-exporter → {{ mirrorHost }}/quay.io/prometheus/node-exporter
+              </UiHint>
+            </template>
           </UiGroup>
         </UiGroup>
       </UiPanel>
@@ -334,24 +351,24 @@ async function handleDownload(): Promise<void> {
     <!-- 标签 / 架构选择 + 下载 -->
     <UiPanel v-if="tags.length" variant="outlined">
       <UiGroup direction="column" gap="md" align="stretch" block>
-        <UiGroup gap="md" align="end" wrap>
-          <UiGroup class="ctl-fill" direction="column" gap="xs">
-            <UiHint size="xs">
+        <UiGroup gap="md" align="center" wrap>
+          <UiGroup class="tag-field ctl-fill" gap="sm" align="center">
+            <UiHint size="xs" class="field-label">
               选择标签
             </UiHint>
-            <UiSelect v-model="selectedTag" class="full-width" placeholder="选择标签" :options="tags.map(t => ({ label: t, value: t }))" @update:model-value="onTagChange" />
+            <UiSelect v-model="selectedTag" placeholder="选择标签" :options="tags.map(t => ({ label: t, value: t }))" @update:model-value="onTagChange" />
           </UiGroup>
 
-          <UiGroup v-if="platforms.length" class="ctl-sm" direction="column" gap="xs">
-            <UiHint size="xs">
+          <UiGroup v-if="platforms.length" class="platform-field ctl-md" gap="sm" align="center">
+            <UiHint size="xs" class="field-label">
               选择架构
             </UiHint>
-            <UiSelect v-model="selectedPlatform" class="full-width" placeholder="选择架构" :options="platforms.map(p => ({ label: formatPlatform(p), value: formatPlatform(p) }))" @update:model-value="onPlatformChange" />
+            <UiSelect v-model="selectedPlatform" placeholder="选择架构" :options="platforms.map(p => ({ label: formatPlatform(p), value: formatPlatform(p) }))" @update:model-value="onPlatformChange" />
           </UiGroup>
         </UiGroup>
 
         <UiGroup gap="sm" align="center" wrap class="btn-flush">
-          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
+          <UiButton type="primary" @click="handleDownload">
             下载并打包 TAR
           </UiButton>
           <UiHint v-if="selectedPlatform" size="xs" class="mono">
@@ -374,15 +391,15 @@ async function handleDownload(): Promise<void> {
         </UiChip>
       </template>
 
-      <UiTable :data="manifest.layers" max-height="240">
+      <UiTable class="manifest-table" :data="manifest.layers" max-height="240">
         <UiTableColumn label="#" width="52" align="right">
           <template #default="{ $index }">
             <span class="mono muted">{{ $index + 1 }}</span>
           </template>
         </UiTableColumn>
-        <UiTableColumn label="层摘要" min-width="200">
+        <UiTableColumn label="层摘要" prop="digest" min-width="260" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="mono" :title="row.digest">{{ row.digest.slice(7, 19) }}…</span>
+            <span class="mono">{{ row.digest }}</span>
           </template>
         </UiTableColumn>
         <UiTableColumn label="大小" width="100" align="right">
@@ -392,22 +409,31 @@ async function handleDownload(): Promise<void> {
         </UiTableColumn>
       </UiTable>
 
-      <UiKeyValue class="manifest-total" label="总计（压缩）" mono>
+      <UiKeyValue class="manifest-total" label="总计（压缩）" label-width="auto" mono>
         {{ formatBytes(totalSize) }}
       </UiKeyValue>
     </UiPanel>
-
-    <DownloadSection
-      :progress="progress"
-      :downloading="downloading"
-      :result="result"
-      @cancel="cancel"
-      @open-dir="openDir"
-    />
   </DownloaderFrame>
 </template>
 
 <style scoped>
+/* 标签与选择框同行：标签不折行，选择框吃掉剩余宽度 */
+.field-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.tag-field :deep(.ui-select-trigger),
+.platform-field :deep(.ui-select-trigger) {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 镜像层是结果清单，行高比默认 42px 紧凑一档 */
+.manifest-table :deep(td) {
+  height: 34px;
+}
+
 /* 表格与「总计」之间留一档间距（UiKeyValue 自带顶部边框，正好当汇总分隔线） */
 .manifest-total {
   margin-top: var(--spacing-sm);

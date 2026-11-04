@@ -215,7 +215,7 @@ export interface OfflinePackDockerDownloadRequest {
   kind: 'docker'
   /** 镜像仓库：ghcr.io / docker.io（缺省 docker.io） */
   registry?: string
-  /** Docker Hub 加速服务（registry 镜像代理）基地址，如 https://docker.1ms.run；缺省直连 */
+  /** Docker registry 加速服务基地址（Docker Hub / GHCR / GCR / Quay，如 https://docker.1ms.run）；缺省直连 */
   mirror?: string
   namespace: string
   repository: string
