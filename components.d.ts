@@ -17,7 +17,7 @@ declare module 'vue' {
     DiagnosticsPanel: typeof import('./tools/telegram-cache/renderer/components/DiagnosticsPanel.vue')['default']
     DockerDownloader: typeof import('./tools/offline-pack/renderer/components/DockerDownloader.vue')['default']
     DownloaderFrame: typeof import('./tools/offline-pack/renderer/components/DownloaderFrame.vue')['default']
-    DownloadSection: typeof import('./tools/offline-pack/renderer/components/DownloadSection.vue')['default']
+    DownloadTasks: typeof import('./tools/offline-pack/renderer/components/DownloadTasks.vue')['default']
     EdgeDownloader: typeof import('./tools/offline-pack/renderer/components/EdgeDownloader.vue')['default']
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']

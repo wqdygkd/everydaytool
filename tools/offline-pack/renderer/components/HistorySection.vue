@@ -160,6 +160,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .history-section {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
 }

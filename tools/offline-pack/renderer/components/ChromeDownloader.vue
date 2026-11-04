@@ -4,10 +4,9 @@ import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { useDebounceFn } from '@vueuse/core'
 import { onScopeDispose, ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
+import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import DownloaderFrame from './DownloaderFrame.vue'
-import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
 
@@ -17,7 +16,7 @@ const searching = ref(false)
 const detail = ref<OfflinePackChromeDetail | null>(null)
 const loading = ref(false)
 
-const { progress, downloading, result, start, cancel, openDir } = useOfflinePackDownload()
+const downloads = useOfflinePackDownloadsStore()
 const debouncedSearch = useDebounceFn((value: string) => search(value), 400)
 
 const EXAMPLES = [
@@ -101,12 +100,15 @@ async function handleSubmit(): Promise<void> {
 
 async function handleDownload(format: 'crx' | 'zip'): Promise<void> {
   if (!detail.value?.id) return
-  await start({
-    kind: 'chrome',
-    id: detail.value.id,
-    filename: `${detail.value.id}.crx`,
-    convertToZip: format === 'zip',
-  })
+  await downloads.start(
+    {
+      kind: 'chrome',
+      id: detail.value.id,
+      filename: `${detail.value.id}.crx`,
+      convertToZip: format === 'zip',
+    },
+    `${detail.value.name || detail.value.id}（${format.toUpperCase()}）`,
+  )
 }
 
 onScopeDispose(() => debouncedSearch.cancel())
@@ -162,22 +164,14 @@ onScopeDispose(() => debouncedSearch.cancel())
         </UiDetailGrid>
 
         <UiGroup gap="sm" wrap class="btn-flush">
-          <UiButton type="primary" :disabled="downloading" @click="handleDownload('crx')">
+          <UiButton type="primary" @click="handleDownload('crx')">
             下载 CRX
           </UiButton>
-          <UiButton :disabled="downloading" @click="handleDownload('zip')">
+          <UiButton @click="handleDownload('zip')">
             下载 ZIP
           </UiButton>
         </UiGroup>
       </UiGroup>
     </UiPanel>
-
-    <DownloadSection
-      :progress="progress"
-      :downloading="downloading"
-      :result="result"
-      @cancel="cancel"
-      @open-dir="openDir"
-    />
   </DownloaderFrame>
 </template>

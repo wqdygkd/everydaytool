@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { OfflinePackTabKey } from '../tabs'
+import { storeToRefs } from 'pinia'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import ChromeDownloader from '../components/ChromeDownloader.vue'
 import DockerDownloader from '../components/DockerDownloader.vue'
+import DownloadTasks from '../components/DownloadTasks.vue'
 import EdgeDownloader from '../components/EdgeDownloader.vue'
 import HistorySection from '../components/HistorySection.vue'
 import MSStoreDownloader from '../components/MSStoreDownloader.vue'
 import VSCodeDownloader from '../components/VSCodeDownloader.vue'
+import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import { OFFLINE_PACK_TABS, tabKeyFromPath } from '../tabs'
 
 const route = useRoute()
@@ -17,6 +20,13 @@ const router = useRouter()
 // 页签状态由路由驱动（/tools/offline-pack/:tab）：URL 可深链，前进后退可用
 const activeTab = computed(() => tabKeyFromPath(route.path))
 const historyOpen = ref(false)
+const downloads = useOfflinePackDownloadsStore()
+const { activeCount, activePercent } = storeToRefs(downloads)
+
+// 关闭工具即结束本次会话：取消未完成任务并从任务区移除（与旧的单任务行为一致）
+onUnmounted(() => {
+  void downloads.reset()
+})
 
 const TAB_COMPONENTS: Record<OfflinePackTabKey, Component> = {
   vscode: VSCodeDownloader,
@@ -77,6 +87,10 @@ function switchTab(key: string): void {
               >
                 <UiIcon name="history" :size="16" class="history-icon" />
                 <span class="history-label">下载历史</span>
+                <span v-if="activeCount" class="history-live" :aria-label="`${activeCount} 个任务下载中`">
+                  <span class="history-live-dot" aria-hidden="true" />
+                  {{ activePercent }}%
+                </span>
                 <UiIcon
                   name="chevronDown"
                   :size="14"
@@ -110,6 +124,7 @@ function switchTab(key: string): void {
                 <UiIconButton icon="close" label="收起下载历史" @click="historyOpen = false" />
               </header>
               <div class="history-body">
+                <DownloadTasks />
                 <HistorySection />
               </div>
             </section>
@@ -292,6 +307,35 @@ function switchTab(key: string): void {
   }
 }
 
+.history-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: history-live-pulse 1.4s var(--ease-out) infinite;
+}
+
+@keyframes history-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .offline-main {
   position: relative;
   display: flex;
@@ -357,7 +401,10 @@ function switchTab(key: string): void {
 }
 
 .history-body {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-md);
   min-height: 0;
   padding: 0 12px 12px;
   overflow: hidden;
@@ -380,9 +427,11 @@ function switchTab(key: string): void {
   .source-row,
   .history-entry,
   .history-chevron,
+  .history-live-dot,
   .history-drawer-enter-active,
   .history-drawer-leave-active {
     transition-duration: 0.01ms;
+    animation: none;
   }
 }
 </style>

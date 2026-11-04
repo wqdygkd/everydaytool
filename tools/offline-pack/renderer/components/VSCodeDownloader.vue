@@ -4,10 +4,9 @@ import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
-import { useOfflinePackDownload } from '../composables/useOfflinePackDownload'
 import { getOfflinePackApi } from '../ipc'
+import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import DownloaderFrame from './DownloaderFrame.vue'
-import DownloadSection from './DownloadSection.vue'
 
 const api = getOfflinePackApi()
 
@@ -17,7 +16,7 @@ const selectedVersion = ref('')
 const linkUrl = ref('')
 const loading = ref(false)
 
-const { progress, downloading, result, start, cancel, openDir } = useOfflinePackDownload()
+const downloads = useOfflinePackDownloadsStore()
 
 const EXAMPLES = [
   { label: '试试 Claude Code', value: 'https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code' },
@@ -74,7 +73,10 @@ async function buildLink(): Promise<void> {
 async function handleDownload(): Promise<void> {
   if (!linkUrl.value) return
   const itemName = itemNameFromUrl(input.value)
-  await start({ kind: 'vscode', url: linkUrl.value, filename: `${itemName}-${selectedVersion.value}.vsix` })
+  await downloads.start(
+    { kind: 'vscode', url: linkUrl.value, filename: `${itemName}-${selectedVersion.value}.vsix` },
+    `${itemName} ${selectedVersion.value}`,
+  )
 }
 </script>
 
@@ -100,14 +102,14 @@ async function handleDownload(): Promise<void> {
     </template>
 
     <UiPanel v-if="versions.length" variant="outlined">
-      <UiGroup direction="column" gap="md" align="stretch" block>
-        <UiHint size="xs">
+      <UiGroup class="version-row" gap="sm" align="center" wrap>
+        <UiHint size="xs" class="version-label">
           选择版本
         </UiHint>
-        <UiSelect v-model="selectedVersion" class="full-width" placeholder="选择版本" :options="versions.map(v => ({ label: v, value: v }))" @update:model-value="buildLink" />
+        <UiSelect v-model="selectedVersion" placeholder="选择版本" :options="versions.map(v => ({ label: v, value: v }))" @update:model-value="buildLink" />
 
-        <UiGroup v-if="linkUrl" gap="sm" wrap class="btn-flush">
-          <UiButton type="primary" :disabled="downloading" @click="handleDownload">
+        <UiGroup v-if="linkUrl" gap="sm" align="center" class="btn-flush">
+          <UiButton type="primary" @click="handleDownload">
             下载到本地
           </UiButton>
           <UiButton @click="useCopy(linkUrl, '下载链接')">
@@ -116,13 +118,18 @@ async function handleDownload(): Promise<void> {
         </UiGroup>
       </UiGroup>
     </UiPanel>
-
-    <DownloadSection
-      :progress="progress"
-      :downloading="downloading"
-      :result="result"
-      @cancel="cancel"
-      @open-dir="openDir"
-    />
   </DownloaderFrame>
 </template>
+
+<style scoped>
+/* 标签、版本选择、下载动作同一行：标签不折行，选择框吃掉剩余宽度 */
+.version-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.version-row :deep(.ui-select-trigger) {
+  flex: 1;
+  min-width: 0;
+}
+</style>
