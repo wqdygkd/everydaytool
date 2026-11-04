@@ -63,7 +63,7 @@ interface RegistryConfig {
   tagsMode: 'hub' | 'registry'
   /** tagsMode=hub 时的 tags API base */
   hubBase?: string
-  /** 加速服务路径前缀（如 ghcr.io 镜像代理需 ghcr.io/ 前缀），直连为空 */
+  /** 加速服务路径前缀：Docker Hub 为空，GHCR / GCR / Quay 等带 `<registry>/`（多库代理靠它区分上游） */
   pathPrefix?: string
 }
 
@@ -75,19 +75,19 @@ function normalizeMirrorBase(mirror?: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
 }
 
-/** 仓库路径：加速服务时按约定带前缀（docker.io 无前缀，ghcr.io 带 ghcr.io/） */
+/** 仓库路径：加速服务时按约定带前缀（docker.io 无前缀，ghcr.io / gcr.io / quay.io 带 `<registry>/`） */
 function repoPath(cfg: RegistryConfig, namespace: string, repository: string): string {
   return `${cfg.pathPrefix ?? ''}${namespace}/${repository}`
 }
 
-/** 按 registry 分发端点；ghcr.io / docker.io 均支持加速服务代理，其余默认 Docker Hub */
+/** 按 registry 分发端点；加速服务统一走 registry v2 端点，直连时 ghcr.io 走 OCI、其余默认 Docker Hub */
 function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
   const mirrorBase = normalizeMirrorBase(mirror)
   if (mirrorBase) {
     return {
       registryBase: mirrorBase,
       tagsMode: 'registry',
-      pathPrefix: registry === 'ghcr.io' ? 'ghcr.io/' : '',
+      pathPrefix: registry === 'docker.io' ? '' : `${registry}/`,
     }
   }
   if (registry === 'ghcr.io') {
