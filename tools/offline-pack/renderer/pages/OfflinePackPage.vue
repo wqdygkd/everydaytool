@@ -3,7 +3,6 @@ import type { Component } from 'vue'
 import type { OfflinePackTabKey } from '../tabs'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import ChromeDownloader from '../components/ChromeDownloader.vue'
 import DockerDownloader from '../components/DockerDownloader.vue'
 import EdgeDownloader from '../components/EdgeDownloader.vue'
@@ -17,7 +16,6 @@ const router = useRouter()
 
 // 页签状态由路由驱动（/tools/offline-pack/:tab）：URL 可深链，前进后退可用
 const activeTab = computed(() => tabKeyFromPath(route.path))
-const activeTabDef = computed(() => OFFLINE_PACK_TABS.find(tab => tab.key === activeTab.value))
 const historyOpen = ref(false)
 
 const TAB_COMPONENTS: Record<OfflinePackTabKey, Component> = {
@@ -39,33 +37,7 @@ function switchTab(key: string): void {
 
 <template>
   <div class="tool-page offline-pack-page">
-    <WorkspaceHeader
-      icon="offline-pack"
-      title="离线包下载"
-      description="选择来源、解析版本并保存到本机下载目录"
-      :status-label="activeTabDef?.label ?? '离线包'"
-      status-tone="neutral"
-    >
-      <template #actions>
-        <UiButton size="small" @click="historyOpen = !historyOpen">
-          {{ historyOpen ? '收起历史' : '下载历史' }}
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
-
     <ToolSurface class="offline-surface">
-      <template #toolbar>
-        <UiToolbar gap="sm" flush>
-          <span class="surface-label">下载来源</span>
-          <UiChip tone="primary" variant="soft">
-            {{ activeTabDef?.label }}
-          </UiChip>
-          <template #end>
-            <span class="toolbar-hint">产物保存在缓存层，可用于离线部署</span>
-          </template>
-        </UiToolbar>
-      </template>
-
       <div class="offline-studio">
         <ToolSideInspector
           :open="true"
@@ -75,23 +47,45 @@ function switchTab(key: string): void {
           :closable="false"
           body-padding="8px"
         >
-          <nav class="source-list" aria-label="下载来源">
-            <button
-              v-for="tab in OFFLINE_PACK_TABS"
-              :key="tab.key"
-              type="button"
-              class="source-row"
-              :class="{ 'is-active': tab.key === activeTab }"
-              :aria-current="tab.key === activeTab ? 'page' : undefined"
-              @click="switchTab(tab.key)"
-            >
-              <span class="source-icon">
-                <img :src="tab.icon" alt="">
-              </span>
-              <span class="source-name">{{ tab.label }}</span>
-              <UiIcon name="arrowRight" :size="14" class="source-arrow" />
-            </button>
-          </nav>
+          <div class="source-panel">
+            <nav class="source-list" aria-label="下载来源">
+              <button
+                v-for="tab in OFFLINE_PACK_TABS"
+                :key="tab.key"
+                type="button"
+                class="source-row"
+                :class="{ 'is-active': tab.key === activeTab }"
+                :aria-current="tab.key === activeTab ? 'page' : undefined"
+                @click="switchTab(tab.key)"
+              >
+                <span class="source-icon">
+                  <img :src="tab.icon" alt="">
+                </span>
+                <span class="source-name">{{ tab.label }}</span>
+                <UiIcon name="arrowRight" :size="14" class="source-arrow" />
+              </button>
+            </nav>
+
+            <div class="source-footer">
+              <button
+                type="button"
+                class="history-entry"
+                :class="{ 'is-active': historyOpen }"
+                :aria-expanded="historyOpen"
+                :aria-controls="historyOpen ? 'offline-pack-history' : undefined"
+                @click="historyOpen = !historyOpen"
+              >
+                <UiIcon name="history" :size="16" class="history-icon" />
+                <span class="history-label">下载历史</span>
+                <UiIcon
+                  name="chevronDown"
+                  :size="14"
+                  class="history-chevron"
+                  :class="{ 'is-open': historyOpen }"
+                />
+              </button>
+            </div>
+          </div>
         </ToolSideInspector>
 
         <section class="offline-main">
@@ -102,7 +96,12 @@ function switchTab(key: string): void {
           </div>
 
           <Transition name="history-drawer">
-            <section v-if="historyOpen" class="history-drawer" aria-label="下载历史">
+            <section
+              v-if="historyOpen"
+              id="offline-pack-history"
+              class="history-drawer"
+              aria-label="下载历史"
+            >
               <header class="history-head">
                 <div>
                   <strong>下载历史</strong>
@@ -117,13 +116,6 @@ function switchTab(key: string): void {
           </Transition>
         </section>
       </div>
-
-      <template #statusline>
-        <span>OFFLINE PACK</span>
-        <span>{{ activeTabDef?.label }}</span>
-        <span class="status-spacer" />
-        <span>{{ historyOpen ? 'HISTORY OPEN' : 'HISTORY COLLAPSED' }}</span>
-      </template>
     </ToolSurface>
   </div>
 </template>
@@ -133,23 +125,12 @@ function switchTab(key: string): void {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 18px;
   overflow: hidden;
 }
 
 .offline-surface {
   min-height: 0;
-}
-
-.surface-label {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-.toolbar-hint {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
 }
 
 .offline-studio {
@@ -160,10 +141,21 @@ function switchTab(key: string): void {
   padding: 12px;
 }
 
+.source-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
 .source-list {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .source-row {
@@ -233,6 +225,71 @@ function switchTab(key: string): void {
 
 .source-row.is-active .source-arrow {
   opacity: 1;
+}
+
+.source-footer {
+  flex: none;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.history-entry {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 38px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--color-fill);
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  &.is-active {
+    border-color: color-mix(in srgb, var(--color-primary) 17%, transparent);
+    background: var(--color-primary-soft);
+    color: var(--color-text-primary);
+  }
+}
+
+.history-icon {
+  flex: none;
+  color: var(--color-text-tertiary);
+}
+
+.history-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-chevron {
+  flex: none;
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-fast) var(--ease-out);
+
+  &.is-open {
+    transform: rotate(180deg);
+  }
 }
 
 .offline-main {
@@ -306,10 +363,6 @@ function switchTab(key: string): void {
   overflow: hidden;
 }
 
-.status-spacer {
-  flex: 1;
-}
-
 .history-drawer-enter-active,
 .history-drawer-leave-active {
   transition:
@@ -325,6 +378,8 @@ function switchTab(key: string): void {
 
 @media (prefers-reduced-motion: reduce) {
   .source-row,
+  .history-entry,
+  .history-chevron,
   .history-drawer-enter-active,
   .history-drawer-leave-active {
     transition-duration: 0.01ms;
