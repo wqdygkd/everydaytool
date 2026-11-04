@@ -1,6 +1,7 @@
 import type { IpcChannels } from '../shared/ipc-validation.ts'
 import { contextBridge, ipcRenderer } from 'electron'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
+import { toIpcError } from '../shared/ipc-error.ts'
 import { isAllowedIpcChannel, isAllowedIpcEventChannel } from '../shared/ipc-validation.ts'
 import { ipcNamespaces } from './ipc-namespaces.ts'
 
@@ -26,7 +27,11 @@ function exposeIpcApi(channels: IpcChannels) {
       if (!isAllowedIpcChannel(channels, channel)) {
         return Promise.reject(new Error(`IPC channel not allowed: ${String(channel)}`))
       }
-      return ipcRenderer.invoke(channel, ...args)
+      // Electron 会给跨进程错误加 `Error invoking remote method '<channel>':` 前缀，
+      // 这层信息对用户没有意义（还会掩盖真正的业务错误），统一剥掉再抛给渲染层。
+      return ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
+        throw toIpcError(error)
+      })
     },
     on(channel: string, callback: IpcListener): () => void {
       if (!isAllowedIpcEventChannel(channels, channel)) {

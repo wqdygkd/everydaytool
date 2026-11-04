@@ -5,6 +5,7 @@ import { createWriteStream } from 'node:fs'
 // 用 Electron net.fetch 走 Chromium 网络栈（继承系统代理），Node 原生 fetch 不走系统代理，
 // 导致大陆环境挂代理仍无法访问 Docker Hub 等被墙上游。
 import { net } from 'electron'
+import { logger } from '../../../../backend/utils/logger.ts'
 import { OFFLINE_PACK_USER_AGENT } from '../../../../shared/offline-pack.ts'
 
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -18,6 +19,8 @@ export interface HttpOptions {
 export interface HttpError extends Error {
   status?: number
   isTimeout?: boolean
+  /** 非 2xx 时的响应正文（供调用方按上游提示做可读翻译） */
+  body?: string
 }
 
 function extractErrorCode(error: unknown): string | undefined {
@@ -88,6 +91,15 @@ function assertOk(res: Response): void {
   throw err
 }
 
+/** 与 assertOk 一致，但保留响应正文：部分加速服务用 403 + 纯文本说明拒绝原因 */
+async function assertOkWithBody(res: Response): Promise<void> {
+  if (res.ok) return
+  const err = new Error(`上游响应 ${res.status}`) as HttpError
+  err.status = res.status
+  err.body = await res.text().catch(() => '')
+  throw err
+}
+
 /** 原始响应（不校验状态码），供 Docker Bearer challenge 读取 401 的 WWW-Authenticate 头 */
 export async function fetchRaw(url: string, options: HttpOptions = {}): Promise<Response> {
   return request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
@@ -100,8 +112,26 @@ export async function fetchText(url: string, options: HttpOptions = {}): Promise
 }
 
 export async function fetchJson<T = unknown>(url: string, options: HttpOptions = {}): Promise<T> {
-  const text = await fetchText(url, options)
-  return JSON.parse(text) as T
+  const res = await request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  await assertOkWithBody(res)
+  const text = await res.text()
+  const contentType = res.headers.get('content-type') ?? ''
+  try {
+    return JSON.parse(text) as T
+  } catch (error) {
+    // 上游可能返回 HTML（网关错误页 / 加速服务首页），只看到 `Unexpected token '<'`
+    // 无法定位是哪一个接口；在错误里带上 URL 与响应片段。
+    const snippet = text.slice(0, 240).replace(/\s+/g, ' ')
+    logger.warn('offline-pack 上游返回非 JSON 内容', { url, status: res.status, contentType, body: text })
+    const looksHtml = snippet.startsWith('<')
+    const err = new Error(looksHtml
+      ? `上游返回 HTML 页面（${res.status}）：${url}。请检查系统代理或切换加速服务`
+      : `上游返回非 JSON（${res.status}${contentType ? ` ${contentType}` : ''}）：${url}`) as HttpError
+    err.status = res.status
+    err.body = text
+    err.cause = error as Error
+    throw err
+  }
 }
 
 export async function postJson<T = unknown>(url: string, body: unknown, options: HttpOptions = {}): Promise<T> {

@@ -5,16 +5,40 @@ import type {
   OfflinePackDockerSearchItem,
   OfflinePackDownloadResult,
 } from '../../../../shared/offline-pack.ts'
+import type { HttpOptions } from '../utils/http.ts'
 import { rename, rm } from 'node:fs/promises'
 // Docker Registry 代理：搜索、标签、鉴权、manifest 解析、镜像层下载与 docker load TAR 打包。
 // 按 registry 分发端点：ghcr.io / docker.io 走 OCI，均支持加速服务镜像代理；空 registry 默认 Docker Hub。
 // 打包在 Node 主进程完成（zlib 解压 + crypto 哈希 + 流式 TAR 写盘），避免浏览器内存/格式限制。
 import path from 'node:path'
+import { logger } from '../../../../backend/utils/logger.ts'
 import { decompressLayer } from '../utils/decompress.ts'
 import { emitProgress, ensureOfflinePackDownloadDir, registerActiveDownload, unregisterActiveDownload } from '../utils/downloads.ts'
 import { addHistory } from '../utils/history.ts'
 import { fetchBuffer, fetchJson, fetchRaw } from '../utils/http.ts'
 import { TarWriter } from '../utils/tar-builder.ts'
+
+// 加速服务（如 docker.1panel.live）会对非中国大陆出口返回 “only support mainland China”，
+// 这是地域限制而不是镜像/网络故障，翻译成用户能照做的提示。
+const MAINLAND_ONLY_PATTERN = /only\s+support\s+(?:mainland\s+china|china\s+mainland)/i
+const MAINLAND_ONLY_MESSAGE = '仅面向中国大陆地区，请关闭代理后重试'
+
+function translateDockerError(error: unknown): unknown {
+  const err = error as { message?: string, body?: string }
+  if (MAINLAND_ONLY_PATTERN.test(`${err.body ?? ''}\n${err.message ?? ''}`)) {
+    return new Error(MAINLAND_ONLY_MESSAGE)
+  }
+  return error
+}
+
+/** fetchJson + 加速服务地域限制翻译 */
+async function fetchDockerJson<T>(url: string, options: HttpOptions = {}): Promise<T> {
+  try {
+    return await fetchJson<T>(url, options)
+  } catch (error) {
+    throw translateDockerError(error)
+  }
+}
 
 const MANIFEST_ACCEPT = [
   'application/vnd.docker.distribution.manifest.v2+json',
@@ -86,7 +110,7 @@ function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
 export async function searchImages(keyword: string, pageSize = 5): Promise<OfflinePackDockerSearchItem[]> {
   const query = encodeURIComponent(keyword.trim())
   const url = `https://hub.docker.com/v2/search/repositories/?query=${query}&page_size=${pageSize}`
-  const data = await fetchJson<{ results?: Array<{ repo_name?: string, short_description?: string, star_count?: number, pull_count?: number }> }>(url)
+  const data = await fetchDockerJson<{ results?: Array<{ repo_name?: string, short_description?: string, star_count?: number, pull_count?: number }> }>(url)
   const results = data.results ?? []
   return results
     .map((item) => {
@@ -107,13 +131,15 @@ export async function getTagList(registry: string, namespace: string, repository
   const cfg = getRegistryConfig(registry, mirror)
   if (cfg.tagsMode === 'hub') {
     const url = `${cfg.hubBase}/v2/repositories/${namespace}/${repository}/tags?page_size=100`
-    const data = await fetchJson<{ results?: Array<{ name?: string }> }>(url)
+    logger.debug('offline-pack docker tags 请求', { mode: 'hub', url })
+    const data = await fetchDockerJson<{ results?: Array<{ name?: string }> }>(url)
     return (data.results ?? []).map(tag => tag.name ?? '').filter(Boolean)
   }
   // OCI registry：/v2/<repo>/tags/list，需要 token（加速服务可能免鉴权）
   const token = await getToken(registry, namespace, repository, mirror)
   const url = `${cfg.registryBase}/v2/${repoPath(cfg, namespace, repository)}/tags/list`
-  const data = await fetchJson<{ tags?: string[] }>(url, { headers: authHeaders(token) })
+  logger.debug('offline-pack docker tags 请求', { mode: 'registry', url, authenticated: Boolean(token) })
+  const data = await fetchDockerJson<{ tags?: string[] }>(url, { headers: authHeaders(token) })
   return data.tags ?? []
 }
 
@@ -124,10 +150,28 @@ function authHeaders(token: string): Record<string, string> {
 
 /** 标准 Bearer challenge 鉴权：探测 /v2/，401 时按 WWW-Authenticate 的 realm/service 换 token */
 async function acquireTokenViaChallenge(registryBase: string, repoPath: string): Promise<string> {
-  const res = await fetchRaw(`${registryBase}/v2/`)
+  const probeUrl = `${registryBase}/v2/`
+  const res = await fetchRaw(probeUrl)
   if (res.ok) return ''
-  if (res.status !== 401) throw new Error(`镜像仓库响应 ${res.status}`)
+  if (res.status !== 401) {
+    // 403 多为加速服务 / 网关拒绝匿名探测：响应头与正文都要打出来，才能判断是哪一层拦的
+    const body = await res.text().catch(() => '')
+    logger.warn('offline-pack 镜像仓库鉴权探测失败', {
+      url: probeUrl,
+      status: res.status,
+      contentType: res.headers.get('content-type') ?? '',
+      wwwAuthenticate: res.headers.get('www-authenticate') ?? '',
+      body: body.slice(0, 2000),
+    })
+    if (MAINLAND_ONLY_PATTERN.test(body)) {
+      throw new Error(MAINLAND_ONLY_MESSAGE)
+    }
+    // 这个探测只用于加速服务（官方 registry 走固定 token 端点）：403 基本是加速服务 / 网关拒绝匿名访问。
+    // 响应正文只进日志（上面已打印），不要把 HTML / JSON 原样丢给用户。
+    throw new Error(`加速服务拒绝访问（${res.status}），请更换加速服务或检查系统代理`)
+  }
   const challenge = res.headers.get('www-authenticate') ?? ''
+  logger.debug('offline-pack 镜像仓库鉴权 challenge', { url: probeUrl, challenge })
   const realm = challenge.match(/realm="([^"]+)"/)?.[1]
   if (!realm) throw new Error('加速服务未返回认证信息，请更换加速服务')
   const service = challenge.match(/service="([^"]+)"/)?.[1]
@@ -135,7 +179,8 @@ async function acquireTokenViaChallenge(registryBase: string, repoPath: string):
   if (service) params.set('service', service)
   params.set('scope', `repository:${repoPath}:pull`)
   const tokenUrl = `${realm}${realm.includes('?') ? '&' : '?'}${params.toString()}`
-  const data = await fetchJson<{ token?: string, access_token?: string }>(tokenUrl)
+  logger.debug('offline-pack 请求镜像仓库 token', { url: tokenUrl })
+  const data = await fetchDockerJson<{ token?: string, access_token?: string }>(tokenUrl)
   const token = data.token ?? data.access_token
   if (!token) throw new Error('Docker 认证服务未返回 token')
   return token
@@ -146,7 +191,8 @@ export async function getToken(registry: string, namespace: string, repository: 
   const path = repoPath(cfg, namespace, repository)
   if (cfg.tokenUrl) {
     const url = `${cfg.tokenUrl}?service=${cfg.tokenService}&scope=repository:${path}:pull`
-    const data = await fetchJson<{ token?: string }>(url)
+    logger.debug('offline-pack 请求官方 registry token', { url })
+    const data = await fetchDockerJson<{ token?: string }>(url)
     if (!data.token) throw new Error('Docker 认证服务未返回 token')
     return data.token
   }
@@ -165,7 +211,7 @@ function buildLayerUrl(registry: string, namespace: string, repository: string, 
 
 /** 不传 platform：返回可用平台列表（过滤 unknown） */
 export async function getPlatforms(registry: string, namespace: string, repository: string, tag: string, token: string, mirror?: string): Promise<OfflinePackDockerPlatform[]> {
-  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
+  const data = await fetchDockerJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
     headers: { ...authHeaders(token), Accept: MANIFEST_ACCEPT },
   })
   if (!isManifestList(data.mediaType)) return []
@@ -208,7 +254,7 @@ export async function getManifest(
   platform?: string,
   mirror?: string,
 ): Promise<OfflinePackDockerManifest> {
-  const data = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
+  const data = await fetchDockerJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, tag, mirror), {
     headers: { ...authHeaders(token), Accept: MANIFEST_ACCEPT },
   })
 
@@ -233,7 +279,7 @@ export async function getManifest(
       throw new Error(`未找到 ${platform} 平台的镜像`)
     }
 
-    const specific = await fetchJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, matched.digest, mirror), {
+    const specific = await fetchDockerJson<Record<string, unknown>>(buildManifestUrl(registry, namespace, repository, matched.digest, mirror), {
       headers: { ...authHeaders(token), Accept: IMAGE_MANIFEST_ACCEPT },
     })
     normalized = normalizeManifest(specific)
