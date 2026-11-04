@@ -198,6 +198,7 @@ export default defineTool({
 | 查找内容 | 位置 |
 | ---------- | ------ |
 | **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
+| **offline-pack 模块记忆（下载任务 store / Docker 镜像改写 / 历史抽屉与数据落点）** | `docs/offline-pack.md` |
 | **telegram-cache 模块记忆（观测口径 / 单飞去重 / HTTP 缓存与本地响应 / 页面捕获与 MTProto 边界）** | `docs/telegram-cache.md` |
 | **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |
 | **workbuddy2api-panel 模块记忆（托管上游二进制 / 探活 / 更新回滚）** | `docs/workbuddy2api-panel.md` |
