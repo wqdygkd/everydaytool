@@ -397,6 +397,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 空态 | `UiEmpty` |
 | 提示 | `UiHint`、`UiAlert` |
 | 弹层 | `UiDialog`、Reka UI Popover / Dropdown |
+| 悬停提示 | `UiTooltip`（Reka UI，portal 到 body；overflow 容器内必须用它，不能用伪元素）。视觉样式必须挂在本模板的内层元素上——Teleport 出去的内容拿不到父组件 scopeId，写在 `TooltipContent` 上的 scoped class 不生效 |
 | 详情 | `UiDetailGrid`、`UiDetailItem`、`UiKeyValue` |
 | 反馈 | `renderer/shared/feedback/`、`vue-sonner` |
 | 图标底板 | `UiIconTile`；`sm` 31px / `md` 38px / `lg` 40px |
@@ -407,7 +408,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 | 组件 | 职责 | 约束 |
 | --- | --- | --- |
-| `AppRail.vue` | 68px 左侧导航；品牌、首页、置顶工具、搜索、设置 | 不读工具业务状态；置顶 id 来自 `UiPreferences` |
+| `AppRail.vue` | 68px 左侧导航；首页、置顶工具、已打开工具、搜索、设置 | 不读工具业务状态；置顶 id 来自 `UiPreferences`，已打开列表来自 `toolTabs` store |
 | `CommandPalette.vue` | `Ctrl/Cmd+K` 工具检索与打开 | 只读工具注册表；键盘完整；无状态面板 |
 | `WorkspaceHeader.vue` | 工具图标、名称、单行状态、主操作、更多 | 状态只显示一行；不承载配置表单 |
 | `ToolSurface.vue` | 主工作区玻璃表面、toolbar、body、statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel` |
@@ -452,7 +453,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 下拉表面：`pop` 表面 + `--glass-pop`，圆角 16px，5px 内边距，阴影 `--shadow-md`；宽度取 `max(触发器宽, 220px)` 并封顶 360px / 可用宽度，最大高度 320px。
 - 选项：最小高度 34px，圆角 7px，字号 12px；hover / 键盘高亮用 `--color-fill`，选中用品牌 10% 浅底 + 中性主文本 + 左侧 13px 勾选图标。选项获得键盘焦点时不再叠加按钮式 `--shadow-focus` 外环，避免出现第二个输入框轮廓。
 - 设置抽屉宽 360–420px；展示为右侧 inspector，避免把所有配置堆进主区域。
-- 关闭 dialog 后必须销毁内部状态（`destroyOnClose`），除非该工具仍在活动页签内且用户正在编辑草稿。
+- 关闭 dialog 后必须销毁内部状态（`destroyOnClose`），除非该工具仍处于打开状态且用户正在编辑草稿。
 
 ## 5. 应用外壳
 
@@ -460,61 +461,67 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 ```text
 ┌──────────────────────────────────────────────────────────┐
-│ 68px Rail │ 48px Topbar                                  │
-│           ├──────────────────────────────────────────────┤
-│  brand    │ Tabs / breadcrumb        Quick open  Win ctl  │
+│ 48px Titlebar（整宽：mac 红绿灯在左，Win/Linux 按钮在右） │
+├───────────┬──────────────────────────────────────────────┤
+│ 68px Rail │ [icon] 名称  一行说明                        │
 │  home     ├──────────────────────────────────────────────┤
 │  pinned   │                                              │
-│  tools    │                Active workspace              │
-│           │                                              │
+│  opened   │                Active workspace              │
+│  tools    │                                              │
 │  search   │                                              │
 │  settings │                                              │
-└──────────────────────────────────────────────────────────┘
+└───────────┴──────────────────────────────────────────────┘
 ```
 
 ### 5.2 左侧导航轨
 
-- 宽 68px，整列玻璃，右缘 1px 白色高光；不铺纯白实底。
-- 顶部品牌钮 42×42，圆角 13，`edt` 使用 Nunito 800、12px、0.05em 字距。
-- 首页按钮固定第一项，下方 1px 分隔线。
-- 置顶工具最多 4 个；用户可在首页星标调整。图标钮 42×42，激活态品牌 10% 浅底 + 蓝色图标 + 左侧 3×18px 指示条。
-- 有可取消的短任务时显示 5px 蓝点；不使用持续呼吸动画。无任务不显示任何状态。
-- 底部固定“搜索工具”（打开命令面板）与“设置”。
+- 宽 68px，整列玻璃，右缘 1px 分隔线 + 内侧 1px 白色高光（两者画在 rail 的伪元素上）；不铺纯白实底。
+- 自上而下：**首页 → 置顶工具 → 已打开的非置顶工具 →（底部固定）搜索工具 / 设置**。首页下方 1px 分隔线。
+- 置顶工具 = **常驻启动器**（Dock 语义）：用户可在首页星标，最多 4 个；关闭只停止运行，图标留在原位、位置不因开关而移动；顺序跟随首页收藏顺序。
+- 已打开的非置顶工具：打开时按打开顺序追加到置顶段之后；关闭即从列表移除。
+- 同一个工具只出现一次，永远取置顶那一位（置顶 + 已打开不重复）。
+- 图标钮 42×42，激活态品牌 10% 浅底 + 蓝色图标 + 左侧 3×18px 指示条。
+- **运行中标识**：已打开但未激活 → 图标右下角 4px 品牌色圆点；激活态已有浅底 + 指示条，不再重复标记。该圆点位置专用于「运行中」，短任务提示不得复用它。
+- **关闭钮**：15px 圆形，位于图标右上角，hover / 键盘聚焦才显现。置顶项的 tooltip / `aria-label` 写“关闭 X（保留置顶）”，非置顶项写“关闭 X”。关闭钮必须是图标按钮的**兄弟节点**——HTML 不允许按钮嵌套按钮。
+- 运行列表区独立滚动（`overflow-y: auto`，隐藏滚动条）：工具多到一列放不下时只滚这一段，首页与底部两个入口始终可见。
+- tooltip 悬停 180ms 后显示名称，深色玻璃、不阻挡指针。运行列表是 overflow 容器，伪元素提示会被裁掉，**必须用 `UiTooltip`（portal 到 body）**，不得回到 `::after` 方案。
 - 图标必须来自统一 SVG 图标集，线宽 1.6–1.8px；不得用 emoji 或临时文字代替。
-- 悬停 180ms 后显示名称 tooltip；tooltip 使用深色玻璃，不阻挡指针。
 - 所有控件 `-webkit-app-region: no-drag`；rail 空白区域可拖动窗口。
+- **rail 从标题栏下沿开始**，不再用顶部 padding 给红绿灯让位：macOS 红绿灯由**整宽标题栏**承载（`electron/main.ts` 的 `trafficLightPosition`，y=18 让 12px 灯组在 48px 栏内居中），标题栏内容左内边距 84px（`.platform-darwin .app-topbar`，见 §5.3）。给 rail 加 `padding-top` 会重新把红绿灯压在 rail 右缘上——分隔线会从灯中间穿过。
 
-### 5.3 顶部工作区栏
+### 5.3 标题栏（整宽顶栏）
 
-- 高 48px，玻璃 header；整行可拖拽。
-- 首页：左侧为“工具台”面包屑；右侧为“打开工具 Ctrl K”和原生窗口控件预留区。
-- 工具页：隐藏面包屑，直接显示已打开的页签；激活页签使用品牌 9% 浅底 + 17% 边线。
-- **工具页不显示“打开工具 / Ctrl K”按钮**：顶栏右端只保留页签溢出、必要的工具级动作与原生窗口控件预留。全局快速入口始终由左轨搜索按钮和 `Ctrl/Cmd + K` 提供。
-- 页签高 32px，圆角 10px，水平内边距 11px；关闭钮 16px，只在 hover / active 时完全显现。
-- 页签过多时横向滚动，不换行；拖拽排序沿用现有 `HeaderTabs` 行为。
-- Windows / Linux 右侧为原生窗口按钮预留 148px；macOS 左侧红绿灯预留 88px。
-- “打开工具”按钮在 1280px 以下只保留图标和 `Ctrl K`；在 1024px 以下只保留图标。
+- 高 48px，玻璃 header；整行可拖拽。**不含页签**：工具切换由左轨图标与 `Ctrl/Cmd + K` 命令面板承担。
+- 内容只有一块「当前页面上下文」：图标块 + 名称 + 一行说明，三者水平排列。
+  - 首页：`EDT` 字标（31×31 品牌浅底，Nunito 800、11px、0.04em 字距）+ `everydaytool` + “本地工具工作区”。
+  - 工具页：工具 icon（`UiIconTile` sm）+ 工具名 + `ToolDefinition.description`。
+  - 应用自带页面（设置）：icon + 页面名 + 一句话职责（`AppTab.description`）。
+- 名称 14px / 500，说明 11px 三级文本色；图标与名称不收缩，说明是唯一可压缩项（单行省略号）。
+- 整个上下文块不可点击（首页入口在左轨），从而保证整行都是窗口拖拽区；**不要**把标题栏做成可点回首页的按钮。
+- 不显示“打开工具 / Ctrl K”按钮，也不显示页签溢出、拖拽排序等任何页签附属物。
+- **标题栏铺满整宽**（不是只覆盖 rail 右侧的工作区）：下面才是「左轨 + 内容」这一行。
+- Windows / Linux 右侧为原生窗口按钮预留 148px；macOS 红绿灯直接落在标题栏左侧，标题栏内容左内边距 84px（灯组右缘约 72px + 12px 间距），其余平台 16px；macOS 全屏隐藏红绿灯时回到 16px。
 
 ### 5.4 工具生命周期（硬约束）
 
 这是本次改版的产品行为核心，不只是视觉：
 
-1. **只有活动页签挂载组件。** `App.vue` 的 `tools-host` 不再 `v-show` 所有已打开页签；只渲染 `activeId` 对应组件。切换到另一页签时，旧组件卸载、新组件挂载。
+1. **只有当前活动页挂载组件。** `App.vue` 只渲染当前路由对应的工具 / 应用页组件；切换工具时旧组件卸载、新组件挂载。
 2. **首页不挂载任何工具运行时。** 回到 `/` 时卸载当前工具；不能为了“返回更快”保留隐藏 webview / store 轮询。
-3. **关闭页签 = 销毁。** `close` 后组件根节点、webview guest、IPC 订阅、定时器与工具级后端会话全部释放；现有 `onUnmounted` / `dispose` 必须逐一核对。
-4. **打开页签 ≠ 预热。** 会话恢复时可以恢复页签列表，但不实例化组件；用户点击页签后才加载。
-5. **后台任务必须显式。** 若某工具关闭后仍需继续下载 / 服务，必须在关闭前明确询问；默认策略是“停止并释放”。WorkBuddy2API 关闭页签停止服务，WXP 关闭时停止其托管的 CDP 会话。
+3. **关闭工具 = 销毁。** 关闭（左轨 ✕）后组件根节点、webview guest、IPC 订阅、定时器与工具级后端会话全部释放；现有 `onUnmounted` / `dispose` 必须逐一核对。
+4. **打开 ≠ 预热。** 会话恢复时可以恢复左轨里的已打开列表，但不实例化组件；用户点击图标后才加载。
+5. **后台任务必须显式。** 若某工具关闭后仍需继续下载 / 服务，必须在关闭前明确询问；默认策略是“停止并释放”。WorkBuddy2API 关闭时停止服务，WXP 关闭时停止其托管的 CDP 会话。
 6. **草稿可以保留数据，不可以保留运行时。** 草稿写入 JSON store；重新打开时恢复数据，但组件、轮询和子进程从头初始化。
 7. **子视图 KeepAlive 仅限工具内部。** `UiMenuHorizontal` 的子视图在工具仍打开时可以 KeepAlive；切走活动工具时整棵子树必须卸载。
 
-推荐实现：保留 `useToolTabsStore` 的页签持久化，但 `App.vue` 改为：
+推荐实现：保留 `useToolTabsStore` 的已打开列表持久化，但 `App.vue` 始终只挂载当前页：
 
 ```vue
 <Transition name="workspace" mode="out-in">
   <component
-    :is="tabComponents[activeId]"
-    v-if="activeId && currentTool"
-    :key="activeId"
+    :is="pageComponents[currentTabId]"
+    v-if="currentTabId"
+    :key="currentTabId"
   />
 </Transition>
 ```
@@ -527,7 +534,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 - 页面左右内边距 42px，顶部 34px；内容最大宽 1160px，居中。
 - 标题“工具台”25px / 500 / -0.03em；下一行 12px 说明使用真实工具数：“8 个本地工具；打开时运行，关闭即释放”。
-- 不在标题右侧重复工具数量或 `LOCAL-FIRST` 元信息；顶栏只承载产品名与工作区语境。
+- 不在标题右侧重复工具数量或 `LOCAL-FIRST` 元信息；标题栏只承载当前页面语境（图标 + 名称 + 说明，见 §5.3）。
 - 搜索坞高 54px；下方 22px 为工具列表。
 - `launcher` 是**一个**玻璃表面：圆角 16px、内边距 7px、顶栏 44px；内部工具行两列排列。
 
@@ -624,7 +631,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | Treease 编辑器 | 内嵌工作区 | 全幅编辑器页面、拦截状态 | 拦截规则弹窗外的状态文案 | 顶栏只保留来源、状态 chip、设置、刷新；规则编辑继续用 dialog |
 | 离线包下载 | 处理控制台 | 来源选择、下载参数、进度 | 大段说明、历史列表 | 左侧 5 个来源切换；主表面单一下载器；历史收进底部抽屉 |
 | WXP 增强 | 处理控制台 | 启动 / 停止、路径与端口、缓存结果 | 三块并列面板、长说明 | header 内联状态；左 inspector 放启动设置；主区放缓存 / 收藏表 |
-| WorkBuddy2API | 内嵌工作区 | 上游面板 webview、启动 / 停止 | 安装、更新、说明、错误四块并列 | header 单行状态与启停；右 inspector 分“运行 / 安装 / 诊断”三段；关闭页签停止服务 |
+| WorkBuddy2API | 内嵌工作区 | 上游面板 webview、启动 / 停止 | 安装、更新、说明、错误四块并列 | header 单行状态与启停；右 inspector 分“运行 / 安装 / 诊断”三段；关闭工具停止服务 |
 | 身份证号生成器 | 表单工作室 | 参数、生成动作与生成结果同时可见 | 外层面板、重复标题、说明卡、页面 header 操作 | 左 360px 表单；主按钮紧贴参数并显示“生成 N 条”；右结果表按内容收缩、最高 320px，超出时表内滚动；复制全部位于结果标题；生成后自动选中首行 |
 
 ### 9.1 身份证号生成器
@@ -674,7 +681,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 ### 9.2 设置页
 
-- 继续作为应用级页签，入口固定在 rail 底部；不再使用标题栏设置按钮。
+- 作为应用自带页面挂载（不是页签、不进左轨已打开列表），入口固定在 rail 底部；标题栏显示齿轮 + “设置” + 一句话职责（`AppTab.description`）。
 - 使用单列文档栏 `760px`，与工具工作区区分。
 - 区块顺序：数据目录 → 分层用量 → 缓存清理 → 窗口外观 → 窗口大小与位置。
 - 设置项仍使用 `UiFormField` / `UiSwitchField` / `UiButton`，不引入新的配置卡样式。
@@ -737,15 +744,15 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 ### Phase 2 — 应用外壳与运行时
 
-1. 新增 `renderer/shared/components/AppRail.vue`，移除 `HeaderTabs` 的品牌标与设置入口依赖。
+1. 新增 `renderer/shared/components/AppRail.vue`，移除 `HeaderTabs` 的品牌标与设置入口依赖（后续“标题栏收敛”已把 `HeaderTabs` 整体删除，见 §5.2 / §5.3）。
 2. 重构 `renderer/App.vue`：
    - 68px rail + 48px topbar；
    - 只挂载 `activeId`；
    - 首页不挂载工具；
-   - 关闭页签执行 destroy；
+   - 关闭工具执行 destroy；
    - 保留 `runTabCloseGuard`。
 3. 新增 `renderer/shared/components/CommandPalette.vue`，接入工具注册表与 `Ctrl/Cmd+K`。
-4. `renderer/shared/components/HeaderTabs.vue` 改为 32px 紧凑页签，保留拖拽、键盘与横向滚动逻辑。
+4. ~~`HeaderTabs.vue` 改为 32px 紧凑页签~~（已废弃：页签整体移除，工具切换改由左轨运行列表承担，见 §5.2）。
 5. 将设置入口移到 rail 底部；标题栏右侧只保留窗口控件预留。
 6. 验证：
    - 首页零工具实例；
@@ -774,7 +781,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
    7. WorkBuddy2API → 验证安装 / 启停 / 关闭销毁。
 3. 每个工具迁移时只允许保留一个主 `ToolSurface`；删除首屏 `UiPanel` 堆叠。
 4. 页面级滚动仍只发生在 `.app-main` 或工具自身主区域；任何 `flex:1` 子项必须配 `min-height:0`。
-5. 替换后运行对应工具的实际操作：启动、停止、生成、下载、打开外部、关闭页签。
+5. 替换后运行对应工具的实际操作：启动、停止、生成、下载、打开外部、关闭工具。
 
 ### Phase 5 — 设置、反馈与边界状态
 
@@ -813,7 +820,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 | 应用外壳 | `renderer/App.vue` |
 | 左侧导航 | `renderer/shared/components/AppRail.vue`（新增） |
 | 命令面板 | `renderer/shared/components/CommandPalette.vue`（新增） |
-| 紧凑页签 | `renderer/shared/components/HeaderTabs.vue` |
+| 左轨运行列表 / 标题栏上下文块 | `renderer/shared/components/AppRail.vue`、`renderer/App.vue` |
 | 首页 | `renderer/pages/HomePage.vue` |
 | 工具入口行 | `renderer/shared/components/LauncherRow.vue`（新增） |
 | 工具 header / surface / inspector | `renderer/shared/components/workspace/`（新增） |
@@ -837,7 +844,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 - **Don't** 在首页展示运行状态、版本、分类、进程、路径或统计卡片。
 - **Don't** 用 `UiPanel` 堆出工具首屏的三四块并列面板。
-- **Don't** 保留所有打开页签的隐藏挂载或跨工具 `KeepAlive`。
+- **Don't** 保留所有已打开工具的隐藏挂载或跨工具 `KeepAlive`。
 - **Don't** 在工具之间使用不同强调色或给工具定义 `color`。
 - **Don't** 把 9–10px 文本、亮蓝小字、彩色左边条或渐变文字带入生产界面。
 - **Don't** 给每一层表面都加 `backdrop-filter` 或阴影。
@@ -861,7 +868,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 - 全局浏览器表面：`renderer/shared/styles/base.scss`
 - 平台组件：`renderer/shared/components/ui/`
 - 组合型工作区组件：`renderer/shared/components/workspace/`
-- 应用壳与生命周期：`renderer/App.vue`、`renderer/shared/components/AppRail.vue`、`renderer/shared/components/HeaderTabs.vue`
+- 应用壳与生命周期：`renderer/App.vue`、`renderer/shared/components/AppRail.vue`
 - 首页与启动台：`renderer/pages/HomePage.vue`、`renderer/shared/components/LauncherRow.vue`
 
 **维护顺序（不可跳步）**
@@ -870,7 +877,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 2. 同步 `.impeccable/design.json` 与令牌表；令牌名不改语义，旧名保留兼容。
 3. 先生成 / 更新 `Ui*` 基础组件，再迁移应用壳，再迁移首页，最后迁移单工具页。
 4. 单工具页只能选择 §8.1 的四种骨架之一；辅助信息进入 inspector、抽屉或子路由。
-5. 修改运行时挂载或关闭路径时，必须验证“切走、关闭页签、回首页、退出应用”四条路径，并在实施计划里记录端口 / DOM / 进程证据。
+5. 修改运行时挂载或关闭路径时，必须验证“切走、关闭工具、回首页、退出应用”四条路径，并在实施计划里记录端口 / DOM / 进程证据。
 6. 每个阶段完成后更新 `docs/redesign-implementation-plan.md` 的复选框与证据路径；只改产品代码、不改契约视为未完成。
 
 ---

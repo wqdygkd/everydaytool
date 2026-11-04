@@ -1,27 +1,47 @@
+import type { IconName } from '../shared/components/ui/icons'
 import { useLocalStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { STORAGE_KEYS } from '../../shared/storage-keys'
-import { findAppTab } from '../config/app-tabs'
 import { getToolRegistry } from '../config/tools'
 
-export interface ToolTab {
+/**
+ * 一个「已打开的工具」。标题栏与左轨都从这里取图标 / 名称 / 说明，
+ * 因此它必须自带元数据，而不是让消费方各自去注册表里查。
+ */
+export interface OpenTool {
   id: string
   name: string
+  description: string
+  icon: IconName
   routeName: string
 }
 
 const STORAGE_KEY = STORAGE_KEYS.toolTabs
+/** 最近使用栈上限：只用于「关闭当前工具后切到哪个」，不需要无限增长 */
+const RECENT_LIMIT = 20
 
-/** 页签可能来自工具注册表，也可能是应用自带页面（设置等）：两者共用同一套打开 / 高亮逻辑 */
-function resolveTab(id: string): ToolTab | null {
+function resolveTool(id: string): OpenTool | null {
   const tool = getToolRegistry().find(t => t.id === id)
-  if (tool) return { id: tool.id, name: tool.name, routeName: `tool-${tool.id}` }
-  const appTab = findAppTab(id)
-  return appTab ? { id: appTab.id, name: appTab.name, routeName: appTab.routeName } : null
+  if (!tool) return null
+  return {
+    id: tool.id,
+    name: tool.name,
+    description: tool.description,
+    icon: tool.icon,
+    routeName: `tool-${tool.id}`,
+  }
 }
 
+/**
+ * 已打开工具列表 + 最近使用顺序。
+ *
+ * 注意：应用自带页面（设置）**不进这个列表**——它是左轨底部的固定入口，
+ * 由路由直接驱动，既不需要关闭，也不该占「运行中」的名额。
+ * store 名与 localStorage key 仍沿用 toolTabs：键里存的是用户历史上打开过的工具 id，
+ * 改名只会换来一次无意义的迁移。
+ */
 export const useToolTabsStore = defineStore('toolTabs', () => {
-  // 隐私模式 / 配额满：持久化失败不影响当前会话的页签行为
+  // 隐私模式 / 配额满：持久化失败不影响当前会话的打开状态
   const openIds = useLocalStorage<string[]>(STORAGE_KEY, [], {
     serializer: {
       read(raw) {
@@ -34,60 +54,66 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     onError: () => {},
   })
   const activeId = ref<string | null>(null)
+  /** 最近访问过的工具 id（栈顶最新）。内存态：重启后只关心「打开了哪些」，不关心访问顺序 */
+  const recentIds = ref<string[]>([])
 
-  const openTabs = computed<ToolTab[]>(() =>
+  const openTools = computed<OpenTool[]>(() =>
     openIds.value
-      .map(resolveTab)
-      .filter((tab): tab is ToolTab => tab !== null),
+      .map(resolveTool)
+      .filter((tool): tool is OpenTool => tool !== null),
   )
+
+  function touchRecent(toolId: string) {
+    recentIds.value = [toolId, ...recentIds.value.filter(id => id !== toolId)].slice(0, RECENT_LIMIT)
+  }
 
   function close(toolId: string) {
     const idx = openIds.value.indexOf(toolId)
     if (idx === -1) return
     openIds.value.splice(idx, 1)
-    // 不自动切到相邻页签：关闭正在查看的工具后由调用方决定去向（当前约定：回主页）
-    if (activeId.value === toolId) {
-      activeId.value = null
-    }
+    recentIds.value = recentIds.value.filter(id => id !== toolId)
+    if (activeId.value === toolId) activeId.value = null
+  }
+
+  /**
+   * 关闭当前工具后的落点：最近使用过、且此刻仍打开着的另一个工具。
+   * 必须**在 close 之前**调用（close 会把该工具从 recentIds / openIds 里摘掉）。
+   */
+  function recentFallback(excludeId: string): string | null {
+    return recentIds.value.find(id => id !== excludeId && openIds.value.includes(id)) ?? null
   }
 
   function syncFromRoute(toolId: string | null) {
-    // activeId 镜像当前路由：回到主页（toolId 为空）即清空，保证页签高亮永不残留
+    // activeId 镜像当前路由：回到主页（toolId 为空）即清空，保证 rail 高亮永不残留
     if (!toolId) {
       activeId.value = null
       return
     }
-    if (!openIds.value.includes(toolId)) {
-      openIds.value.push(toolId)
+    // 应用自带页面（设置）不是工具：不写 openIds，也不参与最近使用
+    if (!resolveTool(toolId)) {
+      activeId.value = null
+      return
     }
+    if (!openIds.value.includes(toolId)) openIds.value.push(toolId)
     activeId.value = toolId
+    touchRecent(toolId)
   }
 
-  /**
-   * 拖拽后按新顺序重排已打开的页签（只接受当前 id 集合的一个完整排列）。
-   * 页签顺序属于会话层数据，沿用 localStorage 持久化（与打开 / 关闭一致）。
-   */
-  function reorder(ids: string[]) {
-    if (ids.length !== openIds.value.length) return
-    const current = new Set(openIds.value)
-    const next = new Set(ids)
-    if (next.size !== ids.length || !ids.every(id => current.has(id))) return
-    openIds.value = [...ids]
-  }
+  // 上次会话残留的 id（工具被移除 / 历史上存过 settings 这类应用页）在此清理：
+  // 只有能解析出元数据的工具才有资格留在列表里，否则 rail 会出现点不动的空图标。
+  const validIds = openIds.value.filter(id => resolveTool(id) !== null)
+  if (validIds.length !== openIds.value.length) openIds.value = validIds
 
-  // 上次会话残留的 id（工具被移除 / 应用页改名）在此清理：页签必须能解析出名字与路由，
-  // 否则用户点击页签时会落到不存在的组件。
-  const validIds = openIds.value.filter(id => resolveTab(id) !== null)
-  if (validIds.length !== openIds.value.length) {
-    openIds.value = validIds
-  }
+  // 最近使用顺序用「打开顺序」播种（后打开的更新）：只靠本次会话的访问记录时，
+  // 重启后打开着多个工具却从未点过任何一个，关闭当前工具就只能回首页——那不是用户想要的。
+  recentIds.value = [...openIds.value].reverse()
 
   return {
     openIds,
     activeId,
-    openTabs,
+    openTools,
     close,
+    recentFallback,
     syncFromRoute,
-    reorder,
   }
 })
