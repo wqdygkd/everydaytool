@@ -1,4 +1,5 @@
 import type { IpcInvokeApi } from './types'
+import { toIpcError } from '@shared/ipc-error'
 import { isElectronEnvironment } from '../environment'
 
 export function createIpcHelpers(namespace: string, label: string): {
@@ -24,7 +25,11 @@ export function createIpcHelpers(namespace: string, label: string): {
   }
 
   function invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
-    return getApi().invoke(channel, ...args) as Promise<T>
+    // preload 已剥过一层 Electron 的 `Error invoking remote method` 包装；
+    // 这里再兜一次（旧 preload / 测试桩 / 网页端注入），保证 helper 使用者拿到的 message 永远可读。
+    return getApi().invoke(channel, ...args).catch((error: unknown) => {
+      throw toIpcError(error)
+    }) as Promise<T>
   }
 
   function on<T = unknown>(channel: string, callback: (payload: T) => void): () => void {

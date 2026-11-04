@@ -1,6 +1,7 @@
 // 平台级 IPC 安全封装：统一校验调用方来源，避免渲染层（含被注入脚本、远程页面）
 // 借用 preload 句柄越权调用主进程能力。工具域注册 handler 时用 safeHandle 替代 ipcMain.handle。
 import type { IpcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
+import { toReadableIpcMessage } from './ipc-error.ts'
 import { isTrustedIpcSenderUrl } from './ipc-sender.ts'
 import { logger } from './logger.ts'
 
@@ -53,7 +54,24 @@ export function safeHandle(ipcMain: IpcMain, channel: string, handler: IpcHandle
       logger.warn('Blocked untrusted IPC call', { channel })
       throw createIpcForbiddenError()
     }
-    return handler(event, ...args)
+    try {
+      return await handler(event, ...args)
+    } catch (error) {
+      // 统一出口：这里是所有 invoke 失败的唯一汇聚点。原始错误（含 stack）只进日志，
+      // 渲染层拿到的永远是收敛后的可读提示，避免把 Electron 包装 / Node 错误码直接甩给用户。
+      const message = toReadableIpcMessage(error)
+      logger.warn('IPC handler failed', {
+        channel,
+        message,
+        original: error instanceof Error ? error.message : String(error),
+      })
+      if (error instanceof Error && error.stack) {
+        logger.debug('IPC handler failed detail', { channel, stack: error.stack })
+      }
+      const wrapped = new Error(message)
+      wrapped.cause = error
+      throw wrapped
+    }
   })
 }
 
