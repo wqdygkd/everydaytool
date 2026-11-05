@@ -5,6 +5,8 @@
 > 一句话：给本机 skill 做一个「包管理器 + 收藏夹」——按仓库分组、记住装过什么、更新时对账、识别上游已删除的 skill、支持禁用/启用、收藏分类，并能直接管理项目里的 `.agents/skills` 与 `skills-lock.json`。
 >
 > 修订：2026-11-05 确认 Q1–Q4/Q6/Q7/Q11/Q12 决策；新增「仓库内只装部分技能」、§9.8 仓库技能面板、§8.6 TFS/无 API 通用 git 与根目录技能布局；更新遍历 `selectedNames` 而非远端全集。
+>
+> 视觉预览：[skill-manager-preview.html](./skill-manager-preview.html)（静态样张；右上「设计信息」含规格 / 组件映射 / 状态）。
 
 ---
 
@@ -1244,6 +1246,8 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 /tools/skill-manager/projects    项目
 /tools/skill-manager/settings    设置（右侧 inspector 或独立子路由）
 ```
+
+静态预览：[skill-manager-preview.html](./skill-manager-preview.html)。只读样张，交互为演示；实现时按 §15.7 组件映射落到 `tools/skill-manager/renderer/`。
 
 工具页 header：
 
