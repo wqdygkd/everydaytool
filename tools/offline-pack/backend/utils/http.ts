@@ -193,10 +193,14 @@ export async function fetchBuffer(
 export async function downloadToFile(
   url: string,
   destPath: string,
-  options: HttpOptions & { onProgress?: ProgressCallback } = {},
+  options: HttpOptions & { onProgress?: ProgressCallback, rejectHtml?: boolean } = {},
 ): Promise<void> {
   const res = await request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   assertOk(res)
+  // 反代节点会用 200 + 一段 HTML 说明页冒充文件（下载下来是个打不开的 zip）
+  if (options.rejectHtml && (res.headers.get('content-type') ?? '').toLowerCase().includes('text/html')) {
+    throw new Error('该线路返回的是网页而不是文件，请换一条线路')
+  }
   if (!res.body) throw new Error('上游未返回文件流')
   const total = Number(res.headers.get('content-length') ?? 0)
   const writer = createWriteStream(destPath)
