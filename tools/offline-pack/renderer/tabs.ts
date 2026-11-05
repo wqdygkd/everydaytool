@@ -4,10 +4,11 @@
 import chromeLogo from './assets/logos/chrome.svg'
 import dockerLogo from './assets/logos/docker.svg'
 import edgeLogo from './assets/logos/edge.svg'
+import githubLogo from './assets/logos/github.svg'
 import microsoftLogo from './assets/logos/microsoft.svg'
 import vscodeLogo from './assets/logos/vscode.svg'
 
-export type OfflinePackTabKey = 'vscode' | 'chrome' | 'edge' | 'docker' | 'msstore'
+export type OfflinePackTabKey = 'vscode' | 'github' | 'chrome' | 'edge' | 'docker' | 'msstore'
 
 export interface OfflinePackTabDef {
   key: OfflinePackTabKey
@@ -22,6 +23,7 @@ export const OFFLINE_PACK_TOOL_ROOT = '/tools/offline-pack'
 /** 页签顺序即展示顺序；主路由重定向到第一项（vscode） */
 export const OFFLINE_PACK_TABS: readonly OfflinePackTabDef[] = [
   { key: 'vscode', label: 'VSCode 插件', icon: vscodeLogo, routeName: 'tool-offline-pack-vscode' },
+  { key: 'github', label: 'GitHub Releases', icon: githubLogo, routeName: 'tool-offline-pack-github' },
   { key: 'chrome', label: 'Chrome 拓展', icon: chromeLogo, routeName: 'tool-offline-pack-chrome' },
   { key: 'edge', label: 'Edge 拓展', icon: edgeLogo, routeName: 'tool-offline-pack-edge' },
   { key: 'docker', label: 'Docker 镜像', icon: dockerLogo, routeName: 'tool-offline-pack-docker' },
