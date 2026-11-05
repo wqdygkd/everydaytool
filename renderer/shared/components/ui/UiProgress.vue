@@ -29,7 +29,7 @@ const clamped = computed(() => Math.min(100, Math.max(0, Math.round(props.percen
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* 进度条只承载进度语义：轨道灰调填充、填充走品牌亮档，语义态切语义色 */
 .ui-progress {
   display: flex;

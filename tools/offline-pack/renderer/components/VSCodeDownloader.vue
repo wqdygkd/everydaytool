@@ -121,7 +121,7 @@ async function handleDownload(): Promise<void> {
   </DownloaderFrame>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* 标签、版本选择、下载动作同一行：标签不折行，选择框吃掉剩余宽度 */
 .version-label {
   flex: none;

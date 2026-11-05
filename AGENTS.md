@@ -31,6 +31,7 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 - 反馈基座 `renderer/shared/feedback/`：`confirm` / `alert` / `prompt` 的统一入口；toast 使用 `vue-sonner`。
 - 平台组件库在 `renderer/shared/components/ui/`，由 `unplugin-vue-components` 自动注册（模板直接用，无需 import）。
 - 组件用法硬约束（`UiTable` / `UiProgress` / `UiChip` 的强制范围）由评审与类型检查保证；业务页面优先复用平台组件。
+- 样式块统一 `<style scoped lang="scss">`（需要穿透到 body 的全局块用 `<style lang="scss">`）；`eslint.config.mjs` 的 `vue/block-lang` 会拦下漏写 `lang` 的块——纯 CSS 既用不了 `@use` / mixin，`&` 嵌套也只能靠 `:is()` 展开，保留两种方言没有收益。
 
 ## 布局、左轨与标题栏（工程侧）
 

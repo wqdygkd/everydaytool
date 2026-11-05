@@ -143,7 +143,7 @@ function formatTime(iso: string): string {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .targets-pane {
   display: flex;
   flex: 1;

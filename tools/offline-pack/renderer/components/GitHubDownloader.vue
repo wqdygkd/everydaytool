@@ -578,7 +578,7 @@ async function resolveFile(): Promise<void> {
   </DownloaderFrame>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .field-label {
   flex: none;
   white-space: nowrap;

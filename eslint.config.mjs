@@ -32,6 +32,14 @@ export default antfu(
     },
   },
   {
+    // 样式块统一 SCSS：DESIGN.md 要求「样式只落在页面 scoped SCSS」，
+    // 而纯 CSS 块用不了 @use / mixin，还会把 `&` 嵌套降级成运行时特性。
+    files: ['**/*.vue'],
+    rules: {
+      'vue/block-lang': ['error', { style: { lang: 'scss' } }],
+    },
+  },
+  {
     // ESLint 10 对未使用导入的 JS 规则会误伤扩展与构建脚本里的环境引用。
     files: ['tools/**/extension/**/*.js', 'scripts/**/*.mjs', '*.mjs'],
     rules: {
