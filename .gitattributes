@@ -1,0 +1,10 @@
+# 统一行尾：仓库内文本文件一律 LF。
+# 依据：Electron/Node/Vite 全链路只吃 LF；NSIS（build/installer.nsh）与
+# electron-builder 也能读 LF，没有必须保留 CRLF 的脚本。
+# 历史上有 20 个文件混入 CRLF，导致 git diff --check 误报、按字节替换时整文件被改写。
+* text=auto eol=lf
+
+# 显式标记二进制，防止 text=auto 误判后参与行尾转换或文本 diff
+*.png binary
+*.ico binary
+*.woff2 binary
