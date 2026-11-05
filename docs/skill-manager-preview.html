@@ -1,0 +1,2060 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>技能管理 · 设计预览 | everydaytool</title>
+  <style>
+    /* ──────────────────────────────────────────────────────────
+       技能管理 preview · 静态设计样张
+       视觉权威：DESIGN.md §3 / §4 / §8
+       业务与状态：docs/skill-manager-plan.md §15
+       实现时以 renderer/shared/components/ui 与 workspace 组件为准
+       ────────────────────────────────────────────────────────── */
+    :root {
+      --color-primary: #3390ec;
+      --color-primary-strong: #006dc3;
+      --color-primary-soft: color-mix(in srgb, var(--color-primary) 10%, transparent);
+      --color-primary-light: color-mix(in srgb, var(--color-primary) 20%, transparent);
+
+      --color-success: #007b54;
+      --color-warning: #975f00;
+      --color-error: #cf1c28;
+      --color-on-solid: #ffffff;
+
+      --color-app-bg: #edf3f8;
+      --color-rail-base: #f7fbff;
+      --color-raised-base: #fbfdff;
+      --color-input-base: #ffffff;
+      --color-field-base: #ffffff;
+      --color-table-base: #fbfdff;
+      --color-button-base: #ffffff;
+      --color-fill-base: #edf3f8;
+      --color-header-base: #f9fcff;
+      --color-pop-base: #fbfdff;
+      --color-overlay-base: #fbfdff;
+
+      --color-border-light: #dfe8ef;
+      --color-border: #cbd8e3;
+      --color-text-primary: #0b1724;
+      --color-text-secondary: #526273;
+      --color-text-tertiary: #5f6f80;
+
+      --radius-xs: 7px;
+      --radius-sm: 10px;
+      --radius-control: 11px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 22px;
+
+      --shadow-sm: 0 10px 34px rgba(27, 57, 87, .10);
+      --shadow-md: 0 18px 48px rgba(29, 62, 94, .10);
+      --shadow-lg: 0 24px 70px rgba(22, 50, 78, .16);
+      --shadow-focus: 0 0 0 1px var(--color-on-solid), 0 0 0 3px var(--color-primary-strong);
+
+      --duration-fast: 140ms;
+      --duration-base: 190ms;
+      --duration-overlay: 220ms;
+      --ease-out: cubic-bezier(.22, 1, .36, 1);
+      --transition-fast: var(--duration-fast) var(--ease-out);
+      --transition-base: var(--duration-base) var(--ease-out);
+
+      --font-size-xs: 11px;
+      --font-size-sm: 12px;
+      --font-size-base: 14px;
+      --font-size-lg: 16px;
+      --font-size-xl: 18px;
+
+      --rail-width: 68px;
+      --topbar-height: 48px;
+      --workspace-header-height: 70px;
+      --toolbar-height: 48px;
+      --statusline-height: 31px;
+      --spec-width: 360px;
+
+      --font-ui: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+      --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace;
+      --font-brand: "Nunito", "Roboto", var(--font-ui);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--color-text-primary);
+      font-family: var(--font-ui);
+      font-size: var(--font-size-base);
+      -webkit-font-smoothing: antialiased;
+      background:
+        radial-gradient(1100px 720px at 12% -12%, rgba(120, 180, 255, .26), transparent 62%),
+        radial-gradient(1000px 640px at 100% 4%, rgba(255, 255, 255, .62), transparent 58%),
+        linear-gradient(145deg, #d0dfeb 0%, #e9f2f8 46%, #cbdbe8 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(720px 360px at 76% 104%, rgba(51, 144, 236, .10), transparent 70%),
+        linear-gradient(180deg, rgba(255, 255, 255, .18), transparent 30%);
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: var(--shadow-focus);
+    }
+    ::selection { background: color-mix(in srgb, var(--color-primary) 24%, transparent); }
+    * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-primary) 22%, transparent) transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background-clip: content-box;
+    }
+    ::-webkit-scrollbar-track { background: transparent; }
+    .icon { width: 18px; height: 18px; display: block; flex: none; }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+
+    /* ── 顶栏：整宽页面上下文，不放工具页签 ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 0 var(--topbar-height);
+      height: var(--topbar-height);
+      padding: 0 16px 0 18px;
+      background: color-mix(in srgb, var(--color-header-base) 62%, transparent);
+      border-bottom: 1px solid rgba(255, 255, 255, .55);
+      backdrop-filter: blur(16px) saturate(135%);
+      -webkit-app-region: drag;
+    }
+    .topbar button { -webkit-app-region: no-drag; }
+    .topbar-context {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+    .brand {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(255, 255, 255, .7);
+      border-radius: 9px;
+      background: var(--color-primary-soft);
+      color: var(--color-primary-strong);
+      font-family: var(--font-brand);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+    }
+    .slash { color: var(--color-text-tertiary); font-size: 12px; }
+    .topbar-tool-icon {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+      color: var(--color-primary-strong);
+    }
+    .topbar-tool-icon .icon { width: 15px; height: 15px; }
+    .topbar-title {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .topbar-desc {
+      overflow: hidden;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .topbar-spacer { flex: 1; min-width: 8px; }
+    .meta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 26px;
+      padding: 0 9px;
+      border: 1px dashed color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--color-raised-base) 56%, transparent);
+      color: var(--color-primary-strong);
+      font-size: 11px;
+      font-weight: 500;
+      transition: background var(--transition-fast), border-color var(--transition-fast);
+    }
+    .meta-button:hover { background: var(--color-primary-soft); border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border)); }
+    .meta-button .icon { width: 14px; height: 14px; }
+
+    .app-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── 左轨 ── */
+    .rail {
+      position: relative;
+      display: flex;
+      flex: 0 0 var(--rail-width);
+      flex-direction: column;
+      align-items: center;
+      width: var(--rail-width);
+      min-height: 0;
+      padding: 10px 0 12px;
+      background: color-mix(in srgb, var(--color-rail-base) 62%, transparent);
+      border-right: 1px solid color-mix(in srgb, var(--color-border-light) 74%, transparent);
+      backdrop-filter: blur(20px) saturate(135%);
+    }
+    .rail::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: -1px;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, .55);
+      pointer-events: none;
+    }
+    .rail-btn {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 4px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .rail-btn .icon { width: 20px; height: 20px; stroke-width: 1.6; }
+    .rail-btn:hover { background: color-mix(in srgb, var(--color-on-solid) 48%, transparent); color: var(--color-text-primary); }
+    .rail-btn.is-active { background: var(--color-primary-soft); color: var(--color-primary-strong); }
+    .rail-btn.is-active::before {
+      content: "";
+      position: absolute;
+      left: -13px;
+      width: 3px;
+      height: 18px;
+      border-radius: 0 3px 3px 0;
+      background: var(--color-primary);
+    }
+    .rail-btn .run-dot {
+      position: absolute;
+      right: 7px;
+      bottom: 7px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--color-primary);
+    }
+    .rail-sep {
+      width: 24px;
+      height: 1px;
+      margin: 5px 0 9px;
+      background: var(--color-border-light);
+    }
+    .rail-bottom { display: flex; flex-direction: column; align-items: center; margin-top: auto; }
+
+    /* ── 主工作区 ── */
+    .main {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      padding: 0 18px 14px;
+      gap: 10px;
+    }
+    .workspace-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 0 0 var(--workspace-header-height);
+      height: var(--workspace-header-height);
+      min-width: 0;
+      padding: 0 2px;
+    }
+    .icon-tile {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255, 255, 255, .72);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--color-primary) 11%, transparent);
+      color: var(--color-primary-strong);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+    }
+    .icon-tile .icon { width: 20px; height: 20px; }
+    .workspace-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+    .workspace-title-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .workspace-title-line h1 {
+      overflow: hidden;
+      flex: 0 1 auto;
+      min-width: 0;
+      margin: 0;
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.25;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .workspace-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex: none;
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .workspace-copy p {
+      overflow: hidden;
+      margin: 0;
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .workspace-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      height: 32px;
+      padding: 0 13px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-control);
+      background: var(--color-button-base);
+      color: var(--color-text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .btn:hover { border-color: color-mix(in srgb, var(--color-primary) 26%, var(--color-border)); background: color-mix(in srgb, var(--color-primary) 5%, var(--color-button-base)); }
+    .btn .icon { width: 15px; height: 15px; }
+    .btn.is-primary {
+      border-color: var(--color-primary-strong);
+      background: var(--color-primary-strong);
+      color: var(--color-on-solid);
+      box-shadow: 0 1px 2px rgba(0, 55, 107, .16);
+    }
+    .btn.is-primary:hover { background: color-mix(in oklab, var(--color-primary-strong) 86%, #000); }
+    .btn.is-small { height: 26px; padding: 0 9px; font-size: 11px; border-radius: 9px; }
+    .btn.is-danger-text { border-color: transparent; background: transparent; color: var(--color-error); }
+    .btn.is-danger-text:hover { background: color-mix(in srgb, var(--color-error) 8%, transparent); }
+
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 27px;
+      height: 27px;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .icon-btn:hover { background: var(--color-fill-base); color: var(--color-text-primary); }
+    .icon-btn .icon { width: 16px; height: 16px; }
+    .icon-btn.is-star.is-on { color: var(--color-warning); }
+    .icon-btn.is-star.is-on .icon { fill: currentColor; }
+    .icon-btn.is-star .icon { fill: none; }
+
+    /* ── 子视图导航 ── */
+    .subnav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: none;
+      width: fit-content;
+      height: 34px;
+      padding: 2px;
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--color-fill-base) 72%, transparent);
+    }
+    .subnav button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 28px;
+      padding: 0 11px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      white-space: nowrap;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .subnav button:hover { color: var(--color-text-primary); }
+    .subnav button.is-active {
+      border-color: color-mix(in srgb, var(--color-primary) 17%, transparent);
+      background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+      color: var(--color-text-primary);
+    }
+    .subnav .count {
+      min-width: 17px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--color-text-tertiary) 10%, transparent);
+      color: var(--color-text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 16px;
+      text-align: center;
+    }
+    .subnav button.is-active .count { background: color-mix(in srgb, var(--color-primary) 14%, transparent); color: var(--color-primary-strong); }
+
+    /* ── 唯一主表面 ── */
+    .tool-surface {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .58);
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--color-raised-base) 82%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), var(--shadow-sm);
+      backdrop-filter: blur(18px) saturate(135%);
+    }
+    .surface-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 var(--toolbar-height);
+      min-width: 0;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .search {
+      position: relative;
+      display: flex;
+      align-items: center;
+      flex: 0 1 272px;
+      min-width: 160px;
+    }
+    .search .icon {
+      position: absolute;
+      left: 10px;
+      width: 15px;
+      height: 15px;
+      color: var(--color-text-tertiary);
+      pointer-events: none;
+    }
+    .search input {
+      width: 100%;
+      height: 30px;
+      padding: 0 54px 0 31px;
+      border: 1px solid var(--color-border);
+      border-radius: 9px;
+      background: var(--color-field-base);
+      color: var(--color-text-primary);
+      font-size: 12px;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .search input::placeholder { color: var(--color-text-tertiary); }
+    .search input:focus {
+      outline: none;
+      border-color: color-mix(in srgb, var(--color-primary) 52%, var(--color-border));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 9%, transparent);
+    }
+    .search kbd {
+      position: absolute;
+      right: 7px;
+      padding: 1px 5px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 5px;
+      background: var(--color-fill-base);
+      color: var(--color-text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 15px;
+      pointer-events: none;
+    }
+    .filter-group { display: flex; align-items: center; gap: 3px; min-width: 0; }
+    .filter-chip {
+      height: 26px;
+      padding: 0 8px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .filter-chip:hover { background: var(--color-fill-base); color: var(--color-text-primary); }
+    .filter-chip.is-active { border-color: var(--color-border-light); background: var(--color-raised-base); color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(24, 53, 82, .04); }
+    .filter-chip .num { margin-left: 4px; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+    .toolbar-spacer { flex: 1; min-width: 4px; }
+    .toolbar-note { color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; }
+
+    .surface-body { display: flex; flex: 1; min-height: 0; }
+    .scope-pane {
+      display: flex;
+      flex: 0 0 218px;
+      flex-direction: column;
+      width: 218px;
+      min-height: 0;
+      padding: 12px 10px;
+      border-right: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-fill-base) 34%, transparent);
+      overflow: auto;
+    }
+    .pane-label {
+      margin: 2px 8px 7px;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .scope-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      height: 34px;
+      padding: 0 8px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      text-align: left;
+      transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    }
+    .scope-row:hover { background: color-mix(in srgb, var(--color-on-solid) 40%, transparent); color: var(--color-text-primary); }
+    .scope-row.is-active {
+      border-color: color-mix(in srgb, var(--color-primary) 17%, transparent);
+      background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+      color: var(--color-text-primary);
+    }
+    .scope-row .icon { width: 15px; height: 15px; color: var(--color-text-tertiary); }
+    .scope-row.is-active .icon { color: var(--color-primary-strong); }
+    .scope-row .num { margin-left: auto; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+    .scope-row .lock { margin-left: auto; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+    .scope-row .lock + .num { margin-left: 6px; }
+    .scope-sub { display: grid; gap: 1px; margin: 2px 0 0 22px; }
+    .scope-sub button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 27px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      text-align: left;
+    }
+    .scope-sub button:hover { background: color-mix(in srgb, var(--color-on-solid) 40%, transparent); color: var(--color-text-primary); }
+    .scope-sub button.is-active { color: var(--color-text-primary); }
+    .scope-sub .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--color-text-tertiary); }
+    .pane-rule { height: 1px; margin: 11px 8px; background: var(--color-border-light); }
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      height: 29px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      text-align: left;
+    }
+    .filter-row:hover { background: color-mix(in srgb, var(--color-on-solid) 40%, transparent); color: var(--color-text-primary); }
+    .filter-row.is-active { background: var(--color-raised-base); color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(24, 53, 82, .04); }
+    .filter-row .filter-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-tertiary); }
+    .filter-row .filter-dot.is-warning { background: var(--color-warning); }
+    .filter-row .filter-dot.is-danger { background: var(--color-error); }
+    .filter-row .num { margin-left: auto; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+    .pane-hint {
+      margin: auto 4px 0;
+      padding: 8px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--color-raised-base) 50%, transparent);
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .view-stack { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+    body[data-view="favorites"] .scope-pane,
+    body[data-view="projects"] .scope-pane { display: none; }
+    body[data-view="favorites"] .filter-group,
+    body[data-view="projects"] .filter-group { display: none; }
+    .view { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+    .view.is-active { display: flex; }
+    .view-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 42px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+    }
+    .view-toolbar .spacer { flex: 1; }
+    .table-scroll { flex: 1; min-height: 0; overflow: auto; }
+
+    .skill-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+    .skill-table col.c-skill { width: 46%; }
+    .skill-table col.c-state { width: 14%; }
+    .skill-table col.c-source { width: 26%; }
+    .skill-table col.c-action { width: 14%; }
+    .skill-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      height: 34px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-raised-base) 94%, var(--color-fill-base));
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .03em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .skill-table thead th:last-child { text-align: right; }
+    .skill-table tbody td {
+      height: 45px;
+      padding: 5px 12px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 66%, transparent);
+      vertical-align: middle;
+    }
+    .skill-table tbody tr.skill-row { transition: background var(--transition-fast); }
+    .skill-table tbody tr.skill-row:hover td { background: color-mix(in srgb, var(--color-on-solid) 36%, transparent); }
+    .skill-table tbody tr.skill-row.is-selected td { background: color-mix(in srgb, var(--color-primary) 7.5%, var(--color-table-base)); }
+    .group-row td {
+      height: 42px !important;
+      padding: 0 12px !important;
+      border-top: 1px solid var(--color-border-light);
+      border-bottom: 1px solid var(--color-border-light) !important;
+      background: color-mix(in srgb, var(--color-fill-base) 52%, transparent);
+    }
+    .group-row:first-child td { border-top: 0; }
+    .group-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .group-toggle {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--color-text-tertiary);
+    }
+    .group-toggle:hover { background: color-mix(in srgb, var(--color-on-solid) 46%, transparent); color: var(--color-text-primary); }
+    .group-toggle .icon { width: 13px; height: 13px; transition: transform var(--transition-fast); }
+    .group-row.is-collapsed .group-toggle .icon { transform: rotate(-90deg); }
+    .group-icon {
+      display: grid;
+      place-items: center;
+      width: 23px;
+      height: 23px;
+      border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border-light));
+      border-radius: 7px;
+      background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+      color: var(--color-primary-strong);
+    }
+    .group-icon .icon { width: 13px; height: 13px; }
+    .group-name { color: var(--color-text-primary); font-size: 12px; font-weight: 500; white-space: nowrap; }
+    .group-host { color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+    .group-count { margin-left: 2px; }
+    .group-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 2px;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .group-state .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .group-state.is-warning { color: var(--color-warning); }
+    .group-state.is-danger { color: var(--color-error); }
+    .group-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+    .split {
+      display: inline-flex;
+      align-items: stretch;
+      height: 26px;
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      border-radius: 9px;
+      background: var(--color-button-base);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+    }
+    .split button {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+      padding: 0 8px;
+      border: 0;
+      background: transparent;
+      color: var(--color-text-primary);
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .split button:hover { background: color-mix(in srgb, var(--color-primary) 6%, transparent); }
+    .split button + button { border-left: 1px solid var(--color-border-light); padding: 0 6px; }
+    .split .icon { width: 11px; height: 11px; }
+    .link-btn {
+      height: 24px;
+      padding: 0 7px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .link-btn:hover { background: color-mix(in srgb, var(--color-on-solid) 46%, transparent); color: var(--color-text-primary); }
+
+    .cell-skill { min-width: 0; }
+    .skill-main { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .indent { width: 18px; flex: none; }
+    .skill-name {
+      overflow: hidden;
+      color: var(--color-text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .skill-main .chip { flex: none; }
+    .skill-desc {
+      overflow: hidden;
+      margin: 1px 0 0 25px;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .path {
+      display: -webkit-box;
+      overflow: hidden;
+      max-height: 2.5em;
+      color: var(--color-text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.25;
+      word-break: break-all;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .path .root-tag { color: var(--color-primary-strong); }
+    .state {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .state .dot {
+      width: 7px;
+      height: 7px;
+      flex: none;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
+    }
+    .state.is-success { color: var(--color-success); }
+    .state.is-warning { color: var(--color-warning); }
+    .state.is-danger { color: var(--color-error); }
+    .state.is-muted { color: var(--color-text-tertiary); }
+    .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1px; opacity: .62; transition: opacity var(--transition-fast); }
+    .skill-row:hover .row-actions, .skill-row:focus-within .row-actions { opacity: 1; }
+    .row-actions .icon-btn { width: 26px; height: 26px; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 20px;
+      padding: 1px 7px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 999px;
+      background: var(--color-raised-base);
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      line-height: 16px;
+      white-space: nowrap;
+    }
+    .chip.is-primary {
+      border-color: color-mix(in srgb, var(--color-primary) 26%, transparent);
+      background: var(--color-primary-soft);
+      color: var(--color-primary-strong);
+    }
+    .chip.is-warning {
+      border-color: color-mix(in srgb, var(--color-warning) 28%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 9%, transparent);
+      color: var(--color-warning);
+    }
+    .chip.is-danger {
+      border-color: color-mix(in srgb, var(--color-error) 28%, transparent);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
+      color: var(--color-error);
+    }
+    .chip.is-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .statusline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 0 0 var(--statusline-height);
+      min-width: 0;
+      padding: 0 14px;
+      border-top: 1px solid var(--color-border-light);
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+    }
+    .statusline .spacer { flex: 1; }
+    .statusline .mono { font-family: var(--font-mono); }
+
+    /* ── 空态 / 收藏 / 项目 ── */
+    .favorites-view, .projects-view { padding: 0; }
+    .fav-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex: 0 0 46px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--color-border-light);
+      overflow-x: auto;
+    }
+    .fav-toolbar .spacer { flex: 1; }
+    .fav-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 170px 92px;
+      gap: 14px;
+      align-items: center;
+      min-height: 58px;
+      padding: 8px 14px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 66%, transparent);
+      transition: background var(--transition-fast);
+    }
+    .fav-row:hover { background: color-mix(in srgb, var(--color-on-solid) 36%, transparent); }
+    .fav-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .fav-name .icon-btn { width: 24px; height: 24px; }
+    .fav-meta { min-width: 0; }
+    .fav-meta strong { display: block; overflow: hidden; font-size: 12px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+    .fav-meta span { display: block; overflow: hidden; margin-top: 1px; color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .fav-origin { overflow: hidden; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .fav-action { display: flex; justify-content: flex-end; }
+
+    .project-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(170px, 1fr) 120px;
+      gap: 16px;
+      align-items: center;
+      min-height: 72px;
+      padding: 10px 16px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 66%, transparent);
+    }
+    .project-row:hover { background: color-mix(in srgb, var(--color-on-solid) 36%, transparent); }
+    .project-title { display: flex; align-items: center; gap: 9px; }
+    .project-title strong { font-size: 12px; font-weight: 500; }
+    .project-path { overflow: hidden; margin: 2px 0 0 31px; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .project-metrics { display: flex; flex-wrap: wrap; gap: 4px; }
+    .project-note { color: var(--color-text-tertiary); font-size: 11px; line-height: 1.5; }
+    .project-action { display: flex; justify-content: flex-end; gap: 4px; }
+
+    .hint {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+      color: var(--color-text-secondary);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .hint .icon { width: 13px; height: 13px; margin-top: 1px; color: var(--color-primary-strong); }
+
+    /* ── 对话框 ── */
+    .dialog-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(23, 42, 61, .17);
+      backdrop-filter: blur(8px);
+    }
+    .dialog-layer[hidden] { display: none; }
+    .dialog {
+      display: flex;
+      flex-direction: column;
+      width: min(760px, calc(100vw - 48px));
+      max-height: min(760px, calc(100vh - 64px));
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .72);
+      border-radius: var(--radius-xl);
+      background: color-mix(in srgb, var(--color-overlay-base) 94%, transparent);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(28px) saturate(135%);
+    }
+    .dialog.is-narrow { width: min(680px, calc(100vw - 48px)); }
+    .dialog-head { padding: 15px 18px 11px; border-bottom: 1px solid var(--color-border-light); }
+    .dialog-title-line { display: flex; align-items: center; gap: 9px; }
+    .dialog-title { margin: 0; font-size: 15px; font-weight: 500; }
+    .dialog-sub { margin: 4px 0 0; color: var(--color-text-tertiary); font-size: 11px; line-height: 1.5; }
+    .dialog-head .icon-btn { margin-left: auto; }
+    .dialog-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 42px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .dialog-toolbar .spacer { flex: 1; }
+    .dialog-list { flex: 1; min-height: 0; overflow: auto; padding: 2px 0; }
+    .skill-option {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) 82px;
+      gap: 10px;
+      align-items: center;
+      min-height: 48px;
+      padding: 7px 18px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 62%, transparent);
+      transition: background var(--transition-fast);
+    }
+    .skill-option:hover { background: color-mix(in srgb, var(--color-on-solid) 38%, transparent); }
+    .skill-option .skill-main { gap: 7px; }
+    .skill-option .skill-desc { margin-left: 0; }
+    .skill-option input[type="checkbox"] {
+      appearance: none;
+      display: grid;
+      place-content: center;
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      border: 1px solid var(--color-border);
+      border-radius: 5px;
+      background: var(--color-field-base);
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast);
+    }
+    .skill-option input[type="checkbox"]::after {
+      content: "";
+      width: 8px;
+      height: 4px;
+      border-bottom: 2px solid var(--color-on-solid);
+      border-left: 2px solid var(--color-on-solid);
+      opacity: 0;
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+    .skill-option input[type="checkbox"]:checked { border-color: var(--color-primary-strong); background: var(--color-primary-strong); }
+    .skill-option input[type="checkbox"]:checked::after { opacity: 1; }
+    .skill-option .opt-state { justify-self: end; }
+    .dialog-foot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 56px;
+      padding: 0 18px;
+      border-top: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-fill-base) 34%, transparent);
+    }
+    .dialog-summary { color: var(--color-text-secondary); font-size: 11px; }
+    .dialog-summary strong { color: var(--color-text-primary); font-weight: 500; }
+    .dialog-foot .spacer { flex: 1; }
+
+    /* ── 设计信息抽屉 ── */
+    .spec-drawer {
+      display: none;
+      flex: 0 0 var(--spec-width);
+      flex-direction: column;
+      width: var(--spec-width);
+      min-height: 0;
+      border-left: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-raised-base) 86%, transparent);
+      backdrop-filter: blur(20px) saturate(135%);
+    }
+    body.spec-open .spec-drawer { display: flex; }
+    .spec-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 52px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .spec-head .icon { width: 15px; height: 15px; color: var(--color-primary-strong); }
+    .spec-head h2 { margin: 0; font-size: 12px; font-weight: 500; }
+    .spec-head .chip { margin-left: 2px; }
+    .spec-head .icon-btn { margin-left: auto; }
+    .spec-tabs {
+      display: flex;
+      gap: 2px;
+      flex: 0 0 38px;
+      padding: 4px 10px 0;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .spec-tabs button {
+      height: 32px;
+      padding: 0 9px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      transition: color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .spec-tabs button:hover { color: var(--color-text-primary); }
+    .spec-tabs button.is-active { border-bottom-color: var(--color-primary); color: var(--color-text-primary); }
+    .spec-scroll { flex: 1; overflow: auto; padding: 14px 14px 24px; }
+    .spec-panel { display: none; }
+    .spec-panel.is-active { display: block; }
+    .spec-hero h3 { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.35; }
+    .spec-hero p { margin: 5px 0 0; color: var(--color-text-secondary); font-size: 11px; line-height: 1.6; }
+    .spec-kicker { margin-bottom: 5px; color: var(--color-primary-strong); font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+    .spec-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 13px 0 16px; }
+    .spec-fact { padding: 8px 9px; border: 1px solid var(--color-border-light); border-radius: 8px; background: color-mix(in srgb, var(--color-fill-base) 32%, transparent); }
+    .spec-fact dt { color: var(--color-text-tertiary); font-size: 11px; }
+    .spec-fact dd { margin: 3px 0 0; color: var(--color-text-primary); font-family: var(--font-mono); font-size: 11px; line-height: 1.4; }
+    .spec-section { margin-top: 17px; }
+    .spec-section h4 { margin: 0 0 7px; color: var(--color-text-primary); font-size: 11px; font-weight: 500; }
+    .spec-section p, .spec-section li { color: var(--color-text-secondary); font-size: 11px; line-height: 1.65; }
+    .spec-section p { margin: 0; }
+    .spec-section ul { margin: 0; padding-left: 14px; }
+    .swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .swatch {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 6px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 7px;
+      background: var(--color-raised-base);
+      color: var(--color-text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .swatch i { width: 13px; height: 13px; flex: none; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .06); }
+    .spec-table { width: 100%; border-collapse: collapse; }
+    .spec-table th, .spec-table td { padding: 5px 4px; border-bottom: 1px solid var(--color-border-light); font-size: 11px; text-align: left; vertical-align: top; }
+    .spec-table th { color: var(--color-text-tertiary); font-weight: 500; }
+    .spec-table td { color: var(--color-text-secondary); }
+    .spec-table td:first-child { color: var(--color-text-primary); }
+    .spec-table code, .spec-code { font-family: var(--font-mono); font-size: 11px; }
+    .state-demo { display: grid; gap: 7px; }
+    .state-demo-row { display: grid; grid-template-columns: 88px 1fr; gap: 7px; align-items: start; padding-bottom: 7px; border-bottom: 1px solid var(--color-border-light); }
+    .state-demo-row p { margin: 0; color: var(--color-text-tertiary); }
+    .spec-links { display: grid; gap: 5px; margin-top: 7px; }
+    .spec-links a {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--color-primary-strong);
+      font-size: 11px;
+      text-decoration: none;
+    }
+    .spec-links a:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .spec-links .icon { width: 12px; height: 12px; }
+
+    @media (max-width: 1180px) {
+      body.spec-open .spec-drawer { display: flex; }
+      .spec-drawer {
+        position: fixed;
+        top: var(--topbar-height);
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        width: min(var(--spec-width), 92vw);
+        box-shadow: -18px 0 48px rgba(22, 50, 78, .14);
+      }
+    }
+    @media (max-width: 980px) {
+      .scope-pane { display: none; }
+      .skill-table col.c-source { width: 22%; }
+      .topbar-desc { display: none; }
+      .toolbar-note { display: none; }
+      .fav-row { grid-template-columns: minmax(0, 1fr) 90px; }
+      .fav-origin { display: none; }
+      .project-row { grid-template-columns: minmax(0, 1fr) 110px; }
+      .project-metrics { display: none; }
+    }
+    @media (max-width: 1100px) {
+      .workspace-status { display: none; }
+    }
+    @media (max-width: 760px) {
+      .main { padding: 0 10px 10px; gap: 8px; }
+      .workspace-actions .btn:not(.is-primary) { display: none; }
+      .subnav { width: 100%; overflow-x: auto; }
+      .subnav button { flex: 1; justify-content: center; }
+      .surface-toolbar { flex-wrap: nowrap; overflow-x: auto; padding: 0 10px; }
+      .search { flex: 0 0 190px; }
+      .filter-group { display: none; }
+      .skill-table { min-width: 620px; }
+      .skill-table col.c-source { width: 24%; }
+      .statusline { font-size: 11px; }
+      .statusline .hide-sm { display: none; }
+      .dialog { width: calc(100vw - 20px); max-height: calc(100vh - 28px); }
+      .dialog-layer { padding: 10px; }
+      .fav-row { grid-template-columns: minmax(0, 1fr) 70px; }
+      .project-row { grid-template-columns: minmax(0, 1fr) 84px; }
+      .project-note { display: none; }
+    }
+    @media (max-width: 640px) {
+      .workspace-copy p { display: none; }
+      .workspace-title-line h1 { font-size: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body data-view="library">
+  <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 20 20"><path d="M3.5 9.2 10 3.5l6.5 5.7M5.5 8v8.5h9V8M8.4 16.5v-4.2h3.2v4.2"/></symbol>
+      <symbol id="i-search" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="M13.2 13.2 17 17"/></symbol>
+      <symbol id="i-layers" viewBox="0 0 20 20"><path d="M10 3 3.5 6.5l6.5 3.25L16.5 6.5 10 3zM3.5 10.5 10 13.75l6.5-3.25M3.5 14.5 10 17.75l6.5-3.25"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-more" viewBox="0 0 20 20"><circle cx="5" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.4" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 20 20"><path d="M15.8 10a5.8 5.8 0 1 1-1.7-4.1M15.8 4.4v3.4h-3.4"/></symbol>
+      <symbol id="i-chevron-down" viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></symbol>
+      <symbol id="i-chevron-right" viewBox="0 0 12 12"><path d="M4.5 2.5 8 6l-3.5 3.5"/></symbol>
+      <symbol id="i-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
+      <symbol id="i-info" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5"/><path d="M10 9v4.5M10 6.5v.01"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.5"/><path d="M10 6v4.5M10 13.6v.01"/></symbol>
+      <symbol id="i-star" viewBox="0 0 20 20"><path d="m10 3 2.1 4.3 4.7.7-3.4 3.3.8 4.7-4.2-2.2-4.2 2.2.8-4.7L3.2 8l4.7-.7L10 3z"/></symbol>
+      <symbol id="i-interceptor" viewBox="0 0 20 20"><path d="M4 5.5l6-2 6 2v4.5c0 3.5-2.5 6-6 7-3.5-1-6-3.5-6-7zM11 5.5 8.5 10h3L9.5 14.5"/></symbol>
+      <symbol id="i-idcard" viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="1.5"/><path d="M5 14.5c0-1.4 1.2-2.2 2.5-2.2s2.5.8 2.5 2.2M11 8.5h4M11 11h4M11 13.5h2.5"/><circle cx="7.5" cy="9" r="1.6"/></symbol>
+      <symbol id="i-offline" viewBox="0 0 20 20"><path d="M10 3v8M6.5 7.5 10 11l3.5-3.5M4 14.5h12M4 16.5h12"/></symbol>
+      <symbol id="i-external" viewBox="0 0 20 20"><path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V10M13 4h3v3M10.5 9.5 16 4"/></symbol>
+      <symbol id="i-history" viewBox="0 0 20 20"><path d="M10 2.5a7.5 7.5 0 1 1-7.4 6.3M2.6 5.2v3.4h3.4M10 6.2v4.1l2.8 1.7"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 20 20"><path d="M4 6h12M8 6V4.5h4V6M5.8 6l.7 10.5h7l.7-10.5M8.5 9v5M11.5 9v5"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-context">
+        <span class="brand" aria-hidden="true">edt</span>
+        <span class="slash" aria-hidden="true">/</span>
+        <span class="topbar-tool-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+        <span class="topbar-title">技能管理</span>
+        <span class="topbar-desc">本机与项目技能的统一工作台</span>
+      </div>
+      <span class="topbar-spacer"></span>
+      <button class="meta-button" type="button" data-spec-toggle aria-label="打开设计信息">
+        <svg class="icon"><use href="#i-info"/></svg>
+        设计信息
+      </button>
+    </header>
+
+    <div class="app-body">
+      <aside class="rail" aria-label="工具导航">
+        <button class="rail-btn" type="button" aria-label="工具台" title="工具台">
+          <svg class="icon"><use href="#i-home"/></svg>
+        </button>
+        <div class="rail-sep" aria-hidden="true"></div>
+        <button class="rail-btn" type="button" aria-label="拦截器" title="拦截器">
+          <svg class="icon"><use href="#i-interceptor"/></svg>
+        </button>
+        <button class="rail-btn" type="button" aria-label="身份证号生成器" title="身份证号生成器">
+          <svg class="icon"><use href="#i-idcard"/></svg>
+        </button>
+        <button class="rail-btn" type="button" aria-label="离线包下载" title="离线包下载">
+          <svg class="icon"><use href="#i-offline"/></svg>
+        </button>
+        <button class="rail-btn is-active" type="button" aria-label="技能管理" title="技能管理" aria-current="page">
+          <svg class="icon"><use href="#i-layers"/></svg>
+        </button>
+        <span class="rail-btn" aria-hidden="true" style="height:4px"></span>
+        <button class="rail-btn" type="button" aria-label="Telegram 网络优化" title="Telegram 网络优化">
+          <svg class="icon"><use href="#i-external"/></svg>
+          <span class="run-dot" aria-hidden="true"></span>
+        </button>
+        <div class="rail-bottom">
+          <button class="rail-btn" type="button" aria-label="搜索工具（Ctrl K）" title="搜索工具（Ctrl K）">
+            <svg class="icon"><use href="#i-search"/></svg>
+          </button>
+          <button class="rail-btn" type="button" aria-label="设置" title="设置">
+            <svg class="icon"><use href="#i-gear"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="workspace-header">
+          <span class="icon-tile" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+          <div class="workspace-copy">
+            <div class="workspace-title-line">
+              <h1>技能管理</h1>
+              <span class="workspace-status"><span class="state is-success"><span class="dot"></span></span>38 个技能 · 6 个仓库 · 4 项待处理</span>
+            </div>
+            <p>按仓库对账、更新、禁用与收藏；只动已选中的技能</p>
+          </div>
+          <div class="workspace-actions">
+            <button class="btn" type="button" data-check-all>
+              <svg class="icon"><use href="#i-refresh"/></svg>
+              检查全部
+            </button>
+            <button class="btn is-primary" type="button" data-open-install>
+              <svg class="icon"><use href="#i-plus"/></svg>
+              安装技能
+            </button>
+            <button class="icon-btn" type="button" aria-label="更多操作" title="更多操作">
+              <svg class="icon"><use href="#i-more"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <nav class="subnav" role="tablist" aria-label="技能管理视图">
+          <button type="button" role="tab" class="is-active" aria-selected="true" data-set-view="library">
+            技能库 <span class="count">38</span>
+          </button>
+          <button type="button" role="tab" aria-selected="false" data-set-view="updates">
+            更新 <span class="count">2</span>
+          </button>
+          <button type="button" role="tab" aria-selected="false" data-set-view="favorites">
+            收藏 <span class="count">12</span>
+          </button>
+          <button type="button" role="tab" aria-selected="false" data-set-view="projects">
+            项目 <span class="count">1</span>
+          </button>
+        </nav>
+
+        <section class="tool-surface" aria-label="技能管理工作区">
+          <div class="surface-toolbar">
+            <label class="search">
+              <svg class="icon"><use href="#i-search"/></svg>
+              <input type="search" placeholder="搜索技能、仓库或路径" aria-label="搜索技能、仓库或路径">
+              <kbd>⌘K</kbd>
+            </label>
+            <div class="filter-group" aria-label="状态筛选">
+              <button class="filter-chip is-active" type="button">全部 <span class="num">38</span></button>
+              <button class="filter-chip" type="button">待更新 <span class="num">2</span></button>
+              <button class="filter-chip" type="button">失效 <span class="num">1</span></button>
+              <button class="filter-chip" type="button">未托管 <span class="num">1</span></button>
+            </div>
+            <span class="toolbar-spacer"></span>
+            <span class="toolbar-note">按仓库分组</span>
+            <button class="icon-btn" type="button" aria-label="切换分组" title="切换分组">
+              <svg class="icon"><use href="#i-layers"/></svg>
+            </button>
+            <button class="icon-btn" type="button" aria-label="刷新" title="刷新" data-check-all>
+              <svg class="icon"><use href="#i-refresh"/></svg>
+            </button>
+          </div>
+
+          <div class="surface-body">
+            <aside class="scope-pane" aria-label="范围与状态">
+              <div class="pane-label">范围</div>
+              <button class="scope-row" type="button">
+                <svg class="icon"><use href="#i-layers"/></svg>
+                全局
+                <span class="num">31</span>
+              </button>
+              <button class="scope-row is-active" type="button">
+                <svg class="icon"><use href="#i-home"/></svg>
+                everydaytool
+                <span class="lock">锁 v1</span>
+                <span class="num">38</span>
+              </button>
+              <div class="scope-sub">
+                <button type="button" class="is-active"><span class="dot"></span>项目技能 <span class="num">38</span></button>
+                <button type="button">+ 添加项目</button>
+              </div>
+              <div class="pane-rule"></div>
+              <div class="pane-label">状态</div>
+              <button class="filter-row is-active" type="button"><span class="filter-dot"></span>全部 <span class="num">38</span></button>
+              <button class="filter-row" type="button"><span class="filter-dot is-warning"></span>待更新 <span class="num">2</span></button>
+              <button class="filter-row" type="button"><span class="filter-dot is-danger"></span>已失效 <span class="num">1</span></button>
+              <button class="filter-row" type="button"><span class="filter-dot"></span>未托管 <span class="num">1</span></button>
+              <button class="filter-row" type="button"><span class="filter-dot"></span>已禁用 <span class="num">1</span></button>
+              <div class="pane-hint">未托管不等于损坏：来源未知，仍可收藏、禁用或移除，但不能自动更新。</div>
+            </aside>
+
+            <div class="view-stack">
+              <section class="view is-active" data-view-panel="library" aria-label="技能库">
+                <div class="table-scroll">
+                  <table class="skill-table">
+                    <colgroup>
+                      <col class="c-skill"><col class="c-state"><col class="c-source"><col class="c-action">
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th scope="col">仓库 / 技能</th>
+                        <th scope="col">状态</th>
+                        <th scope="col">来源路径</th>
+                        <th scope="col">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="group-row" data-group="matt">
+                        <td colspan="4">
+                          <div class="group-line">
+                            <button class="group-toggle" type="button" data-group-toggle aria-expanded="true" aria-label="折叠 mattpocock/skills">
+                              <svg class="icon"><use href="#i-chevron-down"/></svg>
+                            </button>
+                            <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                            <span class="group-name">mattpocock/skills</span>
+                            <span class="group-host">github.com</span>
+                            <span class="chip is-primary group-count">4/24 已选</span>
+                            <span class="group-state is-warning"><span class="dot"></span>2 待处理</span>
+                            <div class="group-actions">
+                              <span class="split">
+                                <button type="button" data-open-update>更新此仓库</button>
+                                <button type="button" data-open-update aria-label="更新选项"><svg class="icon"><use href="#i-chevron-down"/></svg></button>
+                              </span>
+                              <button class="link-btn" type="button" data-open-repo>管理技能</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="matt">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-success"><span class="dot"></span></span><span class="skill-name">grilling</span><span class="chip">开发规范</span></div>
+                          <div class="skill-desc">反复追问，压测方案、决策与边界</div>
+                        </td>
+                        <td><span class="state is-success"><span class="dot"></span>正常</span></td>
+                        <td><span class="path">skills/productivity/grilling/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 grilling"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="grilling 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="matt">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-warning"><span class="dot"></span></span><span class="skill-name">tdd</span><span class="chip">测试</span></div>
+                          <div class="skill-desc">测试驱动开发：红、绿、重构</div>
+                        </td>
+                        <td><span class="state is-warning"><span class="dot"></span>可更新</span></td>
+                        <td><span class="path">skills/engineering/tdd/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 tdd"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="tdd 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="matt">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-danger"><span class="dot"></span></span><span class="skill-name">wizard</span><span class="chip">工具</span></div>
+                          <div class="skill-desc">生成只由人执行的步骤向导</div>
+                        </td>
+                        <td><span class="state is-danger"><span class="dot"></span>上游已移除</span></td>
+                        <td><span class="path">skills/engineering/wizard/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 wizard"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="wizard 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="matt">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-warning"><span class="dot"></span></span><span class="skill-name">diagnosing-bugs</span><span class="chip">诊断</span></div>
+                          <div class="skill-desc">从复现到根因的调试循环</div>
+                        </td>
+                        <td><span class="state is-warning"><span class="dot"></span>本地已修改</span></td>
+                        <td><span class="path">skills/engineering/diagnosing-bugs/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 diagnosing-bugs"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="diagnosing-bugs 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr class="group-row" data-group="gsap">
+                        <td colspan="4">
+                          <div class="group-line">
+                            <button class="group-toggle" type="button" data-group-toggle aria-expanded="true" aria-label="折叠 greensock/gsap-skills">
+                              <svg class="icon"><use href="#i-chevron-down"/></svg>
+                            </button>
+                            <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                            <span class="group-name">greensock/gsap-skills</span>
+                            <span class="group-host">github.com</span>
+                            <span class="chip is-primary group-count">7/7 已选</span>
+                            <span class="group-state"><span class="dot"></span>最新</span>
+                            <div class="group-actions">
+                              <span class="split">
+                                <button type="button" data-open-update>更新此仓库</button>
+                                <button type="button" data-open-update aria-label="更新选项"><svg class="icon"><use href="#i-chevron-down"/></svg></button>
+                              </span>
+                              <button class="link-btn" type="button" data-open-repo>管理技能</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="gsap">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-success"><span class="dot"></span></span><span class="skill-name">gsap-core</span><span class="chip">动画</span></div>
+                          <div class="skill-desc">GSAP 核心 API、缓动与响应式动画</div>
+                        </td>
+                        <td><span class="state is-success"><span class="dot"></span>正常</span></td>
+                        <td><span class="path">skills/gsap-core/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 gsap-core"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="gsap-core 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="gsap">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-muted"><span class="dot"></span></span><span class="skill-name">gsap-timeline</span><span class="chip">动画</span><span class="chip">已禁用</span></div>
+                          <div class="skill-desc">时间线、位置参数与嵌套编排</div>
+                        </td>
+                        <td><span class="state is-muted"><span class="dot"></span>已禁用</span></td>
+                        <td><span class="path">skills/gsap-timeline/SKILL.md</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 gsap-timeline"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="gsap-timeline 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr class="group-row" data-group="tfs">
+                        <td colspan="4">
+                          <div class="group-line">
+                            <button class="group-toggle" type="button" data-group-toggle aria-expanded="true" aria-label="折叠 TFS 仓库">
+                              <svg class="icon"><use href="#i-chevron-down"/></svg>
+                            </button>
+                            <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                            <span class="group-name">tfs.example.internal</span>
+                            <span class="group-host">TFS · git</span>
+                            <span class="chip is-primary group-count">1/1 已选</span>
+                            <span class="group-state"><span class="dot"></span>根目录技能</span>
+                            <div class="group-actions">
+                              <span class="split">
+                                <button type="button" data-open-update>更新此仓库</button>
+                                <button type="button" data-open-update aria-label="更新选项"><svg class="icon"><use href="#i-chevron-down"/></svg></button>
+                              </span>
+                              <button class="link-btn" type="button" data-open-repo>管理技能</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="tfs">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-success"><span class="dot"></span></span><span class="skill-name">trace-analyze-html</span><span class="chip">诊断</span><span class="chip">根目录</span></div>
+                          <div class="skill-desc">把 trace 调用链整理成可读的 HTML 报告</div>
+                        </td>
+                        <td><span class="state is-success"><span class="dot"></span>正常</span></td>
+                        <td><span class="path"><span class="root-tag">SKILL.md</span> · 仓库根目录</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 trace-analyze-html"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="trace-analyze-html 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr class="group-row" data-group="orphan">
+                        <td colspan="4">
+                          <div class="group-line">
+                            <button class="group-toggle" type="button" data-group-toggle aria-expanded="true" aria-label="折叠未托管技能">
+                              <svg class="icon"><use href="#i-chevron-down"/></svg>
+                            </button>
+                            <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-info"/></svg></span>
+                            <span class="group-name">未托管</span>
+                            <span class="group-host">来源未知</span>
+                            <span class="chip group-count">1 个</span>
+                            <span class="group-state"><span class="dot"></span>可收藏 / 接管</span>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="skill-row" data-parent="orphan">
+                        <td class="cell-skill">
+                          <div class="skill-main"><span class="indent"></span><span class="state is-muted"><span class="dot"></span></span><span class="skill-name">shadcn-vue</span><span class="chip">UI</span><span class="chip">未托管</span></div>
+                          <div class="skill-desc">未入锁；来源未知，可能是本地技能包链接</div>
+                        </td>
+                        <td><span class="state is-muted"><span class="dot"></span>未托管</span></td>
+                        <td><span class="path">shadcn-vue → 外部目录</span></td>
+                        <td>
+                          <div class="row-actions">
+                            <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 shadcn-vue"><svg class="icon"><use href="#i-star"/></svg></button>
+                            <button class="icon-btn" type="button" aria-label="shadcn-vue 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="view" data-view-panel="updates" aria-label="更新中心">
+                <div class="hint">
+                  <svg class="icon"><use href="#i-info"/></svg>
+                  更新只作用于已选中的技能；未选中的远端技能不会下载、不会安装。
+                </div>
+                <div class="table-scroll">
+                  <table class="skill-table" style="min-width:640px">
+                    <colgroup><col style="width:38%"><col style="width:16%"><col style="width:16%"><col style="width:14%"><col style="width:16%"></colgroup>
+                    <thead><tr><th>仓库</th><th>已选 / 可用</th><th>可更新</th><th>已移除</th><th>检查</th></tr></thead>
+                    <tbody>
+                      <tr class="skill-row">
+                        <td><div class="skill-main"><span class="group-icon"><svg class="icon"><use href="#i-layers"/></svg></span><span class="skill-name">mattpocock/skills</span><span class="group-host">github.com</span></div></td>
+                        <td><span class="chip is-mono">4 / 24</span></td>
+                        <td><span class="state is-warning"><span class="dot"></span>1</span></td>
+                        <td><span class="state is-danger"><span class="dot"></span>1</span></td>
+                        <td><button class="btn is-small" type="button" data-open-update>查看计划</button></td>
+                      </tr>
+                      <tr class="skill-row">
+                        <td><div class="skill-main"><span class="group-icon"><svg class="icon"><use href="#i-layers"/></svg></span><span class="skill-name">greensock/gsap-skills</span><span class="group-host">github.com</span></div></td>
+                        <td><span class="chip is-mono">7 / 7</span></td>
+                        <td><span class="state"><span class="dot"></span>0</span></td>
+                        <td><span class="state"><span class="dot"></span>0</span></td>
+                        <td><span class="state is-success"><span class="dot"></span>最新</span></td>
+                      </tr>
+                      <tr class="skill-row">
+                        <td><div class="skill-main"><span class="group-icon"><svg class="icon"><use href="#i-layers"/></svg></span><span class="skill-name">tfs.example.internal</span><span class="group-host">TFS · git</span></div></td>
+                        <td><span class="chip is-mono">1 / 1</span></td>
+                        <td><span class="state"><span class="dot"></span>0</span></td>
+                        <td><span class="state"><span class="dot"></span>0</span></td>
+                        <td><button class="btn is-small" type="button" data-open-update>查看计划</button></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="statusline"><span>检查 3 个仓库 · 2 个待处理</span><span class="spacer"></span><span class="mono">上次检查 3 分钟前</span></div>
+              </section>
+
+              <section class="view favorites-view" data-view-panel="favorites" aria-label="收藏">
+                <div class="fav-toolbar">
+                  <button class="filter-chip is-active" type="button">全部 <span class="num">12</span></button>
+                  <button class="filter-chip" type="button">开发规范 <span class="num">5</span></button>
+                  <button class="filter-chip" type="button">UI <span class="num">3</span></button>
+                  <button class="filter-chip" type="button">测试 <span class="num">2</span></button>
+                  <button class="filter-chip" type="button">未分类 <span class="num">2</span></button>
+                  <span class="spacer"></span>
+                  <button class="btn is-small" type="button"><svg class="icon"><use href="#i-plus"/></svg>新建分类</button>
+                </div>
+                <div class="table-scroll">
+                  <div class="fav-row">
+                    <div class="fav-name">
+                      <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 grilling"><svg class="icon"><use href="#i-star"/></svg></button>
+                      <div class="fav-meta"><strong>grilling</strong><span>反复追问，压测方案与决策</span></div>
+                      <span class="chip is-primary">开发规范</span>
+                    </div>
+                    <div class="fav-origin">mattpocock/skills</div>
+                    <div class="fav-action"><button class="btn is-small" type="button">已安装</button></div>
+                  </div>
+                  <div class="fav-row">
+                    <div class="fav-name">
+                      <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 impeccable"><svg class="icon"><use href="#i-star"/></svg></button>
+                      <div class="fav-meta"><strong>impeccable</strong><span>前端设计质量与反 slop</span></div>
+                      <span class="chip is-primary">UI</span>
+                    </div>
+                    <div class="fav-origin">pbakaus/impeccable</div>
+                    <div class="fav-action"><button class="btn is-small" type="button">安装到…</button></div>
+                  </div>
+                  <div class="fav-row">
+                    <div class="fav-name">
+                      <button class="icon-btn is-star is-on" type="button" data-star aria-pressed="true" aria-label="取消收藏 tdd"><svg class="icon"><use href="#i-star"/></svg></button>
+                      <div class="fav-meta"><strong>tdd</strong><span>测试驱动开发：红、绿、重构</span></div>
+                      <span class="chip is-primary">测试</span>
+                    </div>
+                    <div class="fav-origin">mattpocock/skills</div>
+                    <div class="fav-action"><button class="btn is-small" type="button">已安装</button></div>
+                  </div>
+                </div>
+                <div class="statusline"><span>12 个收藏 · 4 个分类</span><span class="spacer"></span><span>收藏是跨 scope 的个人书签</span></div>
+              </section>
+
+              <section class="view projects-view" data-view-panel="projects" aria-label="项目">
+                <div class="fav-toolbar">
+                  <span class="toolbar-note">已登记项目</span>
+                  <span class="spacer"></span>
+                  <button class="btn is-small" type="button"><svg class="icon"><use href="#i-plus"/></svg>添加项目</button>
+                </div>
+                <div class="table-scroll">
+                  <div class="project-row">
+                    <div>
+                      <div class="project-title"><span class="group-icon"><svg class="icon"><use href="#i-home"/></svg></span><strong>everydaytool</strong><span class="chip is-primary">当前项目</span></div>
+                      <div class="project-path">~/other/everydaytool</div>
+                    </div>
+                    <div class="project-metrics">
+                      <span class="chip is-mono">锁 v1 · 34 条</span>
+                      <span class="chip">38 个目录</span>
+                      <span class="chip is-warning">4 个未入锁</span>
+                    </div>
+                    <div class="project-action"><button class="btn is-small" type="button">重新扫描</button><button class="icon-btn" type="button" aria-label="项目更多操作"><svg class="icon"><use href="#i-more"/></svg></button></div>
+                  </div>
+                  <div class="project-row">
+                    <div>
+                      <div class="project-title"><span class="group-icon"><svg class="icon"><use href="#i-home"/></svg></span><strong>trace-analyze-html</strong><span class="chip">TFS</span></div>
+                      <div class="project-path">http://tfs.example.internal/…/_git/example-skill</div>
+                    </div>
+                    <div class="project-metrics">
+                      <span class="chip is-mono">锁 v1 · 1 条</span>
+                      <span class="chip">根目录技能</span>
+                    </div>
+                    <div class="project-action"><button class="btn is-small" type="button">更新</button><button class="icon-btn" type="button" aria-label="项目更多操作"><svg class="icon"><use href="#i-more"/></svg></button></div>
+                  </div>
+                </div>
+                <div class="hint">
+                  <svg class="icon"><use href="#i-info"/></svg>
+                  项目锁是团队资产：写回时只改本次涉及的条目，保留未知字段，并按技能名排序。
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <footer class="statusline">
+            <span>显示 8 / 38 个技能 · 6 个仓库</span>
+            <span class="hide-sm">·</span>
+            <span class="hide-sm">4 项待处理</span>
+            <span class="spacer"></span>
+            <span class="mono">上次检查 12:31</span>
+            <span class="hide-sm">·</span>
+            <span class="hide-sm">样张数据</span>
+          </footer>
+        </section>
+      </main>
+
+      <aside class="spec-drawer" aria-label="设计信息（预览辅助）">
+        <div class="spec-head">
+          <svg class="icon"><use href="#i-info"/></svg>
+          <h2>设计信息</h2>
+          <span class="chip">预览辅助</span>
+          <button class="icon-btn" type="button" data-spec-close aria-label="关闭设计信息"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="spec-tabs" role="tablist" aria-label="设计信息分类">
+          <button class="is-active" type="button" role="tab" aria-selected="true" data-spec-tab="spec">规格</button>
+          <button type="button" role="tab" aria-selected="false" data-spec-tab="components">组件</button>
+          <button type="button" role="tab" aria-selected="false" data-spec-tab="states">状态</button>
+        </div>
+        <div class="spec-scroll">
+          <section class="spec-panel is-active" data-spec-panel="spec">
+            <div class="spec-hero">
+              <div class="spec-kicker">Operate / 处理控制台</div>
+              <h3>技能管理 · 技能库</h3>
+              <p>仓库是组，技能是行；更新只在已选集合内发生。左侧范围与状态用来缩小问题面，主表保持单一扫描轴。</p>
+            </div>
+            <dl class="spec-facts">
+              <div class="spec-fact"><dt>画布</dt><dd>1440 × 900</dd></div>
+              <div class="spec-fact"><dt>外壳</dt><dd>68 rail + 48 topbar</dd></div>
+              <div class="spec-fact"><dt>工具头</dt><dd>70px · 17px 标题</dd></div>
+              <div class="spec-fact"><dt>主表面</dt><dd>radius 16 · 单表面</dd></div>
+              <div class="spec-fact"><dt>工具栏</dt><dd>48px · 30px 控件</dd></div>
+              <div class="spec-fact"><dt>状态行</dt><dd>31px · 10px mono</dd></div>
+            </dl>
+
+            <div class="spec-section">
+              <h4>设计意图</h4>
+              <p>不把每个仓库做成卡片：组头承担仓库身份与批量动作，子行承担技能状态与来源。这样一屏能扫完「哪个仓库有问题、问题是什么、下一步点哪里」。</p>
+            </div>
+
+            <div class="spec-section">
+              <h4>设计令牌</h4>
+              <div class="swatches">
+                <span class="swatch"><i style="background:#3390ec"></i>primary</span>
+                <span class="swatch"><i style="background:#006dc3"></i>strong</span>
+                <span class="swatch"><i style="background:#007b54"></i>success</span>
+                <span class="swatch"><i style="background:#975f00"></i>warning</span>
+                <span class="swatch"><i style="background:#cf1c28"></i>error</span>
+                <span class="swatch"><i style="background:#fbfdff;border-color:#cbd8e3"></i>raised</span>
+              </div>
+              <p style="margin-top:7px">强调色只承担动作、选中与焦点；状态色只承担状态。表头 10–11px，表体 12px，路径 10px mono。</p>
+            </div>
+
+            <div class="spec-section">
+              <h4>布局规则</h4>
+              <ul>
+                <li>左轨 68px，主工作区左右 18px；工具页只保留一个 <span class="spec-code">ToolSurface</span>。</li>
+                <li>工具头 70px：40px 图标 + 17px 标题 + 单行状态；动作不超过「主 + 次 + 更多」。</li>
+                <li>主表列：技能 46% / 状态 14% / 来源 26% / 操作 14%；行高 45px，组头 42px。</li>
+                <li>不用卡片包表格；组头用 fill 底，子行只靠缩进、边线和状态点建立层级。</li>
+              </ul>
+            </div>
+
+            <div class="spec-section">
+              <h4>维护入口</h4>
+              <div class="spec-links">
+                <a href="../DESIGN.md"><svg class="icon"><use href="#i-external"/></svg>DESIGN.md · 令牌 / 组件 / 工具页</a>
+                <a href="skill-manager-plan.md"><svg class="icon"><use href="#i-external"/></svg>skill-manager-plan.md · §15 UI 设计</a>
+                <a href="../renderer/shared/styles/tokens.scss"><svg class="icon"><use href="#i-external"/></svg>tokens.scss · 变量源</a>
+                <a href="../renderer/shared/components/ui/"><svg class="icon"><use href="#i-external"/></svg>Ui* 组件库</a>
+              </div>
+            </div>
+          </section>
+
+          <section class="spec-panel" data-spec-panel="components">
+            <div class="spec-hero">
+              <div class="spec-kicker">Implementation map</div>
+              <h3>界面区域 → edt 组件</h3>
+              <p>预览用原生 HTML 复刻视觉；落地时以 Vue 组件为准，不复制这里的 CSS 内核。</p>
+            </div>
+            <div class="spec-section">
+              <table class="spec-table">
+                <thead><tr><th>区域</th><th>组件</th><th>职责</th></tr></thead>
+                <tbody>
+                  <tr><td>顶栏</td><td><code>App.vue .app-topbar</code></td><td>页面上下文，不含页签</td></tr>
+                  <tr><td>工具头</td><td><code>WorkspaceHeader</code></td><td>图标 / 标题 / 单行状态 / 动作</td></tr>
+                  <tr><td>主表面</td><td><code>ToolSurface</code></td><td>toolbar + body + statusline</td></tr>
+                  <tr><td>子导航</td><td><code>UiMenuHorizontal</code></td><td>技能库 / 更新 / 收藏 / 项目</td></tr>
+                  <tr><td>表格</td><td><code>UiTable</code> + <code>UiTableColumn</code></td><td>仓库树行，支持折叠</td></tr>
+                  <tr><td>状态</td><td><code>UiStatusTag</code></td><td>状态点 + 文字，不只靠颜色</td></tr>
+                  <tr><td>计数</td><td><code>UiChip</code></td><td>仓库计数、分类、筛选</td></tr>
+                  <tr><td>动作</td><td><code>UiButton</code> / <code>UiSplitButton</code></td><td>安装、更新、管理技能</td></tr>
+                  <tr><td>搜索</td><td><code>UiSearchInput</code></td><td>技能 / 仓库 / 路径</td></tr>
+                  <tr><td>弹窗</td><td><code>UiDialog</code></td><td>更新计划 / 仓库技能面板</td></tr>
+                  <tr><td>提示</td><td><code>UiHint</code></td><td>回收站、锁写入等边界说明</td></tr>
+                  <tr><td>侧栏</td><td><code>ToolSideInspector</code></td><td>宽度 268 / 320 / 360</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="spec-section">
+              <h4>不要做</h4>
+              <ul>
+                <li>不要把仓库组做成独立卡片，也不要在 ToolSurface 里再套 UiPanel。</li>
+                <li>不要给每个工具分配独立品牌色；状态色只用于状态。</li>
+                <li>不要用弹窗承载「查看详情」这类不需要打断的任务。</li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="spec-panel" data-spec-panel="states">
+            <div class="spec-hero">
+              <div class="spec-kicker">State coverage</div>
+              <h3>状态与交互</h3>
+              <p>状态必须「点 + 文字」同时出现；危险动作才用红色实底，普通失效用 warning 文案。</p>
+            </div>
+            <div class="spec-section">
+              <div class="state-demo">
+                <div class="state-demo-row"><span class="state is-success"><span class="dot"></span>正常</span><p>目录存在、远端存在、内容匹配基线。</p></div>
+                <div class="state-demo-row"><span class="state is-warning"><span class="dot"></span>可更新</span><p>远端 folder SHA 变化；更新只作用于已选集合。</p></div>
+                <div class="state-demo-row"><span class="state is-danger"><span class="dot"></span>上游已移除</span><p>远端快照没有此路径；默认进回收站并从锁移除。</p></div>
+                <div class="state-demo-row"><span class="state is-warning"><span class="dot"></span>本地已修改</span><p>本地 hash 与基线不同；覆盖前必须确认。</p></div>
+                <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>已禁用</span><p>目录移出扫描根；仍在选择集里，可随时启用。</p></div>
+                <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>未托管</span><p>来源未知；可收藏、接管、删除，但不能自动更新。</p></div>
+              </div>
+            </div>
+            <div class="spec-section">
+              <h4>交互</h4>
+              <ul>
+                <li>点组头折叠 / 展开；星标切换收藏；行操作保持 hover 才显现。</li>
+                <li>「管理技能」打开仓库面板：全部技能、已选自动勾选、改选后一次应用。</li>
+                <li>「更新此仓库」只列已选技能的更新 / 失效 / 冲突。</li>
+                <li>「设计信息」按钮打开本抽屉；关闭后回到纯工具预览。</li>
+              </ul>
+            </div>
+            <div class="spec-section">
+              <h4>维护注意</h4>
+              <ul>
+                <li>新增状态先改 <span class="spec-code">skill-manager-plan.md</span> §7.3，再改 UI。</li>
+                <li>不要新增颜色；状态色从 tokens 取，保持单档语义色。</li>
+                <li>删除、禁用、卸载都必须可恢复；预览里的红色只用于真正危险动作。</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 安装：先解析来源，再进入技能选择 -->
+  <div class="dialog-layer" id="install-dialog" hidden>
+    <div class="dialog is-narrow" role="dialog" aria-modal="true" aria-labelledby="install-dialog-title">
+      <div class="dialog-head">
+        <div class="dialog-title-line">
+          <h2 class="dialog-title" id="install-dialog-title">安装技能</h2>
+          <button class="icon-btn" type="button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <p class="dialog-sub">先解析来源；技能只在勾选后下载，不会把整个仓库铺进本机。</p>
+      </div>
+      <div style="padding:16px 18px 8px">
+        <label style="display:block;color:var(--color-text-secondary);font-size:10px;font-weight:500">来源</label>
+        <input class="install-input" type="text" value="mattpocock/skills" aria-label="来源地址" style="width:100%;height:34px;margin-top:5px;padding:0 10px;border:1px solid var(--color-border);border-radius:9px;background:var(--color-field-base);color:var(--color-text-primary);font-size:12px">
+        <p style="margin:7px 0 0;color:var(--color-text-tertiary);font-size:10px;line-height:1.55">支持 owner/repo、GitHub URL、TFS / Azure 的 <span class="spec-code">/_git/</span> 地址、本地目录；根目录有 SKILL.md 时整个仓库按一个技能处理。</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 18px 14px;border-top:1px solid var(--color-border-light);background:color-mix(in srgb, var(--color-fill-base) 30%, transparent)">
+        <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+        <div style="min-width:0">
+          <div class="skill-name">mattpocock/skills</div>
+          <div class="skill-desc" style="margin-left:0">github.com · main · 24 个技能</div>
+        </div>
+        <span class="chip is-primary" style="margin-left:auto">已识别</span>
+      </div>
+      <div class="dialog-foot">
+        <span class="dialog-summary">下一步：选择要安装的技能</span>
+        <span class="spacer"></span>
+        <button class="btn" type="button" data-close-dialog>取消</button>
+        <button class="btn is-primary" type="button" data-install-continue>解析并选择技能</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 仓库技能面板：改选 = 成员关系 -->
+  <div class="dialog-layer" id="repo-dialog" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="repo-dialog-title">
+      <div class="dialog-head">
+        <div class="dialog-title-line">
+          <h2 class="dialog-title" id="repo-dialog-title">管理 mattpocock/skills 的技能</h2>
+          <button class="icon-btn" type="button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <p class="dialog-sub">24 个可用 · 已选 4 · github.com · main · 上次检查 12:31</p>
+      </div>
+      <div class="dialog-toolbar">
+        <label class="search" style="flex:1;max-width:280px">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <input type="search" placeholder="搜索技能" aria-label="搜索技能">
+        </label>
+        <button class="filter-chip is-active" type="button">全部</button>
+        <button class="filter-chip" type="button">已选 4</button>
+        <button class="filter-chip" type="button">未安装 20</button>
+        <span class="spacer"></span>
+        <button class="link-btn" type="button">全选</button>
+        <button class="link-btn" type="button">全不选</button>
+      </div>
+      <div class="dialog-list">
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="选择 grilling">
+          <div class="skill-main"><span class="state is-success"><span class="dot"></span></span><div><span class="skill-name">grilling</span><div class="skill-desc">skills/productivity/grilling/SKILL.md</div></div></div>
+          <span class="state is-success opt-state"><span class="dot"></span>已安装</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="选择 tdd">
+          <div class="skill-main"><span class="state is-warning"><span class="dot"></span></span><div><span class="skill-name">tdd</span><div class="skill-desc">skills/engineering/tdd/SKILL.md</div></div></div>
+          <span class="state is-warning opt-state"><span class="dot"></span>可更新</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="选择 wizard">
+          <div class="skill-main"><span class="state is-danger"><span class="dot"></span></span><div><span class="skill-name">wizard</span><div class="skill-desc">skills/engineering/wizard/SKILL.md</div></div></div>
+          <span class="state is-danger opt-state"><span class="dot"></span>上游已删</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="选择 diagnosing-bugs">
+          <div class="skill-main"><span class="state is-warning"><span class="dot"></span></span><div><span class="skill-name">diagnosing-bugs</span><div class="skill-desc">skills/engineering/diagnosing-bugs/SKILL.md</div></div></div>
+          <span class="state is-warning opt-state"><span class="dot"></span>已修改</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" aria-label="选择 code-review">
+          <div class="skill-main"><span class="state is-muted"><span class="dot"></span></span><div><span class="skill-name">code-review</span><div class="skill-desc">skills/engineering/code-review/SKILL.md</div></div></div>
+          <span class="state is-muted opt-state"><span class="dot"></span>未安装</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" aria-label="选择 ask-matt">
+          <div class="skill-main"><span class="state is-muted"><span class="dot"></span></span><div><span class="skill-name">ask-matt</span><div class="skill-desc">skills/engineering/ask-matt/SKILL.md</div></div></div>
+          <span class="state is-muted opt-state"><span class="dot"></span>未安装</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" aria-label="选择 codebase-design">
+          <div class="skill-main"><span class="state is-muted"><span class="dot"></span></span><div><span class="skill-name">codebase-design</span><div class="skill-desc">skills/engineering/codebase-design/SKILL.md</div></div></div>
+          <span class="state is-muted opt-state"><span class="dot"></span>未安装</span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <span class="dialog-summary">将安装 <strong>1</strong> · 更新 <strong>1</strong> · 移除 <strong>1</strong> · 不变 <strong>21</strong></span>
+        <span class="spacer"></span>
+        <button class="btn" type="button" data-close-dialog>取消</button>
+        <button class="btn is-primary" type="button" data-close-dialog>应用更改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 更新计划：只列已选中 -->
+  <div class="dialog-layer" id="update-dialog" hidden>
+    <div class="dialog is-narrow" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title">
+      <div class="dialog-head">
+        <div class="dialog-title-line">
+          <h2 class="dialog-title" id="update-dialog-title">更新 mattpocock/skills</h2>
+          <button class="icon-btn" type="button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <p class="dialog-sub">当前 main @ 9a21c3e · 已选 4 / 可用 24 · 1 项更新 · 1 项失效</p>
+      </div>
+      <div class="dialog-list">
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="更新 grilling">
+          <div class="skill-main"><span class="state is-warning"><span class="dot"></span></span><div><span class="skill-name">grilling</span><div class="skill-desc">ef16… → 9a21…</div></div></div>
+          <span class="state is-warning opt-state"><span class="dot"></span>更新</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="移除 wizard">
+          <div class="skill-main"><span class="state is-danger"><span class="dot"></span></span><div><span class="skill-name">wizard</span><div class="skill-desc">上游已无此技能，将移到回收站</div></div></div>
+          <span class="state is-danger opt-state"><span class="dot"></span>失效</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" aria-label="处理 tdd 冲突">
+          <div class="skill-main"><span class="state is-warning"><span class="dot"></span></span><div><span class="skill-name">tdd</span><div class="skill-desc">本地已修改，默认不选中</div></div></div>
+          <span class="state is-warning opt-state"><span class="dot"></span>冲突</span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <span class="dialog-summary">未选中的 <strong>20</strong> 个不下载、不安装、不参与本次更新</span>
+        <span class="spacer"></span>
+        <button class="btn" type="button" data-close-dialog>取消</button>
+        <button class="btn is-primary" type="button" data-close-dialog>应用 2 项</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const body = document.body;
+    const viewButtons = [...document.querySelectorAll('[data-set-view]')];
+    const viewPanels = [...document.querySelectorAll('[data-view-panel]')];
+
+    function setView(name) {
+      body.dataset.view = name;
+      viewButtons.forEach((button) => {
+        const active = button.dataset.setView === name;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', String(active));
+      });
+      viewPanels.forEach((panel) => panel.classList.toggle('is-active', panel.dataset.viewPanel === name));
+    }
+
+    viewButtons.forEach((button) => {
+      button.addEventListener('click', () => setView(button.dataset.setView));
+    });
+
+    document.querySelectorAll('[data-group-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const row = button.closest('tr');
+        const group = row?.dataset.group;
+        if (!group) return;
+        const collapsed = row.classList.toggle('is-collapsed');
+        document.querySelectorAll(`tr[data-parent="${group}"]`).forEach((child) => {
+          child.hidden = collapsed;
+        });
+        button.setAttribute('aria-expanded', String(!collapsed));
+      });
+    });
+
+    document.querySelectorAll('[data-star]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const on = button.classList.toggle('is-on');
+        button.setAttribute('aria-pressed', String(on));
+        button.setAttribute('aria-label', `${on ? '取消收藏' : '收藏'} ${button.getAttribute('aria-label')?.replace(/^(取消收藏|收藏)\s*/, '') ?? ''}`.trim());
+      });
+    });
+
+    const dialogIds = ['install-dialog', 'repo-dialog', 'update-dialog'];
+    function openDialog(id) {
+      const dialog = document.getElementById(id);
+      if (!dialog) return;
+      dialog.hidden = false;
+      const focusable = dialog.querySelector('button, input, [href]');
+      focusable?.focus();
+    }
+    function closeDialogs() {
+      dialogIds.forEach((id) => {
+        const dialog = document.getElementById(id);
+        if (dialog) dialog.hidden = true;
+      });
+    }
+
+    document.querySelectorAll('[data-open-install]').forEach((button) => button.addEventListener('click', () => openDialog('install-dialog')));
+    document.querySelectorAll('[data-open-repo]').forEach((button) => button.addEventListener('click', () => openDialog('repo-dialog')));
+    document.querySelectorAll('[data-open-update]').forEach((button) => button.addEventListener('click', () => openDialog('update-dialog')));
+    document.querySelectorAll('[data-install-continue]').forEach((button) => button.addEventListener('click', () => {
+      closeDialogs();
+      openDialog('repo-dialog');
+    }));
+    document.querySelectorAll('[data-check-all]').forEach((button) => button.addEventListener('click', () => {
+      closeDialogs();
+      setView('updates');
+      const note = document.querySelector('.toolbar-note');
+      if (note) note.textContent = '已检查 · 2 项待处理';
+    }));
+    document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', closeDialogs));
+    document.querySelectorAll('.dialog-layer').forEach((layer) => {
+      layer.addEventListener('click', (event) => {
+        if (event.target === layer) closeDialogs();
+      });
+    });
+
+    function setSpec(open) {
+      body.classList.toggle('spec-open', open);
+    }
+    document.querySelectorAll('[data-spec-toggle]').forEach((button) => button.addEventListener('click', () => setSpec(!body.classList.contains('spec-open'))));
+    document.querySelectorAll('[data-spec-close]').forEach((button) => button.addEventListener('click', () => setSpec(false)));
+
+    document.querySelectorAll('[data-spec-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const name = button.dataset.specTab;
+        document.querySelectorAll('[data-spec-tab]').forEach((tab) => {
+          const active = tab.dataset.specTab === name;
+          tab.classList.toggle('is-active', active);
+          tab.setAttribute('aria-selected', String(active));
+        });
+        document.querySelectorAll('[data-spec-panel]').forEach((panel) => panel.classList.toggle('is-active', panel.dataset.specPanel === name));
+      });
+    });
+
+    document.querySelectorAll('.scope-row, .filter-row, .filter-chip').forEach((button) => {
+      button.addEventListener('click', () => {
+        const group = button.closest('.scope-pane, .filter-group, .fav-toolbar, .dialog-toolbar');
+        if (!group) return;
+        group.querySelectorAll('.scope-row, .filter-row, .filter-chip').forEach((item) => item.classList.remove('is-active'));
+        button.classList.add('is-active');
+      });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      closeDialogs();
+      setSpec(false);
+    });
+
+    document.querySelectorAll('.path, .group-host, .skill-name').forEach((element) => {
+      if (!element.title) element.title = element.textContent.trim();
+    });
+    document.querySelectorAll('svg.icon').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));
+
+    const specBreakpoint = window.matchMedia('(max-width: 1179px)');
+    const closeSpecOnNarrow = (event) => { if (event.matches) setSpec(false); };
+    if (specBreakpoint.addEventListener) specBreakpoint.addEventListener('change', closeSpecOnNarrow);
+    else specBreakpoint.addListener(closeSpecOnNarrow);
+
+    if (window.innerWidth >= 1180) setSpec(true);
+  </script>
+</body>
+</html>
