@@ -416,7 +416,7 @@ async function handleDownload(): Promise<void> {
   </DownloaderFrame>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* 标签与选择框同行：标签不折行，选择框吃掉剩余宽度 */
 .field-label {
   flex: none;

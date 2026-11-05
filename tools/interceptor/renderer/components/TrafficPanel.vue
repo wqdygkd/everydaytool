@@ -254,7 +254,7 @@ function headersText(headers?: Record<string, string>): string {
   </UiDialog>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .traffic-pane {
   display: flex;
   flex: 1;

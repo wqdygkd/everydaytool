@@ -74,7 +74,7 @@ useResizeObserver(scroller, measure)
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .ui-menu-horizontal {
   position: relative;
   display: flex;

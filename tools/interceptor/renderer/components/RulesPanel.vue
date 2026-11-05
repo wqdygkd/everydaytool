@@ -1221,7 +1221,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 /* ── 列表屏（UiTable + 语义令牌，与全应用表格一致） ── */
 
 .rq-content-list-header {
@@ -1815,7 +1815,7 @@ textarea.body-input {
 }
 </style>
 
-<style>
+<style lang="scss">
 /* 新建规则下拉(UiPopover 传送至 body,非 scoped) */
 .rule-picker-popover.ui-popover-content {
   padding: 0;
