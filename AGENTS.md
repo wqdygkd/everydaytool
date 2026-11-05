@@ -141,7 +141,7 @@ export default defineTool({
 | Tailwind v4 入口 / 主题变量 | `renderer/shared/styles/tailwind.css` |
 | **反馈基座（confirm / alert / prompt）** | `renderer/shared/feedback/` |
 | 半透明窗口 alpha / 玻璃控制层（按模式覆写） | `renderer/shared/styles/translucency.scss` |
-| **UI 组件库（面板/分组/键值/表格/进度/对话框等 28 组件）** | `renderer/shared/components/ui/` |
+| **UI 组件库（面板/分组/键值/表格/进度/对话框/分裂按钮等）** | `renderer/shared/components/ui/` |
 | UI 设计规范（令牌 / 组件 / 布局 / 动效） | `DESIGN.md` |
 
 ### 外壳与页面

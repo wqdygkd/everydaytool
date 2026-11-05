@@ -15,6 +15,7 @@ const loading = ref(false)
 /** 来源列短标签：以页签 key 为键建表，新增页签时类型检查会强制补齐 */
 const KIND_LABELS: Record<OfflinePackTabKey, string> = {
   vscode: 'VSCode',
+  github: 'GitHub',
   chrome: 'Chrome',
   edge: 'Edge',
   docker: 'Docker',

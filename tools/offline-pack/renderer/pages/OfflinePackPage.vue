@@ -8,6 +8,7 @@ import ChromeDownloader from '../components/ChromeDownloader.vue'
 import DockerDownloader from '../components/DockerDownloader.vue'
 import DownloadTasks from '../components/DownloadTasks.vue'
 import EdgeDownloader from '../components/EdgeDownloader.vue'
+import GitHubDownloader from '../components/GitHubDownloader.vue'
 import HistorySection from '../components/HistorySection.vue'
 import MSStoreDownloader from '../components/MSStoreDownloader.vue'
 import VSCodeDownloader from '../components/VSCodeDownloader.vue'
@@ -30,6 +31,7 @@ onUnmounted(() => {
 
 const TAB_COMPONENTS: Record<OfflinePackTabKey, Component> = {
   vscode: VSCodeDownloader,
+  github: GitHubDownloader,
   chrome: ChromeDownloader,
   edge: EdgeDownloader,
   docker: DockerDownloader,

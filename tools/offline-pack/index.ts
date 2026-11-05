@@ -4,11 +4,11 @@ import { OFFLINE_PACK_TABS } from './renderer/tabs'
 const tool = defineTool({
   id: 'offline-pack',
   name: '离线包下载',
-  description: '一站式下载 VSCode 插件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包',
+  description: '一站式下载 VSCode 插件、GitHub Releases / 分支源码 / 单文件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包',
   version: '1.0.0',
   icon: 'offline-pack',
   category: { key: 'dev', name: '开发工具' },
-  keywords: ['offline-pack', 'offlinepack', '离线', '下载', 'vscode', 'chrome', 'edge', 'docker', 'msstore', '离线包'],
+  keywords: ['offline-pack', 'offlinepack', '离线', '下载', 'vscode', 'github', 'releases', 'branch', 'raw', 'chrome', 'edge', 'docker', 'msstore', '离线包'],
   supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-10-18',
   route: {

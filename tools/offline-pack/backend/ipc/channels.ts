@@ -15,6 +15,10 @@ export const OFFLINE_PACK_IPC_CHANNELS = {
   DOCKER_MANIFEST: 'offline-pack:docker:manifest',
   // MSStore
   MSSTORE_RESOLVE: 'offline-pack:msstore:resolve',
+  // GitHub
+  GITHUB_RELEASES: 'offline-pack:github:releases',
+  GITHUB_REFS: 'offline-pack:github:refs',
+  GITHUB_FILE: 'offline-pack:github:file',
   // 下载
   DOWNLOAD: 'offline-pack:download',
   CANCEL_DOWNLOAD: 'offline-pack:download:cancel',

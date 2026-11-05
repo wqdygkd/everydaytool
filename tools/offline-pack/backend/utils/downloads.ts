@@ -51,12 +51,14 @@ export function emitProgress(progress: OfflinePackDownloadProgress): void {
 
 export interface SimpleDownloadSpec {
   taskId: string
-  kind: 'vscode' | 'chrome' | 'edge' | 'msstore'
+  kind: 'vscode' | 'chrome' | 'edge' | 'msstore' | 'github'
   url: string
   filename: string
   headers?: Record<string, string>
   /** chrome / edge 下载后转 ZIP（最终文件名 .crx → .zip） */
   convertToZip?: boolean
+  /** 拒绝 HTML 响应：代理节点用 200 + 网页冒充文件时直接报错，不落盘 */
+  rejectHtml?: boolean
 }
 
 /** 下载单个 URL 到文件；convertToZip 时先在临时文件落盘再转换，保证失败不留半成品 */
@@ -67,7 +69,8 @@ export async function downloadSimpleFile(spec: SimpleDownloadSpec): Promise<Offl
 
   const base = path.join(dir, spec.filename)
   const finalPath = spec.convertToZip ? base.replace(/\.crx$/i, '.zip') : base
-  const tmpPath = `${base}.part`
+  // 临时文件带 taskId：同一文件名被两条线路同时下载时，各写各的 .part，不会互相截断
+  const tmpPath = `${base}.${spec.taskId.slice(0, 8)}.part`
 
   const emit = (status: OfflinePackDownloadStatus, downloadedBytes: number, totalBytes: number, message?: string): void => {
     emitProgress({ taskId: spec.taskId, kind: spec.kind, status, downloadedBytes, totalBytes, message })
@@ -78,6 +81,7 @@ export async function downloadSimpleFile(spec: SimpleDownloadSpec): Promise<Offl
     await downloadToFile(spec.url, tmpPath, {
       headers: spec.headers,
       signal: controller.signal,
+      rejectHtml: spec.rejectHtml,
       onProgress: (downloaded, total) => emit('downloading', downloaded, total, `正在下载 ${spec.filename}`),
     })
 
