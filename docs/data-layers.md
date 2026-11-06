@@ -51,6 +51,8 @@
                         benchmarks.json, telegram-session.bin(密文)
     treease-editor/     rules.json                    ← 新增，规则从 LocalStorage 上台面
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
+    skill-manager/      settings.json, registry.json, history.json, projects.json,
+                        favorites.json, presets.json, credentials.json [sensitive], lock-backups/
     quarantine/<ts>/    ← 旧布局孤儿白名单（config.db / cdp-injector / .DS_Store），不删、不备份
   session/                             # L3：Electron sessionData 就是这个目录（路径不变）
     Cookies/ Local Storage/ Partitions/{telegram-cache,treease-editor,workbuddy2api-panel}
@@ -66,6 +68,8 @@
 <assets>/                              # L2 独立根，默认 <data>/assets，可设到任意盘
   telegram-cache/messages/…           # 消息级缓存（manifest + message.md + 媒体）
   telegram-cache/trash/…              # 回收站
+  skill-manager/disabled/…             # 禁用区（按 scopeId）
+  skill-manager/trash/…                # 回收站（manifest + 技能目录）
 ```
 
 收益：`Cache` 类目录只可能出现在 `cache/` 与 `session/` 内部两处，清理逻辑不再需要猜；可再生数据与不可再生数据在磁盘上物理隔离。

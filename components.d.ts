@@ -83,6 +83,7 @@ declare module 'vue' {
     UiToaster: typeof import('./renderer/shared/components/ui/UiToaster.vue')['default']
     UiToolbar: typeof import('./renderer/shared/components/ui/UiToolbar.vue')['default']
     UiTooltip: typeof import('./renderer/shared/components/ui/UiTooltip.vue')['default']
+    UpdatePlanPanel: typeof import('./tools/skill-manager/renderer/components/UpdatePlanPanel.vue')['default']
     VSCodeDownloader: typeof import('./tools/offline-pack/renderer/components/VSCodeDownloader.vue')['default']
     WorkspaceHeader: typeof import('./renderer/shared/components/workspace/WorkspaceHeader.vue')['default']
   }

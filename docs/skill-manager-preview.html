@@ -616,9 +616,15 @@
 
     .view-stack { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
     body[data-view="favorites"] .scope-pane,
-    body[data-view="projects"] .scope-pane { display: none; }
+    body[data-view="projects"] .scope-pane,
+    body[data-view="presets"] .scope-pane { display: none; }
     body[data-view="favorites"] .filter-group,
-    body[data-view="projects"] .filter-group { display: none; }
+    body[data-view="projects"] .filter-group,
+    body[data-view="presets"] .filter-group { display: none; }
+    body[data-view="updates"] .tool-surface > .statusline,
+    body[data-view="favorites"] .tool-surface > .statusline,
+    body[data-view="presets"] .tool-surface > .statusline,
+    body[data-view="projects"] .tool-surface > .statusline { display: none; }
     .view { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
     .view.is-active { display: flex; }
     .view-toolbar {
@@ -855,7 +861,7 @@
     .statusline .mono { font-family: var(--font-mono); }
 
     /* ── 空态 / 收藏 / 项目 ── */
-    .favorites-view, .projects-view { padding: 0; }
+    .favorites-view, .presets-view, .projects-view { padding: 0; }
     .fav-toolbar {
       display: flex;
       align-items: center;
@@ -901,6 +907,54 @@
     .project-metrics { display: flex; flex-wrap: wrap; gap: 4px; }
     .project-note { color: var(--color-text-tertiary); font-size: 11px; line-height: 1.5; }
     .project-action { display: flex; justify-content: flex-end; gap: 4px; }
+
+    .preset-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px 168px;
+      gap: 12px;
+      align-items: center;
+      min-height: 66px;
+      padding: 8px 16px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 66%, transparent);
+      transition: background var(--transition-fast);
+    }
+    .preset-row:hover { background: color-mix(in srgb, var(--color-on-solid) 36%, transparent); }
+    .preset-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .preset-main .group-icon { width: 27px; height: 27px; }
+    .preset-title { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .preset-title strong { overflow: hidden; font-size: 12px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+    .preset-meta { overflow: hidden; margin-top: 2px; color: var(--color-text-tertiary); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .preset-target { justify-self: start; }
+    .preset-actions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--color-border-light);
+      background: color-mix(in srgb, var(--color-fill-base) 48%, transparent);
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .04em;
+    }
+    .section-label .line { flex: 1; height: 1px; background: var(--color-border-light); }
+    .tombstone-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 190px 136px;
+      gap: 12px;
+      align-items: center;
+      min-height: 50px;
+      padding: 6px 16px;
+      border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 58%, transparent);
+    }
+    .tombstone-row:hover { background: color-mix(in srgb, var(--color-on-solid) 30%, transparent); }
+    .tombstone-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .tombstone-name strong { font-size: 12px; font-weight: 500; }
+    .tombstone-name .reason { color: var(--color-text-tertiary); font-size: 11px; }
+    .tombstone-origin { overflow: hidden; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .tombstone-actions { display: flex; justify-content: flex-end; gap: 3px; }
 
     .hint {
       display: flex;
@@ -1120,6 +1174,10 @@
       .fav-origin { display: none; }
       .project-row { grid-template-columns: minmax(0, 1fr) 110px; }
       .project-metrics { display: none; }
+      .preset-row { grid-template-columns: minmax(0, 1fr) 140px; }
+      .preset-target { display: none; }
+      .tombstone-row { grid-template-columns: minmax(0, 1fr) 128px; }
+      .tombstone-origin { display: none; }
     }
     @media (max-width: 1100px) {
       .workspace-status { display: none; }
@@ -1132,6 +1190,7 @@
       .surface-toolbar { flex-wrap: nowrap; overflow-x: auto; padding: 0 10px; }
       .search { flex: 0 0 190px; }
       .filter-group { display: none; }
+      .dialog .filter-group { display: flex; flex-wrap: wrap; }
       .skill-table { min-width: 620px; }
       .skill-table col.c-source { width: 24%; }
       .statusline { font-size: 11px; }
@@ -1259,6 +1318,9 @@
           </button>
           <button type="button" role="tab" aria-selected="false" data-set-view="favorites">
             收藏 <span class="count">12</span>
+          </button>
+          <button type="button" role="tab" aria-selected="false" data-set-view="presets">
+            预设 <span class="count">4</span>
           </button>
           <button type="button" role="tab" aria-selected="false" data-set-view="projects">
             项目 <span class="count">1</span>
@@ -1506,7 +1568,7 @@
                             <span class="group-name">未托管</span>
                             <span class="group-host">来源未知</span>
                             <span class="chip group-count">1 个</span>
-                            <span class="group-state"><span class="dot"></span>可收藏 / 接管</span>
+                            <span class="group-state"><span class="dot"></span>只读 · 可接管</span>
                           </div>
                         </td>
                       </tr>
@@ -1519,6 +1581,7 @@
                         <td><span class="path">shadcn-vue → 外部目录</span></td>
                         <td>
                           <div class="row-actions">
+                            <button class="link-btn" type="button" data-open-adopt>接管</button>
                             <button class="icon-btn is-star" type="button" data-star aria-pressed="false" aria-label="收藏 shadcn-vue"><svg class="icon"><use href="#i-star"/></svg></button>
                             <button class="icon-btn" type="button" aria-label="shadcn-vue 更多操作"><svg class="icon"><use href="#i-more"/></svg></button>
                           </div>
@@ -1608,6 +1671,95 @@
                 <div class="statusline"><span>12 个收藏 · 4 个分类</span><span class="spacer"></span><span>收藏是跨 scope 的个人书签</span></div>
               </section>
 
+              <section class="view presets-view" data-view-panel="presets" aria-label="预设与恢复">
+                <div class="fav-toolbar">
+                  <button class="filter-chip is-active" type="button">预设 <span class="num">4</span></button>
+                  <button class="filter-chip" type="button">已移除 <span class="num">3</span></button>
+                  <span class="spacer"></span>
+                  <button class="btn is-small" type="button" data-open-preset><svg class="icon"><use href="#i-plus"/></svg>新建预设</button>
+                </div>
+                <div class="table-scroll">
+                  <div class="preset-row">
+                    <div class="preset-main">
+                      <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                      <div style="min-width:0">
+                        <div class="preset-title"><strong>前端规范</strong><span class="chip is-primary">8 项</span></div>
+                        <div class="preset-meta">上次应用 2 天前 · 项目 everydaytool · 默认增量</div>
+                      </div>
+                    </div>
+                    <span class="chip preset-target">项目</span>
+                    <div class="preset-actions">
+                      <span class="split"><button type="button" data-open-preset>应用</button><button type="button" data-open-preset aria-label="选择目标"><svg class="icon"><use href="#i-chevron-down"/></svg></button></span>
+                      <button class="link-btn" type="button">编辑</button>
+                    </div>
+                  </div>
+                  <div class="preset-row">
+                    <div class="preset-main">
+                      <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                      <div style="min-width:0">
+                        <div class="preset-title"><strong>公司通用基线</strong><span class="chip is-primary">12 项</span></div>
+                        <div class="preset-meta">未应用 · 来自当前全局技能 · 默认增量</div>
+                      </div>
+                    </div>
+                    <span class="chip preset-target">全局</span>
+                    <div class="preset-actions">
+                      <span class="split"><button type="button" data-open-preset>应用</button><button type="button" data-open-preset aria-label="选择目标"><svg class="icon"><use href="#i-chevron-down"/></svg></button></span>
+                      <button class="link-btn" type="button">编辑</button>
+                    </div>
+                  </div>
+                  <div class="preset-row">
+                    <div class="preset-main">
+                      <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-alert"/></svg></span>
+                      <div style="min-width:0">
+                        <div class="preset-title"><strong>TFS 诊断</strong><span class="chip is-warning">2 项</span></div>
+                        <div class="preset-meta">来源需要 token · 指定目录 · 上次应用 1 周前</div>
+                      </div>
+                    </div>
+                    <span class="chip is-warning preset-target">需认证</span>
+                    <div class="preset-actions">
+                      <span class="split"><button type="button" data-open-preset>应用</button><button type="button" data-open-preset aria-label="选择目标"><svg class="icon"><use href="#i-chevron-down"/></svg></button></span>
+                      <button class="link-btn" type="button">编辑</button>
+                    </div>
+                  </div>
+                  <div class="preset-row">
+                    <div class="preset-main">
+                      <span class="group-icon" aria-hidden="true"><svg class="icon"><use href="#i-layers"/></svg></span>
+                      <div style="min-width:0">
+                        <div class="preset-title"><strong>新项目起步</strong><span class="chip is-primary">5 项</span></div>
+                        <div class="preset-meta">未应用 · 从 skills-lock.json 导入 · 默认增量</div>
+                      </div>
+                    </div>
+                    <span class="chip preset-target">项目</span>
+                    <div class="preset-actions">
+                      <span class="split"><button type="button" data-open-preset>应用</button><button type="button" data-open-preset aria-label="选择目标"><svg class="icon"><use href="#i-chevron-down"/></svg></button></span>
+                      <button class="link-btn" type="button">编辑</button>
+                    </div>
+                  </div>
+
+                  <div class="section-label">已移除 <span class="line"></span> <span>墓碑保留来源，可重装 / 遗忘</span></div>
+                  <div class="tombstone-row">
+                    <div class="tombstone-name"><span class="state is-danger"><span class="dot"></span></span><strong>wizard</strong><span class="reason">上游已删除 · 2026-10-30</span></div>
+                    <div class="tombstone-origin">mattpocock/skills · skills/engineering/wizard/SKILL.md</div>
+                    <div class="tombstone-actions"><button class="btn is-small" type="button">重新安装</button><button class="link-btn" type="button">遗忘</button></div>
+                  </div>
+                  <div class="tombstone-row">
+                    <div class="tombstone-name"><span class="state is-muted"><span class="dot"></span></span><strong>supabase</strong><span class="reason">外部删除 · 2026-10-28</span></div>
+                    <div class="tombstone-origin">supabase/agent-skills · skills/supabase/SKILL.md</div>
+                    <div class="tombstone-actions"><button class="btn is-small" type="button">重新安装</button><button class="link-btn" type="button">遗忘</button></div>
+                  </div>
+                  <div class="tombstone-row">
+                    <div class="tombstone-name"><span class="state is-muted"><span class="dot"></span></span><strong>coding-standards</strong><span class="reason">目录缺失 · 2026-10-20</span></div>
+                    <div class="tombstone-origin">mattpocock/skills · skills/engineering/coding-standards/SKILL.md</div>
+                    <div class="tombstone-actions"><button class="btn is-small" type="button">重新安装</button><button class="link-btn" type="button">遗忘</button></div>
+                  </div>
+                </div>
+                <div class="hint">
+                  <svg class="icon"><use href="#i-info"/></svg>
+                  预设是期望清单，不是锁；应用成功后才写目标锁。已移除记录只是墓碑，不占技能目录。
+                </div>
+                <div class="statusline"><span>4 个预设 · 3 条墓碑</span><span class="spacer"></span><span>应用成功后才写锁</span></div>
+              </section>
+
               <section class="view projects-view" data-view-panel="projects" aria-label="项目">
                 <div class="fav-toolbar">
                   <span class="toolbar-note">已登记项目</span>
@@ -1643,6 +1795,7 @@
                   <svg class="icon"><use href="#i-info"/></svg>
                   项目锁是团队资产：写回时只改本次涉及的条目，保留未知字段，并按技能名排序。
                 </div>
+                <div class="statusline"><span>2 个项目 · 1 个有未入锁</span><span class="spacer"></span><span class="mono">锁 v1</span></div>
               </section>
             </div>
           </div>
@@ -1675,8 +1828,8 @@
           <section class="spec-panel is-active" data-spec-panel="spec">
             <div class="spec-hero">
               <div class="spec-kicker">Operate / 处理控制台</div>
-              <h3>技能管理 · 技能库</h3>
-              <p>仓库是组，技能是行；更新只在已选集合内发生。左侧范围与状态用来缩小问题面，主表保持单一扫描轴。</p>
+              <h3>技能管理 · 工作区</h3>
+              <p>仓库是组，技能是行；更新只在已选集合内发生。预设负责“把哪一组装到哪个目标”，墓碑负责“丢了还能找回来”。</p>
             </div>
             <dl class="spec-facts">
               <div class="spec-fact"><dt>画布</dt><dd>1440 × 900</dd></div>
@@ -1684,12 +1837,12 @@
               <div class="spec-fact"><dt>工具头</dt><dd>70px · 17px 标题</dd></div>
               <div class="spec-fact"><dt>主表面</dt><dd>radius 16 · 单表面</dd></div>
               <div class="spec-fact"><dt>工具栏</dt><dd>48px · 30px 控件</dd></div>
-              <div class="spec-fact"><dt>状态行</dt><dd>31px · 10px mono</dd></div>
+              <div class="spec-fact"><dt>视图</dt><dd>5 个 · 单表面</dd></div>
             </dl>
 
             <div class="spec-section">
               <h4>设计意图</h4>
-              <p>不把每个仓库做成卡片：组头承担仓库身份与批量动作，子行承担技能状态与来源。这样一屏能扫完「哪个仓库有问题、问题是什么、下一步点哪里」。</p>
+              <p>不把每个仓库做成卡片：组头承担仓库身份与批量动作，子行承担技能状态与来源。这样一屏能扫完「哪个仓库有问题、问题是什么、下一步点哪里」。未托管行默认只读，接管是显式授权，不是静默写锁。</p>
             </div>
 
             <div class="spec-section">
@@ -1702,7 +1855,7 @@
                 <span class="swatch"><i style="background:#cf1c28"></i>error</span>
                 <span class="swatch"><i style="background:#fbfdff;border-color:#cbd8e3"></i>raised</span>
               </div>
-              <p style="margin-top:7px">强调色只承担动作、选中与焦点；状态色只承担状态。表头 10–11px，表体 12px，路径 10px mono。</p>
+              <p style="margin-top:7px">强调色只承担动作、选中与焦点；状态色只承担状态。表头 / 元信息 11px，表体 12px，路径 11px mono。</p>
             </div>
 
             <div class="spec-section">
@@ -1739,13 +1892,15 @@
                   <tr><td>顶栏</td><td><code>App.vue .app-topbar</code></td><td>页面上下文，不含页签</td></tr>
                   <tr><td>工具头</td><td><code>WorkspaceHeader</code></td><td>图标 / 标题 / 单行状态 / 动作</td></tr>
                   <tr><td>主表面</td><td><code>ToolSurface</code></td><td>toolbar + body + statusline</td></tr>
-                  <tr><td>子导航</td><td><code>UiMenuHorizontal</code></td><td>技能库 / 更新 / 收藏 / 项目</td></tr>
+                  <tr><td>子导航</td><td><code>UiMenuHorizontal</code></td><td>技能库 / 更新 / 收藏 / 预设 / 项目</td></tr>
                   <tr><td>表格</td><td><code>UiTable</code> + <code>UiTableColumn</code></td><td>仓库树行，支持折叠</td></tr>
                   <tr><td>状态</td><td><code>UiStatusTag</code></td><td>状态点 + 文字，不只靠颜色</td></tr>
                   <tr><td>计数</td><td><code>UiChip</code></td><td>仓库计数、分类、筛选</td></tr>
                   <tr><td>动作</td><td><code>UiButton</code> / <code>UiSplitButton</code></td><td>安装、更新、管理技能</td></tr>
                   <tr><td>搜索</td><td><code>UiSearchInput</code></td><td>技能 / 仓库 / 路径</td></tr>
-                  <tr><td>弹窗</td><td><code>UiDialog</code></td><td>更新计划 / 仓库技能面板</td></tr>
+                  <tr><td>弹窗</td><td><code>UiDialog</code></td><td>更新计划 / 仓库技能面板 / 应用预设</td></tr>
+                  <tr><td>预设 / 恢复</td><td><code>PresetsView</code> / <code>PresetApplyDialog</code></td><td>期望清单、目标、墓碑重装</td></tr>
+                  <tr><td>未托管 / 接管</td><td><code>AdoptDialog</code></td><td>绑定来源 / 仅本地接管</td></tr>
                   <tr><td>提示</td><td><code>UiHint</code></td><td>回收站、锁写入等边界说明</td></tr>
                   <tr><td>侧栏</td><td><code>ToolSideInspector</code></td><td>宽度 268 / 320 / 360</td></tr>
                 </tbody>
@@ -1774,7 +1929,8 @@
                 <div class="state-demo-row"><span class="state is-danger"><span class="dot"></span>上游已移除</span><p>远端快照没有此路径；默认进回收站并从锁移除。</p></div>
                 <div class="state-demo-row"><span class="state is-warning"><span class="dot"></span>本地已修改</span><p>本地 hash 与基线不同；覆盖前必须确认。</p></div>
                 <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>已禁用</span><p>目录移出扫描根；仍在选择集里，可随时启用。</p></div>
-                <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>未托管</span><p>来源未知；可收藏、接管、删除，但不能自动更新。</p></div>
+                <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>已移除</span><p>锁和目录都没了，但 registry 墓碑保留 origin；可重装或遗忘。</p></div>
+                <div class="state-demo-row"><span class="state is-muted"><span class="dot"></span>未托管</span><p>来源未知；默认只读，可收藏、接管、删除，不能更新或禁用。</p></div>
               </div>
             </div>
             <div class="spec-section">
@@ -1783,6 +1939,9 @@
                 <li>点组头折叠 / 展开；星标切换收藏；行操作保持 hover 才显现。</li>
                 <li>「管理技能」打开仓库面板：全部技能、已选自动勾选、改选后一次应用。</li>
                 <li>「更新此仓库」只列已选技能的更新 / 失效 / 冲突。</li>
+                <li>「预设」可把一份期望清单装到全局 / 项目 / 指定目录；默认增量，精确模式需确认。</li>
+                <li>「已移除」是墓碑，不是技能目录；重新安装优先恢复回收站副本。</li>
+                <li>未托管默认只读；「接管」里可选绑定来源（写锁）或仅本地（不写锁）。</li>
                 <li>「设计信息」按钮打开本抽屉；关闭后回到纯工具预览。</li>
               </ul>
             </div>
@@ -1791,12 +1950,101 @@
               <ul>
                 <li>新增状态先改 <span class="spec-code">skill-manager-plan.md</span> §7.3，再改 UI。</li>
                 <li>不要新增颜色；状态色从 tokens 取，保持单档语义色。</li>
-                <li>删除、禁用、卸载都必须可恢复；预览里的红色只用于真正危险动作。</li>
+                <li>删除、禁用、卸载都必须可恢复；预设不写锁，应用成功才写。</li>
+                <li>墓碑是元数据，不随回收站清理；「遗忘」必须二次确认。</li>
               </ul>
             </div>
           </section>
         </div>
       </aside>
+    </div>
+  </div>
+
+  <!-- 未托管接管：绑定来源 or 仅本地 -->
+  <div class="dialog-layer" id="adopt-dialog" hidden>
+    <div class="dialog is-narrow" role="dialog" aria-modal="true" aria-labelledby="adopt-dialog-title">
+      <div class="dialog-head">
+        <div class="dialog-title-line">
+          <h2 class="dialog-title" id="adopt-dialog-title">接管 shadcn-vue</h2>
+          <button class="icon-btn" type="button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <p class="dialog-sub">它在 <span class="spec-code">.agents/skills</span> 里，但 <span class="spec-code">skills-lock.json</span> 没有它。默认不改锁、不参与更新。</p>
+      </div>
+      <div style="padding:14px 18px;display:grid;gap:10px">
+        <label style="display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start">
+          <input type="radio" name="adopt-mode" checked style="margin-top:2px;accent-color:var(--color-primary-strong)">
+          <span>
+            <strong style="display:block;font-size:12px;font-weight:500">绑定来源接管（推荐）</strong>
+            <span style="display:block;margin-top:2px;color:var(--color-text-tertiary);font-size:11px;line-height:1.55">写项目锁，之后可正常更新 / 禁用 / 卸载。</span>
+          </span>
+        </label>
+        <div style="margin-left:26px;display:grid;gap:7px">
+          <input class="install-input" type="text" value="https://github.com/owner/repo" aria-label="来源" style="width:100%;height:32px;padding:0 9px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-field-base);color:var(--color-text-primary);font-size:12px">
+          <input class="install-input" type="text" value="skills/shadcn-vue/SKILL.md" aria-label="技能路径" style="width:100%;height:32px;padding:0 9px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-field-base);color:var(--color-text-primary);font-size:12px">
+        </div>
+        <label style="display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start;padding-top:8px;border-top:1px solid var(--color-border-light)">
+          <input type="radio" name="adopt-mode" style="margin-top:2px;accent-color:var(--color-primary-strong)">
+          <span>
+            <strong style="display:block;font-size:12px;font-weight:500">仅本地接管</strong>
+            <span style="display:block;margin-top:2px;color:var(--color-text-tertiary);font-size:11px;line-height:1.55">只登记目录与当前 hash；不写项目锁，不参与远端更新。之后仍可绑定来源。</span>
+          </span>
+        </label>
+      </div>
+      <div class="dialog-foot">
+        <span class="dialog-summary">接管前不会改 <span class="spec-code">skills-lock.json</span></span>
+        <span class="spacer"></span>
+        <button class="btn" type="button" data-close-dialog>取消</button>
+        <button class="btn is-primary" type="button" data-close-dialog>接管</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 应用预设：目标 + 模式 + 差异 -->
+  <div class="dialog-layer" id="preset-dialog" hidden>
+    <div class="dialog is-narrow" role="dialog" aria-modal="true" aria-labelledby="preset-dialog-title">
+      <div class="dialog-head">
+        <div class="dialog-title-line">
+          <h2 class="dialog-title" id="preset-dialog-title">应用预设 · 前端规范</h2>
+          <button class="icon-btn" type="button" data-close-dialog aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+        </div>
+        <p class="dialog-sub">8 项 · 上次应用 2 天前 · 默认增量；应用成功后才写目标锁</p>
+      </div>
+      <div style="padding:14px 18px;border-bottom:1px solid var(--color-border-light)">
+        <div class="pane-label" style="margin:0 0 6px">目标</div>
+        <div class="filter-group" style="margin-bottom:12px">
+          <button class="filter-chip is-active" type="button">项目 everydaytool</button>
+          <button class="filter-chip" type="button">全局</button>
+          <button class="filter-chip" type="button">指定目录…</button>
+        </div>
+        <div class="pane-label" style="margin:0 0 6px">模式</div>
+        <div class="filter-group">
+          <button class="filter-chip is-active" type="button">增量：保留目标已有</button>
+          <button class="filter-chip" type="button">精确：移除多余</button>
+        </div>
+      </div>
+      <div class="dialog-list">
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="安装 grilling">
+          <div class="skill-main"><span class="state is-success"><span class="dot"></span></span><div><span class="skill-name">grilling</span><div class="skill-desc">mattpocock/skills · 将安装</div></div></div>
+          <span class="state is-success opt-state"><span class="dot"></span>安装</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" checked aria-label="更新 tdd">
+          <div class="skill-main"><span class="state is-warning"><span class="dot"></span></span><div><span class="skill-name">tdd</span><div class="skill-desc">mattpocock/skills · 将更新</div></div></div>
+          <span class="state is-warning opt-state"><span class="dot"></span>更新</span>
+        </div>
+        <div class="skill-option">
+          <input type="checkbox" aria-label="跳过 trace-analyze-html">
+          <div class="skill-main"><span class="state is-danger"><span class="dot"></span></span><div><span class="skill-name">trace-analyze-html</span><div class="skill-desc">TFS · 需要 token，暂不可用</div></div></div>
+          <span class="state is-danger opt-state"><span class="dot"></span>不可用</span>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <span class="dialog-summary">将安装 <strong>2</strong> · 更新 <strong>1</strong> · 不可用 <strong>1</strong>；精确模式会移除 1 个多余技能</span>
+        <span class="spacer"></span>
+        <button class="btn" type="button" data-close-dialog>取消</button>
+        <button class="btn is-primary" type="button" data-close-dialog>应用</button>
+      </div>
     </div>
   </div>
 
@@ -1976,7 +2224,7 @@
       });
     });
 
-    const dialogIds = ['install-dialog', 'repo-dialog', 'update-dialog'];
+    const dialogIds = ['adopt-dialog', 'preset-dialog', 'install-dialog', 'repo-dialog', 'update-dialog'];
     function openDialog(id) {
       const dialog = document.getElementById(id);
       if (!dialog) return;
@@ -1992,7 +2240,9 @@
     }
 
     document.querySelectorAll('[data-open-install]').forEach((button) => button.addEventListener('click', () => openDialog('install-dialog')));
+    document.querySelectorAll('[data-open-preset]').forEach((button) => button.addEventListener('click', () => openDialog('preset-dialog')));
     document.querySelectorAll('[data-open-repo]').forEach((button) => button.addEventListener('click', () => openDialog('repo-dialog')));
+    document.querySelectorAll('[data-open-adopt]').forEach((button) => button.addEventListener('click', () => openDialog('adopt-dialog')));
     document.querySelectorAll('[data-open-update]').forEach((button) => button.addEventListener('click', () => openDialog('update-dialog')));
     document.querySelectorAll('[data-install-continue]').forEach((button) => button.addEventListener('click', () => {
       closeDialogs();
