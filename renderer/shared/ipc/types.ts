@@ -24,6 +24,7 @@ declare global {
     treeaseEditor?: IpcInvokeApi
     wxpEnhancer?: IpcInvokeApi
     offlinePack?: IpcInvokeApi
+    skillManager?: IpcInvokeApi
     telegramCache?: IpcInvokeApi
     workbuddy2apiPanel?: IpcInvokeApi
   }
