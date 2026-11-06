@@ -23,6 +23,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test:skill-manager": "node --experimental-strip-types --test tools/skill-manager/tests/*.test.ts",
     "create:tool": "node scripts/create-tool.mjs",
     "data-layout": "node scripts/data-layout.mjs",
     "data-layers:check": "node scripts/data-layers-check.mjs",
