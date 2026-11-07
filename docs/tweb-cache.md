@@ -1,23 +1,22 @@
 # tweb-cache 模块记忆（tweb 前端的 Telegram 归档）
 
-> 方案与验收清单见 [tweb-cache-plan.md](./tweb-cache-plan.md)；归档目录格式 / HTTP 协议见
-> [telegram-cache.md](./telegram-cache.md)。本文记「实现落点 + 为什么这么放 + 升级 tweb 时怎么重放」。
+> 本文记「实现落点 + 为什么这么放 + 升级 tweb 时怎么重放」。
 
 ## 0. 一句话
 
 `tweb-cache` 是**独立工具**（独立卡片 / 路由 / 后端 / 端口 34200 / IPC `twebCache` / 分区
 `persist:tweb-cache` / 数据 `<assets>/tweb-cache`），页面端是 **tweb（Telegram Web K，Solid.js）**，
-通过平台层契约 `backend/telegram-archive/engine.ts` 复用 telegram-cache 注册的归档引擎（同一份存储代码，
-按 scope 各写各的目录）。页面侧在 `tweb/src/helpers/edt/**` 加一层归档客户端，并在 tweb 源码中保留少量单点接线。
+归档引擎自包含在 `tools/tweb-cache/backend/archive/`。页面侧在 `tweb/src/helpers/edt/**` 加一层归档客户端，
+并在 tweb 源码中保留少量单点接线。
 
 ## 1. 页面侧客户端（tweb/src/helpers/edt/）
 
 | 文件 | 职责 | 要点 |
 | --- | --- | --- |
-| `types.ts` | HTTP 契约类型 | 与 telegram-cache 的归档 HTTP 契约对齐 |
+| `types.ts` | HTTP 契约类型 | 与 `shared/media-archive.ts` 的归档 HTTP 契约对齐 |
 | `env.ts` | 双上下文引导 + `edtFetch` | 页面读注入的 `window.__EDT__`；worker / SW 通过一次性 query 重取 `/edt-bootstrap.js`；**401 时自动换 query 刷新 token**（tweb 的 SW 对带扩展名同源 URL 是 cache-first，`no-store` 头救不了它） |
 | `api.ts` | 5 条归档 HTTP（prepare/append/commit/status/delete/reveal） | peer 是**字符串数字**（tweb 的 PeerId = 带符号 number，`String()` 后即归档命名空间） |
-| `statusStore.ts` | 状态 Map + SSE + 订阅 | 120ms 批量拉取 / 150ms SSE 合流（与 telegram-tt 同参） |
+| `statusStore.ts` | 状态 Map + SSE + 订阅 | 120ms 批量拉取 / 150ms SSE 合流 |
 | `archive.ts` | `cacheMessageToArchive` 流水线 | ≤20 MiB 走 `appDownloadManager.downloadMedia`（整份 Blob）；更大走 SW `stream/` 路由按 Range 分块（45s 超时、断点续传靠后端 `.part`）；照片必须选最大可用 `PhotoSize` 并作为 `thumb` 传入，否则 tweb 会拒绝下载；`getServerMessageId(mid)` 一律先转服务端 id；成功后清理原媒体的 `cachedFiles` / `cachedStreamChunks` |
 | `bridge.ts` | `window.__EDT_JUMP_TO_MESSAGE__` | `apiManagerProxy.getPeer` 判空；频道 / 超级群把服务端 id 转为 `MESSAGE_ID_OFFSET + id` → `appImManager.setInnerPeer({peerId, lastMsgId})`；会话没加载返回 `false` |
 | 取消 / 删除 | `cancelArchiveFor` + `__EDT_CANCEL_ARCHIVE__` | 活跃归档用 `AbortController`；影库删除和右键移除先取消，再做后端 trash/delete，避免删除后被 append 重建 |
@@ -33,15 +32,15 @@
 | 文件 | 职责 |
 | --- | --- |
 | `backend/services/site-service.ts` | 起独立回环站点；固定端口 / origin；`tweb/dist` 缺失只影响本工具 |
-| `backend/ipc/{channels,handlers}.ts` | `twebCache` 独立 IPC；只做参数校验并转调平台归档引擎，固定 `scope='tweb-cache'` |
+| `backend/archive/**` | 站点托管、消息级缓存、影库、回收站与媒体解析（数据固定落在 `<assets>/tweb-cache/`） |
+| `backend/ipc/{channels,handlers}.ts` | `twebCache` 独立 IPC；只做参数校验并转调本工具归档引擎 |
 | `renderer/stores/twebCacheStore.ts` | 站点 / 影库 / 回收站状态；订阅 `EVENT_LIBRARY`，已有条目就地更新，新条目 400ms 防抖重扫 |
 | `renderer/pages/TwebCachePage.vue` | webview + 概览 / 影库 / 回收站；媒体缓存用量在概览页每 5 秒静默刷新；消息号与「定位」按钮跳转消息 |
 | `renderer/ipc.ts` | 唯一 `createIpcHelpers('twebCache')` 实例 |
 
 影库右栏不复制播放器：播放统一在左侧 tweb 会话内完成，避免第二套媒体 UI 和 token 暴露面。
 
-归档事件由 `tools/telegram-cache/backend/services/archive-api.ts` 按 `currentArchiveToolId()` 分流到
-`telegram-cache:event:library` / `tweb-cache:event:library`，两个工具不会收到对方的事件。
+归档事件由 `tools/tweb-cache/backend/archive/api.ts` 统一推送到 `tweb-cache:event:library`。
 
 影库展示：
 
@@ -83,10 +82,9 @@
 
 ## 5. 已知的边界与坑（源码勘察结论，行号以 2026-10-31 的 tweb 为准）
 
-- **PeerId 空间**：tweb 的 `PeerId = number`（`global.d.ts:128`），频道/群是负数（**没有** telegram-tt
-  那种 `-100` 前缀），用户是正数。所以 tweb-cache 的归档目录名与 telegram-cache 的**不同空间**——
-  数据本来就按 scope 分目录（`<assets>/tweb-cache/messages`），互相对不上也无妨；跳转桥 `Number(peerId)`
-  直接当 PeerId 用。**消息 id 不能直接透传**：归档保存服务端 id，而 tweb 的频道 / 超级群内部 mid 是
+- **PeerId 空间**：tweb 的 `PeerId = number`（`global.d.ts:128`），频道/群是负数（没有 `-100` 前缀），
+  用户是正数。归档目录名直接使用这套 PeerId；跳转桥 `Number(peerId)` 直接当 PeerId 用。
+  **消息 id 不能直接透传**：归档保存服务端 id，而 tweb 的频道 / 超级群内部 mid 是
   `MESSAGE_ID_OFFSET + serverId`（例如 `128` → `4294967424`）；`bridge.ts` 必须按 peer 类型换算后再
   `setInnerPeer`，否则只会打开会话、不会滚到消息。
 - **`.time` 结构**：`MessageRender.setTime` 把 `args` 塞进 `.time`（隐藏占位）再**克隆**进 `.time-inner`
@@ -109,7 +107,7 @@
 - `cachedFiles`（Cache Storage，≤20 MiB 整文件，`MAX_FILE_SAVE_SIZE` 门控）：`downloadMedia` 自动命中；
 - 归档实现（Blob 路径走 `downloadMedia`、大文件走 stream 路由）天然骑在这两层上——**看过的部分归档不重下、补下的字节自动沉淀**，无需任何自建层。
 
-若考虑跨工具共享（telegram-tt origin 34100 与 tweb origin 34200 的浏览器缓存互相隔离），才需要自建共享层——当前明确不做。
+当前只有 tweb 一个归档前端（origin 34200），不需要跨工具共享层。
 
 工具侧配套（`TwebCachePage.vue` 概览「tweb 媒体缓存」卡片）：
 
@@ -119,13 +117,11 @@
 
 ## 7. 验收对应关系（与 plan §8 的差异）
 
-- plan 里「影库互通（同一份数据）」已按 2026-10-31 的架构修订改为**各存一份**
-  （`<assets>/telegram-cache/` 与 `<assets>/tweb-cache/`）；两个工具的右栏各自读自己的库。
+- 影库数据固定落在 `<assets>/tweb-cache/`，右栏只读本工具的库。
 - 新增验收项：**已归档的消息断网后仍能在 tweb 页面直接查看 / 播放**。视频归档后必须禁用 HLS、请求原始 document 的普通 `stream/`；播放期间 `upload.getFile` 为 0，`cachedStreamChunks` 不因本地命中而增长。
 - 归档成功后原媒体的浏览器整文件 / stream 分块缓存会被清理；HLS 转码缓存保留（内容不同，不能替代归档）。
 - 影库删除进行中的条目会先取消归档任务；取消后不会继续 append。
-- 影库自动更新：归档 API 的 `TelegramLibraryEvent` 按当前 scope 分别推送到
-  `telegram-cache:event:library` / `tweb-cache:event:library`；tweb store 已有条目就地更新状态、大小、
+- 影库自动更新：归档 API 的 `ArchiveLibraryEvent` 统一推送到 `tweb-cache:event:library`；tweb store 已有条目就地更新状态、大小、
   进度，新条目 400ms 防抖后重扫一次列表。影库行点击消息号或「定位」都会换算 mid 后跳到左侧消息。
 - `tweb 媒体缓存` 用量每 5 秒静默统计一次（页面不可见时暂停）；手动清理后立即重算。
 - 其余 12 条验收通用；`pnpm tweb:check` 对应 plan Step 0 的完成判据。

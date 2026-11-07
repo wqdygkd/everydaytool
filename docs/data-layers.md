@@ -12,7 +12,7 @@
 - 清理只能靠「目录名黑名单」猜（`Cache` / `Code Cache` …），工具自己的可再生数据（`objects/`、`downloads/`、`runtime/`）只能算「数据」，永远清不掉；
 - 切换数据目录整树同步复制，其中 80% 是可再生的 Chromium 缓存；
 - 配置、账号、规则、登录态、可再生缓存混在同一层，**没有可靠的「哪些必须备份」的答案**；
-- 用户想归档的资源（telegram `archive/`）和数据目录绑死，无法放到另一块盘。
+- 用户想归档的资源（tweb-cache `archive/`）和数据目录绑死，无法放到另一块盘。
 
 ## 1. 分层模型
 
@@ -47,27 +47,26 @@
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [sensitive]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [sensitive]
-    telegram-cache/     config.json, registry.json, archive-index.json,
-                        benchmarks.json, telegram-session.bin(密文)
+    tweb-cache/         config.json
     treease-editor/     rules.json                    ← 新增，规则从 LocalStorage 上台面
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
     skill-manager/      settings.json, registry.json, history.json, projects.json,
                         favorites.json, presets.json, credentials.json [sensitive], lock-backups/
     quarantine/<ts>/    ← 旧布局孤儿白名单（config.db / cdp-injector / .DS_Store），不删、不备份
   session/                             # L3：Electron sessionData 就是这个目录（路径不变）
-    Cookies/ Local Storage/ Partitions/{telegram-cache,treease-editor,workbuddy2api-panel}
+    Cookies/ Local Storage/ Partitions/{tweb-cache,treease-editor,workbuddy2api-panel}
     Cache/ Code Cache/ GPUCache/ …     ← 内部可再生子目录，L3 里唯一允许被清的部分
   cache/                               # L4
     app/{logs,crash-dumps}
     interceptor/extension                        (可从 resources 重建)
     offline-pack/downloads/
-    telegram-cache/{objects,tmp,mtproto,diagnostics}
+    tweb-cache/{objects,tmp,diagnostics}
     workbuddy2api-panel/{downloads,runtime/{current,previous,staging}}
     import-rollback/<ts>/   ← 备份恢复前的配置层快照（回滚点，可随时清）
 
 <assets>/                              # L2 独立根，默认 <data>/assets，可设到任意盘
-  telegram-cache/messages/…           # 消息级缓存（manifest + message.md + 媒体）
-  telegram-cache/trash/…              # 回收站
+  tweb-cache/messages/…               # 消息级缓存（manifest + message.md + 媒体）
+  tweb-cache/trash/…                  # 回收站
   skill-manager/disabled/…             # 禁用区（按 scopeId）
   skill-manager/trash/…                # 回收站（manifest + 技能目录）
 ```
@@ -88,7 +87,7 @@
 
 ### 3.2 索引不写死绝对路径
 
-`<data>/config/telegram-cache/registry.json`（及消息媒体索引）内的资源路径一律存**相对所属层根**的路径（沿用 `toTelegramRelativePath` 的做法）。资产根搬家后只需重算根前缀，索引零改动。
+`<data>/config/tweb-cache/media-index.json`（及消息索引）内的资源路径一律存**相对所属层根**的路径（沿用 `toArchiveRelativePath` 的做法）。资产根搬家后只需重算根前缀，索引零改动。
 
 ### 3.3 与数据目录迁移的关系
 
@@ -102,7 +101,7 @@
 
 ### 3.4 清理与统计
 
-- 永不自动清理；删除只经工具 UI 显式执行（如 telegram 归档删除）。
+- 永不自动清理；删除只经工具 UI 显式执行（如 tweb-cache 归档删除）。
 - 用量统计：`measureLayers()` 独立统计资产根；`scanDataRoot()` 在资产根位于数据根内时**排除 `<data>/assets` 这一个条目**，避免与资产卡片重复计数。
 
 ### 3.5 备份语义：清单优先
@@ -125,9 +124,9 @@
 | `offline-pack/downloads/` | `cache/offline-pack/downloads` | cache | never | always | 可重下 |
 | `wxp-enhancer/config.json` | `config/wxp-enhancer/` | config | include | never | — |
 | `wxp-enhancer/data-cache.json` | `config/wxp-enhancer/` | config | include | never | `sensitive`（我们写的登录态 → 按判据归 config，不塞进 `session/`） |
-| `telegram-cache/{config,registry,benchmarks}.json`、`telegram-session.bin` | `config/telegram-cache/` | config | include | never | — |
-| `telegram-cache/{messages,trash}` | `<assets>/telegram-cache/` | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
-| `telegram-cache/{objects,tmp,mtproto,diagnostics}` | `cache/telegram-cache/` | cache | never | always | 清后须 `pruneMissingObjects()` 修剪索引 |
+| `tweb-cache/config.json` | `config/tweb-cache/` | config | include | never | 站点端口（origin 固定） |
+| `tweb-cache/{messages,trash}` | `<assets>/tweb-cache/` | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
+| `tweb-cache/{objects,tmp,diagnostics}` | `cache/tweb-cache/` | cache | never | always | 清后须修剪媒体索引 |
 | `workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `config/workbuddy2api-panel/` | config | include | never | `run/` 是上游 cwd，含 api_key 与上游数据 |
 | `workbuddy2api-panel/{downloads,runtime}` | `cache/workbuddy2api-panel/` | cache | never | always | 清后须校验 `runtime/current/<bin>`，否则显示「需重新下载」 |
 | `session/`（现状） | `session/` | session | optional | internal | 不搬家 |
@@ -147,10 +146,10 @@
 export type DataLayer = 'config' | 'assets' | 'session' | 'cache'
 
 export interface DataLayerEntry {
-  id: string                  // 'telegram-cache.objects'
+  id: string                  // 'tweb-cache.objects'
   toolId: string | 'app'
   layer: DataLayer
-  relativePath: string        // **相对所属层根**：'telegram-cache/objects'、'telegram-cache/messages'
+  relativePath: string        // **相对所属层根**：'tweb-cache/objects'、'tweb-cache/messages'
   label: string
   backup: 'include' | 'optional' | 'manifest-only' | 'never'
   clean: 'never' | 'always' | 'internal-chromium-cache'
@@ -194,7 +193,7 @@ upgradeDataLayout(roots, { dryRun }): DataLayoutUpgradeResult
 - 隔离区（`config/quarantine/`）**不在清理路径里**：它的内容是「不知归属的遗留物」，自动清一次可能就再也见不到了；
   用户看清体积后自行删除。不做自动淘汰（本期）。
 - 清理后按 `integrity` 自愈：
-  - `telegram-cache`：`pruneMissingObjects()` 剔除索引中已不存在的对象；
+  - `tweb-cache`：剔除媒体索引中已不存在的对象；
   - `workbuddy2api-panel`：重算「已安装 = 二进制存在」；
   - `offline-pack`：历史项标「文件已缺失」。
 - 资产层与配置层**不进入任何自动清理路径**。
@@ -283,11 +282,11 @@ payload        gzip(条目表)；条目表 = u32 条目数 + 重复(u16 名长 |
 ### 10.2 工具层（全部改走 `resolveLayerPath`）
 
 interceptor（配置+证书 / 扩展缓存）、
-offline-pack（历史 / 下载）、wxp-enhancer、telegram-cache（索引+密文 / 资产归档 / 对象缓存）、
+offline-pack（历史 / 下载）、wxp-enhancer、tweb-cache（配置 / 资产归档 / 对象缓存）、
 workbuddy2api-panel（manifest+run / 二进制缓存）。
 
-telegram 的索引兼容做法：`registry.json` / `archive-index.json` 里的 `relativePath` 保持相对「工具命名空间」
-（`objects/ab/hash`、`archive/resources/…`），由 `resolveTelegramRelativePath()` 按首段路由到 config / assets / cache，
+tweb-cache 的索引兼容做法：`media-index.json` / `messages-index/*.json` 里的 `relativePath` 保持相对「工具命名空间」
+（`objects/ab/hash`、`messages/…`），由 `resolveArchiveRelativePath()` 按首段路由到 config / assets / cache，
 **v1 旧索引无需改写**。
 
 ### 10.3 工具与门禁
@@ -342,7 +341,7 @@ P2（备份导出/恢复）追加验证：
     LocalStorage 降级为镜像；首次挂载时若配置层为空则把镜像迁上去；
   - 收藏的工具 / 首页工具排序 → `config/app/ui-preferences.json`（`ui-preferences-store.ts`，去重限量），同样镜像兜底网页预览。
 - **清理自愈钩子**（`data-root-scan.ts` 的 `registerCacheIntegrityHandler`，对应条目上的 `integrity` 字段）：
-  - telegram：清掉 `objects/` 后立即 `pruneTelegramRegistry()`（不必等重启）；
+  - tweb-cache：清掉 `objects/` 后，媒体状态查询按对象文件是否存在现算为 `missing`（不必等重启）；
   - workbuddy：清掉 `runtime/` 后立即 `publishStateNow()`，「已安装」按二进制是否真的存在重算
     （manifest 只提供版本号，因此清缓存后 UI 立刻变成"需重新下载"）；
   - offline-pack：`listHistory()` 现算 `exists` / `size`，历史里显示「文件已缺失」徽标。
@@ -351,7 +350,7 @@ P2（备份导出/恢复）追加验证：
 
 ## 11. 不变量（验收断言）
 
-1. 清空 `cache/` 后：应用正常启动；账号 / 规则 / 登录态 / 证书 / 归档全在；telegram 索引已修剪；workbuddy 显示「需重新下载」；offline-pack 历史标缺失；隔离区（`config/quarantine/`）不受影响。
+1. 清空 `cache/` 后：应用正常启动；账号 / 规则 / 登录态 / 证书 / 归档全在；tweb-cache 媒体状态显示为未缓存；workbuddy 显示「需重新下载」；offline-pack 历史标缺失；隔离区（`config/quarantine/`）不受影响。
 2. 导出包内零 `cache` 条目；`sensitive` 按开关处理；`assets` 默认只有清单；包内 sha256 全通过。
 3. 导入只写 `config`（+可选 `session`），失败**自动回滚**并返回 `rollbackSnapshot`（报告里必须能拿到快照路径，可据此人工复核）。
 4. 迁移跳过 `cache` 时：新目录可用、旧目录保留且只剩 `cache/`、迁移结果里 `skipped` 列出了它。
@@ -384,7 +383,7 @@ P2（备份导出/恢复）追加验证：
 | **P0b** | `main.ts` 串 `upgradeDataLayout()`、各工具改走 `resolveLayerPath`（含旧位置容错）、`data-root-scan` 按层统计、设置页四层展示、`data-layers:check` 断言 | ✅ 已交付（§10） |
 | **P1** | 资产根：`assets-root.json` / pending / `migrateAssetsDirectory` / 归档相对路径 / 设置页「更改位置」 | ✅ 已交付（§3） |
 | **P2** | 备份包格式 + 导出/导入 + `invalidateJsonDocuments` + 敏感项提示 + 导入回滚 | ✅ 已交付（§8） |
-| **P3** | `envs.json` / wxp tokens 走 `safeStorage`（明文自动升级）、treease 规则落 `config/`、收藏迁 `config/app/ui-preferences.json`、workbuddy 二进制缺失态、telegram 索引修剪 | ✅ 已交付（§10.5） |
+| **P3** | `envs.json` / wxp tokens 走 `safeStorage`（明文自动升级）、treease 规则落 `config/`、收藏迁 `config/app/ui-preferences.json`、workbuddy 二进制缺失态、tweb-cache 媒体状态现算 | ✅ 已交付（§10.5） |
 
 ## 14. 明确不做
 

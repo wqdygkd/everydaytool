@@ -25,7 +25,6 @@ declare global {
     wxpEnhancer?: IpcInvokeApi
     offlinePack?: IpcInvokeApi
     skillManager?: IpcInvokeApi
-    telegramCache?: IpcInvokeApi
     workbuddy2apiPanel?: IpcInvokeApi
   }
 }

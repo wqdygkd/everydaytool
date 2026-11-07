@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { TelegramLibraryEntry, TelegramTrashEntry } from '../../../../shared/telegram-cache'
+import type { ArchiveLibraryEntry, ArchiveTrashEntry } from '../../../../shared/media-archive'
 import type { TwebWebviewTag } from '../webview'
+import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
@@ -14,10 +15,10 @@ import { useTwebCacheStore } from '../stores/twebCacheStore'
 import { tabKeyFromPath, TWEB_CACHE_TABS } from '../tabs'
 import { formatBytes } from '../utils/format'
 
-const route = useRoute()
 const router = useRouter()
 const store = useTwebCacheStore()
 const isElectron = isElectronEnvironment()
+const toolPath = useToolPath()
 
 const webviewRef = shallowRef<TwebWebviewTag | null>(null)
 const boundElements = new WeakSet<object>()
@@ -40,7 +41,7 @@ watch(originNotice, () => {
   originNoticeDismissed.value = false
 })
 
-const activeTab = computed(() => tabKeyFromPath(route.path))
+const activeTab = computed(() => tabKeyFromPath(toolPath.value))
 const displayUrl = computed(() => pageUrl.value || pageSrc.value || '')
 const inspectorTitle = computed(() =>
   TWEB_CACHE_TABS.find(tab => tab.key === activeTab.value)?.label ?? '工具详情',
@@ -63,13 +64,13 @@ const menuItems = computed(() => TWEB_CACHE_TABS.map(tab => ({
   badge: tab.key === 'library' ? store.library.length : undefined,
 })))
 
-interface LibraryRow extends TelegramLibraryEntry {
+interface LibraryRow extends ArchiveLibraryEntry {
   groupTitle: string
   groupSize: number
 }
 
 const groupedLibrary = computed<LibraryRow[]>(() => {
-  const groups = new Map<string, TelegramLibraryEntry[]>()
+  const groups = new Map<string, ArchiveLibraryEntry[]>()
   for (const entry of store.library) {
     const key = `${entry.peerId}:${entry.groupedId ?? `single-${entry.messageId}`}`
     const group = groups.get(key)
@@ -369,7 +370,7 @@ function openInspector(): void {
   if (activeTab.value === 'overview') void refreshMediaCache(true)
 }
 
-async function openDir(entry: TelegramLibraryEntry): Promise<void> {
+async function openDir(entry: ArchiveLibraryEntry): Promise<void> {
   try {
     await store.openMessageDir(entry.peerId, entry.messageId)
   } catch (error) {
@@ -377,11 +378,11 @@ async function openDir(entry: TelegramLibraryEntry): Promise<void> {
   }
 }
 
-function jumpToEntry(entry: TelegramLibraryEntry): void {
+function jumpToEntry(entry: ArchiveLibraryEntry): void {
   store.requestJump(entry.peerId, entry.messageId)
 }
 
-async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
+async function removeEntry(entry: ArchiveLibraryEntry): Promise<void> {
   try {
     await confirm(
       `把消息 ${entry.messageId} 移入回收站？原目录与 manifest 会保留，可在回收站恢复。`,
@@ -408,7 +409,7 @@ async function removeEntry(entry: TelegramLibraryEntry): Promise<void> {
   }
 }
 
-async function restoreTrash(entry: TelegramTrashEntry): Promise<void> {
+async function restoreTrash(entry: ArchiveTrashEntry): Promise<void> {
   try {
     await store.restoreTrash(entry.trashId)
     toast.success('已恢复')
@@ -439,20 +440,20 @@ async function openDataDir(): Promise<void> {
 }
 
 /** UiTableColumn 插槽行是宽泛记录类型；先收敛到业务类型再使用。 */
-function toEntry(row: unknown): TelegramLibraryEntry {
-  return row as TelegramLibraryEntry
+function toEntry(row: unknown): ArchiveLibraryEntry {
+  return row as ArchiveLibraryEntry
 }
 
-function toTrash(row: unknown): TelegramTrashEntry {
-  return row as TelegramTrashEntry
+function toTrash(row: unknown): ArchiveTrashEntry {
+  return row as ArchiveTrashEntry
 }
 
-function progressOf(entry: TelegramLibraryEntry): number {
+function progressOf(entry: ArchiveLibraryEntry): number {
   if (entry.state === 'complete') return 100
   return Math.round(Math.min(1, Math.max(0, entry.progress ?? 0)) * 100)
 }
 
-function stateLabel(entry: TelegramLibraryEntry): string {
+function stateLabel(entry: ArchiveLibraryEntry): string {
   switch (entry.state) {
     case 'complete': return '已缓存'
     case 'partial':
@@ -463,7 +464,7 @@ function stateLabel(entry: TelegramLibraryEntry): string {
   }
 }
 
-function stateTone(entry: TelegramLibraryEntry): 'success' | 'warning' | 'primary' | 'danger' | 'neutral' {
+function stateTone(entry: ArchiveLibraryEntry): 'success' | 'warning' | 'primary' | 'danger' | 'neutral' {
   switch (entry.state) {
     case 'complete': return 'success'
     case 'partial':
@@ -675,7 +676,7 @@ onUnmounted(() => {
                   </UiDetailItem>
                 </UiDetailGrid>
                 <UiHint block>
-                  assets/tweb-cache/ 与 assets/telegram-cache/ 各自存档，存储代码共用。
+                  归档文件保存在 assets/tweb-cache/，与页面登录态分开存放。
                 </UiHint>
               </section>
 

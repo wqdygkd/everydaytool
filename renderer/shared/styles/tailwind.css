@@ -4,7 +4,7 @@
 @import "tailwindcss" source(none);
 @import "tw-animate-css";
 
-/* 类扫描范围:显式收敛到源码三目录(排除 telegram-tt / tweb / dist / pnpm-store 等) */
+/* 类扫描范围:显式收敛到源码三目录(排除 tweb / dist / pnpm-store 等) */
 @source "../../renderer";
 @source "../../tools";
 @source "../../shared";

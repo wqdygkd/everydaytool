@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { IdCardResult } from '../shared/generator'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
 import { GENDER, generateIdCards } from '../shared/generator'
@@ -130,12 +129,6 @@ onMounted(handleGenerate)
 
 <template>
   <div class="id-card-page tool-page">
-    <WorkspaceHeader
-      icon="idCard"
-      title="身份证号生成器"
-      description="按地区、出生范围与性别批量生成虚构号码"
-    />
-
     <ToolSurface class="generator-surface">
       <div class="form-studio">
         <aside class="config-pane">
@@ -266,13 +259,6 @@ onMounted(handleGenerate)
           </UiTable>
         </section>
       </div>
-
-      <template #statusline>
-        <span>LOCAL GENERATOR</span>
-        <span v-if="selectedId" class="mono">已选 {{ selectedId }}</span>
-        <span class="status-spacer" />
-        <span>数据不离开本机</span>
-      </template>
     </ToolSurface>
   </div>
 </template>
@@ -282,7 +268,7 @@ onMounted(handleGenerate)
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 18px;
   overflow: hidden;
 }
 
@@ -459,7 +445,7 @@ onMounted(handleGenerate)
 
 .result-table {
   flex: 0 1 auto;
-  margin: 0 var(--spacing-lg) var(--spacing-lg);
+  margin: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
 
   :deep(.ui-table-wrap) {
     border-radius: var(--radius-md);
@@ -468,10 +454,6 @@ onMounted(handleGenerate)
 
 .id-cell {
   color: var(--color-text-primary);
-}
-
-.status-spacer {
-  flex: 1;
 }
 
 @media (max-width: 1180px) {

@@ -7,6 +7,7 @@ import { findAppTab, getAppTabs } from './config/app-tabs'
 import { getToolById, getToolRegistry } from './config/tools'
 import AppRail from './shared/components/AppRail.vue'
 import CommandPalette from './shared/components/CommandPalette.vue'
+import ToolPane from './shared/components/ToolPane.vue'
 import UiToaster from './shared/components/ui/UiToaster.vue'
 import { useAppearance } from './shared/composables/useAppearance'
 import { useCommandPalette } from './shared/composables/useCommandPalette'
@@ -49,12 +50,31 @@ function detectPlatform(): string {
 
 const platform = detectPlatform()
 
+/**
+ * 本次会话里真正挂载过的工具：未打开过的工具不在这里，因此不会因为「注册表里有」
+ * 就提前拉起页面 / 后台运行时。持久化的 openIds 只负责左轨列表，点进来才算启动。
+ */
+const mountedToolIds = ref<string[]>([])
+
 watch(
-  () => route.meta?.toolId as string | undefined,
-  (toolId) => {
+  () => [route.meta?.toolId as string | undefined, route.fullPath] as const,
+  ([toolId, fullPath]) => {
     toolsStore.syncFromRoute(toolId ?? null)
+    const tool = toolId ? getToolById(toolId) : undefined
+    if (!tool) return
+    if (!mountedToolIds.value.includes(tool.id)) mountedToolIds.value.push(tool.id)
+    toolsStore.rememberRoute(tool.id, fullPath)
   },
   { immediate: true },
+)
+
+// 关闭工具时把常驻面板一起摘掉，卸载才会触发各工具自己的运行时清理。
+watch(
+  () => [...toolsStore.openIds],
+  (ids) => {
+    const open = new Set(ids)
+    mountedToolIds.value = mountedToolIds.value.filter(id => open.has(id))
+  },
 )
 
 const pageComponents: Record<string, Component> = {
@@ -63,13 +83,9 @@ const pageComponents: Record<string, Component> = {
 }
 
 const currentTabId = computed(() => (typeof route.meta?.toolId === 'string' ? route.meta.toolId : null))
-const activeComponent = computed(() => {
-  const id = currentTabId.value
-  return id ? pageComponents[id] : undefined
-})
-
 const activeTool = computed(() => (currentTabId.value ? getToolById(currentTabId.value) : undefined))
 const activeAppTab = computed(() => (currentTabId.value ? findAppTab(currentTabId.value) : undefined))
+const activeToolId = computed(() => activeTool.value?.id ?? null)
 
 interface TitlebarContext {
   name: string
@@ -158,9 +174,15 @@ function goHome() {
   router.push({ name: 'home' })
 }
 
+function pushTool(toolId: string) {
+  const last = toolsStore.lastRoute(toolId)
+  const fallback = () => router.push({ name: `tool-${toolId}` })
+  return last ? router.push(last).catch(fallback) : fallback()
+}
+
 function openTool(toolId: string) {
   closePalette(false)
-  router.push({ name: `tool-${toolId}` })
+  void pushTool(toolId)
 }
 
 function selectPaletteTool(toolId: string) {
@@ -182,7 +204,7 @@ async function handleToolClose(toolId: string) {
   const fallback = fallbackId
     ? toolsStore.openTools.find(tool => tool.id === fallbackId)
     : undefined
-  if (fallback) router.push({ name: fallback.routeName })
+  if (fallback) void pushTool(fallback.id)
   else goHome()
 }
 
@@ -228,14 +250,29 @@ function openSettings() {
           </Transition>
         </router-view>
 
-        <Transition name="workspace" mode="out-in">
+        <Transition name="page" mode="out-in">
           <component
-            :is="activeComponent"
-            v-if="activeComponent"
-            :key="currentTabId ?? undefined"
+            :is="activeAppTab?.component"
+            v-if="activeAppTab"
+            :key="activeAppTab.id"
             class="tool-runtime"
           />
         </Transition>
+
+        <div class="tool-stack">
+          <ToolPane
+            v-for="toolId in mountedToolIds"
+            :key="toolId"
+            :active="toolId === activeToolId"
+            :path="toolId === activeToolId ? route.fullPath : (toolsStore.lastRoute(toolId) ?? '')"
+          >
+            <component
+              :is="pageComponents[toolId]"
+              v-if="pageComponents[toolId]"
+              class="tool-runtime"
+            />
+          </ToolPane>
+        </div>
       </main>
     </div>
 
@@ -350,6 +387,15 @@ function openSettings() {
   overflow: hidden;
 }
 
+/* 已打开工具的常驻层：绝对定位不参与首页 / 设置页的 flex 布局，
+   z-index 高于标题栏与左轨，保证工具内对话框（teleport 到面板）仍能盖住整个窗口。 */
+.tool-stack {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
 .tool-runtime {
   flex: 1;
   min-height: 0;
@@ -366,31 +412,25 @@ function openSettings() {
 }
 
 .page-enter-active,
-.page-leave-active,
-.workspace-enter-active,
-.workspace-leave-active {
+.page-leave-active {
   transition:
     opacity var(--duration-base) var(--ease-out),
     transform var(--duration-base) var(--ease-out);
 }
 
-.page-enter-from,
-.workspace-enter-from {
+.page-enter-from {
   opacity: 0;
   transform: translateY(4px);
 }
 
-.page-leave-to,
-.workspace-leave-to {
+.page-leave-to {
   opacity: 0;
   transform: translateY(-3px);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter-active,
-  .page-leave-active,
-  .workspace-enter-active,
-  .workspace-leave-active {
+  .page-leave-active {
     transition-duration: 0.01ms;
   }
 }

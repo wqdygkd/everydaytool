@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ApplyPlanResult, FavoritesView, FavoriteViewItem, InstalledSkill, InstallResult, PlanItem, Preset, PresetApplyResult, PresetItem, PresetsFile, ProjectRecord, RemovedSkillView, RepoGroupView, ScopeInventory, SkillManagerSettings, SkillState, SourceCatalog, TokenState, TrashItemView, TrashListResult, UndoPlanResult, UpdatePlan } from '@shared/skill-manager'
 import type { IconName } from '../../../../renderer/shared/components/ui/icons'
+import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { confirm } from '@renderer/shared/feedback'
 import { skillOriginKey } from '@shared/skill-manager'
 import { toast } from 'vue-sonner'
@@ -31,9 +32,9 @@ const STATE_META: Record<SkillState, { label: string, tone: StateTone }> = {
   'unknown': { label: '未知', tone: 'neutral' },
 }
 
-const route = useRoute()
 const router = useRouter()
-const activeTab = computed(() => tabKeyFromPath(route.path))
+const toolPath = useToolPath()
+const activeTab = computed(() => tabKeyFromPath(toolPath.value))
 const menuValue = computed({
   get: () => activeTab.value,
   set: (value: string) => switchTab(value),
