@@ -270,7 +270,7 @@ function notify(message: string) {
               128.4 MB
             </UiKeyValue>
             <UiKeyValue label="路径" mono label-width="80px" wrap>
-              D:\project\everydaytool\data\cache\telegram-cache
+              D:\project\everydaytool\data\cache\tweb-cache
               <template #actions>
                 <UiCopyButton text="D:\\project\\everydaytool" label="路径" />
               </template>

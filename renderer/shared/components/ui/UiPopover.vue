@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 气泡卡内核：Reka UI Popover。
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from 'reka-ui'
+import { useToolOverlayTarget, useToolPaneActive } from './overlay-target'
 
 withDefaults(defineProps<{
   visible: boolean
@@ -14,6 +15,13 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
+
+const portalTarget = useToolOverlayTarget()
+const paneActive = useToolPaneActive()
+
+watch(paneActive, (active) => {
+  if (!active) emit('update:visible', false)
+})
 </script>
 
 <template>
@@ -21,7 +29,7 @@ const emit = defineEmits<{
     <PopoverTrigger as-child>
       <slot name="trigger" />
     </PopoverTrigger>
-    <PopoverPortal>
+    <PopoverPortal :to="portalTarget">
       <PopoverContent
         class="ui-popover-content"
         :class="contentClass"

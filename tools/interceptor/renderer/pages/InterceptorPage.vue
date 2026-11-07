@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import InterceptorStatusPanel from '../components/InterceptorStatusPanel.vue'
@@ -8,11 +9,11 @@ import TrafficPanel from '../components/TrafficPanel.vue'
 import { useInterceptorStore } from '../stores/interceptorStore'
 import { INTERCEPTOR_TABS, tabKeyFromPath } from '../tabs'
 
-const route = useRoute()
 const router = useRouter()
 const store = useInterceptorStore()
+const toolPath = useToolPath()
 
-const activeTab = computed(() => tabKeyFromPath(route.path))
+const activeTab = computed(() => tabKeyFromPath(toolPath.value))
 
 const PANELS = {
   status: InterceptorStatusPanel,

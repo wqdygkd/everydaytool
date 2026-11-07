@@ -6,7 +6,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程�
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / telegram-cache / tweb-cache / workbuddy2api-panel）。
+Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 8 个工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / skill-manager / tweb-cache / workbuddy2api-panel）。
 
 ## 编码规范
 
@@ -35,13 +35,14 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置工具�
 
 ## 布局、左轨与标题栏（工程侧）
 
-- **设置不是页签，也不是弹窗**：入口固定在左侧导航轨底部，点击打开 `/settings` 页。应用自带页面注册在 `renderer/config/app-tabs.ts`（含 `id` / `icon` / `description` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`，`App.vue` 只挂载当前路由对应的页面。**应用自带页面不进已打开工具列表**：不写 `toolTabs.openIds`，不出现在左轨运行列表与「最近使用」里，也不占运行名额。
+- **设置不是页签，也不是弹窗**：入口固定在左侧导航轨底部，点击打开 `/settings` 页。应用自带页面注册在 `renderer/config/app-tabs.ts`（含 `id` / `icon` / `description` / `routeName` / 组件），路由由 `router/routes.ts` 拍平成顶层记录并带 `meta.toolId`。首页与应用自带页面按当前路由渲染；工具页走常驻 `ToolPane`（见下条）。**应用自带页面不进已打开工具列表**：不写 `toolTabs.openIds`，不出现在左轨运行列表与「最近使用」里，也不占运行名额。
   桌面端专属页面（如设置：数据目录 / 分层用量 / 缓存清理 / 窗口外观 / 窗口大小与位置都依赖主进程）必须标 `electronOnly: true`——路由、标题栏上下文与 rail 入口统一走 `getAppTabs()` / `findAppTab()`，网页预览下该页面整体不存在（深链落到兜底回首页），不会去调不存在的 IPC。
   命名上刻意区分：`AppTab` / `APP_TABS` 指应用自带页面，**不要写成 `Shell*`**——Electron 的 `shell` 模块（`openPath` / `openExternal`）在 backend 里随处可见，两套 `shell` 并存会让阅读反复停顿。
 - **左轨（`AppRail.vue`）** 从**整宽标题栏下方**开始（不再是贯穿到窗口顶部的整列，也不再用 `padding-top` 给红绿灯让位）= 首页 → 置顶工具（`useToolLauncher().pinnedTools`，常驻启动器：关闭只停止运行、图标留在原位）→ 已打开的非置顶工具（`toolTabs.openIds` 顺序，关闭即从列表移除）→ 底部固定搜索 / 设置。同一个工具只出现一次并永远取置顶位。运行列表区独立滚动（提示必须用 portal 的 `UiTooltip`，伪元素会被裁掉）；关闭钮是图标按钮的**兄弟节点**（HTML 不允许按钮嵌套），置顶项的 `aria-label` / tooltip 必须写“关闭 X（保留置顶）”。
 - **标题栏（`App.vue` 的 `.app-topbar`）铺满整宽**（`.app-shell` 是「标题栏 + `.app-body`（rail + 内容）」两行），只承载当前页面上下文：图标 + 名称 + 一行说明；macOS 红绿灯落在标题栏左侧，内容左内边距 84px 让开灯组（全屏时回到 16px）。首页用 `EDT` 字标 + `everydaytool` + “本地工具工作区”；工具 / 应用页取注册表元数据。**标题栏不含页签**：工具切换走左轨图标与 `Ctrl/Cmd + K`。旧的页签拖拽排序 / 键盘导航已随 `HeaderTabs.vue` 删除，不要复活。
+- **工具页常驻（打开 ≠ 当前路由）**：`App.vue` 用 `renderer/shared/components/ToolPane.vue` 把**本次会话打开过的工具**全部保持挂载，切换工具只切可见性，因此表单、滚动位置、webview guest 与 IPC 订阅都不丢；只有从左轨关闭才从 `openIds` 移除并卸载，各工具页现有的 `onUnmounted` 清理继续作为“关闭即停止”的唯一入口。未打开过的工具不挂载、不启动运行时。`toolTabs` 的 `lastRoute` 负责记住每个工具最后停留的子路由，切回来回到原页签。工具内浮层（`UiDialog` / `UiPopover` / `UiDropdown` / `UiSelect` / `UiTooltip`）经 `ui/overlay-target` 注入到所属面板，切换工具时随面板一起隐藏并主动关闭，不要改回直接 teleport 到 body。
 - **`stores/toolTabs.ts`** 的职责是「已打开的工具 + 最近使用顺序」：`openIds` 持久化到 localStorage（key 仍叫 `toolTabs`，不改名、不迁移），`recentIds` 只存在内存里，启动时用「打开顺序」播种（后打开的更新）。关闭当前工具时必须**先取 `recentFallback(toolId)` 再 `close()`**——close 会把该工具从两个列表里摘掉，顺序反了就永远只能回首页。
-- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（标题栏上下文与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。
+- 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（标题栏上下文与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。**工具页内解析子路由必须用 `useToolPath()`（`renderer/shared/composables/useToolPath.ts`），不要直接读 `useRoute().path`**：隐藏面板仍在挂载态，全局路由已经切到别的工具，直接读会把子页签重置。
 - 主壳标题栏、左轨、首页网格、工具页布局与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §5.2、§5.3、§6、§8（动效尊重 `prefers-reduced-motion`）。
 
 ## 窗口外观（半透明 / 系统材质 · 工程侧）
@@ -200,7 +201,6 @@ export default defineTool({
 | ---------- | ------ |
 | **wxp-enhancer 模块记忆（目标应用逆向 / 注入脚本约束 / 验证手法）** | `docs/wxp-enhancer.md` |
 | **offline-pack 模块记忆（下载任务 store / Docker 镜像改写 / 历史抽屉与数据落点）** | `docs/offline-pack.md` |
-| **telegram-cache 模块记忆（观测口径 / 单飞去重 / HTTP 缓存与本地响应 / 页面捕获与 MTProto 边界）** | `docs/telegram-cache.md` |
 | **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |
 | **workbuddy2api-panel 模块记忆（托管上游二进制 / 探活 / 更新回滚）** | `docs/workbuddy2api-panel.md` |
 | **tweb-cache 模块记忆（tweb 页面侧归档客户端 / 触点重放 / SW 与 PeerId 坑）** | `docs/tweb-cache.md` |

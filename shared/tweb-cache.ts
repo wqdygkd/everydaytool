@@ -1,14 +1,11 @@
 // tweb-cache（以 tweb / Telegram Web K 为前端）的共享常量与类型。
 //
-// 归档实现与 HTTP 协议复用 telegram-cache 的引擎（见 shared/telegram-cache.ts），
-// 但数据按工具 scope 分开：`<assets>/tweb-cache/messages/...`。
+// 归档实现与 HTTP 协议由本工具自己的后端提供，数据落在 `<assets>/tweb-cache/messages/...`。
 // 这里只放本工具独有的东西：站点端口、配置、站点状态。
-import type { TelegramSiteInfo } from './telegram-cache.ts'
 
 /**
- * 站点端口基址：与 telegram-cache 的 34100 错开，保证两个工具**不同 origin**。
- * 两个 PWA 的 Service Worker 作用域都是 `/`，同源会互相接管 fetch；且 origin 变化
- * 会让登录态（IndexedDB / localStorage / SW 注册）全部作废，所以端口必须确定。
+ * 站点端口基址：固定 origin，避免登录态（IndexedDB / localStorage / SW 注册）作废。
+ * 端口必须确定；被占用时才在 RANGE 内顺延，并把实际端口落盘。
  */
 export const TWEB_CACHE_SITE_PORT_BASE = 34200
 export const TWEB_CACHE_SITE_PORT_RANGE = 16
@@ -24,5 +21,24 @@ export const TWEB_CACHE_DEFAULT_CONFIG: TwebCacheConfig = {
   sitePort: null,
 }
 
-/** 站点状态与 telegram-cache 同构，直接复用同一份形状（渲染层只读展示） */
-export type TwebCacheSiteInfo = TelegramSiteInfo
+/** 主进程 → 渲染层：归档状态 / 进度推送 */
+export const TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL = 'tweb-cache:event:library'
+
+/** 自托管 tweb 的站点状态：页面与 /api、/media 同源 */
+export interface TwebCacheSiteInfo {
+  ready: boolean
+  /** 形如 http://127.0.0.1:<port>/；未就绪时 null */
+  url: string | null
+  /** 当前实际端口；未就绪时 null */
+  port: number | null
+  /** 上次落盘的端口（诊断 origin 是否变化用） */
+  previousPort: number | null
+  /**
+   * 上次落盘端口与实际端口不一致 → origin 已变，页面侧的登录态 / IndexedDB / Cache Storage /
+   * Service Worker 注册全部作废（都需要重新登录），UI 必须明确提示。
+   */
+  originChanged: boolean
+  /** origin 变化时给出的说明（写入失败/端口被占用等），否则 null */
+  portNote: string | null
+  error: string | null
+}

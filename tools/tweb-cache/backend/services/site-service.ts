@@ -1,17 +1,13 @@
 // tweb-cache 的站点生命周期：把 `tweb/dist`（+ `tweb/public`）托管在**本工具专属的回环端口**上。
-//
-// 与 telegram-cache 的关系：站点实现与归档 API 由平台层的归档引擎提供
-// （`backend/telegram-archive/engine.ts`，由 telegram-cache 后端注册），
-// 本工具只决定「托管哪个目录、用哪个端口、状态怎么展示」——因此两个工具
-// 各有独立 origin / 配置 / IPC / 数据命名空间，只共享归档实现。
+// 站点实现与归档 API 由本工具后端的 archive/ 目录提供。
 import type { TwebCacheSiteInfo } from '../../../../shared/tweb-cache.ts'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'
-import { getTelegramArchiveEngine, hasTelegramArchiveEngine } from '../../../../backend/telegram-archive/engine.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { TWEB_CACHE_SITE_PORT_BASE, TWEB_CACHE_SITE_PORT_RANGE } from '../../../../shared/tweb-cache.ts'
+import { startArchiveSite } from '../archive/index.ts'
 import { getTwebCacheConfig, updateTwebCacheConfig } from '../store/config-store.ts'
 
 const EMPTY_SITE: TwebCacheSiteInfo = {
@@ -96,18 +92,12 @@ async function startSite(): Promise<void> {
     return
   }
 
-  if (!hasTelegramArchiveEngine()) {
-    siteStatus = { ...EMPTY_SITE, error: '归档引擎未就绪（telegram-cache 后端应先初始化）' }
-    logger.warn('tweb site server not started: archive engine missing')
-    return
-  }
-
   // 端口落盘后固定：origin 变一次，tweb 的登录态（IndexedDB / localStorage / SW）就全作废
   const configuredPort = getTwebCacheConfig().sitePort
   const basePort = configuredPort ?? TWEB_CACHE_SITE_PORT_BASE
 
   try {
-    const handle = await getTelegramArchiveEngine().startSite('tweb-cache', {
+    const handle = await startArchiveSite({
       rootDir,
       extraRootDir: resolveSiteExtraRoot(),
       port: basePort,

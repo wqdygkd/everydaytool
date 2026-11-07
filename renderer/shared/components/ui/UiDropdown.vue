@@ -3,6 +3,7 @@ import type { IconName } from './icons'
 // 下拉菜单内核：Reka UI DropdownMenu。
 // 菜单项由 items 声明,选择后 emit command;触发器用 #trigger 插槽。
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
+import { useToolOverlayTarget, useToolPaneActive } from './overlay-target'
 
 withDefaults(defineProps<{
   items: Array<{ command: string, label: string, icon?: IconName, danger?: boolean }>
@@ -11,14 +12,22 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   command: [command: string]
 }>()
+
+const open = ref(false)
+const portalTarget = useToolOverlayTarget()
+const paneActive = useToolPaneActive()
+
+watch(paneActive, (active) => {
+  if (!active) open.value = false
+})
 </script>
 
 <template>
-  <DropdownMenuRoot>
+  <DropdownMenuRoot v-model:open="open">
     <DropdownMenuTrigger as-child>
       <slot name="trigger" />
     </DropdownMenuTrigger>
-    <DropdownMenuPortal>
+    <DropdownMenuPortal :to="portalTarget">
       <DropdownMenuContent
         class="ui-dropdown-content"
         :side-offset="4"

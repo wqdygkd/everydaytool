@@ -30,7 +30,7 @@ export interface BackupFileRecord {
 }
 
 export interface BackupAssetRecord {
-  /** 相对资产根的路径（如 telegram-cache/archive/resources/res-xxx/resource.bin） */
+  /** 相对资产根的路径（如 tweb-cache/messages/peer-xxx/...） */
   relativePath: string
   size: number
   toolId: string

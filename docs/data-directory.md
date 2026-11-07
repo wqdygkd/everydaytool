@@ -16,7 +16,7 @@
 | 层 | 位置 | 内容 | 备份 | 清缓存 |
 | --- | --- | --- | --- | --- |
 | **配置** config | `<data>/config/` | 账号 / 规则 / 资源索引 / 证书 / 加密凭据 / 应用壳配置 | 必含 | **永不清理** |
-| **资产** assets | `<assets>/` | 用户显式归档的产出（当前仅 telegram 归档副本） | 只出清单（内容可选） | **永不清理** |
+| **资产** assets | `<assets>/` | 用户显式归档的产出（当前仅 tweb-cache 归档副本） | 只出清单（内容可选） | **永不清理** |
 | **会话** session | `<data>/session/` | Chromium 全部会话：Cookies / LocalStorage / IndexedDB / Partitions | 可选（默认不含） | 只清内部 Chromium 缓存目录 |
 | **缓存** cache | `<data>/cache/` | 可再生：浏览器缓存、工具下载与运行产物、日志、诊断包、旧布局隔离区 | 永不导出 | 一键全清 |
 
@@ -48,26 +48,25 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [敏感]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [敏感：token / 用户对象]
-    telegram-cache/     config.json, registry.json, archive-index.json,
-                        benchmarks.json, telegram-session.bin(密文)
+    tweb-cache/         config.json
     treease-editor/     rules.json（拦截规则 + 总开关；LocalStorage 只是镜像）
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}  [敏感]
     quarantine/         <ts>/  旧布局孤儿白名单（config.db / cdp-injector / .DS_Store），不删、不备份
   session/                         # 会话层 == Electron sessionData
     Cookies/  Local Storage/  IndexedDB/  Preferences
-    Partitions/{telegram-cache,treease-editor,workbuddy2api-panel}
+    Partitions/{tweb-cache,treease-editor,workbuddy2api-panel}
     Cache/  Code Cache/  GPUCache/  …   # 内部可再生缓存，唯一允许在会话层被清的部分
   cache/                           # 缓存层：删了自动重建
     app/{logs,crash-dumps}
     interceptor/extension
     offline-pack/downloads/
-    telegram-cache/{objects,tmp,mtproto,diagnostics}
+    tweb-cache/{objects,tmp,diagnostics}
     workbuddy2api-panel/{downloads,runtime/{current,previous,staging}}
     import-rollback/<时间戳>/       # 备份恢复前的配置层快照（回滚点，可随时清）
 
 <assets>/                           # 资产层：默认 <data>/assets
-  telegram-cache/messages/…
-  telegram-cache/trash/…
+  tweb-cache/messages/…
+  tweb-cache/trash/…
 ```
 
 各工具的落点与清理策略逐条登记在 `shared/data-layers.ts` 的 `DATA_LAYER_ENTRIES`；
@@ -112,7 +111,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 | --- | --- | --- | --- | --- |
 | interceptor | `config/interceptor/{config,rules}.json`、`certs/` | —（系统 CA 信任在外部） | `cache/interceptor/extension/` | — |
 | offline-pack | `config/offline-pack/history.json` | — | `cache/offline-pack/downloads/` | 用户另存位置（外部） |
-| telegram-cache | `config/telegram-cache/*.json`、`telegram-session.bin` | `session/Partitions/telegram-cache/` | `cache/telegram-cache/{objects,tmp,mtproto,diagnostics}` | `<assets>/telegram-cache/{messages,trash}` |
+| tweb-cache | `config/tweb-cache/config.json`、`media-index.json`、`messages-index/` | `session/Partitions/tweb-cache/` | `cache/tweb-cache/{objects,tmp,diagnostics}` | `<assets>/tweb-cache/{messages,trash}` |
 | treease-editor | `config/treease-editor/rules.json` | `session/Partitions/treease-editor/` | — | — |
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |

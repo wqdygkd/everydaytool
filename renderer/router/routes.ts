@@ -5,8 +5,9 @@ import { getAppTabs } from '../config/app-tabs'
 import { allToolRegistry } from '../config/tools'
 import HomePage from '../pages/HomePage.vue'
 
-// 工具页按活动页签即时挂载：App.vue 只渲染当前 meta.toolId 对应组件，
-// 切走或关闭时整棵工具子树卸载，webview guest、IPC 订阅与工具级服务随页面销毁。
+// 工具页由 App.vue 的 ToolPane 常驻：首次进入时按 meta.toolId 挂载，
+// 切换工具只切可见性（页面状态 / webview guest / IPC 订阅保持）；
+// 只有关闭工具才从常驻列表移除并触发整棵子树卸载与工具级服务清理。
 // 工具可用 subRoutes 声明页签 / 列表分类等深链：子路由继承主路由的组件与
 // meta.toolId（页签高亮与活动组件解析依赖它），主路由重定向到第一个子路由，
 // 保证同一状态只有一个规范 URL。
