@@ -5,7 +5,6 @@ import { confirm } from '@renderer/shared/feedback'
 import { useOnline } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { STORAGE_KEYS } from '../../../../shared/storage-keys'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { getTreeaseEditorApi } from '../ipc'
@@ -84,17 +83,6 @@ const webviewRef = ref<HTMLElement | null>(null)
 
 let currentWebContentsId: number | null = null
 let offLog: (() => void) | null = null
-
-const statusLabel = computed(() => {
-  if (attached.value) {
-    return `拦截中 · ${ruleCount.value} 个接口${hits.value > 0 ? ` · 命中 ${hits.value}` : ''}`
-  }
-  return isOnline.value ? '未拦截' : '离线 · 缓存模式'
-})
-const statusTone = computed<'neutral' | 'success' | 'warning'>(() => {
-  if (attached.value) return 'success'
-  return isOnline.value ? 'neutral' : 'warning'
-})
 
 function parseValue(text: string): unknown {
   const trimmed = text.trim()
@@ -385,32 +373,20 @@ onUnmounted(() => {
 
 <template>
   <div class="treease-page tool-page">
-    <WorkspaceHeader
-      icon="treease"
-      title="Treease 编辑器"
-      description="内嵌编辑器，按接口规则实时改写或屏蔽响应"
-      :status-label="statusLabel"
-      :status-tone="statusTone"
-    >
-      <template #actions>
-        <UiButton size="small" :disabled="!isElectron" @click="showDialog = true">
-          拦截设置
-        </UiButton>
-        <UiButton size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
-          刷新
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
-
     <ToolSurface class="treease-surface">
       <template #toolbar>
-        <UiToolbar gap="sm" flush>
+        <UiToolbar class="treease-toolbar" gap="sm" flush>
           <span class="toolbar-src mono">{{ SRC }}</span>
           <UiChip v-if="!isOnline" tone="warning" variant="soft">
             离线 · 缓存模式
           </UiChip>
           <template #end>
-            <span class="toolbar-hint">规则由子路由与配置层恢复，页面关闭即释放</span>
+            <UiButton size="small" :disabled="!isElectron" @click="showDialog = true">
+              拦截设置
+            </UiButton>
+            <UiButton size="small" title="清除页面缓存并重新加载最新内容" @click="handleReload">
+              刷新
+            </UiButton>
           </template>
         </UiToolbar>
       </template>
@@ -433,13 +409,6 @@ onUnmounted(() => {
           allow="fullscreen; clipboard-read; clipboard-write"
         />
       </div>
-
-      <template #statusline>
-        <span>TREEASE EDITOR</span>
-        <span v-if="attached" class="mono">{{ ruleCount }} RULES · {{ hits }} HITS</span>
-        <span class="status-spacer" />
-        <span>{{ isOnline ? 'ONLINE' : 'CACHE ONLY' }}</span>
-      </template>
     </ToolSurface>
 
     <UiDialog v-model="showDialog" title="接口响应拦截" width="680px" destroy-on-close>
@@ -538,12 +507,17 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 18px;
   overflow: hidden;
 }
 
 .treease-surface {
   min-height: 0;
+}
+
+.treease-toolbar {
+  flex: 1;
+  min-width: 0;
 }
 
 .toolbar-src {
@@ -553,12 +527,6 @@ onUnmounted(() => {
   font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.toolbar-hint {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
   white-space: nowrap;
 }
 
@@ -575,10 +543,6 @@ onUnmounted(() => {
   width: 100%;
   border: 0;
   background: var(--color-on-solid);
-}
-
-.status-spacer {
-  flex: 1;
 }
 
 .intercept-alert {

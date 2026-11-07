@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
+import { useToolOverlayTarget, useToolPaneActive } from './overlay-target'
 
 withDefaults(defineProps<{
   title?: string
@@ -16,11 +17,19 @@ withDefaults(defineProps<{
 })
 
 const value = defineModel<boolean>({ required: true })
+
+const portalTarget = useToolOverlayTarget()
+const paneActive = useToolPaneActive()
+
+// 切到别的工具时关闭本工具里的弹窗：面板只是隐藏，弹窗若不主动关闭会继续锁 body 滚动
+watch(paneActive, (active) => {
+  if (!active) value.value = false
+})
 </script>
 
 <template>
   <DialogRoot :open="value" @update:open="value = $event">
-    <DialogPortal>
+    <DialogPortal :to="portalTarget">
       <DialogOverlay
         class="data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 ui-dialog-overlay"
       />

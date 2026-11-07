@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { IconName } from '../../../../renderer/shared/components/ui/icons'
 import type { DelayRuleConfig, HeaderAction, HeaderOperation, HeadersRuleConfig, InterceptorRule, QueryParamAction, QueryParamModification, QueryParamRuleConfig, RedirectRuleConfig, ReplaceRuleConfig, RequestBodyMode, RequestRuleConfig, ResponseRuleConfig, RuleFilters, RuleOperator, RuleSourceKey, RuleType, ScriptRuleConfig, ScriptRunAt, ScriptWorld, UserAgentRuleConfig } from '../../../../shared/interceptor'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
+import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { confirm } from '@renderer/shared/feedback'
 import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
@@ -8,9 +10,10 @@ import { REQUEST_METHODS, RESOURCE_TYPE_LABELS, RULE_DELAY_MAX_MS, RULE_TYPE_LAB
 import { useInterceptorStore } from '../stores/interceptorStore'
 import { RULE_TYPES, ruleTypeFromPath, ruleTypeRouteName } from '../tabs'
 
-const route = useRoute()
 const router = useRouter()
 const store = useInterceptorStore()
+const toolPath = useToolPath()
+const paneActive = useToolPaneActive()
 
 const pickerVisible = ref(false)
 const view = ref<'list' | 'editor'>('list')
@@ -42,7 +45,7 @@ const sortDir = ref<'asc' | 'desc'>('asc')
 const selectedIds = ref(new Set<string>())
 
 // 规则类型过滤走路由（/tools/interceptor/rules/<type>）：URL 可深链
-const activeType = computed<RuleType | null>(() => ruleTypeFromPath(route.path))
+const activeType = computed<RuleType | null>(() => ruleTypeFromPath(toolPath.value))
 
 const ruleTypeFilterOptions: Array<{ value: RuleType | null, label: string }> = [
   { value: null, label: '全部类型' },
@@ -469,6 +472,7 @@ function createRule(type: RuleType): void {
 }
 
 function handleEditorHotkey(event: KeyboardEvent): void {
+  if (!paneActive.value) return
   if (view.value !== 'editor') return
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
   event.preventDefault()

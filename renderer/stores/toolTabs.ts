@@ -56,6 +56,12 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
   const activeId = ref<string | null>(null)
   /** 最近访问过的工具 id（栈顶最新）。内存态：重启后只关心「打开了哪些」，不关心访问顺序 */
   const recentIds = ref<string[]>([])
+  /**
+   * 每个工具最后停留的完整路由（含子路由）。
+   * 工具页常驻后，切换回来必须回到原来的页签，而不是永远落到第一个子路由。
+   * 只存在内存里：重启后的页面状态本来就不保留。
+   */
+  const lastRouteById = ref<Record<string, string>>({})
 
   const openTools = computed<OpenTool[]>(() =>
     openIds.value
@@ -72,7 +78,22 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     if (idx === -1) return
     openIds.value.splice(idx, 1)
     recentIds.value = recentIds.value.filter(id => id !== toolId)
+    if (lastRouteById.value[toolId] !== undefined) {
+      const next = { ...lastRouteById.value }
+      delete next[toolId]
+      lastRouteById.value = next
+    }
     if (activeId.value === toolId) activeId.value = null
+  }
+
+  function rememberRoute(toolId: string, fullPath: string) {
+    if (!fullPath.startsWith('/tools/')) return
+    if (lastRouteById.value[toolId] === fullPath) return
+    lastRouteById.value = { ...lastRouteById.value, [toolId]: fullPath }
+  }
+
+  function lastRoute(toolId: string): string | null {
+    return lastRouteById.value[toolId] ?? null
   }
 
   /**
@@ -114,6 +135,8 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     openTools,
     close,
     recentFallback,
+    rememberRoute,
+    lastRoute,
     syncFromRoute,
   }
 })

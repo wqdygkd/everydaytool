@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { OfflinePackTabKey } from '../tabs'
+import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { storeToRefs } from 'pinia'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
@@ -15,11 +16,11 @@ import VSCodeDownloader from '../components/VSCodeDownloader.vue'
 import { useOfflinePackDownloadsStore } from '../stores/downloads'
 import { OFFLINE_PACK_TABS, tabKeyFromPath } from '../tabs'
 
-const route = useRoute()
 const router = useRouter()
+const toolPath = useToolPath()
 
 // 页签状态由路由驱动（/tools/offline-pack/:tab）：URL 可深链，前进后退可用
-const activeTab = computed(() => tabKeyFromPath(route.path))
+const activeTab = computed(() => tabKeyFromPath(toolPath.value))
 const historyOpen = ref(false)
 const downloads = useOfflinePackDownloadsStore()
 const { activeCount, activePercent } = storeToRefs(downloads)

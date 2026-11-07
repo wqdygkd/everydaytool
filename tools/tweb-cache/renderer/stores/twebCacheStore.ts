@@ -1,10 +1,10 @@
-// tweb-cache 渲染层状态：站点信息 + 影库 / 回收站（数据经平台归档引擎按本工具 scope 提供）。
-// 归档状态由主进程按 scope 推送：已有条目就地更新进度，新条目才防抖重扫列表。
+// tweb-cache 渲染层状态：站点信息 + 影库 / 回收站。
+// 归档状态由主进程推送：已有条目就地更新进度，新条目才防抖重扫列表。
 import type {
-  TelegramLibraryEntry,
-  TelegramLibraryEvent,
-  TelegramTrashEntry,
-} from '../../../../shared/telegram-cache'
+  ArchiveLibraryEntry,
+  ArchiveLibraryEvent,
+  ArchiveTrashEntry,
+} from '../../../../shared/media-archive'
 import type { TwebCacheSiteInfo } from '../../../../shared/tweb-cache'
 import { defineStore } from 'pinia'
 import {
@@ -15,8 +15,8 @@ import {
 
 export const useTwebCacheStore = defineStore('twebCache/state', () => {
   const site = ref<TwebCacheSiteInfo | null>(null)
-  const library = ref<TelegramLibraryEntry[]>([])
-  const trash = ref<TelegramTrashEntry[]>([])
+  const library = ref<ArchiveLibraryEntry[]>([])
+  const trash = ref<ArchiveTrashEntry[]>([])
   const ready = ref(false)
   const busy = reactive({
     library: false,
@@ -35,7 +35,7 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
     return twebCacheIpcChannels()
   }
 
-  function applyLibraryEvent(next: TelegramLibraryEvent): void {
+  function applyLibraryEvent(next: ArchiveLibraryEvent): void {
     const index = library.value.findIndex(
       entry => entry.peerId === next.peerId && entry.messageId === next.messageId,
     )
@@ -94,14 +94,14 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
   async function loadLibrary(silent = false): Promise<void> {
     if (!silent) busy.library = true
     try {
-      library.value = await invoke<TelegramLibraryEntry[]>(channels().LIBRARY_LIST)
+      library.value = await invoke<ArchiveLibraryEntry[]>(channels().LIBRARY_LIST)
     } finally {
       if (!silent) busy.library = false
     }
   }
 
   async function loadTrash(): Promise<void> {
-    trash.value = await invoke<TelegramTrashEntry[]>(channels().TRASH_LIST)
+    trash.value = await invoke<ArchiveTrashEntry[]>(channels().TRASH_LIST)
   }
 
   /** 旧目录正名 + 旧账号层迁移（幂等）；有改动则重扫列表 */
@@ -141,7 +141,7 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
 
     try {
       disposers.push(on(channels().EVENT_LIBRARY, (payload) => {
-        applyLibraryEvent(payload as TelegramLibraryEvent)
+        applyLibraryEvent(payload as ArchiveLibraryEvent)
       }))
 
       await acquireSite()

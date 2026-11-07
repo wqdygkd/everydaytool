@@ -20,8 +20,7 @@ export default antfu(
       '*.md',
       'auto-imports.d.ts',
       'components.d.ts',
-      // 子模块各自维护构建产物：telegram-tt 自带 eslint，tweb 使用 oxlint。
-      'telegram-tt',
+      // 子模块各自维护构建产物：tweb 使用 oxlint。
       'tweb',
     ],
   },

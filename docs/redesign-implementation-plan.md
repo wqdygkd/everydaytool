@@ -7,7 +7,7 @@
 ## 0. 约束与完成定义
 
 - [x] 不改 IPC 边界、数据分层与工具业务语义，只调整外壳、样式、布局和运行时挂载策略。
-- [x] 不覆盖与本次改版无关的用户改动；不清理 `TODO.md`、`telegram-tt/`、`tweb/`。
+- [x] 不覆盖与本次改版无关的用户改动；不清理 `TODO.md`、`tweb/`。
 - [x] 所有桌面尺寸按 1280 / 1440 / 1600 宽验收；本项目不新增移动端布局。
 - [x] 不透明、acrylic、mica、tabbed、vibrancy、transparent-only、夜色玻璃与 reduced-transparency 都可读。
 - [x] 工具仅在活动页签挂载；切走、关闭、回首页均释放组件、webview、IPC 订阅、定时器和工具级会话。
@@ -113,8 +113,7 @@
 
 - [x] 身份证号生成器：表单工作室；左 360px 参数并在参数末尾放置“生成 N 条”主按钮，右结果表按内容收缩且最高 320px；“复制全部”位于结果标题，生成后选中首行。
 - [x] 拦截器：流式工作台；启动 / 停止与流量表进主表面；CA / 说明 / 诊断进 inspector。
-- [x] Telegram 网络优化：webview 全幅；概览 / 任务 / 诊断 / 影库进可收起 inspector。
-- [x] Telegram 缓存（tweb）：与 Telegram 同构；页面、影库、缓存操作不铺概览卡。
+- [x] Telegram 缓存（tweb）：webview 全幅；页面、影库、缓存操作不铺概览卡。
 - [x] Treease 编辑器：全幅 webview；顶栏仅来源、状态、设置、刷新。
 - [x] 离线包下载：处理控制台；左 268px inspector，历史进底部抽屉。
 - [x] WXP 增强：处理控制台；启动设置进 inspector，主区放缓存 / 收藏表。
@@ -186,7 +185,6 @@
 | 场景 | 打开时 | 切回首页 / 关闭后 |
 | --- | --- | --- |
 | 拦截器 | `28818`、`59764` 监听 | 两端口关闭，`Browser bridge stopped` |
-| Telegram 网络优化 | `34100` 监听，1 个 webview | 端口关闭，`Telegram site server stopped` / `Telegram cache runtime stopped` |
 | tweb | `34200` 监听 | 端口关闭，`tweb site server stopped {"reason":"idle"}` |
 | 关闭启动中的拦截器页签 | 两端口监听 | 页签移除、回到首页、`toolRoots = 0`、两端口关闭 |
 | 应用退出 | — | Electron 窗口、`9222` 与全部工具端口关闭 |

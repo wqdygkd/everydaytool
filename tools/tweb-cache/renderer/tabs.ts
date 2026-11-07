@@ -1,4 +1,4 @@
-// tweb-cache 视图 / 路由映射（与 telegram-cache 同构：面板切换由子路由驱动，可深链）。
+// tweb-cache 视图 / 路由映射：面板切换由子路由驱动，可深链。
 export type TwebCacheTabKey = 'overview' | 'library'
 
 export interface TwebCacheTabDef {

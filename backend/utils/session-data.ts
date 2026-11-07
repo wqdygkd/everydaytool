@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 //
 // Electron 没有“每个 persist 分区自定义路径”的 API；唯一受支持的物理落盘方式是：
 // 在 app ready 之前调用 app.setPath('sessionData', <data-root>/session)。
-// 这样所有分区（Persist:telegram-cache、persist:treease-editor）都直接写在
+// 这样所有分区（persist:tweb-cache、persist:treease-editor）都直接写在
 // <data-root>/session/Partitions/<name>，**不使用任何 junction / 软链**。
 //
 // 约束：

@@ -593,8 +593,8 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 骨架 | 判据 | 结构 | 工具 |
 | --- | --- | --- | --- |
 | 流式工作台 | 持续扫读表格 / 流量 | header + 子视图导航 + 单一大表格表面 | 拦截器 |
-| 内嵌工作区 | 主体是 webview / 浏览器页面 | header + 浏览器工具条 + 全幅 webview + 可收起 inspector | Telegram 网络优化、tweb、Treease、WorkBuddy2API |
-| 表单工作室 | 左侧参数，右侧结果 | header + 左 360px 表单 / 右侧结果表 | 身份证号生成器 |
+| 内嵌工作区 | 主体是 webview / 浏览器页面 | header（可选）+ 浏览器工具条 + 全幅 webview + 可收起 inspector | tweb、WorkBuddy2API、Treease（无 header / statusline） |
+| 表单工作室 | 左侧参数，右侧结果 | header（可选）+ 左 360px 表单 / 右侧结果表 | 身份证号生成器（无 header / statusline） |
 | 处理控制台 | 启动 / 下载 / 同步 + 检查结果 | header + 左 268px inspector + 主任务表面 | WXP 增强、离线包下载 |
 
 ### 8.2 工具页 header
@@ -605,6 +605,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 工具详情 header 右上角不出现“打开工具 / Ctrl K”框；避免与全局命令面板、左轨搜索形成三入口重复。
 - 主按钮只对应工具的主要动作：启动、生成、下载、打开等。
 - 状态卡、说明卡和安装卡不得进入 header。
+- 工具页 header 不是强制项：身份证号生成器与 Treease 已移除 `WorkspaceHeader`，工具上下文由全局顶栏承载；Treease 的“拦截设置 / 刷新”放到 `ToolSurface` 工具栏末尾。
 
 ### 8.3 子视图导航
 
@@ -617,6 +618,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 - 一个工具只有一个主 `ToolSurface`，圆角 16px，玻璃 raised。
 - 顶部 `surface-toolbar` 高 48px：搜索、筛选、次要动作；底部 `statusline` 高 31px：记录数 / 进程 / 路径等低频信息。
+- `statusline` 同样是可选槽位：身份证号生成器与 Treease 不使用；低频状态移入 toolbar、inspector 或设置 dialog，不为了凑满底部再加一行。
 - 表格、webview、表单结果都直接占用表面；不额外套 `UiPanel`。
 - 详细设置、安装、说明、错误日志进入右侧 inspector 或按需抽屉。
 - 背景透明，工具页不得再铺整页 `--color-app-bg`；画布统一透明。
@@ -626,9 +628,8 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 工具 | 骨架 | 首屏必须突出 | 必须移出首屏 | 交互与状态 |
 | --- | --- | --- | --- | --- |
 | 拦截器 | 流式工作台 | 启动 / 停止、当前流量表、规则命中 | 设置说明、CA 证书长文、诊断卡 | 状态改为 header 内联一行；4 个子路由不变；规则编辑器用右侧抽屉；表格始终占满剩余高度 |
-| Telegram 网络优化 | 内嵌工作区 | Telegram webview、页面导航、影库入口 | 概览三卡、站点详情、缓存说明 | 主区域 webview 全幅；右侧 inspector 默认收起；任务 / 影库 / 诊断按需展开 |
-| Telegram 缓存（tweb） | 内嵌工作区 | tweb 页面、影库入口、缓存操作 | 站点 / 归档 / 媒体缓存的概览卡 | 与 Telegram 同构；侧栏页签保留，但不再堆三张概览面板 |
-| Treease 编辑器 | 内嵌工作区 | 全幅编辑器页面、拦截状态 | 拦截规则弹窗外的状态文案 | 顶栏只保留来源、状态 chip、设置、刷新；规则编辑继续用 dialog |
+| Telegram 缓存（tweb） | 内嵌工作区 | tweb 页面、影库入口、缓存操作 | 站点 / 归档 / 媒体缓存的概览卡 | 侧栏页签保留，但不再堆三张概览面板 |
+| Treease 编辑器 | 内嵌工作区 | 全幅编辑器页面、拦截状态 | 页面 header、statusline、重复状态文案 | 无 `WorkspaceHeader` / statusline；`ToolSurface` 工具栏左侧来源与状态 chip，右侧末尾“拦截设置 / 刷新”；规则编辑继续用 dialog |
 | 离线包下载 | 处理控制台 | 来源选择、下载参数、进行中任务 | 大段说明、历史列表 | 无工具页 header；左 268px inspector 切 6 个来源；主表面单一下载器；左栏底部「下载历史」打开底部抽屉（任务 + 历史）；GitHub 解析结果按「仓库卡 → 三段切换（Releases / 分支源码 / 单文件）→ 产物卡」垂直铺开，每张产物卡下每条加速线路一个 split 按钮（左下载 / 右复制链接），不再有全局线路下拉，也不做批量勾选 |
 | WXP 增强 | 处理控制台 | 启动 / 停止、路径与端口、缓存结果 | 三块并列面板、长说明 | header 内联状态；左 inspector 放启动设置；主区放缓存 / 收藏表 |
 | WorkBuddy2API | 内嵌工作区 | 上游面板 webview、启动 / 停止 | 安装、更新、说明、错误四块并列 | header 单行状态与启停；右 inspector 分“运行 / 安装 / 诊断”三段；关闭工具停止服务 |
@@ -639,8 +640,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 **结构**
 
 ```text
-WorkspaceHeader（仅图标 / 标题 / 一句用途）
-└─ ToolSurface
+ToolSurface（无 WorkspaceHeader / statusline，直接占满工作区）
    ├─ 左 config-pane（360px）
    │  ├─ 出生方式 → 年龄或出生日期 → 性别 → 地区 → 生成数量
    │  ├─ 1px 分隔线 + “生成 N 条”主按钮
@@ -652,6 +652,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 **参数列**
 
+- 该工具不使用 `WorkspaceHeader` 与 `ToolSurface` 的 statusline：工具名与用途由全局顶栏承载，页面只保留一个主表面上，外边距统一 `18px`。左右两列共用同一段顶部节奏（左栏标题区约 48px，右侧 result-head 固定 48px）。
 - 左栏固定 `360px`；宽度不足 `1180px` 时收至 `320px`。表单字段间距 `17px`，标签宽 `72px`，全部复用 `UiFormField` / `UiRadioGroup` / `UiSlider` / `UiSelect`。
 - 字段顺序固定为出生方式、年龄范围或出生日期、性别、地区、生成数量。按年龄显示一个双滑块 slider，轨道上方两端分别显示当前“最小 / 最大”年龄值（如“18 岁 / 60 岁”）；数值行使用 11px 次级文本、tabular-nums，距轨道 5px。双滑块圆点为 16px，圆心必须与 6px 轨道中心线重合。按出生日期显示两个原生 date input，中间用“至”连接。
 - 地区使用省 / 市 / 区三级 `UiSelect` 级联；未选省级时不显示市级，未选市级时不显示区级。每个 select 在左栏内独占一行，不并排压窄。
@@ -663,7 +664,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 - 结果标题固定 `48px` 高。左侧为“生成结果 + 点击号码行即可复制”；右侧依次为结果数 `UiChip` 与 `UiButton size="small"` 的“复制全部”。结果数为零时复制按钮 disabled。
 - 表格复用 `UiTable`，使用 `max-height="320"`，不再使用 `height="100%"`。单条结果时表格约 `70px` 高；20 条时表格停在 `320px` 并在表内滚动。
-- 结果表与 `ToolSurface` 左右边缘各保留 `16px` 呼吸空间，表格自身使用 `--radius-md` 圆角；不额外套 `UiPanel`。列顺序固定为身份证号、地区、出生日期、性别、操作；号码与日期使用 mono / tabular-nums。
+- 结果标题与表格之间保留 `12px` 间距；结果表与 `ToolSurface` 左右边缘各保留 `16px` 呼吸空间，表格自身使用 `--radius-md` 圆角；不额外套 `UiPanel`。列顺序固定为身份证号、地区、出生日期、性别、操作；号码与日期使用 mono / tabular-nums。
 - 生成后选中第一条；点击整行或行内“复制”都复制该号码并保持选中。复制全部复制换行分隔的全部号码。
 - 空结果保持紧凑空态，不撑满整个工作区；不得用大块空白或说明卡填补右侧。
 
@@ -675,11 +676,30 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 **迁移落点**
 
-- 修改 `tools/id-card-generator/renderer/pages/IdCardGeneratorPage.vue`：删除 `WorkspaceHeader` 的 actions / status 槽位；把主按钮移入 `config-pane`；把复制全部移入 `result-head`；将 `UiTable` 从 `height="100%"` 改为 `:max-height="320"`。
+- 修改 `tools/id-card-generator/renderer/pages/IdCardGeneratorPage.vue`：已删除 `WorkspaceHeader` 与 statusline；把主按钮移入 `config-pane`；把复制全部移入 `result-head`；将 `UiTable` 从 `height="100%"` 改为 `:max-height="320"`。
 - 不改生成算法、JSON 配置恢复、选中首行、行点击复制与 IPC；不新增工具级 store 或独立设计令牌。
 - 样式只落在页面 scoped SCSS；公共 `UiButton` / `UiChip` / `UiTable` 的视觉内核不改。
 
-### 9.2 设置页
+### 9.2 Treease 编辑器
+
+**结构**
+
+```text
+ToolSurface（无 WorkspaceHeader / statusline，直接占满工作区）
+   ├─ 48px toolbar
+   │  ├─ 左：来源地址（可省略）+ 离线 / 缓存模式 chip
+   │  └─ 右（末尾）：拦截设置、刷新
+   └─ 全幅 webview / iframe
+```
+
+**布局与约束**
+
+- 工具名与用途由全局顶栏提供，页面不再重复 `WorkspaceHeader`；页面外边距统一 `18px`。
+- 拦截状态只保留在“接口响应拦截”dialog 内；statusline 删除后不要再补一条重复的 ONLINE / RULES / HITS 文案。
+- “拦截设置 / 刷新”固定在 `UiToolbar` 的 `#end` 槽位。`UiToolbar` 必须撑满 `ToolSurface` 工具栏（`flex: 1; min-width: 0`），否则 `#end` 的 `margin-left: auto` 没有可推空间，按钮会贴在来源地址后面而不是行末。
+- 工具栏左侧只放来源与必要的状态 chip，不放大段说明；规则恢复 / 页面关闭释放等实现细节不进 UI。
+
+### 9.3 设置页
 
 - 作为应用自带页面挂载（不是页签、不进左轨已打开列表），入口固定在 rail 底部；标题栏显示齿轮 + “设置” + 一句话职责（`AppTab.description`）。
 - 使用单列文档栏 `760px`，与工具工作区区分。
@@ -726,7 +746,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 
 1. 读取并记录当前首页、设置页、8 个工具页在 1280 / 1440 / 1600 宽度的截图。
 2. 标记所有工具页的 `onUnmounted`、`dispose`、`onBeforeUnmount`、IPC 取消订阅与 webview 清理。
-3. 保留 `git status` 中与本任务无关的用户改动，不覆盖 `TODO.md`、`telegram-tt/`、`tweb/`。
+3. 保留 `git status` 中与本任务无关的用户改动，不覆盖 `TODO.md`、`tweb/`。
 4. 在 `docs/redesign-preview.html` 对照本文档逐项验收视觉，不先改业务组件。
 
 ### Phase 1 — 令牌、玻璃与基础组件
@@ -774,7 +794,7 @@ WorkspaceHeader（仅图标 / 标题 / 一句用途）
 2. 按风险从低到高迁移：
    1. 身份证号生成器 → 验证表单工作室。
    2. 拦截器 → 验证流式工作台与路由子视图。
-   3. Telegram 网络优化、tweb → 验证 webview + inspector。
+   3. tweb → 验证 webview + inspector。
    4. Treease 编辑器 → 验证全幅 webview。
    5. 离线包下载 → 验证处理控制台与历史抽屉。
    6. WXP 增强 → 验证进程状态、设置与缓存表。

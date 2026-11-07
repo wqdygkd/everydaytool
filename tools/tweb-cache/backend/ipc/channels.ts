@@ -1,6 +1,6 @@
-// tweb-cache 的 IPC 通道（独立命名空间，与 telegram-cache 互不影响）。
+// tweb-cache 的 IPC 通道（独立命名空间）。
 // 全部为窄接口：peerId / messageId / trashId / 数字，不接受路径或 URL。
-import { TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL } from '../../../../shared/telegram-cache.ts'
+import { TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL } from '../../../../shared/tweb-cache.ts'
 
 export const TWEB_CACHE_IPC_CHANNELS = {
   SITE_INFO: 'tweb-cache:site:info',

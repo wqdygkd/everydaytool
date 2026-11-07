@@ -31,3 +31,11 @@
 - `installCacheHandlers()` 在 initialize 预装协议层 handler，页面缓存不依赖 `interceptService.start()`；
   停止拦截只下规则，不移除 handler。
 - 缓存落盘位置由 `sessionData` 决定，因此 HTTP 缓存自然写入数据目录；不要在业务代码里另建缓存目录。
+
+## 页面骨架（UI）
+
+- 不使用 `WorkspaceHeader` 与 `ToolSurface` 的 statusline：工具名 / 用途由全局顶栏承载，页面只保留一块主 `ToolSurface`，外边距统一 `18px`。
+- `ToolSurface` 工具栏左侧是来源地址与离线 / 缓存模式 chip，右侧末尾是“拦截设置 / 刷新”。
+- `UiToolbar` 需要 `flex: 1; min-width: 0` 撑满工具栏；否则 `#end` 的 `margin-left: auto` 失效，动作会贴在前一项后面。
+- 拦截状态（拦截中 / 规则数 / 命中数 / 未启动）只放在“接口响应拦截”dialog 内，不在页面顶部或底部重复。
+- 工具页常驻：切换工具只隐藏面板，关闭工具才卸载并触发 `INTERCEPT_STOP`；切换工具时拦截与页面状态保持。

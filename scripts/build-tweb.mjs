@@ -196,7 +196,7 @@ function dirSizeBytes(dir) {
 
 function main() {
   if (!existsSync(pkgPath)) {
-    fail(`找不到 ${path.relative(rootDir, pkgPath)}：请先克隆 tweb 到仓库根（docs/tweb-cache-plan.md §0）`)
+    fail(`找不到 ${path.relative(rootDir, pkgPath)}：请先克隆 tweb 到仓库根`)
   }
 
   const runtime = resolveRuntime()

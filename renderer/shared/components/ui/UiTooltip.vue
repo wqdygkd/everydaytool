@@ -7,6 +7,7 @@
 // 本组件的 scopeId，写成 `<TooltipContent class="ui-tooltip">` 的 scoped 样式会整条失效
 // （提示会变成 16px 透明底的裸文字）。把可样式化的结构放进本模板里的 div 才吃得到 scoped。
 import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui'
+import { useToolOverlayTarget } from './overlay-target'
 
 withDefaults(defineProps<{
   /** 提示文案（纯文本，不解析 HTML） */
@@ -21,6 +22,7 @@ withDefaults(defineProps<{
 
 /** 定位层（Reka 根元素）只承担定位与层级：不吃指针事件，避免提示框挡住底下内容 */
 const layerStyle = { pointerEvents: 'none', zIndex: 2600 } as const
+const portalTarget = useToolOverlayTarget()
 </script>
 
 <template>
@@ -29,7 +31,7 @@ const layerStyle = { pointerEvents: 'none', zIndex: 2600 } as const
       <TooltipTrigger as-child>
         <slot />
       </TooltipTrigger>
-      <TooltipPortal>
+      <TooltipPortal :to="portalTarget">
         <TooltipContent :side="side" :side-offset="8" :style="layerStyle">
           <div class="ui-tooltip">
             {{ text }}

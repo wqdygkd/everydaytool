@@ -267,7 +267,7 @@ function isAppOwnUrl(url: string | undefined): boolean {
 
 // ── 权限策略 ──
 // 默认拒绝，按会话白名单放行。主会话（应用自身页面）只需要剪贴板写与全屏（复制按钮 / 全屏 API）；
-// webview 分区（treease / telegram 浏览真实站点）按浏览器语义放行常见浏览权限。
+// webview 分区（treease / tweb 浏览真实站点）按浏览器语义放行常见浏览权限。
 // 其余（openExternal、clipboard-read 等）一律拒绝——外跳统一走 edt-app:open-external。
 const APP_SESSION_PERMISSIONS = new Set<string>(['clipboard-sanitized-write', 'fullscreen'])
 const GUEST_SESSION_PERMISSIONS = new Set<string>([
@@ -338,7 +338,7 @@ function hardenWindow(win: BrowserWindow): void {
 }
 
 // 所有 webview 的顶层导航闸：只允许 http(s) / about:blank。工具域自己的域名白名单
-// （如 telegram 观测页）是额外收紧；这一层保证任何 webview 都无法被导航到 file:/data: 等本地协议。
+// （如 tweb 归档页）是额外收紧；这一层保证任何 webview 都无法被导航到 file:/data: 等本地协议。
 function registerWebviewGuards(): void {
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return

@@ -171,12 +171,12 @@
   /* 文档栏：表单 / 说明型页面（设置、离线包、WXP）的**唯一内容栏宽度**。
      这类页面不是数据网格，一行横跨 1600px 时「标签 → 控件」的距离会远到需要转头；
      栏宽固定后，左边缘、说明的右边缘、输入框的右边缘才会落在同一条线上。
-     数据 / 工作区型页面（telegram、环境浏览器、沙箱、拦截器）不设栏，铺满窗口。 */
+     数据 / 工作区型页面（tweb、拦截器）不设栏，铺满窗口。 */
   --column-document: 760px;
   --titlebar-height: 48px; /* 自定义顶部工作区栏高 */
 
   color-scheme: light; /* 固定浅色：禁用系统深色表单控件 */
-  /* telegram 字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
+  /* 全局字体栈（Roboto 400/500 由 renderer/main.ts 引入的自托管字体提供） */
   font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif; /* 正文 UI */
   --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace; /* 等宽 / 数字 */
   --font-brand: "Nunito", "Roboto", sans-serif; /* 品牌标 / 字母头像（Nunito ExtraBold 800 自托管） */

@@ -97,9 +97,8 @@
 - 工具链：`node v26.12.0` + `pnpm 10.6.3`（v22 的 corepack 在沙箱内无法写 `~/.cache`，改用已安装的 v26；满足项目 `>=22.18`）。
 - `pnpm lint`：通过。
 - `pnpm data-layers:check`：通过（38 个条目 / 25 条搬迁规则 / 146 个后端文件 / 1 处显式豁免）。
-- `pnpm typecheck`：**基线失败**，共 18 个既有错误：
+- `pnpm typecheck`：**基线失败**，存在既有错误：
   - `tools/interceptor/renderer/components/TargetsPanel.vue`：2
-  - `tools/telegram-cache/renderer/components/DiagnosticsPanel.vue`：16
   - 全部是 `Store<...>` 上访问 `.value` 的类型错误，与 skill-manager 无关。
 - `git status`：仅有本次设计文档/预览/实施计划的改动，无其它未提交代码。
 

@@ -16,6 +16,7 @@ import {
 // - 选项经 :options 传入,value 统一以字符串匹配,发射字符串
 // - 数值型消费方(缓存配额 / 状态码)在自身 handler 里 Number() 转换
 import { computed, useAttrs } from 'vue'
+import { useToolOverlayTarget, useToolPaneActive } from './overlay-target'
 
 export interface UiSelectOption {
   label: string | number
@@ -47,6 +48,14 @@ const modelValue = useVModel(props, 'modelValue', emit)
 
 const attrs = useAttrs()
 
+const open = ref(false)
+const portalTarget = useToolOverlayTarget()
+const paneActive = useToolPaneActive()
+
+watch(paneActive, (active) => {
+  if (!active) open.value = false
+})
+
 // Reka 用空字符串表示「未选择」，不能作为 SelectItem.value。
 // 消费方确实需要空值选项时（如身份证的「随机全国」）在组件内核换成内部哨兵，
 // 对外仍只发射原始空字符串，占位符语义保持不变。
@@ -76,6 +85,7 @@ function onUpdate(value: string) {
 
 <template>
   <SelectRoot
+    v-model:open="open"
     :model-value="selectedKey"
     :disabled="disabled"
     @update:model-value="onUpdate"
@@ -90,7 +100,7 @@ function onUpdate(value: string) {
         <ChevronDownIcon :size="16" class="ui-select-caret" />
       </SelectIcon>
     </SelectTrigger>
-    <SelectPortal>
+    <SelectPortal :to="portalTarget">
       <SelectContent :side-offset="4" position="popper" class="ui-select-content">
         <SelectViewport class="ui-select-viewport">
           <SelectItem
