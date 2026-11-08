@@ -10,6 +10,14 @@ export const ARCHIVE_LOCAL_RESPONSE_MIME_PREFIX = 'image/'
 export type ArchiveMessageState = 'missing' | 'queued' | 'downloading' | 'partial' | 'complete' | 'failed'
 export type ArchiveAttachmentState = 'pending' | 'partial' | 'complete' | 'failed'
 export type ArchiveMediaLinkMode = 'hardlink' | 'copy' | 'object'
+/**
+ * `complete` 的来源：
+ * - direct：本条消息自己有完整缓存；
+ * - source：本条是转发，缓存落在转发源消息上；
+ * - forward：本条是源消息，缓存落在某份转发副本上；
+ * - media：本条没有直接缓存，但同媒体 + 同正文长度的其它消息已缓存。
+ */
+export type ArchiveStatusVia = 'direct' | 'source' | 'forward' | 'media'
 
 export interface ArchiveMessagePeerSnapshot {
   id: string
@@ -31,6 +39,7 @@ export interface ArchiveThumbnailSnapshot {
   mediaKey: string
   mimeType: string
   size: number
+  /** 相对消息目录（`media/<file>`），peer 目录改名不受影响 */
   relativePath: string
   savedAt: number
 }
@@ -44,7 +53,7 @@ export interface ArchiveMessageAttachment {
   expectedSize?: number
   actualSize?: number
   sha256?: string
-  /** 相对工具命名空间（assets 层）的路径，如 `messages/peer-<peerId>/<mid>/media/<mediaKey>.jpg` */
+  /** 相对消息目录的路径（`media/<mediaKey>.jpg`）；旧归档可能是完整 `messages/…`，读取时兼容 */
   relativePath?: string
   linkMode?: ArchiveMediaLinkMode
   status: ArchiveAttachmentState
@@ -127,6 +136,21 @@ export interface ArchiveMessageStatusEntry {
   attachments?: number
   savedAt?: number
   error?: string
+  /** 仅 complete 时有意义；省略等价于 direct */
+  via?: ArchiveStatusVia
+  /** via 非 direct 时，实际承载缓存的消息（用于“在文件夹中显示”等操作） */
+  resolved?: { peerId: string, messageId: number }
+}
+
+/** 页面查询状态时提供的等价线索（可选，用于识别转发 / 同内容副本） */
+export interface ArchiveMessageStatusHint {
+  messageId: number
+  /** 转发源快照：只有同时含 id 与 messageId 时才用于精确关联 */
+  forwardSource?: ArchiveForwardSourceSnapshot
+  /** 本条消息的媒体 key（`photo_<id>` / `document_<id>`），用于内容签名匹配 */
+  mediaKeys?: string[]
+  /** 本条消息正文长度（与 mediaKeys 一起构成内容签名） */
+  textChars?: number
 }
 
 export interface ArchiveLibraryEntry {
@@ -161,6 +185,8 @@ export interface ArchiveLibraryEvent {
   received?: number
   expected?: number
   progress?: number
+  via?: ArchiveStatusVia
+  resolved?: { peerId: string, messageId: number }
 }
 
 export interface ArchiveTrashEntry {

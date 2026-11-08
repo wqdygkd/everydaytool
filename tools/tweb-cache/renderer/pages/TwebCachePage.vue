@@ -9,7 +9,6 @@ import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { TWEB_CACHE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { useTwebCacheStore } from '../stores/twebCacheStore'
 import { tabKeyFromPath, TWEB_CACHE_TABS } from '../tabs'
@@ -20,6 +19,36 @@ const store = useTwebCacheStore()
 const isElectron = isElectronEnvironment()
 const toolPath = useToolPath()
 
+const INSPECTOR_PREF_STORAGE_KEY = 'twebCache.inspector'
+const INSPECTOR_DEFAULT_WIDTH = 360
+const INSPECTOR_MIN_WIDTH = 320
+const INSPECTOR_MAX_WIDTH = 720
+
+interface InspectorPreference {
+  open?: boolean
+  width?: number
+}
+
+function readInspectorPreference(): InspectorPreference {
+  try {
+    const raw = localStorage.getItem(INSPECTOR_PREF_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as { open?: unknown, width?: unknown }
+    const width = typeof parsed.width === 'number' && Number.isFinite(parsed.width)
+      ? Math.min(INSPECTOR_MAX_WIDTH, Math.max(INSPECTOR_MIN_WIDTH, Math.round(parsed.width)))
+      : undefined
+    return {
+      open: typeof parsed.open === 'boolean' ? parsed.open : undefined,
+      width,
+    }
+  } catch {
+    return {}
+  }
+}
+
+const activeTab = computed(() => tabKeyFromPath(toolPath.value))
+const inspectorPreference = readInspectorPreference()
+
 const webviewRef = shallowRef<TwebWebviewTag | null>(null)
 const boundElements = new WeakSet<object>()
 const pageUrl = ref('')
@@ -29,7 +58,8 @@ const initError = ref('')
 const canGoBack = ref(false)
 const canGoForward = ref(false)
 const devtoolsOpen = ref(false)
-const inspectorOpen = ref(false)
+const inspectorOpen = ref(inspectorPreference.open ?? activeTab.value !== 'overview')
+const inspectorWidth = ref(inspectorPreference.width ?? INSPECTOR_DEFAULT_WIDTH)
 
 const site = computed(() => store.site)
 const pageSrc = computed(() => site.value?.url ?? '')
@@ -41,23 +71,10 @@ watch(originNotice, () => {
   originNoticeDismissed.value = false
 })
 
-const activeTab = computed(() => tabKeyFromPath(toolPath.value))
 const displayUrl = computed(() => pageUrl.value || pageSrc.value || '')
 const inspectorTitle = computed(() =>
   TWEB_CACHE_TABS.find(tab => tab.key === activeTab.value)?.label ?? '工具详情',
 )
-const statusLabel = computed(() => {
-  if (initError.value) return '后端未就绪'
-  if (loadError.value) return '页面加载失败'
-  if (!site.value?.url) return siteError.value ? '站点未就绪' : '正在启动'
-  return originNotice.value ? '登录态已重置' : '本地站点已就绪'
-})
-const statusTone = computed<'neutral' | 'success' | 'warning' | 'danger'>(() => {
-  if (initError.value || loadError.value) return 'danger'
-  if (!site.value?.url || originNotice.value) return 'warning'
-  return 'success'
-})
-
 const menuItems = computed(() => TWEB_CACHE_TABS.map(tab => ({
   value: tab.key as string,
   label: tab.label,
@@ -67,6 +84,8 @@ const menuItems = computed(() => TWEB_CACHE_TABS.map(tab => ({
 interface LibraryRow extends ArchiveLibraryEntry {
   groupTitle: string
   groupSize: number
+  /** 组内首行 = 组大小；其余行 = 0（被上面的单元格合并掉） */
+  groupSpan: number
 }
 
 const groupedLibrary = computed<LibraryRow[]>(() => {
@@ -82,16 +101,29 @@ const groupedLibrary = computed<LibraryRow[]>(() => {
   for (const entries of groups.values()) {
     const first = entries[0]
     const title = first.peerTitle || first.peerId
-    entries.forEach((entry) => {
+    entries.forEach((entry, index) => {
       rows.push({
         ...entry,
         groupTitle: title,
         groupSize: entries.length,
+        groupSpan: index === 0 ? entries.length : 0,
       })
     })
   }
   return rows
 })
+
+/** 会话 / 消息列按组纵向合并；其他列不合并 */
+function librarySpanMethod({ row, columnIndex }: {
+  row: Record<PropertyKey, any>
+  rowIndex: number
+  columnIndex: number
+}): [number, number] | undefined {
+  if (columnIndex !== 0) return undefined
+  const span = Number(row.groupSpan ?? 1)
+  if (span > 1) return [span, 1]
+  return span === 0 ? [0, 1] : undefined
+}
 
 function safeCall<T>(fn: () => T, fallback: T): T {
   try {
@@ -195,6 +227,8 @@ const mediaCacheLoading = ref(false)
 const mediaCacheClearing = ref(false)
 const mediaCacheBusy = ref(false)
 const thumbnailBackfillRunning = ref(false)
+const pausingAll = ref(false)
+const hasActiveCache = computed(() => store.library.some(entry => entry.state === 'downloading'))
 const documentVisibility = useDocumentVisibility()
 const mediaCacheAutoRefresh = useIntervalFn(() => {
   if (documentVisibility.value === 'visible' && inspectorOpen.value && activeTab.value === 'overview') {
@@ -298,7 +332,6 @@ function startMediaCacheAutoRefresh(): void {
 }
 
 watch(activeTab, (tab) => {
-  if (tab !== 'overview') inspectorOpen.value = true
   if (inspectorOpen.value && tab === 'overview') void refreshMediaCache(true)
 })
 
@@ -356,18 +389,103 @@ watch(() => store.pendingJump, () => {
   if (jump) void runJump(jump)
 })
 
+/** 影库「继续缓存」：调 tweb 页面里挂的 window.__EDT_RESUME_CACHE__（从 .part 续传） */
+async function resumeEntry(entry: ArchiveLibraryEntry): Promise<void> {
+  const wv = webviewRef.value
+  if (!wv) {
+    toast.warning('tweb 页面尚未就绪')
+    return
+  }
+  if (!/^-?\d{1,20}$/.test(entry.peerId) || !Number.isSafeInteger(entry.messageId)) return
+
+  const script = '(() => {'
+    + 'const fn = window.__EDT_RESUME_CACHE__;'
+    + `return typeof fn === 'function' ? fn(${JSON.stringify(entry.peerId)}, ${entry.messageId}) : null;`
+    + '})()'
+  try {
+    const result = await wv.executeJavaScript(script, true) as { started?: boolean, reason?: string } | null
+    if (!result) {
+      toast.warning('tweb 页面未启用归档客户端')
+      return
+    }
+    if (!result.started) {
+      toast.warning(result.reason === 'busy' ? '这条消息正在缓存' : '该消息还没有在 tweb 里加载，请先打开对应会话')
+      return
+    }
+    toast.success('已开始继续缓存')
+  } catch (error) {
+    toast.error(`继续缓存失败：${(error as Error).message}`)
+  }
+}
+
+/** 暂停影库 → 页面的全部缓存任务：只中断，`.part` 保留，之后可继续缓存 */
+async function pauseAllCaches(): Promise<void> {
+  const wv = webviewRef.value
+  if (!wv) {
+    toast.warning('tweb 页面尚未就绪')
+    return
+  }
+  pausingAll.value = true
+  try {
+    const paused = await wv.executeJavaScript(
+      '(() => { const fn = window.__EDT_PAUSE_ALL_ARCHIVE__; return typeof fn === \'function\' ? fn() : null; })()',
+      true,
+    ) as number | null
+    if (paused === null) {
+      toast.warning('tweb 页面未启用归档客户端')
+      return
+    }
+    store.clearActiveArchives()
+    // 等 abort 落到 catch（状态改回 partial）再重扫，避免刚暂停又读回「缓存中」
+    await new Promise(resolve => window.setTimeout(resolve, 300))
+    await store.loadLibrary(true)
+    toast.success(paused > 0 ? `已暂停 ${paused} 个缓存任务` : '没有正在进行的缓存任务')
+  } catch (error) {
+    toast.error(`暂停失败：${(error as Error).message}`)
+  } finally {
+    pausingAll.value = false
+  }
+}
+
 function switchTab(key: string): void {
   if (key === activeTab.value) return
   const tab = TWEB_CACHE_TABS.find(item => item.key === key)
   if (tab) {
-    inspectorOpen.value = true
+    setInspectorOpen(true)
     router.push({ name: tab.routeName })
   }
 }
 
 function openInspector(): void {
-  inspectorOpen.value = true
+  setInspectorOpen(true)
   if (activeTab.value === 'overview') void refreshMediaCache(true)
+}
+
+function closeInspector(): void {
+  setInspectorOpen(false)
+}
+
+function setInspectorOpen(open: boolean): void {
+  inspectorOpen.value = open
+  writeInspectorPreference()
+}
+
+function setInspectorWidth(width: number): void {
+  inspectorWidth.value = width
+}
+
+function finishInspectorResize(width: number): void {
+  inspectorWidth.value = width
+  writeInspectorPreference()
+}
+
+function writeInspectorPreference(): void {
+  try {
+    localStorage.setItem(INSPECTOR_PREF_STORAGE_KEY, JSON.stringify({
+      open: inspectorOpen.value,
+      width: inspectorWidth.value,
+    }))
+  } catch {}
 }
 
 async function openDir(entry: ArchiveLibraryEntry): Promise<void> {
@@ -422,6 +540,7 @@ async function refreshAll(): Promise<void> {
   try {
     await Promise.all([
       store.refreshSite(),
+      store.loadArchiveDirInfo(),
       store.loadLibrary(),
       store.loadTrash(),
       refreshMediaCache(true),
@@ -435,7 +554,59 @@ async function openDataDir(): Promise<void> {
   try {
     await store.openDataDir()
   } catch (error) {
-    toast.error((error as Error).message || '打开数据目录失败')
+    toast.error((error as Error).message || '打开归档目录失败')
+  }
+}
+
+async function selectArchiveDir(): Promise<void> {
+  let directory: string | null = null
+  try {
+    directory = await store.selectArchiveDir()
+  } catch (error) {
+    toast.error((error as Error).message || '选择归档目录失败')
+    return
+  }
+  if (!directory) return
+  if (store.archiveDir && directory === store.archiveDir.archiveDir) return
+
+  try {
+    await confirm(
+      `把 Telegram 归档切换到：\n${directory}\n\n现有的 messages/ 与 trash/ 会整体迁移；`
+      + '索引留在数据目录，迁移完成后影库立即指向新位置。',
+      '自定义归档目录',
+      { type: 'warning', confirmButtonText: '迁移并切换', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+
+  try {
+    const result = await store.changeArchiveDir(directory)
+    toast.success(result.changed ? `归档目录已切换，迁移 ${result.moved.length} 项` : '归档目录未变化')
+  } catch (error) {
+    toast.error((error as Error).message || '切换归档目录失败')
+  }
+}
+
+async function resetArchiveDir(): Promise<void> {
+  const info = store.archiveDir
+  if (!info?.isCustom) return
+  try {
+    await confirm(
+      `恢复默认归档目录：\n${info.defaultArchiveDir}\n\n`
+      + '当前的 messages/ 与 trash/ 会迁回该目录；目标里已有同名非空目录时不会覆盖。',
+      '恢复默认归档目录',
+      { type: 'warning', confirmButtonText: '恢复默认', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+
+  try {
+    const result = await store.changeArchiveDir(null)
+    toast.success(result.changed ? '已恢复默认归档目录' : '归档目录未变化')
+  } catch (error) {
+    toast.error((error as Error).message || '恢复默认归档目录失败')
   }
 }
 
@@ -456,7 +627,8 @@ function progressOf(entry: ArchiveLibraryEntry): number {
 function stateLabel(entry: ArchiveLibraryEntry): string {
   switch (entry.state) {
     case 'complete': return '已缓存'
-    case 'partial':
+    // partial 是「未完成」（含上次中断），只有 downloading 才是本进程正在写盘
+    case 'partial': return '部分缓存'
     case 'downloading': return '缓存中'
     case 'queued': return '排队中'
     case 'failed': return '失败'
@@ -476,7 +648,6 @@ function stateTone(entry: ArchiveLibraryEntry): 'success' | 'warning' | 'primary
 }
 
 onMounted(async () => {
-  if (activeTab.value !== 'overview') inspectorOpen.value = true
   if (!isElectron) return
   try {
     await store.init()
@@ -491,33 +662,17 @@ onUnmounted(() => {
   const wv = webviewRef.value
   if (wv && devtoolsOpen.value) safeCall(() => wv.closeDevTools(), undefined)
   webviewRef.value = null
+  writeInspectorPreference()
   store.dispose()
 })
 </script>
 
 <template>
   <div class="tool-page tweb-page">
-    <WorkspaceHeader
-      icon="telegram"
-      title="Telegram 缓存（tweb）"
-      description="内嵌 tweb 页面，按需查看归档、回收站与页面媒体缓存"
-      :status-label="statusLabel"
-      :status-tone="statusTone"
-    >
-      <template #actions>
-        <UiButton size="small" @click="openInspector">
-          工具详情
-        </UiButton>
-        <UiButton size="small" type="primary" :disabled="!displayUrl" @click="openInBrowser">
-          外部打开
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
-
     <div class="embedded-stage">
       <ToolSurface class="tweb-surface">
         <template #toolbar>
-          <UiToolbar gap="sm" flush>
+          <UiToolbar class="tweb-toolbar" gap="sm" flush>
             <UiIconButton icon="arrowLeft" label="后退" :disabled="!canGoBack" @click="goBack" />
             <UiIconButton icon="arrowRight" label="前进" :disabled="!canGoForward" @click="goForward" />
             <UiIconButton icon="refresh" label="刷新页面" @click="reload" />
@@ -525,6 +680,12 @@ onUnmounted(() => {
             <span v-if="loading" class="loading-dot" aria-label="加载中" />
 
             <template #end>
+              <UiIconButton
+                icon="external"
+                label="外部打开"
+                :disabled="!displayUrl"
+                @click="openInBrowser"
+              />
               <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
               <UiIconButton
                 icon="info"
@@ -598,23 +759,19 @@ onUnmounted(() => {
             </UiGroup>
           </div>
         </div>
-
-        <template #statusline>
-          <span>TWEB LOCAL</span>
-          <span v-if="store.site?.port" class="mono">PORT {{ store.site.port }}</span>
-          <span>{{ store.library.length }} 条归档</span>
-          <span v-if="mediaCacheUsage">媒体缓存 {{ formatBytes(mediaCacheUsage.total) }}</span>
-          <span class="status-spacer" />
-          <span>{{ inspectorOpen ? 'INSPECTOR ON' : 'WEBVIEW ONLY' }}</span>
-        </template>
       </ToolSurface>
 
       <ToolSideInspector
         :open="inspectorOpen"
         :title="inspectorTitle"
-        :width="360"
+        :width="inspectorWidth"
+        resizable
+        :min-width="INSPECTOR_MIN_WIDTH"
+        :max-width="INSPECTOR_MAX_WIDTH"
         body-padding="12px"
-        @close="inspectorOpen = false"
+        @update:width="setInspectorWidth"
+        @resize-end="finishInspectorResize"
+        @close="closeInspector"
       >
         <div class="inspector-content">
           <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
@@ -651,9 +808,6 @@ onUnmounted(() => {
                   页面由工具自己的回环端口托管；归档 API 与媒体流由平台归档引擎提供。
                 </UiHint>
                 <div class="inspector-actions">
-                  <UiButton size="small" @click="openDataDir">
-                    打开数据目录
-                  </UiButton>
                   <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
                     刷新
                   </UiButton>
@@ -675,8 +829,37 @@ onUnmounted(() => {
                     {{ store.pendingArchives.length }} 条
                   </UiDetailItem>
                 </UiDetailGrid>
+                <div class="archive-dir-row">
+                  <span class="archive-dir-path mono" :title="store.archiveDir?.archiveDir">
+                    {{ store.archiveDir?.archiveDir || '—' }}
+                  </span>
+                  <UiChip :tone="store.archiveDir?.isCustom ? 'primary' : 'neutral'">
+                    {{ store.archiveDir?.isCustom ? '自定义' : '默认' }}
+                  </UiChip>
+                </div>
+                <div class="inspector-actions">
+                  <UiButton size="small" @click="openDataDir">
+                    打开归档目录
+                  </UiButton>
+                  <UiButton size="small" :loading="store.busy.archiveDir" @click="selectArchiveDir">
+                    更改…
+                  </UiButton>
+                  <UiButton
+                    v-if="store.archiveDir?.isCustom"
+                    size="small"
+                    :loading="store.busy.archiveDir"
+                    @click="resetArchiveDir"
+                  >
+                    恢复默认
+                  </UiButton>
+                </div>
                 <UiHint block>
-                  归档文件保存在 assets/tweb-cache/，与页面登录态分开存放。
+                  <template v-if="store.archiveDir?.isCustom">
+                    已单独指定归档目录，不影响全局资产目录；索引仍在数据目录，迁移失败会自动回滚。
+                  </template>
+                  <template v-else>
+                    默认保存在 assets/tweb-cache/，与页面登录态分开；可单独指定到其他磁盘。
+                  </template>
                 </UiHint>
               </section>
 
@@ -716,33 +899,56 @@ onUnmounted(() => {
                     <strong>本地影库</strong>
                     <span>{{ store.library.length }} 条记录</span>
                   </div>
-                  <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
-                    刷新
-                  </UiButton>
+                  <div class="head-actions">
+                    <UiButton
+                      size="small"
+                      :disabled="!hasActiveCache"
+                      :loading="pausingAll"
+                      @click="pauseAllCaches"
+                    >
+                      全部暂停
+                    </UiButton>
+                    <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
+                      刷新
+                    </UiButton>
+                  </div>
                 </header>
                 <UiTable
                   :data="groupedLibrary"
-                  max-height="320"
+                  :span-method="librarySpanMethod"
+                  max-height="min(560px, calc(100vh - 300px))"
                   empty-text="还没有本地缓存：先在 tweb 页面里右键「缓存此消息」"
                 >
-                  <UiTableColumn label="会话 / 消息" min-width="146">
+                  <UiTableColumn label="会话 / 消息" min-width="96">
                     <template #default="{ row }">
-                      <div class="library-main">
-                        <img
-                          v-if="row.thumbnailUrl"
-                          class="library-thumb"
-                          :src="row.thumbnailUrl"
-                          loading="lazy"
-                          alt=""
-                        >
-                        <span class="library-message">
-                          <span class="mono library-title">{{ row.groupTitle }}</span>
-                          <span class="muted">
-                            #{{ row.messageId }} · {{ formatBytes(row.size) }}
-                            <template v-if="row.groupSize > 1"> · 组内 {{ row.groupSize }} 条</template>
-                          </span>
-                        </span>
-                      </div>
+                      <span class="library-group">
+                        <span class="mono library-title" :title="row.groupTitle">{{ row.groupTitle }}</span>
+                        <span v-if="row.groupSize > 1" class="muted">相册 · {{ row.groupSize }} 条</span>
+                      </span>
+                    </template>
+                  </UiTableColumn>
+                  <UiTableColumn label="消息 ID" width="64" align="right">
+                    <template #default="{ row }">
+                      <span class="mono">{{ row.messageId }}</span>
+                    </template>
+                  </UiTableColumn>
+                  <UiTableColumn label="预览" width="60">
+                    <template #default="{ row }">
+                      <img
+                        v-if="row.thumbnailUrl"
+                        class="library-thumb"
+                        :src="row.thumbnailUrl"
+                        loading="lazy"
+                        alt=""
+                      >
+                      <span v-else class="library-thumb library-thumb--empty">
+                        <UiIcon name="layers" :size="14" />
+                      </span>
+                    </template>
+                  </UiTableColumn>
+                  <UiTableColumn label="大小" width="80" align="right">
+                    <template #default="{ row }">
+                      <span class="mono">{{ formatBytes(row.size) }}</span>
                     </template>
                   </UiTableColumn>
                   <UiTableColumn label="状态" width="78">
@@ -759,9 +965,16 @@ onUnmounted(() => {
                       </div>
                     </template>
                   </UiTableColumn>
-                  <UiTableColumn label="操作" width="92" align="right">
+                  <UiTableColumn label="操作" width="124" align="right">
                     <template #default="{ row }">
                       <div class="row-actions">
+                        <UiIconButton
+                          v-if="toEntry(row).state !== 'complete'"
+                          icon="download"
+                          :size="24"
+                          label="继续缓存"
+                          @click="resumeEntry(toEntry(row))"
+                        />
                         <UiIconButton
                           icon="arrowRight"
                           :size="24"
@@ -820,7 +1033,7 @@ onUnmounted(() => {
 .tweb-page {
   display: flex;
   flex-direction: column;
-  padding: 0 18px 18px;
+  padding: 18px;
   overflow: hidden;
 }
 
@@ -834,6 +1047,12 @@ onUnmounted(() => {
 .tweb-surface {
   min-width: 0;
   min-height: 0;
+}
+
+/* 让 `#end` 真正贴到工具栏最右边（否则 UiToolbar 只按内容宽度收缩，右侧留空） */
+.tweb-toolbar {
+  flex: 1;
+  min-width: 0;
 }
 
 .url-pill {
@@ -961,6 +1180,13 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: var(--spacing-sm);
 
+  > .head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex: none;
+  }
+
   > div {
     display: grid;
     min-width: 0;
@@ -985,18 +1211,26 @@ onUnmounted(() => {
   gap: var(--spacing-sm);
 }
 
+.archive-dir-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.archive-dir-path {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
 .row-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-xs);
-}
-
-.library-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
 }
 
 .library-thumb {
@@ -1008,7 +1242,13 @@ onUnmounted(() => {
   background: var(--color-fill);
 }
 
-.library-message {
+.library-thumb--empty {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+}
+
+.library-group {
   display: grid;
   min-width: 0;
   line-height: 1.35;
@@ -1037,10 +1277,6 @@ onUnmounted(() => {
 
 .danger-hint {
   color: var(--color-warning);
-}
-
-.status-spacer {
-  flex: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

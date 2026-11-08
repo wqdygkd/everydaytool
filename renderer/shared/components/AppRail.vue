@@ -159,29 +159,6 @@ onMounted(() => {
   -webkit-app-region: drag;
 }
 
-/* 右缘分隔线 + 内侧 1px 高光：画成伪元素而不是 border-right / inset 阴影，
-   这样分隔线可以有自己的起止（当前整列从标题栏下沿开始，起止就是 rail 自身）。 */
-.app-rail::before,
-.app-rail::after {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  content: '';
-  pointer-events: none;
-}
-
-.app-rail::before {
-  right: 1px;
-  width: 1px;
-  background: color-mix(in srgb, var(--color-on-solid) 58%, transparent);
-}
-
-.app-rail::after {
-  right: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--color-border-light) 78%, transparent);
-}
-
 /* 运行列表区：工具多到一列放不下时只滚这里，首页与底部搜索 / 设置始终可见。
    注意 overflow 会裁掉旧的 ::after tooltip，因此提示层换成了 portal 到 body 的 UiTooltip。 */
 .rail-scroll {

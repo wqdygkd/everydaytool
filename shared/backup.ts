@@ -30,7 +30,7 @@ export interface BackupFileRecord {
 }
 
 export interface BackupAssetRecord {
-  /** 相对资产根的路径（如 tweb-cache/messages/peer-xxx/...） */
+  /** 相对资产根的路径（如 tweb-cache/messages/<群目录>/...） */
   relativePath: string
   size: number
   toolId: string

@@ -9,10 +9,12 @@ import {
   archiveMessageDir,
   readArchiveMessageManifest,
   recordArchiveMedia,
+  registerArchiveAliases,
   removeArchiveMedia,
   removeArchiveMessageIndexEntry,
+  unregisterArchiveAliases,
 } from './message-store.ts'
-import { getArchiveTrashRoot, toArchiveRelativePath } from './paths.ts'
+import { getArchiveTrashRoot, resolveMessageRelativePath, toArchiveRelativePath } from './paths.ts'
 
 interface TrashDocument extends ArchiveTrashEntry {
   schemaVersion: 1
@@ -73,6 +75,7 @@ export async function moveArchiveMessageToTrash(
     if (attachment.mediaKey) removeArchiveMedia(attachment.mediaKey)
   }
   removeArchiveMessageIndexEntry(peerId, messageId)
+  unregisterArchiveAliases(peerId, messageId)
   logger.info('Archive message moved to trash', { peerId, messageId, trashId })
   return entry
 }
@@ -118,14 +121,23 @@ export async function restoreArchiveTrash(trashId: string): Promise<{
 
   for (const attachment of manifest?.attachments ?? []) {
     if (!attachment.mediaKey || !attachment.relativePath) continue
+    const absolutePath = resolveMessageRelativePath(target, attachment.relativePath)
+    if (!absolutePath) continue
     recordArchiveMedia({
       mediaKey: attachment.mediaKey,
-      relativePath: attachment.relativePath,
+      relativePath: toArchiveRelativePath(absolutePath),
       size: attachment.actualSize ?? 0,
       mimeType: attachment.mimeType,
       sha256: attachment.sha256,
     })
   }
+  registerArchiveAliases({
+    peerId: document.peerId,
+    messageId: document.messageId,
+    forwardSource: manifest?.forwardSource,
+    mediaKeys: manifest?.attachments.map(attachment => attachment.mediaKey) ?? [],
+    textChars: manifest?.text?.chars ?? 0,
+  })
   logger.info('Archive message restored from trash', { trashId })
   return {
     state: manifest ? 'complete' : 'partial',

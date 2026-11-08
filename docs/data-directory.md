@@ -48,7 +48,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [敏感]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [敏感：token / 用户对象]
-    tweb-cache/         config.json
+    tweb-cache/         config.json, peer-dirs.json（群目录名登记）
     treease-editor/     rules.json（拦截规则 + 总开关；LocalStorage 只是镜像）
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}  [敏感]
     quarantine/         <ts>/  旧布局孤儿白名单（config.db / cdp-injector / .DS_Store），不删、不备份
@@ -111,7 +111,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 | --- | --- | --- | --- | --- |
 | interceptor | `config/interceptor/{config,rules}.json`、`certs/` | —（系统 CA 信任在外部） | `cache/interceptor/extension/` | — |
 | offline-pack | `config/offline-pack/history.json` | — | `cache/offline-pack/downloads/` | 用户另存位置（外部） |
-| tweb-cache | `config/tweb-cache/config.json`、`media-index.json`、`messages-index/` | `session/Partitions/tweb-cache/` | `cache/tweb-cache/{objects,tmp,diagnostics}` | `<assets>/tweb-cache/{messages,trash}` |
+| tweb-cache | `config/tweb-cache/config.json`、`media-index.json`、`messages-index/`、`archive-alias.json`、`peer-dirs.json` | `session/Partitions/tweb-cache/` | `cache/tweb-cache/{objects,tmp,diagnostics}` | 默认 `<assets>/tweb-cache/{messages,trash}`，可在工具内单独自定义 |
 | treease-editor | `config/treease-editor/rules.json` | `session/Partitions/treease-editor/` | — | — |
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |
