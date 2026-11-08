@@ -128,6 +128,8 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'wxp-enhancer.config', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/config.json', label: '注入设置', backup: 'include', clean: 'never' },
   { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态与收藏备份', backup: 'include', clean: 'never', sensitive: true },
   { id: 'tweb-cache.config', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/config.json', label: '站点端口（tweb 前端）', backup: 'include', clean: 'never' },
+  { id: 'tweb-cache.aliases', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/archive-alias.json', label: '等价缓存索引（转发 / 同媒体副本，可由 manifest 重建）', backup: 'optional', clean: 'never' },
+  { id: 'tweb-cache.peer-dirs', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/peer-dirs.json', label: '群目录名登记（username + peer id，可由 manifest 重建）', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.manifest', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/manifest.json', label: '托管二进制清单', backup: 'include', clean: 'never', integrity: 'reinstall-required' },
   { id: 'workbuddy2api-panel.settings', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/app-settings.json', label: '面板设置', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.run', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/run', label: '上游运行目录（api_key / auths / data）', backup: 'include', clean: 'never', sensitive: true },

@@ -1,6 +1,7 @@
 // tweb-cache 配置（`<config>/tweb-cache/config.json`）：只存站点端口这类本工具私有设置。
 // 归档索引由 scope 落在 `<config>/tweb-cache/`，本文件只管理站点自身配置。
 import type { TwebCacheConfig } from '../../../../shared/tweb-cache.ts'
+import path from 'node:path'
 import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import {
@@ -24,9 +25,18 @@ function sanitizeSitePort(value: unknown): number | null {
   return value
 }
 
+/** 归档目录只接受非空绝对路径；空值表示回到默认位置。路径是否可用在切换时另行校验。 */
+function sanitizeArchiveDir(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  return path.resolve(value.trim())
+}
+
 function sanitize(input: unknown): TwebCacheConfig {
   const record = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
-  return { sitePort: sanitizeSitePort(record.sitePort) }
+  return {
+    sitePort: sanitizeSitePort(record.sitePort),
+    archiveDir: sanitizeArchiveDir(record.archiveDir),
+  }
 }
 
 function readDocument(): TwebConfigDocument {

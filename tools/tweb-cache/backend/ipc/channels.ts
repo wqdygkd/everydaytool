@@ -16,6 +16,10 @@ export const TWEB_CACHE_IPC_CHANNELS = {
   TRASH_LIST: 'tweb-cache:trash:list',
   TRASH_RESTORE: 'tweb-cache:trash:restore',
   TRASH_EMPTY: 'tweb-cache:trash:empty',
+  // 归档目录（默认 <assets>/tweb-cache，可单独自定义）
+  ARCHIVE_DIR_INFO: 'tweb-cache:archive-dir:info',
+  ARCHIVE_DIR_SELECT: 'tweb-cache:archive-dir:select',
+  ARCHIVE_DIR_CHANGE: 'tweb-cache:archive-dir:change',
   // 目录
   OPEN_DATA_DIR: 'tweb-cache:open-data-dir',
   // 主进程 → 渲染层：归档状态 / 进度推送

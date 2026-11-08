@@ -1,9 +1,10 @@
 // tweb-cache 的归档引擎：站点托管、消息级缓存、影库与回收站。
-// 数据固定落在 <assets>/tweb-cache/…，不再有跨工具作用域。
+// 归档默认落在 <assets>/tweb-cache/，可在工具内单独指定目录（见 archive-dir.ts）。
 import type { ArchiveLibraryEntry, ArchiveMessageState, ArchiveTrashEntry } from '../../../../shared/media-archive.ts'
 import { existsSync } from 'node:fs'
 import { shell } from 'electron'
 import { handleArchiveApi } from './api.ts'
+import { changeArchiveDirectory, getArchiveDirInfo } from './archive-dir.ts'
 import { getArchiveMediaStatuses, resolveArchiveMedia } from './media-resolver.ts'
 import { listArchiveLibrary } from './message-library.ts'
 import {
@@ -98,3 +99,5 @@ export function emptyTrash(olderThanDays?: number): Promise<number> {
 export function getMessagesRoot(): string {
   return getArchiveMessagesRoot()
 }
+
+export { changeArchiveDirectory, getArchiveDirInfo }

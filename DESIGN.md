@@ -413,7 +413,9 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | `WorkspaceHeader.vue` | 工具图标、名称、单行状态、主操作、更多 | 状态只显示一行；不承载配置表单 |
 | `ToolSurface.vue` | 主工作区玻璃表面、toolbar、body、statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel` |
 | `LauncherRow.vue` | 首页工具入口行 | 图标 / 名称 / 最多两行描述 / 置顶 / 箭头；打开与置顶是两个并列按钮 |
-| `ToolSideInspector.vue` | 右侧可收起检查器 | 与主内容同表面分隔；宽度 268 / 320 / 360 |
+| `ToolSideInspector.vue` | 可收起检查器 | 与主内容同表面分隔；默认宽度 268 / 320 / 360，声明 `resizable` 后可拖拽边缘调宽，范围由 `min-width` / `max-width` 约束，并须为主工作区保留 `min-main-width`；宽度持久化由使用方负责 |
+
+可调宽 inspector 只在业务确实需要（表格、日志、长详情）时开启。拖拽条是 8px 命中区内的 2px 品牌色可见线，另一侧边缘放同一条；键盘 `←` / `→` 每次 16px，`Shift` 为 48px，`Home` / `End` 跳到最小 / 最大宽度。组件只抛 `update:width` 与 `resizeEnd`，不把用户偏好写进共享组件。
 
 ### 4.3 按钮
 
@@ -437,6 +439,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 表头 11px / 500 / 中性三级；表体 12px；行高 39–44px。
 - 表头底 `--color-fill`；行 hover 白色 36%；选中行品牌蓝 7.5%。
 - 数字、ID、URL、状态码使用 `.mono`；数字列右对齐或按扫描需要对齐。
+- 需要按组纵向合并时用 `UiTable` 的 `span-method`（`({ row, rowIndex, columnIndex }) => [rowspan, colspan]`，`0` 表示该格被上方合并掉）。只合并分组列；每行独有的标识（消息号 / ID）必须另立一列，不能随合并一起消失。
 - 表格空态用 `UiEmpty`，文案必须说明下一步。
 
 ### 4.6 状态与徽章
@@ -475,7 +478,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 ### 5.2 左侧导航轨
 
-- 宽 68px，整列玻璃，右缘 1px 分隔线 + 内侧 1px 白色高光（两者画在 rail 的伪元素上）；不铺纯白实底。
+- 宽 68px，整列玻璃，**右缘不画分隔线 / 高光**（border、伪元素、inset 阴影都不用）：rail 与内容区只靠底色明度差区分；不铺纯白实底。
 - 自上而下：**首页 → 置顶工具 → 已打开的非置顶工具 →（底部固定）搜索工具 / 设置**。首页下方 1px 分隔线。
 - 置顶工具 = **常驻启动器**（Dock 语义）：用户可在首页星标，最多 4 个；关闭只停止运行，图标留在原位、位置不因开关而移动；顺序跟随首页收藏顺序。
 - 已打开的非置顶工具：打开时按打开顺序追加到置顶段之后；关闭即从列表移除。
@@ -487,7 +490,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - tooltip 悬停 180ms 后显示名称，深色玻璃、不阻挡指针。运行列表是 overflow 容器，伪元素提示会被裁掉，**必须用 `UiTooltip`（portal 到 body）**，不得回到 `::after` 方案。
 - 图标必须来自统一 SVG 图标集，线宽 1.6–1.8px；不得用 emoji 或临时文字代替。
 - 所有控件 `-webkit-app-region: no-drag`；rail 空白区域可拖动窗口。
-- **rail 从标题栏下沿开始**，不再用顶部 padding 给红绿灯让位：macOS 红绿灯由**整宽标题栏**承载（`electron/main.ts` 的 `trafficLightPosition`，y=18 让 12px 灯组在 48px 栏内居中），标题栏内容左内边距 84px（`.platform-darwin .app-topbar`，见 §5.3）。给 rail 加 `padding-top` 会重新把红绿灯压在 rail 右缘上——分隔线会从灯中间穿过。
+- **rail 从标题栏下沿开始**，不用顶部 padding 给红绿灯让位：macOS 红绿灯由**整宽标题栏**承载（`electron/main.ts` 的 `trafficLightPosition`，y=18 让 12px 灯组在 48px 栏内居中），标题栏内容左内边距 84px（`.platform-darwin .app-topbar`，见 §5.3）。给 rail 加 `padding-top` 会把灯组压回 rail 上方，破坏「整宽标题栏 + 下方 rail / 内容两列」的结构。
 
 ### 5.3 标题栏（整宽顶栏）
 

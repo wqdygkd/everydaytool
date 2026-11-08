@@ -47,7 +47,7 @@
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [sensitive]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [sensitive]
-    tweb-cache/         config.json
+    tweb-cache/         config.json, peer-dirs.json（群目录名登记）
     treease-editor/     rules.json                    ← 新增，规则从 LocalStorage 上台面
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
     skill-manager/      settings.json, registry.json, history.json, projects.json,
@@ -88,6 +88,8 @@
 ### 3.2 索引不写死绝对路径
 
 `<data>/config/tweb-cache/media-index.json`（及消息索引）内的资源路径一律存**相对所属层根**的路径（沿用 `toArchiveRelativePath` 的做法）。资产根搬家后只需重算根前缀，索引零改动。
+消息目录里的 `manifest.json` / `archive.meta.json` 更进一步：附件路径相对**消息目录**（`media/<file>`），
+peer 目录改名不影响这些文件。
 
 ### 3.3 与数据目录迁移的关系
 
@@ -125,7 +127,9 @@
 | `wxp-enhancer/config.json` | `config/wxp-enhancer/` | config | include | never | — |
 | `wxp-enhancer/data-cache.json` | `config/wxp-enhancer/` | config | include | never | `sensitive`（我们写的登录态 → 按判据归 config，不塞进 `session/`） |
 | `tweb-cache/config.json` | `config/tweb-cache/` | config | include | never | 站点端口（origin 固定） |
-| `tweb-cache/{messages,trash}` | `<assets>/tweb-cache/` | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
+| `tweb-cache/archive-alias.json` | `config/tweb-cache/` | config | optional | never | 等价缓存索引（转发 / 同媒体副本）；可由 manifest 重建 |
+| `tweb-cache/peer-dirs.json` | `config/tweb-cache/` | config | include | never | 群目录名登记（username + peer id）；丢失后可从 manifest 重建 |
+| `tweb-cache/{messages,trash}` | `<assets>/tweb-cache/`（工具内可单独覆盖） | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
 | `tweb-cache/{objects,tmp,diagnostics}` | `cache/tweb-cache/` | cache | never | always | 清后须修剪媒体索引 |
 | `workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `config/workbuddy2api-panel/` | config | include | never | `run/` 是上游 cwd，含 api_key 与上游数据 |
 | `workbuddy2api-panel/{downloads,runtime}` | `cache/workbuddy2api-panel/` | cache | never | always | 清后须校验 `runtime/current/<bin>`，否则显示「需重新下载」 |
@@ -287,7 +291,7 @@ workbuddy2api-panel（manifest+run / 二进制缓存）。
 
 tweb-cache 的索引兼容做法：`media-index.json` / `messages-index/*.json` 里的 `relativePath` 保持相对「工具命名空间」
 （`objects/ab/hash`、`messages/…`），由 `resolveArchiveRelativePath()` 按首段路由到 config / assets / cache，
-**v1 旧索引无需改写**。
+**v1 旧索引无需改写**。manifest 内的附件路径则相对消息目录（`media/<file>`），旧格式 `messages/…` 读取时兼容。
 
 ### 10.3 工具与门禁
 

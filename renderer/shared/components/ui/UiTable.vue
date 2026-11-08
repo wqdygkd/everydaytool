@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { UiTableColumnReg } from './uiTableColumns'
 // 表格基座内核：原生 <table>（支持
-// width / min-width / align / sortable="custom" / show-overflow-tooltip /
+// width / min-width / align / sortable="custom" / show-overflow-tooltip / span-method（行合并）/
 // #default / #header / row-click / sort-change / row-class-name / 树形全展开 /
 // max-height / loading / 空态)。列由 UiTableColumn 注册,行展开与单元格渲染都在这里。
 import { computed, h, provide, reactive, useAttrs } from 'vue'
@@ -22,6 +22,12 @@ const props = withDefaults(defineProps<{
   mono?: boolean
   /** 行可点击:整行手型指针 */
   rowClickable?: boolean
+  /** 单元格合并:返回 [rowspan, colspan]；rowspan 为 0 表示该格不渲染（被上方合并掉） */
+  spanMethod?: (ctx: {
+    row: Record<PropertyKey, any>
+    rowIndex: number
+    columnIndex: number
+  }) => [number, number] | undefined
 }>(), {
   loading: false,
   emptyText: '暂无数据',
@@ -75,13 +81,27 @@ function cellText(col: UiTableColumnReg, row: Record<PropertyKey, any>) {
 }
 
 /* 单元格:默认取 row[prop],有 #default 插槽则以插槽为准(作用域 { row, $index }) */
-function cellComp(col: UiTableColumnReg, item: { row: Record<PropertyKey, any>, depth: number }, index: number) {
+function cellComp(
+  col: UiTableColumnReg,
+  item: { row: Record<PropertyKey, any>, depth: number },
+  index: number,
+  columnIndex: number,
+) {
   return () => {
+    const span = props.spanMethod?.({ row: item.row, rowIndex: index, columnIndex })
+    const rowSpan = span?.[0] ?? 1
+    const colSpan = span?.[1] ?? 1
+    if (rowSpan === 0) return null
+
     const scoped = col.slots.default?.({ row: item.row, $index: index })
     const hasSlot = Array.isArray(scoped) ? scoped.length > 0 : scoped != null
     const text = cellText(col, item.row)
     const content = hasSlot ? scoped : text
-    return h('td', { style: { textAlign: col.props.align } }, [
+    return h('td', {
+      rowspan: rowSpan > 1 ? rowSpan : undefined,
+      colspan: colSpan > 1 ? colSpan : undefined,
+      style: { textAlign: col.props.align },
+    }, [
       h('div', {
         class: ['ui-cell', { 'is-clip': !!col.props.showOverflowTooltip }],
         title: col.props.showOverflowTooltip ? text : undefined,
@@ -153,7 +173,7 @@ const containerStyle = computed(() => {
           @click="emit('rowClick', item.row, i)"
         >
           <template v-for="(col, j) in columns" :key="j">
-            <component :is="cellComp(col, item, i)" />
+            <component :is="cellComp(col, item, i, j)" />
           </template>
         </tr>
       </tbody>

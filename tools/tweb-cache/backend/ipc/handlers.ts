@@ -1,17 +1,20 @@
 // tweb-cache 的 IPC handler：只做参数校验 + 转调本工具的归档引擎。
 // 存储逻辑一行都不在这里（见 backend/archive/）。
-import { ipcMain, shell } from 'electron'
-import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
+import { mkdir } from 'node:fs/promises'
+import { dialog, ipcMain, shell } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import {
+  changeArchiveDirectory,
   deleteMessage,
   emptyTrash,
+  getArchiveDirInfo,
   listLibrary,
   listTrash,
   normalizeLibrary,
   restoreTrash,
   revealMessageDir,
 } from '../archive/index.ts'
+import { getArchiveDir } from '../archive/paths.ts'
 import {
   ensureTwebCacheSiteStarted,
   getTwebCacheMediaOrigin,
@@ -19,9 +22,6 @@ import {
   releaseTwebCacheSite,
 } from '../services/site-service.ts'
 import { TWEB_CACHE_IPC_CHANNELS } from './channels.ts'
-
-/** 数据命名空间：归档落在 assets/tweb-cache/… */
-const SCOPE = 'tweb-cache'
 
 let handlersRegistered = false
 
@@ -79,8 +79,21 @@ export function registerTwebCacheHandlers(): void {
     const days = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : undefined
     return emptyTrash(days)
   })
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.ARCHIVE_DIR_INFO, () => getArchiveDirInfo())
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.ARCHIVE_DIR_SELECT, async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择 Telegram 归档目录',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    return result.canceled ? null : (result.filePaths[0] ?? null)
+  })
+  safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.ARCHIVE_DIR_CHANGE, (_event, value: unknown) => {
+    if (value !== null && typeof value !== 'string') throw new Error('归档目录参数非法')
+    return changeArchiveDirectory(value)
+  })
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.OPEN_DATA_DIR, async () => {
-    const dir = resolveLayerPath('assets', SCOPE, 'messages')
+    const dir = getArchiveDir()
+    await mkdir(dir, { recursive: true })
     const error = await shell.openPath(dir)
     if (error) throw new Error(error)
     return true

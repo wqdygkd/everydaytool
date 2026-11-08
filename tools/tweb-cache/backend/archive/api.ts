@@ -8,6 +8,7 @@ import type {
   ArchiveCommitRequest,
   ArchiveLibraryEvent,
   ArchiveMessageStatusEntry,
+  ArchiveMessageStatusHint,
   ArchivePrepareRequest,
 } from '../../../../shared/media-archive.ts'
 import type { SiteApiContext } from './site-server.ts'
@@ -20,7 +21,9 @@ import {
   archiveMessageDir,
   commitArchiveMessage,
   getArchiveMessageStatuses,
+  listArchiveEquivalents,
   prepareArchiveMessage,
+  readArchiveMessageManifest,
   saveArchiveThumbnail,
 } from './message-store.ts'
 import {
@@ -31,6 +34,7 @@ import {
 } from './trash-service.ts'
 
 const MAX_STATUS_IDS = 500
+const MAX_STATUS_MEDIA_KEYS = 32
 
 function readIntParam(url: URL, name: string, min: number, max: number): number {
   const raw = url.searchParams.get(name)
@@ -43,6 +47,49 @@ function readPeerId(url: URL): string {
   const peer = url.searchParams.get('peer') ?? ''
   if (!/^-?\d{1,20}$/.test(peer)) throw new Error('peer 非法')
   return peer
+}
+
+function readPeerIdValue(value: unknown): string {
+  if (typeof value !== 'string' || !/^-?\d{1,20}$/.test(value)) throw new Error('peer 非法')
+  return value
+}
+
+/** 页面传来的等价线索：只保留可校验的字段，数组长度与 key 长度都设上限 */
+function sanitizeStatusHints(raw: unknown): ArchiveMessageStatusHint[] {
+  if (!Array.isArray(raw)) return []
+  const hints: ArchiveMessageStatusHint[] = []
+  for (const item of raw.slice(0, MAX_STATUS_IDS)) {
+    if (typeof item !== 'object' || item === null) continue
+    const record = item as Record<string, unknown>
+    const messageId = record.messageId
+    if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) continue
+    const hint: ArchiveMessageStatusHint = { messageId }
+
+    const source = record.forwardSource
+    if (typeof source === 'object' && source !== null) {
+      const sourceRecord = source as Record<string, unknown>
+      const sourcePeerId = sourceRecord.id
+      const sourceMessageId = sourceRecord.messageId
+      if (typeof sourcePeerId === 'string' && /^-?\d{1,20}$/.test(sourcePeerId)
+        && typeof sourceMessageId === 'number' && Number.isSafeInteger(sourceMessageId) && sourceMessageId > 0) {
+        hint.forwardSource = { id: sourcePeerId, messageId: sourceMessageId }
+      }
+    }
+
+    const mediaKeys = record.mediaKeys
+    if (Array.isArray(mediaKeys)) {
+      hint.mediaKeys = mediaKeys
+        .filter((key): key is string => typeof key === 'string' && /^[\w.-]{1,200}$/.test(key))
+        .slice(0, MAX_STATUS_MEDIA_KEYS)
+    }
+
+    const textChars = record.textChars
+    if (typeof textChars === 'number' && Number.isSafeInteger(textChars) && textChars >= 0) {
+      hint.textChars = textChars
+    }
+    hints.push(hint)
+  }
+  return hints
 }
 
 function headerValue(context: SiteApiContext, name: string): string | undefined {
@@ -60,6 +107,34 @@ function publishStatus(context: SiteApiContext, payload: ArchiveLibraryEvent): v
   broadcastToWindows(TWEB_ARCHIVE_LIBRARY_EVENT_CHANNEL, payload)
 }
 
+/** 提交 / 恢复后把等价副本也推成 complete；删除后只在对方没有自己的缓存时撤回 */
+async function publishEquivalents(
+  context: SiteApiContext,
+  equivalents: Awaited<ReturnType<typeof listArchiveEquivalents>>,
+  origin: { peerId: string, messageId: number },
+  removed: boolean,
+): Promise<void> {
+  for (const counterpart of equivalents) {
+    if (!removed) {
+      publishStatus(context, {
+        peerId: counterpart.peerId,
+        messageId: counterpart.messageId,
+        state: 'complete',
+        via: counterpart.via,
+        resolved: origin,
+      })
+      continue
+    }
+    const manifest = await readArchiveMessageManifest(counterpart.peerId, counterpart.messageId)
+    if (manifest?.status === 'complete') continue
+    publishStatus(context, {
+      peerId: counterpart.peerId,
+      messageId: counterpart.messageId,
+      state: 'missing',
+    })
+  }
+}
+
 export async function handleArchiveApi(context: SiteApiContext): Promise<boolean> {
   const { req, url, sendJson, readJson, readBuffer } = context
   const method = req.method ?? 'GET'
@@ -74,7 +149,9 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
       publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
-        state: result.state,
+        // prepare 一定跟着真实下载：先把状态推成「缓存中」，否则 blob 阶段（首片 append 之前）
+        // 页面与影库会一直停在「部分缓存」。
+        state: result.state === 'complete' ? 'complete' : 'downloading',
       })
       sendJson(200, result)
       return true
@@ -117,11 +194,17 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
         text: body.text,
         textTruncated: body.textTruncated,
       })
+      const equivalents = result.state === 'complete'
+        ? await listArchiveEquivalents(body.peer.id, body.messageId)
+        : []
       publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
         state: result.state,
       })
+      if (equivalents.length) {
+        await publishEquivalents(context, equivalents, { peerId: body.peer.id, messageId: body.messageId }, false)
+      }
       sendJson(200, result)
       return true
     }
@@ -149,15 +232,32 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
       return true
     }
 
+    if (method === 'POST' && url.pathname === '/api/archive/status') {
+      const body = await readJson<{ peer?: { id?: string }, messages?: unknown }>()
+      const peerId = readPeerIdValue(body?.peer?.id)
+      const hints = sanitizeStatusHints(body?.messages)
+      const statuses: Record<string, ArchiveMessageStatusEntry> = await getArchiveMessageStatuses(
+        peerId,
+        hints.map(hint => hint.messageId),
+        hints,
+      )
+      sendJson(200, { statuses })
+      return true
+    }
+
     if (method === 'POST' && url.pathname === '/api/archive/delete') {
       const body = await readJson<{ peer?: { id?: string }, messageId?: number, retentionDays?: number }>()
       if (!body?.peer?.id || typeof body.messageId !== 'number') throw new Error('delete 参数非法')
+      const equivalents = await listArchiveEquivalents(body.peer.id, body.messageId)
       const entry = await moveArchiveMessageToTrash(body.peer.id, body.messageId, body.retentionDays)
       publishStatus(context, {
         peerId: body.peer.id,
         messageId: body.messageId,
         state: 'missing',
       })
+      if (equivalents.length) {
+        await publishEquivalents(context, equivalents, { peerId: body.peer.id, messageId: body.messageId }, true)
+      }
       sendJson(200, { state: 'missing', entry })
       return true
     }
@@ -181,11 +281,20 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
       const body = await readJson<{ trashId?: string }>()
       if (!body?.trashId) throw new Error('restore 参数非法')
       const restored = await restoreArchiveTrash(body.trashId)
+      const equivalents = restored.state === 'complete'
+        ? await listArchiveEquivalents(restored.peerId, restored.messageId)
+        : []
       publishStatus(context, {
         peerId: restored.peerId,
         messageId: restored.messageId,
         state: restored.state,
       })
+      if (equivalents.length) {
+        await publishEquivalents(context, equivalents, {
+          peerId: restored.peerId,
+          messageId: restored.messageId,
+        }, false)
+      }
       sendJson(200, { state: restored.state })
       return true
     }

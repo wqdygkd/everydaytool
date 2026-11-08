@@ -1,9 +1,10 @@
-// 本地影库（v4）：扫描 messages/peer-<群 id>/<消息 id>/，给工具侧 library 面板提供只读列表。
+// 本地影库（v4）：扫描 messages/<群目录>/<消息 id>/（`<username>-peer-<id>`，无 username 时 `peer-<id>`），
+// 给工具侧 library 面板提供只读列表。
 // 不访问网络、不调用 MTProto；manifest 缺失时按 archive.meta.json 标为 partial。
 import type { ArchiveForwardSourceSnapshot, ArchiveLibraryEntry, ArchiveMessageState } from '../../../../shared/media-archive.ts'
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { migrateArchiveAccountLayout } from './message-store.ts'
+import { migrateArchiveAccountLayout, resolveArchivePeerIdFromDir } from './message-store.ts'
 import { getArchiveMessagesRoot, toArchiveRelativePath } from './paths.ts'
 
 const MAX_ENTRIES = 500
@@ -76,12 +77,17 @@ function buildMessageLink(peerId: string, messageId: number, username?: string):
 export async function listArchiveLibrary(): Promise<ArchiveLibraryEntry[]> {
   const root = getArchiveMessagesRoot()
   const entries: ArchiveLibraryEntry[] = []
+  // 目录迁移期间可能同时存在旧目录与规范目录：同一 (peer, message) 只展示一次
+  const seenMessages = new Set<string>()
 
   // 旧版 messages/acc-<scope>/ 那一级在这里顺手上移（幂等，每个进程只跑一次）
   await migrateArchiveAccountLayout().catch(() => undefined)
   const peers = await readdir(root, { withFileTypes: true }).catch(() => [])
   for (const peer of peers) {
-    if (!peer.isDirectory() || !peer.name.startsWith('peer-')) continue
+    if (!peer.isDirectory()) continue
+    // 群目录名可能是 `<username>-peer-<id>`，也可能是迁移中的旧命名：统一反查真实 peer id
+    const resolvedPeerId = await resolveArchivePeerIdFromDir(peer.name)
+    if (!resolvedPeerId) continue
     const peerDir = path.join(root, peer.name)
     const messages = await readdir(peerDir, { withFileTypes: true }).catch(() => [])
     for (const message of messages) {
@@ -98,8 +104,11 @@ export async function listArchiveLibrary(): Promise<ArchiveLibraryEntry[]> {
       ), 0)
       const expected = attachments.reduce((total, item) => total + (item.expectedSize ?? 0), 0)
       const messageId = source.messageId ?? Number(message.name)
-      const peerId = source.peer?.id ?? peer.name.replace(/^peer-/, '')
+      const peerId = source.peer?.id ?? resolvedPeerId
       if (!Number.isSafeInteger(messageId) || messageId <= 0 || !peerId) continue
+      const messageKey = `${peerId}:${messageId}`
+      if (seenMessages.has(messageKey)) continue
+      seenMessages.add(messageKey)
 
       const state = manifest?.status ?? (attachments.length > 0 ? 'partial' : 'queued')
       entries.push({
