@@ -213,15 +213,14 @@
   box-shadow: var(--shadow-window-frame); /* 窗口浮起感 */
 }
 
-/* 左侧导航轨与顶部工作区栏：acrylic 强透光时需要自己的玻璃，
-   其他材质也沿用同一结构，但由模式变量决定模糊半径。 */
+/* 左侧导航轨与顶部工作区栏：不铺背景色，也不额外做模糊，
+   与主体画布保持同一层完全透明的观感。 */
 .app-shell.is-acrylic .app-rail,
 .app-shell.is-mica .app-rail,
 .app-shell.is-tabbed .app-rail,
 .app-shell.is-vibrancy .app-rail,
 .app-shell.is-transparent-only .app-rail {
-  background: var(--color-rail);
-  backdrop-filter: var(--glass-rail);
+  background: transparent;
 }
 
 .app-shell.is-acrylic .app-topbar,
@@ -229,8 +228,7 @@
 .app-shell.is-tabbed .app-topbar,
 .app-shell.is-vibrancy .app-topbar,
 .app-shell.is-transparent-only .app-topbar {
-  background: var(--color-header); /* 标题栏半透明表面 */
-  backdrop-filter: var(--glass-header); /* 玻璃：补偿 acrylic 强透光下的壁纸细节 */
+  background: transparent;
 }
 
 /* ── 夜色玻璃（Aurora Glass 重设计）：纯 CSS 暗色主题轴 ──

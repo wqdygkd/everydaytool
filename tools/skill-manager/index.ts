@@ -9,7 +9,7 @@ const tool = defineTool({
   icon: 'layers',
   category: { key: 'dev', name: '开发工具' },
   keywords: ['skill', 'skills', '技能', '技能管理', 'agents', 'skills-lock', 'lock'],
-  supportedTargets: ['win', 'mac', 'linux'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-11-06',
   route: {
     path: 'skill-manager',

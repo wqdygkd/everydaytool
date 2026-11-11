@@ -1,53 +1,36 @@
 <script setup lang="ts">
 import type { ArchiveLibraryEntry, ArchiveTrashEntry } from '../../../../shared/media-archive'
 import type { TwebWebviewTag } from '../webview'
-import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
-import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import { TWEB_CACHE_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import { useTwebCacheStore } from '../stores/twebCacheStore'
-import { tabKeyFromPath, TWEB_CACHE_TABS } from '../tabs'
 import { formatBytes } from '../utils/format'
 
-const router = useRouter()
 const store = useTwebCacheStore()
 const isElectron = isElectronEnvironment()
-const toolPath = useToolPath()
 
-const INSPECTOR_PREF_STORAGE_KEY = 'twebCache.inspector'
-const INSPECTOR_DEFAULT_WIDTH = 360
-const INSPECTOR_MIN_WIDTH = 320
-const INSPECTOR_MAX_WIDTH = 720
+const LIB_WIDTH_KEY = 'twebCache.libraryWidth'
+const LIB_DEFAULT_WIDTH = 504
+const LIB_MIN_WIDTH = 360
+const LIB_MAX_WIDTH = 760
+const LIB_RESIZE_STEP = 24
+const LIB_MIN_GUEST_WIDTH = 320
 
-interface InspectorPreference {
-  open?: boolean
-  width?: number
-}
-
-function readInspectorPreference(): InspectorPreference {
+function readLibraryWidth(): number {
   try {
-    const raw = localStorage.getItem(INSPECTOR_PREF_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as { open?: unknown, width?: unknown }
-    const width = typeof parsed.width === 'number' && Number.isFinite(parsed.width)
-      ? Math.min(INSPECTOR_MAX_WIDTH, Math.max(INSPECTOR_MIN_WIDTH, Math.round(parsed.width)))
-      : undefined
-    return {
-      open: typeof parsed.open === 'boolean' ? parsed.open : undefined,
-      width,
-    }
+    const raw = localStorage.getItem(LIB_WIDTH_KEY)
+    if (!raw) return LIB_DEFAULT_WIDTH
+    const width = Number(raw)
+    if (!Number.isFinite(width)) return LIB_DEFAULT_WIDTH
+    return Math.min(LIB_MAX_WIDTH, Math.max(LIB_MIN_WIDTH, Math.round(width)))
   } catch {
-    return {}
+    return LIB_DEFAULT_WIDTH
   }
 }
-
-const activeTab = computed(() => tabKeyFromPath(toolPath.value))
-const inspectorPreference = readInspectorPreference()
 
 const webviewRef = shallowRef<TwebWebviewTag | null>(null)
 const boundElements = new WeakSet<object>()
@@ -58,13 +41,26 @@ const initError = ref('')
 const canGoBack = ref(false)
 const canGoForward = ref(false)
 const devtoolsOpen = ref(false)
-const inspectorOpen = ref(inspectorPreference.open ?? activeTab.value !== 'overview')
-const inspectorWidth = ref(inspectorPreference.width ?? INSPECTOR_DEFAULT_WIDTH)
+const libraryFilter = ref('')
+const pausingAll = ref(false)
+const mediaCacheClearing = ref(false)
+const thumbnailBackfillRunning = ref(false)
+const libraryWidth = ref(readLibraryWidth())
+const splitRef = ref<HTMLElement | null>(null)
+const resizingLibrary = ref(false)
+
+let dragState: {
+  pointerId: number
+  startX: number
+  startWidth: number
+  handle: HTMLElement
+} | null = null
+let previousUserSelect = ''
+let previousCursor = ''
 
 const site = computed(() => store.site)
 const pageSrc = computed(() => site.value?.url ?? '')
 const siteError = computed(() => site.value?.error ?? '')
-
 const originNotice = computed(() => (site.value?.originChanged ? site.value.portNote ?? '' : ''))
 const originNoticeDismissed = ref(false)
 watch(originNotice, () => {
@@ -72,14 +68,10 @@ watch(originNotice, () => {
 })
 
 const displayUrl = computed(() => pageUrl.value || pageSrc.value || '')
-const inspectorTitle = computed(() =>
-  TWEB_CACHE_TABS.find(tab => tab.key === activeTab.value)?.label ?? '工具详情',
+const hasActiveCache = computed(() => store.library.some(entry => entry.state === 'downloading'))
+const libraryTotalSize = computed(() =>
+  store.library.reduce((sum, entry) => sum + (Number.isFinite(entry.size) ? entry.size : 0), 0),
 )
-const menuItems = computed(() => TWEB_CACHE_TABS.map(tab => ({
-  value: tab.key as string,
-  label: tab.label,
-  badge: tab.key === 'library' ? store.library.length : undefined,
-})))
 
 interface LibraryRow extends ArchiveLibraryEntry {
   groupTitle: string
@@ -88,9 +80,18 @@ interface LibraryRow extends ArchiveLibraryEntry {
   groupSpan: number
 }
 
+const filteredLibrary = computed(() => {
+  const query = libraryFilter.value.trim().toLowerCase()
+  if (!query) return store.library
+  return store.library.filter((entry) => {
+    const haystack = `${entry.peerTitle ?? ''} ${entry.peerId} ${entry.messageId}`.toLowerCase()
+    return haystack.includes(query)
+  })
+})
+
 const groupedLibrary = computed<LibraryRow[]>(() => {
   const groups = new Map<string, ArchiveLibraryEntry[]>()
-  for (const entry of store.library) {
+  for (const entry of filteredLibrary.value) {
     const key = `${entry.peerId}:${entry.groupedId ?? `single-${entry.messageId}`}`
     const group = groups.get(key)
     if (group) group.push(entry)
@@ -112,6 +113,15 @@ const groupedLibrary = computed<LibraryRow[]>(() => {
   }
   return rows
 })
+
+const libraryMenuItems = computed(() => [
+  { command: 'open-dir', label: '打开归档目录', icon: 'layers' as const },
+  { command: 'change-dir', label: '更改归档目录…', icon: 'refresh' as const },
+  ...(store.archiveDir?.isCustom
+    ? [{ command: 'reset-dir', label: '恢复默认目录', icon: 'refresh' as const }]
+    : []),
+  { command: 'clear-media', label: '清理 tweb 媒体缓存', icon: 'trash' as const, danger: true },
+])
 
 /** 会话 / 消息列按组纵向合并；其他列不合并 */
 function librarySpanMethod({ row, columnIndex }: {
@@ -157,8 +167,7 @@ function bindWebview(el: unknown): void {
     loading.value = false
     pageUrl.value = safeCall(() => wv.getURL(), pageUrl.value)
     syncNavigation(wv)
-    void refreshMediaCache(true)
-    if (activeTab.value === 'library') void backfillThumbnails()
+    void backfillThumbnails()
   })
   wv.addEventListener('did-navigate', (event) => {
     pageUrl.value = (event as { url?: string }).url || pageUrl.value
@@ -209,32 +218,81 @@ function openInBrowser(): void {
   openExternal(url)
 }
 
-// —— tweb 媒体缓存（页面侧 Cache Storage：整文件 / 流式分块 / HLS）——
-// tweb 默认按 TTL 自动清理（默认 7 天）；edt 客户端已在页面内把 TTL 关掉，这里只提供用量与手动清理。
-type MediaCacheBucket = 'cachedFiles' | 'cachedStreamChunks' | 'cachedHlsQualityFiles' | 'cachedHlsStreamChunks'
-interface MediaCacheUsage { total: number, buckets: Record<string, number> }
-
-const MEDIA_CACHE_BUCKETS: readonly MediaCacheBucket[] = ['cachedFiles', 'cachedStreamChunks', 'cachedHlsQualityFiles', 'cachedHlsStreamChunks']
-const MEDIA_CACHE_LABELS: Record<string, string> = {
-  cachedFiles: '整文件',
-  cachedStreamChunks: '流式分块',
-  cachedHlsQualityFiles: 'HLS 画质',
-  cachedHlsStreamChunks: 'HLS 分块',
+// —— 影库宽度：默认 504，可拖 360–760；分隔条键盘 ←/→ 每次 24px ——
+function maxAllowedLibraryWidth(): number {
+  const total = splitRef.value?.clientWidth ?? 0
+  if (!total) return LIB_MAX_WIDTH
+  return Math.max(LIB_MIN_WIDTH, Math.min(LIB_MAX_WIDTH, total - LIB_MIN_GUEST_WIDTH))
 }
 
-const mediaCacheUsage = ref<MediaCacheUsage | null>(null)
-const mediaCacheLoading = ref(false)
-const mediaCacheClearing = ref(false)
-const mediaCacheBusy = ref(false)
-const thumbnailBackfillRunning = ref(false)
-const pausingAll = ref(false)
-const hasActiveCache = computed(() => store.library.some(entry => entry.state === 'downloading'))
-const documentVisibility = useDocumentVisibility()
-const mediaCacheAutoRefresh = useIntervalFn(() => {
-  if (documentVisibility.value === 'visible' && inspectorOpen.value && activeTab.value === 'overview') {
-    void refreshMediaCache(true)
+function applyLibraryWidth(value: number): number {
+  const next = Math.round(Math.min(maxAllowedLibraryWidth(), Math.max(LIB_MIN_WIDTH, value)))
+  libraryWidth.value = next
+  return next
+}
+
+function writeLibraryWidth(): void {
+  try {
+    localStorage.setItem(LIB_WIDTH_KEY, String(libraryWidth.value))
+  } catch {}
+}
+
+function startLibraryResize(event: PointerEvent): void {
+  if (event.button !== 0) return
+  const handle = event.currentTarget as HTMLElement | null
+  if (!handle) return
+  dragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startWidth: libraryWidth.value,
+    handle,
   }
-}, 5000, { immediate: false })
+  resizingLibrary.value = true
+  try {
+    handle.setPointerCapture(event.pointerId)
+  } catch {}
+  handle.focus({ preventScroll: true })
+  previousUserSelect = document.body.style.userSelect
+  previousCursor = document.body.style.cursor
+  document.body.style.userSelect = 'none'
+  document.body.style.cursor = 'col-resize'
+  event.preventDefault()
+}
+
+function moveLibraryResize(event: PointerEvent): void {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+  applyLibraryWidth(dragState.startWidth + (dragState.startX - event.clientX))
+}
+
+function finishLibraryResize(event?: PointerEvent): void {
+  if (!dragState) return
+  if (event && event.pointerId !== dragState.pointerId) return
+  const { handle, pointerId } = dragState
+  dragState = null
+  resizingLibrary.value = false
+  try {
+    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
+  } catch {}
+  document.body.style.userSelect = previousUserSelect
+  document.body.style.cursor = previousCursor
+  writeLibraryWidth()
+}
+
+function resizeLibraryByKeyboard(event: KeyboardEvent): void {
+  let next: number | null = null
+  if (event.key === 'ArrowLeft') next = libraryWidth.value - LIB_RESIZE_STEP
+  else if (event.key === 'ArrowRight') next = libraryWidth.value + LIB_RESIZE_STEP
+  else if (event.key === 'Home') next = LIB_MIN_WIDTH
+  else if (event.key === 'End') next = maxAllowedLibraryWidth()
+  if (next === null) return
+  event.preventDefault()
+  applyLibraryWidth(next)
+  writeLibraryWidth()
+}
+
+// —— tweb 媒体缓存（页面侧 Cache Storage）：只保留手动清理入口 ——
+type MediaCacheBucket = 'cachedFiles' | 'cachedStreamChunks' | 'cachedHlsQualityFiles' | 'cachedHlsStreamChunks'
+const MEDIA_CACHE_BUCKETS: readonly MediaCacheBucket[] = ['cachedFiles', 'cachedStreamChunks', 'cachedHlsQualityFiles', 'cachedHlsStreamChunks']
 
 async function runMediaCacheBridge<T>(script: string): Promise<T | null> {
   const wv = webviewRef.value
@@ -243,37 +301,6 @@ async function runMediaCacheBridge<T>(script: string): Promise<T | null> {
     return (await wv.executeJavaScript(script, true)) as T | null
   } catch {
     return null
-  }
-}
-
-async function refreshMediaCache(silent = false): Promise<void> {
-  if (mediaCacheBusy.value || !isElectron) return
-  mediaCacheBusy.value = true
-  if (!silent) mediaCacheLoading.value = true
-  try {
-    const result = await runMediaCacheBridge<MediaCacheUsage>(`(async () => {
-      const names = ${JSON.stringify(MEDIA_CACHE_BUCKETS)};
-      const buckets = {};
-      let total = 0;
-      for (const name of names) {
-        try {
-          const cache = await caches.open(name);
-          const responses = await cache.matchAll();
-          let size = 0;
-          for (const response of responses) {
-            const len = parseInt(response.headers.get('content-length') || '0', 10);
-            size += Number.isFinite(len) ? len : 0;
-          }
-          buckets[name] = size;
-          total += size;
-        } catch (e) { buckets[name] = -1; }
-      }
-      return { total, buckets };
-    })()`)
-    if (result) mediaCacheUsage.value = result
-  } finally {
-    mediaCacheBusy.value = false
-    if (!silent) mediaCacheLoading.value = false
   }
 }
 
@@ -303,37 +330,12 @@ async function clearMediaCache(): Promise<void> {
       }
       return cleared;
     })()`)
-    if (typeof cleared === 'number') {
-      toast.success(`已清理 ${cleared} 个媒体缓存桶`)
-      void refreshMediaCache()
-    } else {
-      toast.warning('tweb 页面尚未就绪，无法清理')
-    }
+    if (typeof cleared === 'number') toast.success(`已清理 ${cleared} 个媒体缓存桶`)
+    else toast.warning('tweb 页面尚未就绪，无法清理')
   } finally {
     mediaCacheClearing.value = false
   }
 }
-
-const mediaCacheBreakdown = computed(() => {
-  const usage = mediaCacheUsage.value
-  if (!usage) return '—'
-  return MEDIA_CACHE_BUCKETS
-    .map(name => `${MEDIA_CACHE_LABELS[name] ?? name} ${formatBytes(usage.buckets[name] ?? 0)}`)
-    .join(' · ')
-})
-
-watch(() => store.siteReady, (ready) => {
-  if (ready) void refreshMediaCache(true)
-}, { immediate: true })
-
-function startMediaCacheAutoRefresh(): void {
-  if (!isElectron || mediaCacheAutoRefresh.isActive.value) return
-  mediaCacheAutoRefresh.resume()
-}
-
-watch(activeTab, (tab) => {
-  if (inspectorOpen.value && tab === 'overview') void refreshMediaCache(true)
-})
 
 async function backfillThumbnails(): Promise<void> {
   if (thumbnailBackfillRunning.value || !isElectron) return
@@ -358,10 +360,6 @@ async function backfillThumbnails(): Promise<void> {
     thumbnailBackfillRunning.value = false
   }
 }
-
-watch(activeTab, (tab) => {
-  if (tab === 'library') void backfillThumbnails()
-})
 
 /** 影库定位：调 tweb 页面里挂的 window.__EDT_JUMP_TO_MESSAGE__ */
 async function runJump(jump: { peerId: string, messageId: number }): Promise<void> {
@@ -447,45 +445,20 @@ async function pauseAllCaches(): Promise<void> {
   }
 }
 
-function switchTab(key: string): void {
-  if (key === activeTab.value) return
-  const tab = TWEB_CACHE_TABS.find(item => item.key === key)
-  if (tab) {
-    setInspectorOpen(true)
-    router.push({ name: tab.routeName })
+async function onLibraryCommand(command: string): Promise<void> {
+  if (command === 'open-dir') {
+    await openDataDir()
+    return
   }
-}
-
-function openInspector(): void {
-  setInspectorOpen(true)
-  if (activeTab.value === 'overview') void refreshMediaCache(true)
-}
-
-function closeInspector(): void {
-  setInspectorOpen(false)
-}
-
-function setInspectorOpen(open: boolean): void {
-  inspectorOpen.value = open
-  writeInspectorPreference()
-}
-
-function setInspectorWidth(width: number): void {
-  inspectorWidth.value = width
-}
-
-function finishInspectorResize(width: number): void {
-  inspectorWidth.value = width
-  writeInspectorPreference()
-}
-
-function writeInspectorPreference(): void {
-  try {
-    localStorage.setItem(INSPECTOR_PREF_STORAGE_KEY, JSON.stringify({
-      open: inspectorOpen.value,
-      width: inspectorWidth.value,
-    }))
-  } catch {}
+  if (command === 'change-dir') {
+    await selectArchiveDir()
+    return
+  }
+  if (command === 'reset-dir') {
+    await resetArchiveDir()
+    return
+  }
+  if (command === 'clear-media') await clearMediaCache()
 }
 
 async function openDir(entry: ArchiveLibraryEntry): Promise<void> {
@@ -543,7 +516,6 @@ async function refreshAll(): Promise<void> {
       store.loadArchiveDirInfo(),
       store.loadLibrary(),
       store.loadTrash(),
-      refreshMediaCache(true),
     ])
   } catch (error) {
     toast.error((error as Error).message || '刷新失败')
@@ -654,378 +626,277 @@ onMounted(async () => {
   } catch (error) {
     initError.value = (error as Error).message
   }
-  startMediaCacheAutoRefresh()
   void store.normalizeLibrary().catch(() => undefined)
+  void backfillThumbnails()
 })
 
 onUnmounted(() => {
   const wv = webviewRef.value
   if (wv && devtoolsOpen.value) safeCall(() => wv.closeDevTools(), undefined)
   webviewRef.value = null
-  writeInspectorPreference()
+  writeLibraryWidth()
   store.dispose()
 })
 </script>
 
 <template>
   <div class="tool-page tweb-page">
-    <div class="embedded-stage">
-      <ToolSurface class="tweb-surface">
-        <template #toolbar>
-          <UiToolbar class="tweb-toolbar" gap="sm" flush>
-            <UiIconButton icon="arrowLeft" label="后退" :disabled="!canGoBack" @click="goBack" />
-            <UiIconButton icon="arrowRight" label="前进" :disabled="!canGoForward" @click="goForward" />
-            <UiIconButton icon="refresh" label="刷新页面" @click="reload" />
-            <span class="url-pill mono" :title="displayUrl">{{ displayUrl }}</span>
+    <ToolSurface class="tweb-surface">
+      <div ref="splitRef" class="tg-split" :class="{ 'is-resizing': resizingLibrary }">
+        <div class="tg-guest">
+          <div class="guest-bar">
+            <UiIconButton icon="arrowLeft" :size="24" label="后退" :disabled="!canGoBack" @click="goBack" />
+            <UiIconButton icon="arrowRight" :size="24" label="前进" :disabled="!canGoForward" @click="goForward" />
+            <UiIconButton icon="refresh" :size="24" label="刷新页面" @click="reload" />
+            <span class="guest-url mono" :title="displayUrl">{{ displayUrl }}</span>
             <span v-if="loading" class="loading-dot" aria-label="加载中" />
-
-            <template #end>
-              <UiIconButton
-                icon="external"
-                label="外部打开"
-                :disabled="!displayUrl"
-                @click="openInBrowser"
-              />
-              <UiIconButton icon="script" label="页面开发者工具" :active="devtoolsOpen" @click="toggleDevTools" />
-              <UiIconButton
-                icon="info"
-                label="工具详情"
-                :active="inspectorOpen"
-                @click="openInspector"
-              />
-            </template>
-          </UiToolbar>
-        </template>
-
-        <div class="browser-stage">
-          <UiAlert
-            v-if="initError"
-            class="pane-alert"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="后端未就绪"
-            :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
-          />
-          <UiAlert
-            v-else-if="!isElectron"
-            class="pane-alert"
-            type="info"
-            :closable="false"
-            show-icon
-            title="网页预览不支持内嵌 tweb"
-            description="请使用 everydaytool 桌面端打开本工具。"
-          />
-          <UiAlert
-            v-else-if="!pageSrc"
-            class="pane-alert"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="tweb 本地站点未就绪"
-            :description="siteError || '正在启动本地站点…（首次需要先在 tweb/ 里构建 dist）'"
-          />
-          <UiAlert
-            v-else-if="originNotice && !originNoticeDismissed"
-            class="pane-alert"
-            type="warning"
-            show-icon
-            title="站点端口已变化：tweb 登录态已重置"
-            :description="originNotice"
-            @close="originNoticeDismissed = true"
-          />
-
-          <webview
-            v-if="isElectron && pageSrc"
-            :ref="bindWebview"
-            :partition="TWEB_CACHE_WEBVIEW_PARTITION"
-            :src="pageSrc"
-            class="tweb-webview"
-          />
-
-          <div v-if="loading && pageSrc && !loadError" class="browser-overlay">
-            <span class="muted">正在加载 tweb…</span>
+            <UiIconButton
+              icon="external"
+              :size="24"
+              label="外部打开"
+              :disabled="!displayUrl"
+              @click="openInBrowser"
+            />
+            <UiIconButton
+              icon="script"
+              :size="24"
+              label="页面开发者工具"
+              :active="devtoolsOpen"
+              @click="toggleDevTools"
+            />
           </div>
 
-          <div v-if="loadError" class="browser-overlay is-error">
-            <span class="error-text">{{ loadError }}</span>
-            <UiGroup gap="sm">
-              <UiButton size="small" type="primary" @click="reload">
-                重试
-              </UiButton>
-              <UiButton size="small" @click="openInBrowser">
-                在系统浏览器打开
-              </UiButton>
-            </UiGroup>
+          <div class="browser-stage">
+            <UiAlert
+              v-if="initError"
+              class="pane-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="后端未就绪"
+              :description="`${initError}。请确认在 everydaytool 桌面端运行（网页预览没有主进程 IPC）。`"
+            />
+            <UiAlert
+              v-else-if="!isElectron"
+              class="pane-alert"
+              type="info"
+              :closable="false"
+              show-icon
+              title="网页预览不支持内嵌 tweb"
+              description="请使用 everydaytool 桌面端打开本工具。"
+            />
+            <UiAlert
+              v-else-if="!pageSrc"
+              class="pane-alert"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="tweb 本地站点未就绪"
+              :description="siteError || '正在启动本地站点…（首次需要先在 tweb/ 里构建 dist）'"
+            />
+            <UiAlert
+              v-else-if="originNotice && !originNoticeDismissed"
+              class="pane-alert"
+              type="warning"
+              show-icon
+              title="站点端口已变化：tweb 登录态已重置"
+              :description="originNotice"
+              @close="originNoticeDismissed = true"
+            />
+
+            <webview
+              v-if="isElectron && pageSrc"
+              :ref="bindWebview"
+              :partition="TWEB_CACHE_WEBVIEW_PARTITION"
+              :src="pageSrc"
+              class="tweb-webview"
+            />
+
+            <div v-if="loading && pageSrc && !loadError" class="browser-overlay">
+              <span class="muted">正在加载 tweb…</span>
+            </div>
+
+            <div v-if="loadError" class="browser-overlay is-error">
+              <span class="error-text">{{ loadError }}</span>
+              <UiGroup gap="sm">
+                <UiButton size="small" type="primary" @click="reload">
+                  重试
+                </UiButton>
+                <UiButton size="small" @click="openInBrowser">
+                  在系统浏览器打开
+                </UiButton>
+              </UiGroup>
+            </div>
           </div>
         </div>
-      </ToolSurface>
 
-      <ToolSideInspector
-        :open="inspectorOpen"
-        :title="inspectorTitle"
-        :width="inspectorWidth"
-        resizable
-        :min-width="INSPECTOR_MIN_WIDTH"
-        :max-width="INSPECTOR_MAX_WIDTH"
-        body-padding="12px"
-        @update:width="setInspectorWidth"
-        @resize-end="finishInspectorResize"
-        @close="closeInspector"
-      >
-        <div class="inspector-content">
-          <UiMenuHorizontal :model-value="activeTab" :items="menuItems" @update:model-value="switchTab" />
-          <div class="side-scroll">
-            <div v-if="activeTab === 'overview'" class="inspector-sections">
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>本地站点</strong>
-                    <span>tweb 独立回环端口</span>
-                  </div>
-                  <UiChip :tone="store.siteReady ? 'success' : 'neutral'" mono>
-                    {{ store.siteReady ? '已就绪' : '未就绪' }}
-                  </UiChip>
-                </header>
-                <UiDetailGrid :columns="2">
-                  <UiDetailItem label="页面地址" size="xs" mono>
-                    {{ store.site?.url || '—' }}
-                  </UiDetailItem>
-                  <UiDetailItem label="端口" size="xs" mono>
-                    {{ store.site?.port ?? '—' }}
-                  </UiDetailItem>
-                  <UiDetailItem label="origin" size="xs">
-                    {{ store.site?.originChanged ? '本次已变化' : '已固定' }}
-                  </UiDetailItem>
-                  <UiDetailItem label="进行中归档" size="xs" mono>
-                    {{ store.pendingArchives.length }}
-                  </UiDetailItem>
-                </UiDetailGrid>
-                <UiHint v-if="store.site?.error" block class="danger-hint">
-                  {{ store.site.error }}
-                </UiHint>
-                <UiHint v-else block>
-                  页面由工具自己的回环端口托管；归档 API 与媒体流由平台归档引擎提供。
-                </UiHint>
-                <div class="inspector-actions">
-                  <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
-                    刷新
-                  </UiButton>
-                </div>
-              </section>
+        <div
+          class="tg-grip"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖动调整影库宽度"
+          :aria-valuemin="LIB_MIN_WIDTH"
+          :aria-valuemax="LIB_MAX_WIDTH"
+          :aria-valuenow="libraryWidth"
+          tabindex="0"
+          @pointerdown="startLibraryResize"
+          @pointermove="moveLibraryResize"
+          @pointerup="finishLibraryResize"
+          @pointercancel="finishLibraryResize"
+          @lostpointercapture="finishLibraryResize"
+          @keydown="resizeLibraryByKeyboard"
+        />
 
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>本地归档</strong>
-                    <span>独立命名空间，不与其他工具互相覆盖</span>
-                  </div>
-                </header>
-                <UiDetailGrid :columns="2">
-                  <UiDetailItem label="已缓存消息" size="xs" mono>
-                    {{ store.library.filter(item => item.state === 'complete').length }} 条
-                  </UiDetailItem>
-                  <UiDetailItem label="进行中" size="xs" mono>
-                    {{ store.pendingArchives.length }} 条
-                  </UiDetailItem>
-                </UiDetailGrid>
-                <div class="archive-dir-row">
-                  <span class="archive-dir-path mono" :title="store.archiveDir?.archiveDir">
-                    {{ store.archiveDir?.archiveDir || '—' }}
+        <aside class="tg-lib" :style="{ '--lib-width': `${libraryWidth}px` }">
+          <header class="tg-lib-head">
+            <UiIcon name="layers" :size="14" />
+            <span>影库</span>
+            <span class="meta">{{ store.library.length }} 条 · {{ formatBytes(libraryTotalSize) }}</span>
+            <UiDropdown :items="libraryMenuItems" @command="onLibraryCommand">
+              <template #trigger>
+                <UiIconButton icon="more" :size="24" label="影库操作" />
+              </template>
+            </UiDropdown>
+          </header>
+
+          <div class="tg-tools">
+            <label class="lib-search">
+              <UiIcon name="search" :size="14" />
+              <input
+                v-model="libraryFilter"
+                type="search"
+                placeholder="搜索消息或媒体"
+                aria-label="搜索影库"
+              >
+            </label>
+            <UiIconButton
+              icon="pause"
+              :size="28"
+              label="全部暂停"
+              :disabled="!hasActiveCache"
+              :loading="pausingAll"
+              @click="pauseAllCaches"
+            />
+            <UiIconButton
+              icon="refresh"
+              :size="28"
+              label="刷新影库"
+              :loading="store.busy.library"
+              @click="refreshAll"
+            />
+          </div>
+
+          <div class="lib-table">
+            <UiTable
+              :data="groupedLibrary"
+              :span-method="librarySpanMethod"
+              height="100%"
+              empty-text="还没有本地缓存：先在 tweb 页面里右键「缓存此消息」"
+            >
+              <UiTableColumn label="会话 / 消息" min-width="110">
+                <template #default="{ row }">
+                  <span class="library-group">
+                    <span class="mono library-title" :title="row.groupTitle">{{ row.groupTitle }}</span>
+                    <span v-if="row.groupSize > 1" class="muted">相册 · {{ row.groupSize }} 条</span>
                   </span>
-                  <UiChip :tone="store.archiveDir?.isCustom ? 'primary' : 'neutral'">
-                    {{ store.archiveDir?.isCustom ? '自定义' : '默认' }}
-                  </UiChip>
-                </div>
-                <div class="inspector-actions">
-                  <UiButton size="small" @click="openDataDir">
-                    打开归档目录
-                  </UiButton>
-                  <UiButton size="small" :loading="store.busy.archiveDir" @click="selectArchiveDir">
-                    更改…
-                  </UiButton>
-                  <UiButton
-                    v-if="store.archiveDir?.isCustom"
-                    size="small"
-                    :loading="store.busy.archiveDir"
-                    @click="resetArchiveDir"
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="消息 ID" width="56" align="right">
+                <template #default="{ row }">
+                  <span class="mono">{{ row.messageId }}</span>
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="预览" width="52">
+                <template #default="{ row }">
+                  <img
+                    v-if="row.thumbnailUrl"
+                    class="library-thumb"
+                    :src="row.thumbnailUrl"
+                    loading="lazy"
+                    alt=""
                   >
-                    恢复默认
-                  </UiButton>
-                </div>
-                <UiHint block>
-                  <template v-if="store.archiveDir?.isCustom">
-                    已单独指定归档目录，不影响全局资产目录；索引仍在数据目录，迁移失败会自动回滚。
-                  </template>
-                  <template v-else>
-                    默认保存在 assets/tweb-cache/，与页面登录态分开；可单独指定到其他磁盘。
-                  </template>
-                </UiHint>
-              </section>
-
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>tweb 媒体缓存</strong>
-                    <span>浏览器 Cache Storage</span>
+                  <span v-else class="library-thumb library-thumb--empty">
+                    <UiIcon name="layers" :size="13" />
+                  </span>
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="大小" width="64" align="right">
+                <template #default="{ row }">
+                  <span class="mono">{{ formatBytes(row.size) }}</span>
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="状态" width="76">
+                <template #default="{ row }">
+                  <div class="state-cell">
+                    <UiChip :tone="stateTone(toEntry(row))">
+                      {{ stateLabel(toEntry(row)) }}
+                    </UiChip>
+                    <UiProgress
+                      v-if="toEntry(row).state !== 'complete'"
+                      :percentage="progressOf(toEntry(row))"
+                      :stroke-width="3"
+                    />
                   </div>
-                </header>
-                <UiDetailGrid :columns="2">
-                  <UiDetailItem label="占用" size="xs" mono>
-                    {{ mediaCacheUsage ? formatBytes(mediaCacheUsage.total) : '—' }}
-                  </UiDetailItem>
-                  <UiDetailItem label="自动清理" size="xs">
-                    已关闭（手动清）
-                  </UiDetailItem>
-                </UiDetailGrid>
-                <UiHint block>
-                  {{ mediaCacheBreakdown }}
-                </UiHint>
-                <div class="inspector-actions">
-                  <UiButton size="small" :loading="mediaCacheLoading" @click="refreshMediaCache()">
-                    刷新用量
-                  </UiButton>
-                  <UiButton size="small" type="danger" plain :loading="mediaCacheClearing" @click="clearMediaCache">
-                    清理
-                  </UiButton>
-                </div>
-              </section>
-            </div>
-
-            <div v-else class="inspector-sections">
-              <section class="inspector-section inspector-section--fill">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>本地影库</strong>
-                    <span>{{ store.library.length }} 条记录</span>
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="操作" width="108" align="right">
+                <template #default="{ row }">
+                  <div class="row-actions">
+                    <UiIconButton
+                      v-if="toEntry(row).state !== 'complete'"
+                      icon="download"
+                      :size="24"
+                      label="继续缓存"
+                      @click="resumeEntry(toEntry(row))"
+                    />
+                    <UiIconButton
+                      icon="arrowRight"
+                      :size="24"
+                      label="定位消息"
+                      @click="jumpToEntry(toEntry(row))"
+                    />
+                    <UiIconButton
+                      icon="external"
+                      :size="24"
+                      label="打开文件夹"
+                      @click="openDir(toEntry(row))"
+                    />
+                    <UiIconButton
+                      icon="trash"
+                      :size="24"
+                      label="移入回收站"
+                      @click="removeEntry(toEntry(row))"
+                    />
                   </div>
-                  <div class="head-actions">
-                    <UiButton
-                      size="small"
-                      :disabled="!hasActiveCache"
-                      :loading="pausingAll"
-                      @click="pauseAllCaches"
-                    >
-                      全部暂停
-                    </UiButton>
-                    <UiButton size="small" :loading="store.busy.library" @click="refreshAll">
-                      刷新
-                    </UiButton>
-                  </div>
-                </header>
-                <UiTable
-                  :data="groupedLibrary"
-                  :span-method="librarySpanMethod"
-                  max-height="min(560px, calc(100vh - 300px))"
-                  empty-text="还没有本地缓存：先在 tweb 页面里右键「缓存此消息」"
-                >
-                  <UiTableColumn label="会话 / 消息" min-width="96">
-                    <template #default="{ row }">
-                      <span class="library-group">
-                        <span class="mono library-title" :title="row.groupTitle">{{ row.groupTitle }}</span>
-                        <span v-if="row.groupSize > 1" class="muted">相册 · {{ row.groupSize }} 条</span>
-                      </span>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="消息 ID" width="64" align="right">
-                    <template #default="{ row }">
-                      <span class="mono">{{ row.messageId }}</span>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="预览" width="60">
-                    <template #default="{ row }">
-                      <img
-                        v-if="row.thumbnailUrl"
-                        class="library-thumb"
-                        :src="row.thumbnailUrl"
-                        loading="lazy"
-                        alt=""
-                      >
-                      <span v-else class="library-thumb library-thumb--empty">
-                        <UiIcon name="layers" :size="14" />
-                      </span>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="大小" width="80" align="right">
-                    <template #default="{ row }">
-                      <span class="mono">{{ formatBytes(row.size) }}</span>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="状态" width="78">
-                    <template #default="{ row }">
-                      <div class="state-cell">
-                        <UiChip :tone="stateTone(toEntry(row))">
-                          {{ stateLabel(toEntry(row)) }}
-                        </UiChip>
-                        <UiProgress
-                          v-if="toEntry(row).state !== 'complete'"
-                          :percentage="progressOf(toEntry(row))"
-                          :stroke-width="3"
-                        />
-                      </div>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="操作" width="124" align="right">
-                    <template #default="{ row }">
-                      <div class="row-actions">
-                        <UiIconButton
-                          v-if="toEntry(row).state !== 'complete'"
-                          icon="download"
-                          :size="24"
-                          label="继续缓存"
-                          @click="resumeEntry(toEntry(row))"
-                        />
-                        <UiIconButton
-                          icon="arrowRight"
-                          :size="24"
-                          label="定位消息"
-                          @click="jumpToEntry(toEntry(row))"
-                        />
-                        <UiIconButton
-                          icon="external"
-                          :size="24"
-                          label="打开文件夹"
-                          @click="openDir(toEntry(row))"
-                        />
-                        <UiIconButton
-                          icon="trash"
-                          :size="24"
-                          label="移入回收站"
-                          @click="removeEntry(toEntry(row))"
-                        />
-                      </div>
-                    </template>
-                  </UiTableColumn>
-                </UiTable>
-              </section>
-
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>回收站</strong>
-                    <span>{{ store.trash.length }} 条记录</span>
-                  </div>
-                </header>
-                <UiTable :data="store.trash" max-height="180" empty-text="回收站为空">
-                  <UiTableColumn label="会话 / 消息" min-width="180" show-overflow-tooltip>
-                    <template #default="{ row }">
-                      <span class="mono">{{ row.peerId }} / {{ row.messageId }}</span>
-                    </template>
-                  </UiTableColumn>
-                  <UiTableColumn label="操作" width="72" align="right">
-                    <template #default="{ row }">
-                      <UiButton size="small" text type="primary" @click="restoreTrash(toTrash(row))">
-                        恢复
-                      </UiButton>
-                    </template>
-                  </UiTableColumn>
-                </UiTable>
-              </section>
-            </div>
+                </template>
+              </UiTableColumn>
+            </UiTable>
           </div>
-        </div>
-      </ToolSideInspector>
-    </div>
+
+          <section class="trash-sec">
+            <header class="tg-sub-head">
+              <UiIcon name="trash" :size="12" />
+              <span>回收站</span>
+              <span>{{ store.trash.length }} 条记录</span>
+            </header>
+            <UiTable :data="store.trash" max-height="150" empty-text="回收站为空">
+              <UiTableColumn label="会话 / 消息" min-width="180" show-overflow-tooltip>
+                <template #default="{ row }">
+                  <span class="mono">{{ row.peerId }} / {{ row.messageId }}</span>
+                </template>
+              </UiTableColumn>
+              <UiTableColumn label="操作" width="64" align="right">
+                <template #default="{ row }">
+                  <UiButton size="small" text type="primary" @click="restoreTrash(toTrash(row))">
+                    恢复
+                  </UiButton>
+                </template>
+              </UiTableColumn>
+            </UiTable>
+          </section>
+        </aside>
+      </div>
+    </ToolSurface>
   </div>
 </template>
 
@@ -1033,15 +904,8 @@ onUnmounted(() => {
 .tweb-page {
   display: flex;
   flex-direction: column;
-  padding: 18px;
+  padding: 0;
   overflow: hidden;
-}
-
-.embedded-stage {
-  display: flex;
-  flex: 1;
-  gap: 12px;
-  min-height: 0;
 }
 
 .tweb-surface {
@@ -1049,21 +913,49 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-/* 让 `#end` 真正贴到工具栏最右边（否则 UiToolbar 只按内容宽度收缩，右侧留空） */
-.tweb-toolbar {
+.tg-split {
+  display: flex;
   flex: 1;
   min-width: 0;
+  min-height: 0;
+
+  &.is-resizing {
+    cursor: col-resize;
+  }
 }
 
-.url-pill {
+.tg-guest {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-app-bg);
+}
+
+.guest-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 36px;
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-raised);
+}
+
+.guest-url {
   flex: 1;
   min-width: 0;
-  padding: var(--spacing-xs) var(--spacing-md);
-  border-radius: 999px;
-  background: var(--color-fill);
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-control);
+  background: var(--color-input);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-control);
+  font-size: 11px;
+  line-height: 24px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1135,117 +1027,158 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-.inspector-content {
+.tg-grip {
+  position: relative;
+  flex: 0 0 7px;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
+  outline: none;
+  touch-action: none;
+
+  &::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    background: var(--color-border-light);
+    content: '';
+    transition: background-color var(--transition-fast);
+  }
+
+  &:hover::after,
+  &:focus-visible::after,
+  .tg-split.is-resizing &::after {
+    left: 2.5px;
+    width: 2px;
+    background: var(--color-primary);
+  }
+}
+
+.tg-lib {
   display: flex;
+  flex: 0 0 var(--lib-width);
   flex-direction: column;
-  height: 100%;
+  width: var(--lib-width);
   min-height: 0;
-  gap: var(--spacing-sm);
-}
-
-.side-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.inspector-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.inspector-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border-light);
-
-  &:last-child {
-    padding-bottom: 0;
-    border-bottom: 0;
-  }
-}
-
-.inspector-section--fill {
-  min-height: 0;
-}
-
-.inspector-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-
-  > .head-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    flex: none;
-  }
-
-  > div {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
-  }
-
-  strong {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
-  span {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-    line-height: 1.45;
-  }
-}
-
-.inspector-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.archive-dir-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
-
-.archive-dir-path {
-  flex: 1;
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  overflow-wrap: anywhere;
-}
-
-.row-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--spacing-xs);
-}
-
-.library-thumb {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
+  overflow: hidden;
   background: var(--color-fill);
 }
 
-.library-thumb--empty {
-  display: grid;
-  place-items: center;
+.tg-lib-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 40px;
+  height: 40px;
+  min-width: 0;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+
+  > span:first-of-type {
+    color: var(--color-text-primary);
+  }
+
+  .meta {
+    margin-left: auto;
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    font-weight: var(--font-weight-regular);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}
+
+.tg-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.lib-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-control);
+  background: var(--color-input);
   color: var(--color-text-tertiary);
+
+  input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-primary);
+    font-family: inherit;
+    font-size: var(--font-size-xs);
+    outline: none;
+
+    &::placeholder {
+      color: var(--color-text-tertiary);
+    }
+
+    &::-webkit-search-cancel-button {
+      display: none;
+    }
+  }
+
+  &:focus-within {
+    border-color: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  }
+}
+
+.lib-table {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  :deep(.ui-table-wrap) {
+    flex: 1;
+    min-height: 0;
+    border-radius: 0;
+  }
+}
+
+.trash-sec {
+  flex: none;
+  min-width: 0;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-fill);
+
+  :deep(.ui-table-wrap) {
+    border-radius: 0;
+  }
+}
+
+.tg-sub-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px 4px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+
+  > span:last-child {
+    margin-left: auto;
+    font-weight: var(--font-weight-regular);
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 .library-group {
@@ -1264,6 +1197,21 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
+.library-thumb {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-fill);
+}
+
+.library-thumb--empty {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+}
+
 .state-cell {
   display: flex;
   flex-direction: column;
@@ -1275,8 +1223,11 @@ onUnmounted(() => {
   }
 }
 
-.danger-hint {
-  color: var(--color-warning);
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
 }
 
 @media (prefers-reduced-motion: reduce) {

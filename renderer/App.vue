@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import type { IconName } from './shared/components/ui/icons'
 import ConfirmHost from '@renderer/shared/feedback/ConfirmHost.vue'
 import { useEventListener } from '@vueuse/core'
 import { findAppTab, getAppTabs } from './config/app-tabs'
@@ -86,30 +85,6 @@ const currentTabId = computed(() => (typeof route.meta?.toolId === 'string' ? ro
 const activeTool = computed(() => (currentTabId.value ? getToolById(currentTabId.value) : undefined))
 const activeAppTab = computed(() => (currentTabId.value ? findAppTab(currentTabId.value) : undefined))
 const activeToolId = computed(() => activeTool.value?.id ?? null)
-
-interface TitlebarContext {
-  name: string
-  description: string
-}
-
-/** 标题栏图标：首页没有图标（用 EDT 字标），工具 / 应用页取注册表元数据 */
-const titlebarIcon = computed<IconName | null>(
-  () => activeTool.value?.icon ?? activeAppTab.value?.icon ?? null,
-)
-
-/**
- * 标题栏是在描述「当前这块内容是什么」：首页讲应用本身，工具讲工具能力，应用页（设置）讲页面职责。
- * 全部走注册表里的元数据，组件不再各写一份文案。
- */
-const titlebar = computed<TitlebarContext>(() => {
-  if (activeTool.value) {
-    return { name: activeTool.value.name, description: activeTool.value.description }
-  }
-  if (activeAppTab.value) {
-    return { name: activeAppTab.value.name, description: activeAppTab.value.description }
-  }
-  return { name: 'everydaytool', description: '本地工具工作区' }
-})
 
 const settingsTab = findAppTab('settings')
 const isFullscreen = ref(false)
@@ -211,6 +186,19 @@ async function handleToolClose(toolId: string) {
 function openSettings() {
   if (settingsTab) router.push({ name: settingsTab.routeName })
 }
+
+const topbarMenuItems = [
+  { command: 'switch', label: '切换工具', icon: 'search' as const },
+  { command: 'close', label: '关闭当前工具', icon: 'close' as const, danger: true },
+]
+
+function onTopbarCommand(command: string) {
+  if (command === 'switch') {
+    openPalette()
+    return
+  }
+  if (command === 'close' && activeTool.value) void handleToolClose(activeTool.value.id)
+}
 </script>
 
 <template>
@@ -219,12 +207,42 @@ function openSettings() {
     :class="[`platform-${platform}`, modeClasses]"
   >
     <header class="app-topbar">
-      <div class="topbar-context">
-        <span v-if="titlebarIcon === null" class="topbar-brand" aria-hidden="true">EDT</span>
-        <UiIconTile v-else size="sm" :name="titlebarIcon" :icon-size="17" />
-        <span class="topbar-title">{{ titlebar.name }}</span>
-        <span class="topbar-meta">{{ titlebar.description }}</span>
-      </div>
+      <template v-if="activeTool">
+        <button
+          type="button"
+          class="tool-switcher"
+          aria-haspopup="dialog"
+          :title="activeTool.name"
+          @click="openPalette()"
+        >
+          <span class="tool-switcher-tile" aria-hidden="true">
+            <UiIcon :name="activeTool.icon" :size="15" />
+          </span>
+          <span class="tool-switcher-name">{{ activeTool.name }}</span>
+          <UiIcon name="chevronDown" :size="12" class="tool-switcher-chevron" />
+        </button>
+        <span class="topbar-desc">{{ activeTool.description }}</span>
+        <span class="topbar-grow" aria-hidden="true" />
+        <div id="app-topbar-state" class="topbar-state-slot" />
+        <div id="app-topbar-actions" class="topbar-actions-slot" />
+        <UiDropdown class="topbar-more" :items="topbarMenuItems" @command="onTopbarCommand">
+          <template #trigger>
+            <UiIconButton icon="more" :size="28" label="更多" />
+          </template>
+        </UiDropdown>
+      </template>
+
+      <template v-else-if="activeAppTab">
+        <UiIconTile size="sm" :name="activeAppTab.icon" :icon-size="17" />
+        <span class="topbar-title">{{ activeAppTab.name }}</span>
+        <span class="topbar-meta">{{ activeAppTab.description }}</span>
+      </template>
+
+      <template v-else>
+        <span class="topbar-brand" aria-hidden="true">EDT</span>
+        <span class="topbar-title">everydaytool</span>
+        <span class="topbar-meta">本地工具工作区</span>
+      </template>
     </header>
 
     <div class="app-body">
@@ -309,14 +327,12 @@ function openSettings() {
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   flex: 0 0 var(--topbar-height);
   height: var(--topbar-height);
   min-width: 0;
   padding: 0 var(--spacing-lg);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border-light) 72%, transparent);
-  background: var(--color-header);
-  backdrop-filter: var(--glass-header);
+  background: transparent;
   color: var(--color-text-primary);
   -webkit-app-region: drag;
 }
@@ -333,15 +349,104 @@ function openSettings() {
   padding-left: var(--spacing-lg);
 }
 
-/* 标题栏只剩一块「当前上下文」：图标 + 名称 + 一行说明。
-   整块不可交互（首页入口在左轨），因此整行仍是窗口拖拽区；说明是唯一可收缩的项，
-   窗口变窄时先省略说明，名称与图标不动。 */
-.topbar-context {
+/* 工具页：切换器是可交互胶囊，其余部分仍是窗口拖拽区。 */
+.tool-switcher {
   display: flex;
   align-items: center;
-  flex: 1;
   gap: 9px;
+  flex: none;
+  max-width: 268px;
+  height: 34px;
   min-width: 0;
+  padding: 0 9px 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+
+  &:hover {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+.tool-switcher-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.tool-switcher-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-switcher-chevron {
+  flex: none;
+  color: var(--color-text-tertiary);
+}
+
+.topbar-desc {
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-grow {
+  flex: 1;
+  min-width: 8px;
+}
+
+.topbar-state-slot,
+.topbar-actions-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: none;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.topbar-state-slot {
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.topbar-actions-slot :deep(.ui-button) {
+  height: 30px;
+  padding: 0 12px;
+  font-size: var(--font-size-sm);
+}
+
+.topbar-more {
+  flex: none;
+  -webkit-app-region: no-drag;
 }
 
 /* 首页字标与 UiIconTile（sm）同尺寸，保证三种状态的图标位对齐 */

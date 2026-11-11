@@ -16,11 +16,6 @@ const tool = defineTool({
     component: () => import('./renderer/pages/TwebCachePage.vue'),
     meta: { toolId: 'tweb-cache', title: 'Telegram 缓存（tweb）' },
   },
-  // 子路由只驱动右侧面板，webview 常驻
-  subRoutes: [
-    { path: 'overview', name: 'tool-tweb-cache-overview', meta: { title: '概览' } },
-    { path: 'library', name: 'tool-tweb-cache-library', meta: { title: '影库' } },
-  ],
 })
 
 export default tool

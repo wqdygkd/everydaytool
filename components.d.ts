@@ -23,7 +23,6 @@ declare module 'vue' {
     GithubLineButtons: typeof import('./tools/offline-pack/renderer/components/GithubLineButtons.vue')['default']
     HistorySection: typeof import('./tools/offline-pack/renderer/components/HistorySection.vue')['default']
     InterceptorStatusPanel: typeof import('./tools/interceptor/renderer/components/InterceptorStatusPanel.vue')['default']
-    LauncherRow: typeof import('./renderer/shared/components/LauncherRow.vue')['default']
     MSStoreDownloader: typeof import('./tools/offline-pack/renderer/components/MSStoreDownloader.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
@@ -81,6 +80,6 @@ declare module 'vue' {
     UiTooltip: typeof import('./renderer/shared/components/ui/UiTooltip.vue')['default']
     UpdatePlanPanel: typeof import('./tools/skill-manager/renderer/components/UpdatePlanPanel.vue')['default']
     VSCodeDownloader: typeof import('./tools/offline-pack/renderer/components/VSCodeDownloader.vue')['default']
-    WorkspaceHeader: typeof import('./renderer/shared/components/workspace/WorkspaceHeader.vue')['default']
+    WorkspaceSpine: typeof import('./renderer/shared/components/workspace/WorkspaceSpine.vue')['default']
   }
 }

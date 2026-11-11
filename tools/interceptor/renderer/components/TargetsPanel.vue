@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { InterceptorTarget } from '../../../../shared/interceptor'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { toast } from 'vue-sonner'
 import { parseTargetOrigin } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
 
 const store = useInterceptorStore()
+const paneActive = useToolPaneActive()
 
 const originInput = ref('')
+const targetList = computed(() => store.targets)
 
 /** 输入预览：实时告诉用户会存成什么 origin（纯域名默认 https，回环默认 http） */
 const previewOrigin = computed(() => (originInput.value.trim() ? parseTargetOrigin(originInput.value) : null))
@@ -73,21 +76,23 @@ function formatTime(iso: string): string {
 
 <template>
   <div class="targets-pane">
-    <header class="targets-toolbar">
-      <UiInput
-        v-model="originInput"
-        class="target-input"
-        placeholder="origin，如 https://www.a.com（粘整条 URL 会自动取 origin）"
-        @keyup.enter="add"
-      />
-      <UiButton type="primary" :disabled="invalidInput" @click="add">
-        加入名单
-      </UiButton>
-      <span class="toolbar-spacer" />
-      <UiChip tone="success" variant="soft">
-        启用 {{ enabledCount }} / {{ store.targets.length }}
-      </UiChip>
-    </header>
+    <Teleport v-if="paneActive" defer to="#interceptor-toolbar">
+      <header class="targets-toolbar is-toolbar">
+        <UiInput
+          v-model="originInput"
+          class="target-input"
+          placeholder="origin，如 https://www.a.com（粘整条 URL 会自动取 origin）"
+          @keyup.enter="add"
+        />
+        <UiButton type="primary" :disabled="invalidInput" @click="add">
+          加入名单
+        </UiButton>
+        <span class="toolbar-spacer" />
+        <UiChip tone="success" variant="soft">
+          启用 {{ enabledCount }} / {{ targetList.length }}
+        </UiChip>
+      </header>
+    </Teleport>
 
     <div v-if="previewOrigin && previewOrigin !== originInput.trim()" class="input-note">
       将存为 <span class="mono">{{ previewOrigin }}</span>
@@ -98,7 +103,7 @@ function formatTime(iso: string): string {
 
     <UiTable
       class="targets-table"
-      :data="store.targets"
+      :data="targetList"
       row-key="id"
       height="100%"
       empty-text="名单为空（全部透传，规则不会跑）"
@@ -159,6 +164,13 @@ function formatTime(iso: string): string {
   height: 48px;
   padding: 0 14px;
   border-bottom: 1px solid var(--color-border-light);
+}
+
+.targets-toolbar.is-toolbar {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border-bottom: 0;
 }
 
 .target-input {

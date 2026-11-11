@@ -8,7 +8,7 @@ const tool = defineTool({
   icon: 'wb2api',
   category: { key: 'dev', name: '开发工具' },
   keywords: ['workbuddy', 'wb2api', 'workbuddy2api', 'panel', 'api', 'gateway'],
-  supportedTargets: ['win', 'mac', 'linux'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-10-26',
   route: {
     path: 'workbuddy2api-panel',

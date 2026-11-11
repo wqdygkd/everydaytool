@@ -35,7 +35,7 @@
      每个表面角色拆成「基准色(*-base) × alpha(--alpha-*)」两层：
      本文件定义基准色，translucency.scss 按窗口模式覆写 alpha，
      消费端用 --color-<role> 合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
-  --color-rail-base: #f7fbff; /* 角色 rail：左侧 68px 导航轨 */
+  --color-rail-base: #f7fbff; /* 角色 rail：左侧 48px 导航轨 */
   --color-raised-base: #fbfdff; /* 角色 raised：主工作区 / launcher / 抽屉 */
   --color-input-base: #ffffff; /* 角色 input：浮在画布上的搜索框 / 导航控件 */
   --color-field-base: #ffffff; /* 角色 field：表面内的通用表单输入框 */
@@ -155,13 +155,13 @@
   /* ── 控件 / 外壳尺寸（全应用统一，禁止一处一个 px） ── */
   --control-height: 32px; /* 表单控件与 ghost 按钮同高 */
   --line-height-control: 20px; /* 控件 / 表格 / 徽标统一行高 */
-  --content-max-width: 1160px; /* 首页内容最大宽 */
-  --rail-width: 68px;
+  --content-max-width: 1264px; /* 首页内容最大宽 */
+  --rail-width: 48px;
   --topbar-height: 48px;
-  --rail-control-size: 42px;
+  --rail-control-size: 36px;
   --launcher-row-height: 78px;
-  --workspace-header-height: 70px;
   --workspace-toolbar-height: 48px;
+  --spine-width: 98px;
   --workspace-statusline-height: 31px;
   /* 长文行宽上限：中文一行 ~60 字最舒服（CJK 每字 1em，所以用 em 而不是 ch——
      ch 是 "0" 的宽度，在中文里会算出 1.8 倍的错觉）。

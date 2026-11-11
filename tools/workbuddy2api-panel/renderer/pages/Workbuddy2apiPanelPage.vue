@@ -4,13 +4,14 @@ import type {
   Wb2apiProgressEvent,
   Wb2apiUpdateInfo,
 } from '../../../../shared/workbuddy2api-panel'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { registerTabCloseGuard } from '@renderer/shared/composables/useTabCloseGuard'
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { toast } from 'vue-sonner'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
+import WorkspaceSpine from '../../../../renderer/shared/components/workspace/WorkspaceSpine.vue'
 import { WB2API_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import {
   buildWb2apiAnthropicBaseUrl,
@@ -30,6 +31,7 @@ function openUpstreamRepo() {
 }
 
 const state = ref<Wb2apiPanelState | null>(null)
+const paneActive = useToolPaneActive()
 const loading = ref(false)
 const cancelling = ref(false)
 /** 用户点了「取消下载」：由 abort 引发的中断不是失败，runAction 据此吞掉错误提示 */
@@ -47,6 +49,10 @@ const inspectorMenu = [
 const inspectorTitle = computed(() =>
   inspectorMenu.find(tab => tab.value === inspectorTab.value)?.label ?? '运行',
 )
+const inspectorSpineItems = computed(() => inspectorMenu.map(tab => ({
+  key: tab.value,
+  label: tab.label,
+})))
 
 // 检查更新的结果缓存在主进程（state.update）：重开页签 / 刷新都在，渲染层不再自留一份副本。
 // 已安装版本来自 manifest（state.version），与检查结果里的 currentVersion 同源现算。
@@ -281,12 +287,6 @@ function openInspector(tab: InspectorTab = 'run') {
   inspectorOpen.value = true
 }
 
-function selectInspectorTab(value: string) {
-  if (value === 'run' || value === 'install' || value === 'diagnostics') {
-    inspectorTab.value = value
-  }
-}
-
 function openPanelInBrowser() {
   if (panelSrc.value) openExternal(panelSrc.value)
 }
@@ -352,41 +352,48 @@ onUnmounted(() => {
 
 <template>
   <div class="tool-page wb2api-page">
-    <WorkspaceHeader
-      icon="wb2api"
-      title="WorkBuddy2API"
-      description="内嵌上游管理面板；安装、启停与诊断按需展开"
-      :status-label="statusLabel"
-      :status-tone="statusTone"
-    >
-      <template #actions>
-        <UiButton size="small" @click="openInspector('run')">
-          运行详情
-        </UiButton>
-        <UiButton
-          v-if="!isRunning"
-          size="small"
-          type="primary"
-          :disabled="busy || !installed || state?.orphanLikely"
-          @click="onStart"
-        >
-          启动
-        </UiButton>
-        <UiButton
-          v-else
-          size="small"
-          type="warning"
-          plain
-          :disabled="busy"
-          @click="onStop"
-        >
-          停止
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
+    <Teleport v-if="paneActive" defer to="#app-topbar-state">
+      <span class="tb-state" :class="`is-${statusTone}`">
+        <i class="tb-dot" />
+        {{ statusLabel }}
+      </span>
+    </Teleport>
+
+    <Teleport v-if="paneActive" defer to="#app-topbar-actions">
+      <UiButton size="small" @click="openInspector('run')">
+        运行详情
+      </UiButton>
+      <UiButton
+        v-if="!isRunning"
+        size="small"
+        type="primary"
+        :disabled="busy || !installed || state?.orphanLikely"
+        @click="onStart"
+      >
+        启动
+      </UiButton>
+      <UiButton
+        v-else
+        size="small"
+        type="warning"
+        plain
+        :disabled="busy"
+        @click="onStop"
+      >
+        停止
+      </UiButton>
+    </Teleport>
 
     <div class="wb2api-layout">
       <ToolSurface class="wb2api-surface">
+        <template #spine>
+          <WorkspaceSpine
+            :model-value="inspectorOpen ? inspectorTab : ''"
+            :items="inspectorSpineItems"
+            @update:model-value="(value: string) => openInspector(value as InspectorTab)"
+          />
+        </template>
+
         <template #toolbar>
           <UiToolbar gap="sm" flush>
             <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
@@ -446,14 +453,6 @@ onUnmounted(() => {
             </template>
           </UiEmpty>
         </div>
-
-        <template #statusline>
-          <span>WORKBUDDY2API</span>
-          <span class="mono">127.0.0.1:{{ endpointPort }}</span>
-          <span v-if="state?.version">v{{ state.version }}</span>
-          <span class="status-spacer" />
-          <span>{{ isRunning ? 'SERVICE RUNNING' : 'SERVICE STOPPED' }}</span>
-        </template>
       </ToolSurface>
 
       <ToolSideInspector
@@ -464,12 +463,6 @@ onUnmounted(() => {
         @close="inspectorOpen = false"
       >
         <div class="inspector-content">
-          <UiMenuHorizontal
-            :model-value="inspectorTab"
-            :items="inspectorMenu"
-            @update:model-value="selectInspectorTab"
-          />
-
           <div class="side-scroll">
             <div v-if="inspectorTab === 'run'" class="inspector-sections">
               <section class="inspector-section">
@@ -629,8 +622,50 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 0;
   overflow: hidden;
+}
+
+.tb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.tb-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+}
+
+.tb-state.is-success {
+  color: var(--color-success);
+
+  .tb-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
+  }
+}
+
+.tb-state.is-warning {
+  color: var(--color-warning);
+
+  .tb-dot {
+    background: var(--color-warning);
+  }
+}
+
+.tb-state.is-danger {
+  color: var(--color-error);
+
+  .tb-dot {
+    background: var(--color-error);
+  }
 }
 
 .wb2api-layout {
@@ -781,9 +816,5 @@ onUnmounted(() => {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.status-spacer {
-  flex: 1;
 }
 </style>

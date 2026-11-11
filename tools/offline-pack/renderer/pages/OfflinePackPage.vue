@@ -143,7 +143,7 @@ function switchTab(key: string): void {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 18px;
+  padding: 0;
   overflow: hidden;
 }
 
