@@ -1,14 +1,17 @@
 <template>
-  <section class="tool-surface">
-    <header v-if="$slots.toolbar" class="tool-surface-toolbar">
-      <slot name="toolbar" />
-    </header>
-    <div class="tool-surface-body">
-      <slot />
+  <section class="tool-surface" :class="{ 'has-spine': $slots.spine }">
+    <slot name="spine" />
+    <div class="tool-surface-main">
+      <header v-if="$slots.toolbar" class="tool-surface-toolbar">
+        <slot name="toolbar" />
+      </header>
+      <div class="tool-surface-body">
+        <slot />
+      </div>
+      <footer v-if="$slots.statusline" class="tool-surface-statusline">
+        <slot name="statusline" />
+      </footer>
     </div>
-    <footer v-if="$slots.statusline" class="tool-surface-statusline">
-      <slot name="statusline" />
-    </footer>
   </section>
 </template>
 
@@ -22,9 +25,25 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--color-on-solid) 58%, var(--color-border-light));
   border-radius: var(--radius-lg);
+  /* 主区域无内边距，右下角正好压在窗口外缘：不画内圆角，交给窗口自身裁切。
+     这样窗口圆角 / 最大化直角 / 无圆角平台都能自然贴合，不会露出透明楔形。 */
+  border-bottom-right-radius: 0;
   background: var(--color-raised);
   backdrop-filter: var(--glass-raised);
-  box-shadow: inset 0 1px 0 var(--color-highlight), var(--shadow-sm);
+  box-shadow: inset 0 1px 0 var(--color-highlight);
+}
+
+.tool-surface.has-spine {
+  flex-direction: row;
+}
+
+.tool-surface-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .tool-surface-toolbar {

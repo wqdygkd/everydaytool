@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { WxpRunningStatus } from '../../../../shared/wxp'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { toast } from 'vue-sonner'
 import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite'
@@ -13,6 +13,7 @@ import { useWxpEnhancerStore } from '../stores/wxpEnhancerStore'
 
 const store = useWxpEnhancerStore()
 const isElectron = isElectronEnvironment()
+const paneActive = useToolPaneActive()
 
 const ACTIVE_STATUSES = ['launching', 'waiting', 'connecting', 'running']
 
@@ -275,48 +276,49 @@ onUnmounted(() => {
 
 <template>
   <div class="wxp-enhancer-page tool-page">
-    <WorkspaceHeader
-      icon="wxpEnhancer"
-      title="WXP 增强"
-      description="启动 WXP、注入增强脚本，并把登录信息与收藏缓存在本机"
-      :status-label="statusLabel"
-      :status-tone="statusTone"
-    >
-      <template #actions>
-        <UiButton size="small" @click="settingsOpen = !settingsOpen">
-          {{ settingsOpen ? '收起设置' : '启动设置' }}
-        </UiButton>
-        <UiGroup v-if="!isRunning" gap="xs">
-          <UiButton
-            type="primary"
-            :loading="launching"
-            :disabled="loading"
-            @click="handleLaunch"
-          >
-            启动
-          </UiButton>
-          <span class="launch-warn" tabindex="0" aria-label="启动前请先退出已打开的 WXP" title="启动前请先退出已打开的 WXP">
-            <UiIcon name="alert" :size="16" />
-          </span>
-        </UiGroup>
-        <UiButton
-          v-else
-          type="warning"
-          plain
-          :loading="stopping"
-          @click="handleStop"
-        >
-          停止
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
+    <Teleport v-if="paneActive" defer to="#app-topbar-state">
+      <span class="tb-state" :class="`is-${statusTone}`">
+        <i class="tb-dot" />
+        {{ statusLabel }}
+      </span>
+    </Teleport>
+
+    <Teleport v-if="paneActive" defer to="#app-topbar-actions">
+      <UiButton size="small" @click="settingsOpen = !settingsOpen">
+        {{ settingsOpen ? '收起设置' : '启动设置' }}
+      </UiButton>
+      <span
+        v-if="!isRunning"
+        class="launch-warn"
+        tabindex="0"
+        aria-label="启动前请先退出已打开的 WXP"
+        title="启动前请先退出已打开的 WXP"
+      >
+        <UiIcon name="alert" :size="16" />
+      </span>
+      <UiButton
+        v-if="!isRunning"
+        type="primary"
+        :loading="launching"
+        :disabled="loading"
+        @click="handleLaunch"
+      >
+        启动
+      </UiButton>
+      <UiButton
+        v-else
+        type="warning"
+        plain
+        :loading="stopping"
+        @click="handleStop"
+      >
+        停止
+      </UiButton>
+    </Teleport>
 
     <ToolSurface class="wxp-surface">
       <template #toolbar>
         <UiToolbar gap="sm" flush>
-          <span class="surface-label" role="status" aria-live="polite">
-            {{ statusLabel }}
-          </span>
           <UiGroup v-if="isConnected" gap="xs" wrap>
             <UiChip mono>
               PID {{ store.running?.pid ?? '-' }}
@@ -546,13 +548,6 @@ onUnmounted(() => {
           </div>
         </section>
       </div>
-
-      <template #statusline>
-        <span>WXP ENHANCER</span>
-        <span v-if="store.dataCache?.favoritesUpdatedAt">收藏备份 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}</span>
-        <span class="status-spacer" />
-        <span>{{ settingsOpen ? 'SETTINGS OPEN' : 'SETTINGS HIDDEN' }}</span>
-      </template>
     </ToolSurface>
   </div>
 </template>
@@ -562,8 +557,50 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 0;
   overflow: hidden;
+}
+
+.tb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.tb-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+}
+
+.tb-state.is-success {
+  color: var(--color-success);
+
+  .tb-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
+  }
+}
+
+.tb-state.is-warning {
+  color: var(--color-warning);
+
+  .tb-dot {
+    background: var(--color-warning);
+  }
+}
+
+.tb-state.is-danger {
+  color: var(--color-error);
+
+  .tb-dot {
+    background: var(--color-error);
+  }
 }
 
 .wxp-surface {
@@ -727,9 +764,5 @@ onUnmounted(() => {
 
 .cache-empty {
   min-height: 240px;
-}
-
-.status-spacer {
-  flex: 1;
 }
 </style>

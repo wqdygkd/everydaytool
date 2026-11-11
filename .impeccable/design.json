@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-02T00:00:00+08:00",
+  "generatedAt": "2026-11-11T00:00:00+08:00",
   "title": "Design System: everydaytool Command Deck",
   "extensions": {
     "colorMeta": {
@@ -30,8 +30,8 @@
       }
     },
     "typographyMeta": {
-      "launcher-title": {
-        "displayName": "Launcher Title",
+      "home-title": {
+        "displayName": "Home Title",
         "purpose": "Only the home workspace title; never used inside a tool."
       },
       "page-title": {
@@ -51,7 +51,7 @@
       {
         "name": "surface",
         "value": "0 10px 34px rgba(27, 57, 87, 0.10)",
-        "purpose": "Resting launcher and workspace glass surface."
+        "purpose": "Floating overlays only; the resting workspace uses edges and an inset highlight."
       },
       {
         "name": "floating",
@@ -92,17 +92,17 @@
       "name": "App Rail",
       "kind": "nav",
       "refersTo": "app-rail",
-      "description": "Persistent 68px glass rail for home, pinned tools, search and settings.",
-      "html": "<nav class=\"ds-rail\"><button class=\"ds-brand\">edt</button><button class=\"ds-rail-button ds-active\" aria-label=\"Home\"><span>▦</span></button><button class=\"ds-rail-button\" aria-label=\"Pin\"><span>◇</span></button></nav>",
-      "css": ".ds-rail{display:flex;flex-direction:column;align-items:center;gap:8px;width:68px;padding:12px 10px;background:color-mix(in oklab,var(--color-rail-base,#f7fbff) 62%,transparent);border-right:1px solid rgba(255,255,255,.45);backdrop-filter:blur(20px) saturate(135%);}.ds-brand{width:42px;height:42px;border:1px solid rgba(51,144,236,.24);border-radius:13px;background:rgba(51,144,236,.10);color:var(--color-primary-strong,#006dc3);font-family:Nunito,sans-serif;font-weight:800;}.ds-rail-button{width:42px;height:42px;border:1px solid transparent;border-radius:12px;background:transparent;color:var(--color-text-secondary,#526273);}.ds-rail-button:hover{background:rgba(255,255,255,.48);color:var(--color-text-primary,#0b1724);}.ds-rail-button:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px var(--color-primary-strong,#006dc3);}.ds-active{background:color-mix(in srgb,var(--color-primary,#3390ec) 10%,transparent);border-color:color-mix(in srgb,var(--color-primary,#3390ec) 22%,transparent);color:var(--color-primary-strong,#006dc3);}"
+      "description": "48px transparent rail for home, pinned tools, search and settings.",
+      "html": "<nav class=\"ds-rail\"><button class=\"ds-rail-button ds-active\" aria-label=\"Home\"><span>▦</span></button><button class=\"ds-rail-button\" aria-label=\"Pin\"><span>◇</span></button></nav>",
+      "css": ".ds-rail{display:flex;flex-direction:column;align-items:center;gap:6px;width:48px;padding:10px 0 12px;background:transparent;}.ds-rail-button{width:36px;height:36px;border:0;border-radius:11px;background:transparent;color:var(--color-text-secondary,#526273);}.ds-rail-button:hover{background:color-mix(in srgb,var(--color-primary,#3390ec) 7%,transparent);color:var(--color-text-primary,#0b1724);}.ds-rail-button:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px var(--color-primary-strong,#006dc3);}.ds-active{background:color-mix(in srgb,var(--color-primary,#3390ec) 10%,transparent);color:var(--color-primary-strong,#006dc3);}"
     },
     {
-      "name": "Launcher Surface",
-      "kind": "card",
-      "refersTo": "launcher-surface",
-      "description": "Single glass sheet containing tool rows with two-line summaries instead of a grid of cards.",
-      "html": "<section class=\"ds-launcher\"><header class=\"ds-launcher-head\"><span>All tools</span><span>Pinned first</span></header><button class=\"ds-tool-row\"><span class=\"ds-tool-icon\">IL</span><span class=\"ds-tool-copy\"><strong>Interceptor</strong><small>Local MITM proxy</small></span><span class=\"ds-arrow\">›</span></button></section>",
-      "css": ".ds-launcher{overflow:hidden;border:1px solid rgba(255,255,255,.52);border-radius:16px;background:color-mix(in oklab,var(--color-raised-base,#fbfdff) 76%,transparent);box-shadow:0 10px 34px rgba(27,57,87,.10);backdrop-filter:blur(26px) saturate(140%);}.ds-launcher-head{display:flex;justify-content:space-between;align-items:center;min-height:44px;padding:0 18px;border-bottom:1px solid var(--color-border-light,#dfe8ef);font-size:11px;color:var(--color-text-secondary,#526273);}.ds-tool-row{display:flex;align-items:center;gap:2px;width:100%;min-height:78px;padding:4px 6px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;}.ds-tool-row:hover{background:rgba(255,255,255,.46);border-color:rgba(255,255,255,.56);}.ds-tool-row:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px var(--color-primary-strong,#006dc3);}.ds-tool-icon{display:grid;place-items:center;width:38px;height:38px;border:1px solid rgba(51,144,236,.24);border-radius:11px;background:rgba(51,144,236,.10);color:var(--color-primary-strong,#006dc3);font-size:11px;font-weight:500;}.ds-tool-copy{display:flex;flex:1;flex-direction:column;min-width:0;}.ds-tool-copy strong{font-size:14px;font-weight:500;color:var(--color-text-primary,#0b1724);}.ds-tool-copy small{display:-webkit-box;overflow:hidden;font-size:12px;line-height:1.45;color:var(--color-text-secondary,#526273);overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2;}.ds-arrow{color:var(--color-text-tertiary,#5f6f80);font-size:18px;}"
+      "name": "Home Tool Row",
+      "kind": "list",
+      "refersTo": "tool-row",
+      "description": "52px index row with number, icon, name, one-line description and running state.",
+      "html": "<button class=\"ds-tool-row\"><span class=\"ds-tool-num\">1</span><span class=\"ds-tool-icon\">IL</span><span class=\"ds-tool-copy\"><strong>Interceptor</strong><small>Local MITM proxy</small></span><span class=\"ds-tool-state\">未运行</span></button>",
+      "css": ".ds-tool-row{display:flex;align-items:center;gap:12px;width:100%;height:52px;padding:0 8px 0 6px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;}.ds-tool-row:hover{background:color-mix(in srgb,var(--color-primary,#3390ec) 7%,transparent);border-color:transparent;}.ds-tool-row:focus-visible{outline:none;box-shadow:0 0 0 1px #fff,0 0 0 3px var(--color-primary-strong,#006dc3);}.ds-tool-num{width:16px;font-family:\"Cascadia Mono\",monospace;font-size:11px;color:var(--color-text-tertiary,#5f6f80);text-align:right;}.ds-tool-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:rgba(51,144,236,.10);color:var(--color-primary-strong,#006dc3);font-size:11px;font-weight:500;}.ds-tool-copy{display:flex;flex:1;flex-direction:column;min-width:0;}.ds-tool-copy strong{font-size:14px;font-weight:500;color:var(--color-text-primary,#0b1724);}.ds-tool-copy small{overflow:hidden;font-size:12px;line-height:1.2;color:var(--color-text-secondary,#526273);white-space:nowrap;text-overflow:ellipsis;}.ds-tool-state{font-size:11px;color:var(--color-text-tertiary,#5f6f80);}"
     },
     {
       "name": "Primary Action",
@@ -118,7 +118,7 @@
       "refersTo": "workspace-surface",
       "description": "One glass surface that owns the active tool's table, canvas or split form. Never nested.",
       "html": "<section class=\"ds-workspace\"><div class=\"ds-workspace-toolbar\"><span>Filter</span></div><div class=\"ds-workspace-body\">Primary tool content</div><footer class=\"ds-workspace-status\">24 records</footer></section>",
-      "css": ".ds-workspace{display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.58);border-radius:16px;background:color-mix(in oklab,var(--color-raised-base,#fbfdff) 76%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.74),0 10px 34px rgba(27,57,87,.10);backdrop-filter:blur(26px) saturate(140%);}.ds-workspace-toolbar{display:flex;align-items:center;min-height:48px;padding:8px 12px;border-bottom:1px solid var(--color-border-light,#dfe8ef);}.ds-workspace-body{flex:1;min-height:0;overflow:auto;}.ds-workspace-status{display:flex;align-items:center;min-height:31px;padding:0 12px;border-top:1px solid var(--color-border-light,#dfe8ef);font-family:\"Cascadia Mono\",monospace;font-size:11px;color:var(--color-text-tertiary,#5f6f80);}"
+      "css": ".ds-workspace{display:flex;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,.58);border-radius:16px;background:color-mix(in oklab,var(--color-raised-base,#fbfdff) 76%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.74);backdrop-filter:blur(26px) saturate(140%);}.ds-workspace-toolbar{display:flex;align-items:center;min-height:48px;padding:8px 12px;border-bottom:1px solid var(--color-border-light,#dfe8ef);}.ds-workspace-body{flex:1;min-height:0;overflow:auto;}.ds-workspace-status{display:flex;align-items:center;min-height:31px;padding:0 12px;border-top:1px solid var(--color-border-light,#dfe8ef);font-family:\"Cascadia Mono\",monospace;font-size:11px;color:var(--color-text-tertiary,#5f6f80);}"
     },
     {
       "name": "Command Palette",
@@ -130,11 +130,11 @@
   ],
   "narrative": {
     "northStar": "Command Deck",
-    "overview": "everydaytool is a persistent desktop tool launcher, not a monitoring dashboard. A narrow rail keeps tools within one click; the center carries exactly one active workspace; a tool is instantiated only when opened and is destroyed when closed. Translucent surfaces establish spatial layering, fine rules establish structure, and signal blue marks action, selection and focus. Decoration never creates hierarchy.",
+    "overview": "everydaytool is a persistent desktop tool launcher, not a monitoring dashboard. A narrow transparent rail keeps tools within one click; the center displays the active workspace while tools opened in this session stay mounted until closed. Translucent content surfaces establish spatial layering, fine rules establish structure, and signal blue marks action, selection and focus. Decoration never creates hierarchy.",
     "keyCharacteristics": [
-      "Tools first, status second; the home screen never shows runtime status, versions or category metadata.",
-      "One active tool and one runtime; switching away or closing unmounts the component and releases its timers, subscriptions, webviews and tool-level backend sessions.",
-      "68px glass rail, 48px workspace bar and a single 16px glass work surface.",
+      "Tools first, status second; the home screen keeps only a lightweight running dot and label, without versions or category metadata.",
+      "Opened tools stay mounted while switching; closing a tool unmounts it and releases its timers, subscriptions, webviews and tool-level backend sessions.",
+      "48px transparent rail and 48px transparent topbar at equal width and height, plus a single 16px glass work surface.",
       "Cool glass, pale blue ambient light and 1px translucent edges, without stacked cards or heavy shadows.",
       "Brand blue #3390ec and ink blue #006dc3 are the only accent colors."
     ],
@@ -146,7 +146,7 @@
       },
       {
         "name": "The Neutral Label Rule",
-        "body": "Tabs, selected rows and active rail labels use neutral primary text, not bright blue small type.",
+        "body": "Selected rows and active rail labels use neutral primary text, not bright blue small type.",
         "section": "colors"
       },
       {
@@ -173,15 +173,15 @@
     "dos": [
       "Do keep exactly one primary work surface per tool.",
       "Do move settings, diagnostics, help and installation into an inspector, drawer or sub-route.",
-      "Do keep each home tool row to icon, name, one-line description, pin and arrow.",
+      "Do keep each home tool row to icon, name, one-line description, running state and pin.",
       "Do expose every tool through Ctrl/Cmd+K and the left rail.",
       "Do verify text contrast on every material and in night glass.",
       "Do confirm only real unfinished work before closing; release everything else immediately."
     ],
     "donts": [
-      "Don't show runtime status, versions, categories, processes, paths or statistics on the home screen.",
+      "Don't show versions, categories, processes, paths or statistics on the home screen.",
       "Don't stack UiPanel cards as the first viewport of a tool.",
-      "Don't retain hidden mounts for every open tab or use cross-tool KeepAlive.",
+      "Don't use cross-tool KeepAlive instead of ToolPane's explicit persistence; closing a tool must unmount it.",
       "Don't give tools separate accent colors.",
       "Don't use 9–10px text, bright blue small type, colored side stripes or gradient text.",
       "Don't apply backdrop-filter or shadows to every layer.",

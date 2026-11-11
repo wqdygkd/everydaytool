@@ -93,12 +93,6 @@ async function submitPort(): Promise<void> {
   toast.success(`代理端口已改为 ${port}`)
 }
 
-async function applyDesired(enabled: boolean): Promise<void> {
-  const applied = await store.setProxyDesired(enabled)
-  if (!applied) toast.warning('没有已连接的浏览器（先在 Chrome 中打开扩展）')
-  else toast.success(enabled ? '已通知浏览器挂载代理' : '已通知浏览器恢复直连')
-}
-
 async function openExtensionDir(): Promise<void> {
   const ok = await store.openExtensionDir()
   if (!ok) toast.error('打开扩展目录失败')
@@ -119,22 +113,6 @@ function formatTime(at: number): string {
             <strong>{{ store.status?.proxyRunning ? '代理运行中' : '代理未运行' }}</strong>
             <span>{{ proxyEndpoint || '等待浏览器扩展连接' }}</span>
           </div>
-        </div>
-        <div class="summary-actions">
-          <UiButton
-            size="small"
-            :disabled="!connections.length"
-            @click="applyDesired(true)"
-          >
-            挂载代理
-          </UiButton>
-          <UiButton
-            size="small"
-            :disabled="!connections.length || !proxyEnabled"
-            @click="applyDesired(false)"
-          >
-            恢复直连
-          </UiButton>
         </div>
       </div>
 
@@ -386,7 +364,7 @@ function formatTime(at: number): string {
   background: var(--color-raised);
 
   > span {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
   }
 
@@ -405,7 +383,7 @@ function formatTime(at: number): string {
 }
 
 .metric-note {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 

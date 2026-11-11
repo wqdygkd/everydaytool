@@ -34,7 +34,7 @@
 
 ## 页面骨架（UI）
 
-- 不使用 `WorkspaceHeader` 与 `ToolSurface` 的 statusline：工具名 / 用途由全局顶栏承载，页面只保留一块主 `ToolSurface`，外边距统一 `18px`。
+- 不使用 `WorkspaceHeader` 与 `ToolSurface` 的 statusline：工具名 / 用途由全局顶栏承载，页面只保留一块主 `ToolSurface`，外边距统一 `0`。
 - `ToolSurface` 工具栏左侧是来源地址与离线 / 缓存模式 chip，右侧末尾是“拦截设置 / 刷新”。
 - `UiToolbar` 需要 `flex: 1; min-width: 0` 撑满工具栏；否则 `#end` 的 `margin-left: auto` 失效，动作会贴在前一项后面。
 - 拦截状态（拦截中 / 规则数 / 命中数 / 未启动）只放在“接口响应拦截”dialog 内，不在页面顶部或底部重复。

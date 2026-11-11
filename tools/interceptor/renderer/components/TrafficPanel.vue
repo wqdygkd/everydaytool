@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TrafficEntry } from '../../../../shared/interceptor'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { confirm } from '@renderer/shared/feedback'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { useInterceptorStore } from '../stores/interceptorStore'
@@ -7,6 +8,7 @@ import { useInterceptorStore } from '../stores/interceptorStore'
 const emit = defineEmits<{ createRule: [entry: TrafficEntry] }>()
 
 const store = useInterceptorStore()
+const paneActive = useToolPaneActive()
 
 const filter = ref('')
 const detail = ref<TrafficEntry | null>(null)
@@ -66,20 +68,22 @@ function headersText(headers?: Record<string, string>): string {
 
 <template>
   <div class="traffic-pane">
-    <header class="traffic-toolbar">
-      <UiSearchInput
-        v-model="filter"
-        variant="box"
-        placeholder="按 URL 过滤"
-        clearable
-        class="traffic-search"
-      />
-      <span class="traffic-count">{{ filteredTraffic.length }} / {{ store.traffic.length }} 条</span>
-      <span class="toolbar-spacer" />
-      <UiButton size="small" :disabled="!store.traffic.length" @click="clearAll">
-        清空
-      </UiButton>
-    </header>
+    <Teleport v-if="paneActive" defer to="#interceptor-toolbar">
+      <header class="traffic-toolbar is-toolbar">
+        <UiSearchInput
+          v-model="filter"
+          variant="box"
+          placeholder="按 URL 过滤"
+          clearable
+          class="traffic-search"
+        />
+        <span class="traffic-count">{{ filteredTraffic.length }} / {{ store.traffic.length }} 条</span>
+        <span class="toolbar-spacer" />
+        <UiButton size="small" :disabled="!store.traffic.length" @click="clearAll">
+          清空
+        </UiButton>
+      </header>
+    </Teleport>
 
     <UiTable
       class="traffic-table"
@@ -270,6 +274,13 @@ function headersText(headers?: Record<string, string>): string {
   height: 48px;
   padding: 0 14px;
   border-bottom: 1px solid var(--color-border-light);
+}
+
+.traffic-toolbar.is-toolbar {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  border-bottom: 0;
 }
 
 .traffic-search {

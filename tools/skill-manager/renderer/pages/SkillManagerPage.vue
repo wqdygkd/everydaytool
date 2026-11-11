@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { ApplyPlanResult, FavoritesView, FavoriteViewItem, InstalledSkill, InstallResult, PlanItem, Preset, PresetApplyResult, PresetItem, PresetsFile, ProjectRecord, RemovedSkillView, RepoGroupView, ScopeInventory, SkillManagerSettings, SkillState, SourceCatalog, TokenState, TrashItemView, TrashListResult, UndoPlanResult, UpdatePlan } from '@shared/skill-manager'
 import type { IconName } from '../../../../renderer/shared/components/ui/icons'
+import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { confirm } from '@renderer/shared/feedback'
 import { skillOriginKey } from '@shared/skill-manager'
 import { toast } from 'vue-sonner'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceHeader from '../../../../renderer/shared/components/workspace/WorkspaceHeader.vue'
+import WorkspaceSpine from '../../../../renderer/shared/components/workspace/WorkspaceSpine.vue'
 import UpdatePlanPanel from '../components/UpdatePlanPanel.vue'
 import { addSkillManagerProject, adoptSkillManagerSkill, applySkillManagerPlan, applySkillManagerPreset, checkSkillManagerUpdates, clearSkillManagerTrash, deleteSkillManagerPreset, deleteSkillManagerSkill, deleteSkillManagerToken, deleteSkillManagerTrash, exportSkillManagerPresets, forgetSkillManagerRemoved, getSkillManagerFavorites, getSkillManagerPresets, getSkillManagerSettings, importSkillManagerPresets, installSkillManagerSkills, listSkillManagerProjects, listSkillManagerRemoved, listSkillManagerTokens, listSkillManagerTrash, reinstallSkillManagerRemoved, removeSkillManagerProject, rescanSkillManagerProject, resolveSkillSource, restoreSkillManagerTrash, saveSkillManagerPreset, saveSkillManagerToken, scanSkillManager, setSkillManagerEnabled, toggleSkillManagerFavorite, undoSkillManagerPlan, updateSkillManagerSettings } from '../ipc'
 import { SKILL_MANAGER_TABS, tabKeyFromPath } from '../tabs'
@@ -34,11 +35,8 @@ const STATE_META: Record<SkillState, { label: string, tone: StateTone }> = {
 
 const router = useRouter()
 const toolPath = useToolPath()
+const paneActive = useToolPaneActive()
 const activeTab = computed(() => tabKeyFromPath(toolPath.value))
-const menuValue = computed({
-  get: () => activeTab.value,
-  set: (value: string) => switchTab(value),
-})
 const inventory = ref<Awaited<ReturnType<typeof scanSkillManager>> | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -152,9 +150,9 @@ const tabBadges = computed<Record<string, number | undefined>>(() => {
 const repoCount = computed(() => activeGroups.value.filter(group => !group.orphan).length)
 
 const menuItems = computed(() => SKILL_MANAGER_TABS.map(tab => ({
-  value: tab.key,
+  key: tab.key,
   label: tab.label,
-  badge: tabBadges.value[tab.key],
+  count: tabBadges.value[tab.key],
 })))
 
 const filterCounts = computed(() => ({
@@ -172,6 +170,12 @@ const statusLabel = computed(() => {
   const scope = activeScope.value
   if (!scope) return '暂无技能'
   return `${scope.summary.total} 个技能 · ${repoCount.value} 个仓库 · ${scope.summary.issueCount} 项待处理`
+})
+
+const statusTone = computed<'neutral' | 'success' | 'warning' | 'danger'>(() => {
+  if (error.value) return 'danger'
+  if (loading.value || autoChecking.value) return 'neutral'
+  return (activeSummary.value?.issueCount ?? 0) > 0 ? 'warning' : 'success'
 })
 
 const scannedLabel = computed(() => {
@@ -1065,33 +1069,37 @@ watch(activeTab, (tab) => {
 
 <template>
   <div class="skill-manager-page tool-page">
-    <WorkspaceHeader
-      icon="layers"
-      title="技能管理"
-      description="按仓库对账、更新、禁用与收藏；只动已选中的技能"
-      :status-label="statusLabel"
-    >
-      <template #actions>
-        <UiButton class="check-all-button" size="small" @click="refresh">
-          重新扫描
-        </UiButton>
-        <UiButton size="small" type="primary" @click="openInstallDialog()">
-          安装技能
-        </UiButton>
-        <UiButton size="small" @click="openSettings">
-          设置
-        </UiButton>
-        <UiButton size="small" @click="openTrash">
-          回收站
-        </UiButton>
-      </template>
-    </WorkspaceHeader>
+    <Teleport v-if="paneActive" defer to="#app-topbar-state">
+      <span class="tb-state" :class="`is-${statusTone}`">
+        <i class="tb-dot" />
+        {{ statusLabel }}
+      </span>
+    </Teleport>
 
-    <div class="subnav-row">
-      <UiMenuHorizontal v-model="menuValue" :items="menuItems" aria-label="技能管理视图" />
-    </div>
+    <Teleport v-if="paneActive" defer to="#app-topbar-actions">
+      <UiButton class="check-all-button" size="small" @click="refresh">
+        重新扫描
+      </UiButton>
+      <UiButton size="small" type="primary" @click="openInstallDialog()">
+        安装技能
+      </UiButton>
+      <UiButton size="small" @click="openSettings">
+        设置
+      </UiButton>
+      <UiButton size="small" @click="openTrash">
+        回收站
+      </UiButton>
+    </Teleport>
 
     <ToolSurface class="skill-surface">
+      <template #spine>
+        <WorkspaceSpine
+          :model-value="activeTab"
+          :items="menuItems"
+          @update:model-value="switchTab"
+        />
+      </template>
+
       <template #toolbar>
         <div class="surface-toolbar-content">
           <UiSearchInput
@@ -1144,6 +1152,9 @@ watch(activeTab, (tab) => {
             </button>
           </div>
           <span class="toolbar-spacer" />
+          <span class="toolbar-meta" :title="scannedLabel">
+            {{ activeScope ? `${activeScope.summary.onDisk} 目录 · ${activeScope.summary.tracked} 托管` : '未读取' }}
+          </span>
           <span class="toolbar-note">按仓库分组</span>
           <UiIconButton icon="layers" label="切换分组" :size="28" @click="comingSoon('切换分组')" />
           <UiIconButton icon="refresh" label="刷新" :size="28" @click="refresh" />
@@ -1615,16 +1626,6 @@ watch(activeTab, (tab) => {
           </div>
         </div>
       </div>
-
-      <template #statusline>
-        <span>{{ activeScope ? `${activeScope.summary.onDisk} 个目录` : '未读取' }}</span>
-        <span>·</span>
-        <span>{{ activeScope ? `${activeScope.summary.tracked} 已托管` : '—' }}</span>
-        <span>·</span>
-        <span>{{ activeScope ? `${activeScope.summary.untracked} 未托管` : '—' }}</span>
-        <span class="status-spacer" />
-        <span class="mono">Step 11 · 项目与认证已接入 · {{ scannedLabel }}</span>
-      </template>
     </ToolSurface>
 
     <UiDialog v-model="settingsOpen" title="项目与认证" width="760px">
@@ -2159,23 +2160,54 @@ watch(activeTab, (tab) => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 0 18px 18px;
+  padding: 0;
   overflow: hidden;
-}
-
-.subnav-row {
-  flex: none;
-  width: fit-content;
-  max-width: 100%;
-  margin-bottom: 10px;
-
-  :deep(.ui-menu-horizontal) {
-    width: auto;
-  }
 }
 
 .skill-surface {
   min-height: 0;
+}
+
+.tb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.tb-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-tertiary);
+}
+
+.tb-state.is-success {
+  color: var(--color-success);
+
+  .tb-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
+  }
+}
+
+.tb-state.is-warning {
+  color: var(--color-warning);
+
+  .tb-dot {
+    background: var(--color-warning);
+  }
+}
+
+.tb-state.is-danger {
+  color: var(--color-error);
+
+  .tb-dot {
+    background: var(--color-error);
+  }
 }
 
 .surface-toolbar-content {
@@ -2229,6 +2261,15 @@ watch(activeTab, (tab) => {
 .toolbar-note {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.toolbar-meta {
+  flex: none;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -3380,8 +3421,6 @@ watch(activeTab, (tab) => {
 .adopt-target .mono { overflow: hidden; color: var(--color-text-tertiary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .adopt-modes { display: flex; gap: 6px; }
 
-.status-spacer { flex: 1; }
-
 .mono { font-family: var(--font-mono); }
 
 @media (max-width: 980px) {
@@ -3390,9 +3429,7 @@ watch(activeTab, (tab) => {
 
 @media (max-width: 760px) {
   .skill-manager-page { padding: 0 10px 10px; }
-  .skill-manager-page :deep(.workspace-status) { display: none; }
   .skill-manager-page :deep(.check-all-button) { display: none; }
-  .subnav-row { width: 100%; }
   .filter-group { display: none; }
   .toolbar-note { display: none; }
   .skill-table { min-width: 620px; }

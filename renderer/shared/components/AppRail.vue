@@ -82,7 +82,7 @@ onMounted(() => {
           :aria-current="!props.activeId ? 'page' : undefined"
           @click="emit('home')"
         >
-          <UiIcon name="home" :size="19" />
+          <UiIcon name="home" :size="16" />
         </button>
       </UiTooltip>
 
@@ -98,7 +98,7 @@ onMounted(() => {
             :aria-current="props.activeId === tool.id ? 'page' : undefined"
             @click="emit('selectTool', tool.id)"
           >
-            <UiIcon :name="tool.icon" :size="19" />
+            <UiIcon :name="tool.icon" :size="16" />
             <span v-if="tool.open && props.activeId !== tool.id" class="rail-run-dot" aria-hidden="true" />
           </button>
         </UiTooltip>
@@ -124,7 +124,7 @@ onMounted(() => {
           aria-label="搜索工具（Ctrl K）"
           @click="emit('search')"
         >
-          <UiIcon name="search" :size="18" />
+          <UiIcon name="search" :size="16" />
         </button>
       </UiTooltip>
 
@@ -137,7 +137,7 @@ onMounted(() => {
           :aria-current="props.activeId === 'settings' ? 'page' : undefined"
           @click="emit('settings')"
         >
-          <UiIcon name="gear" :size="18" />
+          <UiIcon name="gear" :size="16" />
         </button>
       </UiTooltip>
     </div>
@@ -155,7 +155,7 @@ onMounted(() => {
   width: var(--rail-width);
   min-height: 0;
   padding: 10px 0 12px;
-  background: var(--color-rail);
+  background: transparent;
   -webkit-app-region: drag;
 }
 
@@ -166,7 +166,7 @@ onMounted(() => {
   flex: 1;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
   min-height: 0;
   padding-bottom: 6px;
@@ -183,7 +183,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
 }
 
@@ -209,7 +209,8 @@ onMounted(() => {
   height: var(--rail-control-size);
   padding: 0;
   border: 0;
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -221,7 +222,8 @@ onMounted(() => {
     transform var(--duration-fast) var(--ease-out);
 
   &:hover {
-    background: color-mix(in srgb, var(--color-on-solid) 46%, transparent);
+    border-color: transparent;
+    background: color-mix(in srgb, var(--color-primary) 7%, transparent);
     color: var(--color-text-primary);
   }
 
@@ -231,10 +233,10 @@ onMounted(() => {
 
     &::before {
       position: absolute;
-      left: -13px;
+      left: -6px;
       width: 3px;
       height: 18px;
-      border-radius: 0 3px 3px 0;
+      border-radius: 0 2px 2px 0;
       background: var(--color-primary);
       content: '';
       animation: rail-indicator-in var(--duration-fast) var(--ease-out);
@@ -262,7 +264,7 @@ onMounted(() => {
   pointer-events: none;
 }
 
-/* 关闭钮：悬停 / 键盘聚焦才显现，避免 42px 图标长期被小叉遮住 */
+/* 关闭钮：悬停 / 键盘聚焦才显现，避免 40px 图标长期被小叉遮住 */
 .rail-close {
   position: absolute;
   top: 0;
@@ -307,7 +309,7 @@ onMounted(() => {
 }
 
 .rail-divider {
-  width: 28px;
+  width: 24px;
   height: 1px;
   margin: 1px 0 2px;
   background: var(--color-border-light);

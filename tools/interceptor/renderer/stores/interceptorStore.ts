@@ -63,6 +63,14 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
       if (traffic.value.length > 1000) traffic.value.splice(0, traffic.value.length - 1000)
     }))
 
+    await refresh()
+    ready.value = true
+  }
+
+  /** 重新拉一次主进程快照（状态页工具条的刷新入口；事件订阅继续生效） */
+  async function refresh(): Promise<void> {
+    const ipc = api()
+    const channels = ipc.channels
     const [runtimeStatus, caStatus, targetList, ruleList, trafficList] = await Promise.all([
       ipc.invoke(channels.STATUS_GET),
       ipc.invoke(channels.CA_STATUS_GET),
@@ -75,7 +83,6 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     targets.value = targetList as InterceptorTarget[]
     rules.value = ruleList as InterceptorRule[]
     traffic.value = trafficList as TrafficEntry[]
-    ready.value = true
   }
 
   function dispose(): void {
@@ -217,6 +224,7 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     runtimeActive,
     ruleEditorDraft,
     init,
+    refresh,
     dispose,
     activateRuntime,
     deactivateRuntime,

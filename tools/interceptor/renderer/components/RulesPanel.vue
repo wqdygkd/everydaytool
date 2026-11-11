@@ -699,70 +699,72 @@ async function remove(rule: InterceptorRule): Promise<void> {
 <template>
   <div v-if="view === 'list'">
     <div>
-      <div class="rq-content-list-header">
-        <div class="rq-content-list-header-filters">
-          <UiSearchInput
-            v-model="searchValue"
-            variant="box"
-            placeholder="搜索"
-            clearable
-            class="ctl-md"
-            :size="16"
-          />
-          <div class="seg-filter" role="group" aria-label="规则过滤">
-            <button v-for="option in filterOptions" :key="option.key" type="button" class="seg-filter-btn" :class="{ 'is-active': activeFilter === option.key }" @click="activeFilter = option.key">
-              <UiIcon v-if="option.icon === 'pin'" name="pin" />
-              <UiIcon v-else-if="option.icon === 'toggle'" name="toggle" />
-              {{ option.label }}
-              <UiChip v-if="filterCounts[option.key]" mono>
-                {{ filterCounts[option.key] }}
-              </UiChip>
-            </button>
-          </div>
-          <UiSelect
-            :model-value="activeType ?? ''"
-            class="ctl-sm"
-            :options="ruleTypeFilterOptions.map(option => ({ label: option.label, value: ruleTypeOptionValue(option.value) }))"
-            @update:model-value="(v: string) => selectRuleType(v === '' ? null : v as RuleType)"
-          />
-        </div>
-        <div class="rq-content-list-header-actions">
-          <UiPopover
-            :visible="pickerVisible"
-            :width="400"
-            content-class="rule-picker-popover"
-            @update:visible="pickerVisible = $event"
-          >
-            <template #trigger>
-              <UiButton type="primary">
-                <UiIcon name="plus" class="btn-icon" />
-                新建规则
-              </UiButton>
-            </template>
-            <div class="rule-picker-list">
-              <div v-for="group in typeGroups" :key="group.title" class="rule-picker-section">
-                <div class="rule-picker-category">
-                  <span class="title">{{ group.title }}</span>
-                  <span class="divider" />
-                </div>
-                <button
-                  v-for="option in group.options"
-                  :key="option.type"
-                  type="button"
-                  class="rule-picker-item"
-                  @click="chooseTypeOption(option)"
-                >
-                  <UiIcon :name="option.icon" class="icon" />
-                  <span class="details">
-                    <span class="title">{{ option.title }}</span>
-                    <span class="desc">{{ option.desc }}</span>
-                  </span>
-                </button>
-              </div>
+      <Teleport v-if="paneActive" defer to="#interceptor-toolbar">
+        <div class="rq-content-list-header is-toolbar">
+          <div class="rq-content-list-header-filters">
+            <UiSearchInput
+              v-model="searchValue"
+              variant="box"
+              placeholder="搜索"
+              clearable
+              class="ctl-md"
+              :size="16"
+            />
+            <div class="seg-filter" role="group" aria-label="规则过滤">
+              <button v-for="option in filterOptions" :key="option.key" type="button" class="seg-filter-btn" :class="{ 'is-active': activeFilter === option.key }" @click="activeFilter = option.key">
+                <UiIcon v-if="option.icon === 'pin'" name="pin" />
+                <UiIcon v-else-if="option.icon === 'toggle'" name="toggle" />
+                {{ option.label }}
+                <UiChip v-if="filterCounts[option.key]" mono>
+                  {{ filterCounts[option.key] }}
+                </UiChip>
+              </button>
             </div>
-          </UiPopover>
+            <UiSelect
+              :model-value="activeType ?? ''"
+              class="ctl-sm"
+              :options="ruleTypeFilterOptions.map(option => ({ label: option.label, value: ruleTypeOptionValue(option.value) }))"
+              @update:model-value="(v: string) => selectRuleType(v === '' ? null : v as RuleType)"
+            />
+          </div>
+          <div class="rq-content-list-header-actions">
+            <UiPopover
+              :visible="pickerVisible"
+              :width="400"
+              content-class="rule-picker-popover"
+              @update:visible="pickerVisible = $event"
+            >
+              <template #trigger>
+                <UiButton type="primary">
+                  <UiIcon name="plus" class="btn-icon" />
+                  新建规则
+                </UiButton>
+              </template>
+              <div class="rule-picker-list">
+                <div v-for="group in typeGroups" :key="group.title" class="rule-picker-section">
+                  <div class="rule-picker-category">
+                    <span class="title">{{ group.title }}</span>
+                    <span class="divider" />
+                  </div>
+                  <button
+                    v-for="option in group.options"
+                    :key="option.type"
+                    type="button"
+                    class="rule-picker-item"
+                    @click="chooseTypeOption(option)"
+                  >
+                    <UiIcon :name="option.icon" class="icon" />
+                    <span class="details">
+                      <span class="title">{{ option.title }}</span>
+                      <span class="desc">{{ option.desc }}</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </UiPopover>
+          </div>
         </div>
-      </div>
+      </Teleport>
 
       <UiTable
         class="rules-table"
@@ -880,21 +882,23 @@ async function remove(rule: InterceptorRule): Promise<void> {
     </nav>
 
     <div class="rule-editor-main">
-      <UiToolbar class="rule-editor-topbar">
-        <UiIconButton icon="arrowLeft" label="返回列表" @click="closeEditor" />
-        <UiBreadcrumb
-          :items="[{ label: '规则' }, { label: isExistingDraft ? '编辑规则' : '创建规则' }]"
-          @navigate="onEditorCrumbNavigate"
-        />
-        <template #end>
-          <span class="muted enable-label">启用</span>
-          <UiSwitchField v-model="draft.enabled" size="small" />
-          <UiButton type="primary" @click="save">
-            保存规则
-            <span class="kbd-hint">Ctrl S</span>
-          </UiButton>
-        </template>
-      </UiToolbar>
+      <Teleport v-if="paneActive" defer to="#interceptor-toolbar">
+        <UiToolbar class="rule-editor-topbar is-toolbar">
+          <UiIconButton icon="arrowLeft" label="返回列表" @click="closeEditor" />
+          <UiBreadcrumb
+            :items="[{ label: '规则' }, { label: isExistingDraft ? '编辑规则' : '创建规则' }]"
+            @navigate="onEditorCrumbNavigate"
+          />
+          <template #end>
+            <span class="muted enable-label">启用</span>
+            <UiSwitchField v-model="draft.enabled" size="small" />
+            <UiButton type="primary" @click="save">
+              保存规则
+              <span class="kbd-hint">Ctrl S</span>
+            </UiButton>
+          </template>
+        </UiToolbar>
+      </Teleport>
 
       <div class="rule-editor-body">
         <div class="rule-title-row">
@@ -1236,6 +1240,12 @@ async function remove(rule: InterceptorRule): Promise<void> {
   padding: var(--spacing-sm) 0;
 }
 
+.rq-content-list-header.is-toolbar {
+  flex: 1;
+  flex-wrap: nowrap;
+  padding: 0;
+}
+
 .rq-content-list-header-filters {
   display: flex;
   align-items: center;
@@ -1492,6 +1502,11 @@ async function remove(rule: InterceptorRule): Promise<void> {
 /* 顶栏用 UiToolbar（返回钮 + UiBreadcrumb + 右侧动作） */
 .rule-editor-topbar {
   padding-bottom: var(--spacing-md);
+}
+
+.rule-editor-topbar.is-toolbar {
+  flex: 1;
+  padding: 0;
 }
 
 .enable-label {
