@@ -1,6 +1,6 @@
 # workbuddy2api-panel 模块记忆
 
-> 主进程托管上游 [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel) 二进制；左栏 webview 嵌 `/panel/`，右栏运维。
+> 主进程托管上游 [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel) 二进制；左侧「运行详情」管安装 / 启停 / 更新 / 诊断，右侧主区 webview 嵌 `/panel/`。
 > 取证 tag：`v2026.10.26.1001`（安装实际拉 GitHub `latest`，此 tag 仅对照）
 
 ## 1. 硬约束（不要违反）

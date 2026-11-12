@@ -46,6 +46,10 @@
   --color-pop-base: #fbfdff; /* 角色 pop：下拉 / 菜单 / 命令面板候选层 */
   --color-overlay-base: #fbfdff; /* 角色 overlay：dialog / toast / 模态 */
 
+  /* 工具内侧工作井 / 嵌套卡片：嵌在 raised 表面里的内容区（inspector 旁主区 /
+     侧栏 / 影库 / 井内卡片）。固定由 fill 合成，禁止各工具再写自己的百分比。 */
+  --color-well: color-mix(in oklab, var(--color-fill) 34%, transparent);
+
   /* 默认（不透明窗口）：全部实色，与旧版一致；各角色 1 = 完全不透明 */
   --alpha-rail: 1; /* 左侧导航轨 */
   --alpha-raised: 1; /* 卡片 / 面板 / 浮岛 */
@@ -157,6 +161,7 @@
   --line-height-control: 20px; /* 控件 / 表格 / 徽标统一行高 */
   --content-max-width: 1264px; /* 首页内容最大宽 */
   --rail-width: 48px;
+  --rail-width-wide: 208px; /* 左轨展开态：图标 + 名称 */
   --topbar-height: 48px;
   --rail-control-size: 36px;
   --launcher-row-height: 78px;
@@ -181,7 +186,7 @@
   --font-mono: "Cascadia Mono", "Roboto Mono", "SF Mono", Menlo, Consolas, monospace; /* 等宽 / 数字 */
   --font-brand: "Nunito", "Roboto", sans-serif; /* 品牌标 / 字母头像（Nunito ExtraBold 800 自托管） */
   font-synthesis-weight: none; /* 禁止合成字重，避免自托管字体发虚 */
-  /* 不设背景：底色由页面自理（工具页 .tool-page 自带 app-bg，首页透出窗口），
+  /* 不设背景：底色由页面自理（工具页 ToolSurface 承担，首页透出窗口），
      :root 留白才能让半透明窗口透出桌面 */
   color: var(--color-text-primary); /* 全局默认文字色 */
 }

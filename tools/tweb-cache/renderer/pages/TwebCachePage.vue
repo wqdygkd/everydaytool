@@ -930,7 +930,6 @@ onUnmounted(() => {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--color-app-bg);
 }
 
 .guest-bar {
@@ -942,7 +941,7 @@ onUnmounted(() => {
   min-width: 0;
   padding: 0 10px;
   border-bottom: 1px solid var(--color-border-light);
-  background: var(--color-raised);
+  background: transparent;
 }
 
 .guest-url {
@@ -1063,7 +1062,7 @@ onUnmounted(() => {
   width: var(--lib-width);
   min-height: 0;
   overflow: hidden;
-  background: var(--color-fill);
+  background: var(--color-well);
 }
 
 .tg-lib-head {

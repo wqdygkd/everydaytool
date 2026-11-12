@@ -9,8 +9,8 @@
   src: url("./fonts/Nunito-ExtraBold.woff2") format("woff2");
 }
 
-/* 根底色一律不画：应用外壳与各页面自理底色（工具页 .tool-page 自带 app-bg，
-   首页 / 半透明窗口需要透出桌面），html / body 留白才不会糊一层灰。
+/* 根底色一律不画：应用外壳与各页面自理底色（工具页画布透明、内容由
+   ToolSurface 承担；首页 / 半透明窗口需要透出桌面），html / body 留白才不会糊一层灰。
    半透明窗口同样受益：原生透明通道不会再被页面自身底色盖住。 */
 html,
 body {

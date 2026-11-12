@@ -4,14 +4,11 @@ import type {
   Wb2apiProgressEvent,
   Wb2apiUpdateInfo,
 } from '../../../../shared/workbuddy2api-panel'
-import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { registerTabCloseGuard } from '@renderer/shared/composables/useTabCloseGuard'
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { toast } from 'vue-sonner'
-import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
-import WorkspaceSpine from '../../../../renderer/shared/components/workspace/WorkspaceSpine.vue'
 import { WB2API_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import {
   buildWb2apiAnthropicBaseUrl,
@@ -31,7 +28,6 @@ function openUpstreamRepo() {
 }
 
 const state = ref<Wb2apiPanelState | null>(null)
-const paneActive = useToolPaneActive()
 const loading = ref(false)
 const cancelling = ref(false)
 /** 用户点了「取消下载」：由 abort 引发的中断不是失败，runAction 据此吞掉错误提示 */
@@ -39,20 +35,6 @@ const cancelRequested = ref(false)
 const progress = ref<Wb2apiProgressEvent | null>(null)
 const apiKeyVisible = ref(false)
 const inspectorOpen = ref(false)
-type InspectorTab = 'run' | 'install' | 'diagnostics'
-const inspectorTab = ref<InspectorTab>('run')
-const inspectorMenu = [
-  { value: 'run', label: '运行' },
-  { value: 'install', label: '安装' },
-  { value: 'diagnostics', label: '诊断' },
-]
-const inspectorTitle = computed(() =>
-  inspectorMenu.find(tab => tab.value === inspectorTab.value)?.label ?? '运行',
-)
-const inspectorSpineItems = computed(() => inspectorMenu.map(tab => ({
-  key: tab.value,
-  label: tab.label,
-})))
 
 // 检查更新的结果缓存在主进程（state.update）：重开页签 / 刷新都在，渲染层不再自留一份副本。
 // 已安装版本来自 manifest（state.version），与检查结果里的 currentVersion 同源现算。
@@ -88,12 +70,12 @@ const installed = computed(() => state.value?.installed === true)
  * 期间再点启动 / 重启 / 再次安装只会互相打断，后端也只会回「已有任务进行中」。
  */
 const busy = computed(() => loading.value || state.value?.updating === true)
-/** 左栏空态文案：首次安装进行中时「尚未安装…请去安装」会自相矛盾，改说正在装 */
+/** 主区空态文案：首次安装进行中时「尚未安装…请去安装」会自相矛盾，改说正在装 */
 const emptyText = computed(() => {
   if (status.value === 'not_installed') {
     return state.value?.updating === true
       ? '正在安装上游二进制，完成后点击「启动」即可打开面板'
-      : '尚未安装上游二进制，请在右侧从 GitHub 或本地 ZIP 安装'
+      : '尚未安装上游二进制，请在左侧从 GitHub 或本地 ZIP 安装'
   }
   return '服务未运行。安装完成后点击「启动」，面板将显示在此处'
 })
@@ -282,9 +264,12 @@ const canCancelDownload = computed(() =>
   state.value?.updating === true && progress.value?.phase === 'download',
 )
 
-function openInspector(tab: InspectorTab = 'run') {
-  inspectorTab.value = tab
+function openInspector() {
   inspectorOpen.value = true
+}
+
+function toggleInspector() {
+  inspectorOpen.value = !inspectorOpen.value
 }
 
 function openPanelInBrowser() {
@@ -352,119 +337,34 @@ onUnmounted(() => {
 
 <template>
   <div class="tool-page wb2api-page">
-    <Teleport v-if="paneActive" defer to="#app-topbar-state">
-      <span class="tb-state" :class="`is-${statusTone}`">
-        <i class="tb-dot" />
-        {{ statusLabel }}
-      </span>
-    </Teleport>
+    <ToolSurface class="wb2api-surface">
+      <template #toolbar>
+        <UiToolbar gap="sm" flush>
+          <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
+          <span class="wb2api-status-label">{{ statusLabel }}</span>
+          <UiChip v-if="state?.version" mono>
+            v{{ state.version }}
+          </UiChip>
+          <UiChip v-if="state?.orphanLikely" tone="warning">
+            端口被外部进程占用
+          </UiChip>
+          <template #end>
+            <UiIconButton icon="refresh" label="刷新状态" :disabled="loading" @click="refresh" />
+            <UiIconButton icon="external" label="在浏览器打开面板" :disabled="!panelSrc" @click="openPanelInBrowser" />
+            <UiIconButton
+              icon="info"
+              :active="inspectorOpen"
+              :label="inspectorOpen ? '收起运行详情' : '运行详情'"
+              @click="toggleInspector"
+            />
+          </template>
+        </UiToolbar>
+      </template>
 
-    <Teleport v-if="paneActive" defer to="#app-topbar-actions">
-      <UiButton size="small" @click="openInspector('run')">
-        运行详情
-      </UiButton>
-      <UiButton
-        v-if="!isRunning"
-        size="small"
-        type="primary"
-        :disabled="busy || !installed || state?.orphanLikely"
-        @click="onStart"
-      >
-        启动
-      </UiButton>
-      <UiButton
-        v-else
-        size="small"
-        type="warning"
-        plain
-        :disabled="busy"
-        @click="onStop"
-      >
-        停止
-      </UiButton>
-    </Teleport>
-
-    <div class="wb2api-layout">
-      <ToolSurface class="wb2api-surface">
-        <template #spine>
-          <WorkspaceSpine
-            :model-value="inspectorOpen ? inspectorTab : ''"
-            :items="inspectorSpineItems"
-            @update:model-value="(value: string) => openInspector(value as InspectorTab)"
-          />
-        </template>
-
-        <template #toolbar>
-          <UiToolbar gap="sm" flush>
-            <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
-            <span class="wb2api-status-label">{{ statusLabel }}</span>
-            <UiChip v-if="state?.version" mono>
-              v{{ state.version }}
-            </UiChip>
-            <UiChip v-if="state?.orphanLikely" tone="warning">
-              端口被外部进程占用
-            </UiChip>
-            <template #end>
-              <UiIconButton icon="refresh" label="刷新状态" :disabled="loading" @click="refresh" />
-              <UiIconButton icon="external" label="在浏览器打开面板" :disabled="!panelSrc" @click="openPanelInBrowser" />
-              <UiIconButton icon="info" label="运行详情" :active="inspectorOpen" @click="openInspector('run')" />
-            </template>
-          </UiToolbar>
-        </template>
-
-        <div class="wb2api-stage">
-          <UiAlert
-            v-if="state?.orphanLikely"
-            class="wb2api-alert"
-            type="warning"
-            :closable="false"
-            show-icon
-            title="端口被非本工具托管的进程占用"
-            description="可以结束占用进程后重试，工具不会接管外部服务。"
-          />
-          <UiAlert
-            v-else-if="state?.lastError && !showWebview"
-            class="wb2api-alert"
-            type="error"
-            :closable="false"
-            show-icon
-            title="服务启动失败"
-            :description="state.lastError"
-          />
-
-          <webview
-            v-if="showWebview && panelSrc"
-            class="wb2api-webview"
-            :src="panelSrc"
-            :partition="WB2API_WEBVIEW_PARTITION"
-            allowpopups
-          />
-          <UiEmpty
-            v-else
-            class="wb2api-empty"
-            center
-            icon="wb2api"
-            :text="emptyText"
-          >
-            <template #actions>
-              <UiButton size="small" @click="openInspector(installed ? 'run' : 'install')">
-                {{ installed ? '查看运行详情' : '安装上游二进制' }}
-              </UiButton>
-            </template>
-          </UiEmpty>
-        </div>
-      </ToolSurface>
-
-      <ToolSideInspector
-        :open="inspectorOpen"
-        :title="inspectorTitle"
-        :width="360"
-        body-padding="12px"
-        @close="inspectorOpen = false"
-      >
-        <div class="inspector-content">
-          <div class="side-scroll">
-            <div v-if="inspectorTab === 'run'" class="inspector-sections">
+      <div class="wb2api-body">
+        <aside v-if="inspectorOpen" class="wb2api-detail" aria-label="运行详情">
+          <div class="wb2api-detail-scroll">
+            <div class="inspector-sections">
               <section class="inspector-section">
                 <header class="inspector-section-head">
                   <div>
@@ -526,9 +426,7 @@ onUnmounted(() => {
                   </template>
                 </UiKeyValue>
               </section>
-            </div>
 
-            <div v-else-if="inspectorTab === 'install'" class="inspector-sections">
               <section class="inspector-section">
                 <header class="inspector-section-head">
                   <div>
@@ -582,9 +480,7 @@ onUnmounted(() => {
                   打开数据目录
                 </UiButton>
               </section>
-            </div>
 
-            <div v-else class="inspector-sections">
               <section class="inspector-section">
                 <header class="inspector-section-head">
                   <div>
@@ -611,9 +507,51 @@ onUnmounted(() => {
               </section>
             </div>
           </div>
+        </aside>
+
+        <div class="wb2api-stage">
+          <UiAlert
+            v-if="state?.orphanLikely"
+            class="wb2api-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="端口被非本工具托管的进程占用"
+            description="可以结束占用进程后重试，工具不会接管外部服务。"
+          />
+          <UiAlert
+            v-else-if="state?.lastError && !showWebview"
+            class="wb2api-alert"
+            type="error"
+            :closable="false"
+            show-icon
+            title="服务启动失败"
+            :description="state.lastError"
+          />
+
+          <webview
+            v-if="showWebview && panelSrc"
+            class="wb2api-webview"
+            :src="panelSrc"
+            :partition="WB2API_WEBVIEW_PARTITION"
+            allowpopups
+          />
+          <UiEmpty
+            v-else
+            class="wb2api-empty"
+            center
+            icon="wb2api"
+            :text="emptyText"
+          >
+            <template #actions>
+              <UiButton size="small" @click="openInspector()">
+                {{ installed ? '查看运行详情' : '安装上游二进制' }}
+              </UiButton>
+            </template>
+          </UiEmpty>
         </div>
-      </ToolSideInspector>
-    </div>
+      </div>
+    </ToolSurface>
   </div>
 </template>
 
@@ -626,53 +564,27 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.tb-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-}
-
-.tb-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-tertiary);
-}
-
-.tb-state.is-success {
-  color: var(--color-success);
-
-  .tb-dot {
-    background: var(--color-success);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 14%, transparent);
-  }
-}
-
-.tb-state.is-warning {
-  color: var(--color-warning);
-
-  .tb-dot {
-    background: var(--color-warning);
-  }
-}
-
-.tb-state.is-danger {
-  color: var(--color-error);
-
-  .tb-dot {
-    background: var(--color-error);
-  }
-}
-
-.wb2api-layout {
+.wb2api-body {
   display: flex;
   flex: 1;
-  gap: 12px;
+  min-width: 0;
   min-height: 0;
+}
+
+.wb2api-detail {
+  display: flex;
+  flex: 0 0 360px;
+  flex-direction: column;
+  width: 360px;
+  min-height: 0;
+  border-right: 1px solid var(--color-border-light);
+}
+
+.wb2api-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
 }
 
 .wb2api-surface {
@@ -687,7 +599,7 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: color-mix(in srgb, var(--color-fill) 24%, transparent);
+  background: var(--color-well);
 }
 
 .wb2api-alert {
@@ -712,21 +624,6 @@ onUnmounted(() => {
 .wb2api-status-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-}
-
-.inspector-content {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  gap: var(--spacing-sm);
-}
-
-.side-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 2px;
 }
 
 .inspector-sections {

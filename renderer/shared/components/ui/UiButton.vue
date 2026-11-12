@@ -89,7 +89,6 @@ const isDisabled = computed(() => props.disabled || props.loading)
   &.is-plain:not(.is-text):not(.is-link) {
     background: transparent;
     box-shadow: none;
-    color: var(--color-text-primary);
   }
 
   &.is-primary.is-plain {
@@ -112,6 +111,26 @@ const isDisabled = computed(() => props.disabled || props.loading)
     }
   }
 
+  &.is-success.is-plain {
+    border-color: var(--color-success);
+    color: var(--color-success);
+
+    &:hover:not(:disabled) {
+      background: var(--color-success);
+      color: var(--color-on-solid);
+    }
+  }
+
+  &.is-warning.is-plain {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+
+    &:hover:not(:disabled) {
+      background: var(--color-warning);
+      color: var(--color-on-solid);
+    }
+  }
+
   &.is-link {
     color: var(--color-text-secondary);
 
@@ -121,7 +140,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
     &.is-warning { color: var(--color-warning); }
   }
 
-  &.is-primary:not(.is-text):not(.is-link) {
+  &.is-primary:not(.is-text):not(.is-link):not(.is-plain) {
     background: var(--color-primary-strong);
     border-color: var(--color-primary-strong);
     color: var(--color-on-solid);
@@ -130,7 +149,7 @@ const isDisabled = computed(() => props.disabled || props.loading)
     &:active:not(:disabled) { background: color-mix(in oklab, var(--color-primary-strong) 74%, #000); }
   }
 
-  &.is-danger:not(.is-text):not(.is-link) {
+  &.is-danger:not(.is-text):not(.is-link):not(.is-plain) {
     background: var(--color-error);
     border-color: var(--color-error);
     color: var(--color-on-solid);
@@ -138,17 +157,17 @@ const isDisabled = computed(() => props.disabled || props.loading)
     &:hover:not(:disabled) { background: color-mix(in oklab, var(--color-error) 86%, #000); }
   }
 
-  &.is-success:not(.is-text):not(.is-link),
-  &.is-warning:not(.is-text):not(.is-link) {
+  &.is-success:not(.is-text):not(.is-link):not(.is-plain),
+  &.is-warning:not(.is-text):not(.is-link):not(.is-plain) {
     color: var(--color-on-solid);
   }
 
-  &.is-success:not(.is-text):not(.is-link) {
+  &.is-success:not(.is-text):not(.is-link):not(.is-plain) {
     background: var(--color-success);
     border-color: var(--color-success);
   }
 
-  &.is-warning:not(.is-text):not(.is-link) {
+  &.is-warning:not(.is-text):not(.is-link):not(.is-plain) {
     background: var(--color-warning);
     border-color: var(--color-warning);
   }

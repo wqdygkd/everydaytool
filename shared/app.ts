@@ -43,7 +43,14 @@ export interface DataUsage {
   layers: DataLayerUsageInfo[]
 }
 
-/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：收藏的工具 + 首页工具顺序 */
+/** 左轨三态：图标栏 / 宽栏 / 收起 */
+export type RailMode = 'compact' | 'wide' | 'collapsed'
+
+export function isRailMode(value: unknown): value is RailMode {
+  return value === 'compact' || value === 'wide' || value === 'collapsed'
+}
+
+/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：收藏、首页顺序、左轨三态 */
 export interface UiPreferences {
   favoriteToolIds: string[]
   /**
@@ -51,6 +58,8 @@ export interface UiPreferences {
    * 空数组 = 未自定义：首页按工具创建时间倒序（最新在前）。
    */
   toolOrder: string[]
+  /** 左轨显示状态；跨重启与备份保留 */
+  railMode: RailMode
 }
 
 /** 资产根信息（独立根，默认 `<data>/assets`，可改到任意盘） */

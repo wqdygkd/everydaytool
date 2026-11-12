@@ -38,7 +38,7 @@ export const APP_TABS: AppTab[] = [
     id: 'settings',
     name: '设置',
     icon: 'gear',
-    description: '数据目录、窗口外观、缓存清理与窗口几何',
+    description: '数据存储、窗口外观与高级配置',
     routeName: 'settings',
     path: '/settings',
     electronOnly: true,

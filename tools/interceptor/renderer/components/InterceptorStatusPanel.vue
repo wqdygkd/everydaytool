@@ -296,6 +296,7 @@ function formatTime(at: number): string {
 
 .status-side {
   border-left: 1px solid var(--color-border-light);
+  background: var(--color-well);
 }
 
 .summary-row {
@@ -361,7 +362,7 @@ function formatTime(at: number): string {
 .metric {
   min-width: 0;
   padding: 12px 13px;
-  background: var(--color-raised);
+  background: var(--color-well);
 
   > span {
     color: var(--color-text-secondary);

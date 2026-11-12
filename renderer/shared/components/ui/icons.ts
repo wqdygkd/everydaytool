@@ -28,6 +28,10 @@ export const icons = {
   'play': { vb: 20, paths: ['M7 4.5 15 10l-8 5.5z'], sw: 1.6 },
   'chevronDown': { vb: 20, paths: ['m6 8 4 4 4-4'], sw: 1.8 },
   'chevronRight': { vb: 12, paths: ['M4.5 2.5L8 6l-3.5 3.5'], sw: 1.4 },
+  // 左轨三态：左侧竖线表示轨道宽度，收起态用指向左的短箭头提示可恢复
+  'sidebar': { vb: 20, rects: [[2.5, 4, 15, 12, 2]], paths: ['M8 4v12'], sw: 1.5 },
+  'sidebarWide': { vb: 20, rects: [[2.5, 4, 15, 12, 2]], paths: ['M11.5 4v12'], sw: 1.5 },
+  'sidebarCollapsed': { vb: 20, rects: [[2.5, 4, 15, 12, 2]], paths: ['M5.5 4v12', 'M13 7.5 11 10l2 2.5'], sw: 1.5 },
   'arrowLeft': { vb: 20, paths: ['M11.5 5 6.5 10l5 5', 'M6.5 10h9'], sw: 1.6 },
   'arrowRight': { vb: 20, paths: ['M8.5 5l5 5-5 5', 'M13.5 10h-9'], sw: 1.6 },
   'more': { vb: 20, circles: [[5, 10, 1.4, true], [10, 10, 1.4, true], [15, 10, 1.4, true]] },
