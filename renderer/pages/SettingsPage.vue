@@ -4,6 +4,7 @@ import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
 import type { BackupExportResult, BackupInspectResult, BackupRestoreReport } from '../../shared/backup'
 import type { WindowBoundsState } from '../../shared/window-bounds'
 import { alert, confirm, prompt } from '@renderer/shared/feedback'
+import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { getSensitiveEntries } from '../../shared/data-layers'
 import { useAppearance } from '../shared/composables/useAppearance'
@@ -23,6 +24,89 @@ const usage = ref<DataUsage | null>(null)
 const usageLoading = ref(false)
 const changing = ref(false)
 const cleaning = ref(false)
+
+const cleanablePercent = computed(() => {
+  const total = usage.value?.totalBytes ?? 0
+  const cleanable = usage.value?.cleanableBytes ?? 0
+  if (total <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((cleanable / total) * 100)))
+})
+
+interface SettingsNavItem {
+  id: string
+  label: string
+}
+
+interface SettingsNavGroup {
+  group: string
+  items: SettingsNavItem[]
+}
+
+const SETTINGS_NAV: SettingsNavGroup[] = [
+  {
+    group: '数据与存储',
+    items: [
+      { id: 'data-directory', label: '数据目录' },
+      { id: 'data-layers', label: '数据分层' },
+      { id: 'cache', label: '清理缓存' },
+      { id: 'backup', label: '备份与恢复' },
+    ],
+  },
+  {
+    group: '窗口',
+    items: [
+      { id: 'appearance', label: '窗口外观' },
+      { id: 'bounds', label: '大小与位置' },
+    ],
+  },
+  {
+    group: '高级',
+    items: [
+      { id: 'debug', label: '调试' },
+    ],
+  },
+]
+const SETTINGS_ITEMS = SETTINGS_NAV.flatMap(group => group.items)
+
+const pageRef = ref<HTMLElement | null>(null)
+const activeSetting = ref(SETTINGS_ITEMS[0].id)
+// 索引跳转期间锁住滚动位置回写：目标分区被夹在滚动末端时（例如「窗口外观」
+// 下方只剩两屏内容），落点会停在最大滚动位置，滚动监听会把高亮翻成末项「调试」。
+let spyLocked = false
+let spyUnlockTimer: number | undefined
+
+function updateActiveSetting() {
+  if (spyLocked) return
+  const page = pageRef.value
+  if (!page) return
+  const threshold = page.getBoundingClientRect().top + 96
+  const maxScroll = page.scrollHeight - page.clientHeight
+  const atBottom = maxScroll > 0 && maxScroll - page.scrollTop < 24
+  let active = SETTINGS_ITEMS[0].id
+  for (const item of SETTINGS_ITEMS) {
+    const el = page.querySelector<HTMLElement>(`[data-setting="${item.id}"]`)
+    if (el && el.getBoundingClientRect().top <= threshold) active = item.id
+  }
+  if (atBottom) {
+    active = SETTINGS_ITEMS[SETTINGS_ITEMS.length - 1].id
+  }
+  activeSetting.value = active
+}
+
+function scrollToSetting(id: string) {
+  const el = pageRef.value?.querySelector<HTMLElement>(`[data-setting="${id}"]`)
+  if (!el) return
+  spyLocked = true
+  activeSetting.value = id
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' })
+  window.clearTimeout(spyUnlockTimer)
+  spyUnlockTimer = window.setTimeout(() => {
+    spyLocked = false
+  }, 700)
+}
+
+useEventListener(window, 'resize', updateActiveSetting)
 
 // ── 窗口外观 ──
 // 平台能力由主进程给出：不支持半透明的平台直接禁用整组，而不是给一个点了没反应的开关。
@@ -412,315 +496,576 @@ onMounted(() => {
   void loadUsage()
   void loadAppearance()
   void loadBounds()
+  void nextTick(updateActiveSetting)
 })
 </script>
 
 <template>
-  <div class="settings-page tool-page">
-    <!-- 不再放「应用设置」大标题：页签本身已经叫「设置」，
-         标题会与页签重复一行。这里只留一句总说明，各面板自带小标题。 -->
-    <UiHint class="settings-lead">
-      数据目录、空间占用与窗口外观等应用级配置；这里的改动立即生效。
-    </UiHint>
-
-    <UiPanel title="数据目录">
-      <div class="directory-row">
-        <span class="directory-path mono">{{ info?.dataDirectory }}</span>
-        <UiChip>{{ info?.isCustom ? '自定义' : '默认' }}</UiChip>
-      </div>
-      <UiGroup>
-        <UiButton size="small" @click="openDirectory">
-          打开文件夹
-        </UiButton>
-        <UiButton size="small" :loading="changing" @click="selectDirectory">
-          更改…
-        </UiButton>
-      </UiGroup>
-      <div v-if="info?.pendingDataDirectory" class="directory-row">
-        <span class="muted">待切换</span>
-        <span class="directory-path mono">{{ info.pendingDataDirectory }}</span>
-        <UiChip tone="warning">
-          重启后生效
-        </UiChip>
-      </div>
-      <UiHint block>
-        配置、登录会话与可再生的缓存都存放在此目录（归档资产例外，见下方「数据分层」）。更改需重启：
-        启动时会先整体迁移旧目录（含登录缓存），确认成功后才切换到新目录，因此缓存与登录态保持有效；
-        目标目录必须为空。
-      </UiHint>
-    </UiPanel>
-
-    <UiPanel title="数据分层">
-      <template #actions>
-        <UiButton link size="small" :disabled="usageLoading" @click="loadUsage">
-          刷新
-        </UiButton>
-      </template>
-      <p v-if="usage" class="usage-summary">
-        总计 <span class="mono">{{ formatBytes(usage.totalBytes) }}</span>
-        <span class="muted">·</span>
-        可清理 <span class="mono">{{ formatBytes(usage.cleanableBytes) }}</span>
-      </p>
-      <ul v-if="usage" class="layer-list">
-        <li v-for="layer in usage.layers" :key="layer.layer" class="layer-row">
-          <div class="layer-head">
-            <span class="layer-name">{{ layer.label }}</span>
-            <UiChip :tone="layer.cleanable ? 'neutral' : 'warning'" variant="outline">
-              {{ layer.cleanable ? '可再生' : '不可再生' }}
-            </UiChip>
-            <span class="mono layer-bytes">{{ formatBytes(layer.bytes) }}</span>
+  <div ref="pageRef" class="settings-page tool-page" @scroll.passive="updateActiveSetting">
+    <div class="settings-shell">
+      <nav class="settings-index" aria-label="设置分区">
+        <div v-for="group in SETTINGS_NAV" :key="group.group" class="index-group">
+          <div class="index-label">
+            {{ group.group }}
           </div>
-          <p class="layer-summary">
-            {{ layer.summary }}
-          </p>
-          <template v-if="layer.layer === 'assets'">
-            <p class="layer-path mono">
-              {{ assetsInfo?.assetsRoot ?? usage.assetsRoot }}
-            </p>
-            <p v-if="assetsInfo?.pendingAssetsRoot" class="layer-path mono">
-              待切换 {{ assetsInfo.pendingAssetsRoot }}（重启后生效）
-            </p>
-            <p class="layer-summary">
-              归档体量大且不可再生，可放到另一块盘：更改后下次启动会把旧位置的归档整体迁移过去（不覆盖非空目录）。
-            </p>
-            <UiGroup>
-              <UiButton size="small" @click="openAssetsDirectory">
-                打开
-              </UiButton>
-              <UiButton size="small" :loading="assetsChanging" @click="selectAssetsDirectory">
-                更改…
-              </UiButton>
-            </UiGroup>
-          </template>
-          <details v-if="layer.entries.length > 0" class="layer-entries">
-            <summary>{{ layer.entries.length }} 项明细</summary>
-            <ul>
-              <li v-for="entry in layer.entries" :key="entry.id" class="usage-row">
-                <span class="usage-name">{{ entry.label }}</span>
-                <span class="mono usage-bytes">{{ formatBytes(entry.bytes) }}</span>
-              </li>
-            </ul>
-          </details>
-        </li>
-      </ul>
-      <UiHint v-if="usageLoading" block>
-        正在计算磁盘占用…
-      </UiHint>
-      <UiHint block>
-        分层按「能不能重新生成」划分：配置与资产不可再生（备份要带上），会话是登录态，缓存随时可删。
-      </UiHint>
-    </UiPanel>
+          <button
+            v-for="item in group.items"
+            :key="item.id"
+            type="button"
+            class="index-item"
+            :class="{ 'is-active': activeSetting === item.id }"
+            :aria-current="activeSetting === item.id ? 'location' : undefined"
+            @click="scrollToSetting(item.id)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </nav>
 
-    <UiPanel title="清理缓存">
-      <UiHint block>
-        只清「缓存」层（含沙箱浏览器与各工具的下载 / 运行产物）和「会话」层内部的浏览器缓存目录。
-        不会删除账号、规则、证书、登录态与归档；运行中的沙箱会自动跳过。
-      </UiHint>
-      <UiButton :loading="cleaning" @click="clearCache">
-        清除缓存
-      </UiButton>
-    </UiPanel>
+      <div class="settings-doc">
+        <section class="settings-section" aria-labelledby="settings-storage-title">
+          <header class="section-head">
+            <h2 id="settings-storage-title">
+              数据与存储
+            </h2>
+            <p>数据落地位置、空间占用与迁移备份。</p>
+          </header>
 
-    <UiPanel title="窗口外观">
-      <UiSwitchField :model-value="transparentOn" :disabled="!isTransparentEnabled" align="start" @update:model-value="toggleTransparent">
-        半透明窗口
-        <template v-if="!isTransparentEnabled">
-          （当前系统不支持）
-        </template>
-      </UiSwitchField>
-      <UiHint block>
-        {{ appearanceHint }}
-      </UiHint>
+          <UiPanel class="settings-group" variant="outlined" padding="0">
+            <div class="setting-row" data-setting="data-directory">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>数据目录</h3>
+                  <p>配置、登录会话与可再生的缓存都存放在这里。</p>
+                </div>
+                <UiChip v-if="info">
+                  {{ info.isCustom ? '自定义' : '默认' }}
+                </UiChip>
+              </div>
+              <div class="path-box">
+                <span class="path mono">{{ info?.dataDirectory ?? '—' }}</span>
+              </div>
+              <div v-if="info?.pendingDataDirectory" class="path-box is-pending">
+                <span class="pending-label">待切换</span>
+                <span class="path mono">{{ info.pendingDataDirectory }}</span>
+                <UiChip tone="warning">
+                  重启后生效
+                </UiChip>
+              </div>
+              <div class="row-foot">
+                <UiHint size="xs">
+                  更改后重启生效：启动时先整体迁移旧目录，目标目录必须为空。
+                </UiHint>
+                <UiGroup>
+                  <UiButton size="small" @click="openDirectory">
+                    打开文件夹
+                  </UiButton>
+                  <UiButton size="small" :loading="changing" @click="selectDirectory">
+                    更改…
+                  </UiButton>
+                </UiGroup>
+              </div>
+            </div>
 
-      <div v-if="isTransparentEnabled && appearance?.enabled" class="material-picker">
-        <template v-if="materialChoices.length > 0">
-          <span class="material-label">系统材质</span>
-          <div class="material-options">
-            <button
-              v-for="option in materialChoices"
-              :key="option.value"
-              type="button"
-              class="material-option"
-              :class="{ 'is-active': selectedMaterial === option.value }"
-              @click="chooseMaterial(option.value)"
-            >
-              <span class="material-name">{{ option.label }}</span>
-              <span class="material-desc">{{ option.description }}</span>
-            </button>
-          </div>
-        </template>
-        <UiHint v-else block>
-          当前系统没有可用的系统背景材质，仅窗口画布会透出桌面。
-        </UiHint>
+            <div class="setting-row" data-setting="data-layers">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>数据分层</h3>
+                  <p>配置与资产不可再生，会话是登录态，缓存随时可删。</p>
+                </div>
+                <UiButton link size="small" :disabled="usageLoading" @click="loadUsage">
+                  刷新
+                </UiButton>
+              </div>
+              <div v-if="usage" class="usage-block">
+                <p class="usage-line">
+                  总计 <span class="mono">{{ formatBytes(usage.totalBytes) }}</span>
+                  <span class="usage-sep">·</span>
+                  可清理 <span class="mono">{{ formatBytes(usage.cleanableBytes) }}</span>
+                </p>
+                <div class="usage-meter" role="img" :aria-label="`可清理占总量的 ${cleanablePercent}%`">
+                  <span class="usage-meter-fill" :style="{ width: `${cleanablePercent}%` }" />
+                </div>
+              </div>
+              <ul v-if="usage" class="layer-list">
+                <li v-for="layer in usage.layers" :key="layer.layer" class="layer-row">
+                  <div class="layer-head">
+                    <span class="layer-name">{{ layer.label }}</span>
+                    <UiChip :tone="layer.cleanable ? 'neutral' : 'warning'" variant="outline">
+                      {{ layer.cleanable ? '可再生' : '不可再生' }}
+                    </UiChip>
+                    <span class="mono layer-bytes">{{ formatBytes(layer.bytes) }}</span>
+                  </div>
+                  <p class="layer-summary">
+                    {{ layer.summary }}
+                  </p>
+                  <template v-if="layer.layer === 'assets'">
+                    <p class="layer-path mono">
+                      {{ assetsInfo?.assetsRoot ?? usage.assetsRoot }}
+                    </p>
+                    <p v-if="assetsInfo?.pendingAssetsRoot" class="layer-path mono">
+                      待切换 {{ assetsInfo.pendingAssetsRoot }}（重启后生效）
+                    </p>
+                    <p class="layer-summary">
+                      归档体量大且不可再生，可放到另一块盘；下次启动会整体迁移，非空目录不覆盖。
+                    </p>
+                    <UiGroup>
+                      <UiButton size="small" @click="openAssetsDirectory">
+                        打开
+                      </UiButton>
+                      <UiButton size="small" :loading="assetsChanging" @click="selectAssetsDirectory">
+                        更改…
+                      </UiButton>
+                    </UiGroup>
+                  </template>
+                  <details v-if="layer.entries.length > 0" class="layer-entries">
+                    <summary>{{ layer.entries.length }} 项明细</summary>
+                    <ul>
+                      <li v-for="entry in layer.entries" :key="entry.id" class="usage-row">
+                        <span class="usage-name">{{ entry.label }}</span>
+                        <span class="mono usage-bytes">{{ formatBytes(entry.bytes) }}</span>
+                      </li>
+                    </ul>
+                  </details>
+                </li>
+              </ul>
+              <UiHint v-if="usageLoading" block>
+                正在计算磁盘占用…
+              </UiHint>
+              <UiHint v-else-if="!usage" block>
+                空间占用读取失败，点击右上角「刷新」重试。
+              </UiHint>
+            </div>
+
+            <div class="setting-row" data-setting="cache">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>清理缓存</h3>
+                  <p>只清缓存层与会话内的浏览器缓存；账号、规则、证书与归档不受影响。</p>
+                </div>
+                <UiButton size="small" :loading="cleaning" @click="clearCache">
+                  清除缓存
+                </UiButton>
+              </div>
+            </div>
+
+            <div class="setting-row" data-setting="backup">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>备份与恢复</h3>
+                  <p>只打包配置层与资产清单，缓存不进包；恢复前会自动快照现有配置。</p>
+                </div>
+                <UiGroup>
+                  <UiButton size="small" :loading="backupBusy" @click="exportBackup">
+                    导出备份…
+                  </UiButton>
+                  <UiButton size="small" :loading="backupBusy" @click="restoreBackup">
+                    从备份恢复…
+                  </UiButton>
+                </UiGroup>
+              </div>
+            </div>
+          </UiPanel>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-window-title">
+          <header class="section-head">
+            <h2 id="settings-window-title">
+              窗口
+            </h2>
+            <p>外观材质、半透明与窗口几何。</p>
+          </header>
+
+          <UiPanel class="settings-group" variant="outlined" padding="0">
+            <div class="setting-row" data-setting="appearance">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>窗口外观</h3>
+                  <p>{{ appearanceHint || '调整窗口透明度与系统背景材质。' }}</p>
+                </div>
+                <UiSwitchField
+                  aria-label="半透明窗口"
+                  :model-value="transparentOn"
+                  :disabled="!isTransparentEnabled"
+                  @update:model-value="toggleTransparent"
+                />
+              </div>
+
+              <div v-if="isTransparentEnabled && appearance?.enabled" class="material-block">
+                <div class="block-label">
+                  系统材质
+                </div>
+                <div v-if="materialChoices.length > 0" class="material-options">
+                  <button
+                    v-for="option in materialChoices"
+                    :key="option.value"
+                    type="button"
+                    class="material-option"
+                    :class="{ 'is-active': selectedMaterial === option.value }"
+                    :aria-pressed="selectedMaterial === option.value"
+                    @click="chooseMaterial(option.value)"
+                  >
+                    <span class="material-mark" aria-hidden="true" />
+                    <span class="material-text">
+                      <span class="material-name">{{ option.label }}</span>
+                      <span class="material-desc">{{ option.description }}</span>
+                    </span>
+                  </button>
+                </div>
+                <UiHint v-else block>
+                  当前系统没有可用的系统背景材质，仅窗口画布会透出桌面。
+                </UiHint>
+              </div>
+
+              <div class="sub-row">
+                <div class="row-copy">
+                  <h3>夜色玻璃</h3>
+                  <p>暗色表面基调 + 亮蓝强调，可与任意半透明 / 材质模式组合；跟随系统「降低透明度」自动退回不透明。</p>
+                </div>
+                <UiSwitchField
+                  aria-label="夜色玻璃"
+                  :model-value="nightOn"
+                  @update:model-value="toggleNight"
+                />
+              </div>
+            </div>
+
+            <div class="setting-row" data-setting="bounds">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>窗口大小与位置</h3>
+                  <p>启动时恢复上次退出前的尺寸与位置；记录越界时回到默认尺寸并居中。</p>
+                </div>
+                <UiSwitchField
+                  aria-label="记住窗口大小与位置"
+                  :model-value="rememberBoundsOn"
+                  @update:model-value="toggleRememberBounds"
+                />
+              </div>
+              <div class="row-foot">
+                <span class="bounds-value">
+                  <span class="muted">上次记录</span>
+                  <span v-if="bounds?.bounds" class="mono">
+                    {{ bounds.bounds.width }} × {{ bounds.bounds.height }}{{ bounds.maximized ? '（最大化）' : '' }}
+                  </span>
+                  <span v-else class="muted">暂无记录，按默认尺寸居中</span>
+                </span>
+                <UiButton size="small" :loading="boundsResetting" @click="resetBounds">
+                  重置为默认大小
+                </UiButton>
+              </div>
+            </div>
+          </UiPanel>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-advanced-title">
+          <header class="section-head">
+            <h2 id="settings-advanced-title">
+              高级
+            </h2>
+            <p>排查问题时使用，日常无需改动。</p>
+          </header>
+
+          <UiPanel class="settings-group" variant="outlined" padding="0">
+            <div class="setting-row" data-setting="debug">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>调试控制台</h3>
+                  <p>在独立窗口中打开 DevTools，关闭该窗口即可收起。</p>
+                </div>
+                <UiButton size="small" @click="openDevTools">
+                  打开调试控制台
+                </UiButton>
+              </div>
+            </div>
+          </UiPanel>
+        </section>
       </div>
-
-      <div class="appearance-toggle">
-        <UiSwitchField :model-value="nightOn" align="start" @update:model-value="toggleNight">
-          夜色玻璃
-        </UiSwitchField>
-        <UiHint block>
-          暗色表面基调 + 亮蓝强调的纯 CSS 主题轴,可与任意半透明 / 材质模式组合;
-          跟随「降低透明度」辅助功能自动退回不透明。
-        </UiHint>
-      </div>
-    </UiPanel>
-
-    <UiPanel title="窗口大小与位置">
-      <UiSwitchField :model-value="rememberBoundsOn" align="start" @update:model-value="toggleRememberBounds">
-        记住窗口大小与位置
-      </UiSwitchField>
-      <UiHint block>
-        启动时恢复上次退出前的尺寸与位置（含最大化状态）。若记录落在已拔掉的外接屏上或超出了当前屏幕，
-        会改回默认尺寸并居中，不会把窗口还原到屏幕外。
-      </UiHint>
-      <div class="bounds-row">
-        <span class="muted">上次记录</span>
-        <span v-if="bounds?.bounds" class="mono">
-          {{ bounds.bounds.width }} × {{ bounds.bounds.height }}{{ bounds.maximized ? '（最大化）' : '' }}
-        </span>
-        <span v-else class="muted">暂无记录，按默认尺寸居中</span>
-      </div>
-      <UiGroup>
-        <UiButton size="small" :loading="boundsResetting" @click="resetBounds">
-          重置为默认大小
-        </UiButton>
-      </UiGroup>
-    </UiPanel>
-
-    <UiPanel title="备份与恢复">
-      <UiHint block>
-        备份包只装不可再生的数据：配置层（账号 / 规则 / 证书 / 索引）与资产清单；会话层可选，缓存层永不进包。
-        恢复前会先把现有配置快照到缓存层，可回滚。
-      </UiHint>
-      <UiGroup>
-        <UiButton :loading="backupBusy" @click="exportBackup">
-          导出备份…
-        </UiButton>
-        <UiButton :loading="backupBusy" @click="restoreBackup">
-          从备份恢复…
-        </UiButton>
-      </UiGroup>
-    </UiPanel>
-
-    <UiPanel title="调试">
-      <UiHint block>
-        在独立窗口中打开 DevTools，用于查看渲染层日志、网络请求与内存快照；关闭该窗口即可收起。
-      </UiHint>
-      <UiButton @click="openDevTools">
-        打开调试控制台
-      </UiButton>
-    </UiPanel>
+    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
-/* 页面级宽度：设置项不需要铺满整个窗口，长行（路径 / 用量）反而更难读。
-   内边距与首页一致（2xl / 3xl），保证与其它页面同一留白节奏。 */
+/* 设置工作台：左侧分区索引定高不动，右侧是唯一的滚动文档列。 */
 .settings-page {
-  padding: var(--spacing-2xl) var(--spacing-3xl) var(--spacing-3xl);
-
-  > :deep(*) {
-    max-width: var(--column-document);
-    margin-right: auto;
-    margin-left: auto;
-  }
+  padding: 36px 40px 48px;
 }
 
-@media (max-width: 640px) {
-  .settings-page {
-    padding: var(--spacing-2xl) var(--spacing-lg) var(--spacing-3xl);
-  }
-}
-
-/* 引导说明：不是块级（不需要 margin-top），只与首个面板拉开距离 */
-.settings-lead {
-  margin-bottom: var(--spacing-lg);
-}
-
-/* 面板之间留出区块间距（UiPanel 自身不带外边距）。
-   2xl 而不是 md：这是**同级区块**之间的距离，必须明显大于面板内部
-   标题→内容（12）与行间距（8），否则七个分区会糊成一整条长列表。 */
-.settings-page > :deep(.ui-panel + .ui-panel) {
-  margin-top: var(--spacing-2xl);
-}
-
-.directory-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-.directory-path {
-  flex: 1;
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  word-break: break-all;
-}
-
-/* 窗口位置面板的记录摘要：与数据目录那行同构造（弱化标签 + 等宽值），只是值更短 */
-.bounds-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin: var(--spacing-sm) 0;
-  font-size: var(--font-size-sm);
-}
-
-/* 材质选择：卡片式单选（比 el-radio 更容易表达「这是哪种视觉」） */
-.material-picker {
-  margin-top: var(--spacing-md);
-}
-
-.material-label {
-  display: block;
-  margin-bottom: var(--spacing-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-/* 夜间主题开关：与上方的半透明 / 材质选项之间留出分隔。 */
-.appearance-toggle {
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.material-options {
+.settings-shell {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--spacing-sm);
+  grid-template-columns: 196px minmax(0, var(--column-document));
+  gap: 48px;
+  width: min(100%, 1004px);
+  margin: 0 auto;
+  align-items: start;
 }
 
-.material-option {
+.settings-index {
+  position: sticky;
+  top: 12px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-md);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--color-raised);
-  color: var(--color-text-primary);
+  gap: 22px;
+  align-self: start;
+}
+
+.index-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.index-label {
+  padding: 0 10px 6px;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.08em;
+}
+
+.index-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
   text-align: left;
   cursor: pointer;
-  transition: var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 
   &:hover {
-    border-color: var(--color-border);
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    color: var(--color-text-primary);
   }
 
   &.is-active {
-    border-color: var(--color-primary);
-    background: var(--color-primary-soft);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+
+    &::before {
+      position: absolute;
+      top: 7px;
+      bottom: 7px;
+      left: -8px;
+      width: 2px;
+      border-radius: 2px;
+      background: var(--color-primary);
+      content: '';
+    }
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: var(--shadow-focus);
   }
+}
+
+.settings-doc {
+  min-width: 0;
+}
+
+.settings-section + .settings-section {
+  margin-top: 44px;
+}
+
+.section-head {
+  margin-bottom: 14px;
+
+  h2 {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: -0.01em;
+  }
+
+  p {
+    margin: 4px 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+  }
+}
+
+.settings-group {
+  overflow: hidden;
+}
+
+.setting-row {
+  padding: 18px 20px;
+  /* 索引跳转落点：给分组标题留出位置，避免首行顶到滚动区上沿后标题被裁掉 */
+  scroll-margin-top: 84px;
+
+  & + .setting-row {
+    border-top: 1px solid var(--color-border-light);
+  }
+}
+
+.row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.row-copy {
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+  }
+
+  p {
+    max-width: 56ch;
+    margin: 3px 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+  }
+}
+
+.row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+
+  .ui-hint {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.sub-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.path-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--color-well);
+
+  &.is-pending {
+    background: color-mix(in srgb, var(--color-warning) 7%, transparent);
+  }
+}
+
+.path {
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.pending-label {
+  flex: none;
+  color: var(--color-warning);
+  font-size: var(--font-size-xs);
+}
+
+.bounds-value {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.material-block {
+  margin-top: 16px;
+}
+
+.block-label {
+  margin-bottom: 8px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.material-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* 材质是单选而不是卡片：整行可点，选中只改底色与圆点，不再套一层边框。 */
+.material-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  }
+
+  &.is-active {
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+.material-mark {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 50%;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+
+  .material-option.is-active & {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    box-shadow: inset 0 0 0 3px var(--color-raised);
+  }
+}
+
+.material-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .material-name {
@@ -731,30 +1076,55 @@ onMounted(() => {
 .material-desc {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-  /* 材质说明常折两行：11px 中文按 1.5 才不糊（与 .layer-summary 同一档） */
   line-height: 1.5;
 }
 
-.usage-summary {
-  margin: var(--spacing-sm) 0;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+.usage-block {
+  margin-top: 12px;
+}
 
-  .muted {
-    margin: 0 var(--spacing-xs);
+.usage-line {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+
+  .mono {
+    color: var(--color-text-primary);
   }
+}
+
+.usage-sep {
+  margin: 0 6px;
+  color: var(--color-text-tertiary);
+}
+
+.usage-meter {
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-fill);
+}
+
+.usage-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width var(--transition-fast);
 }
 
 /* 数据分层：一层一行（名称 + 可再生标记 + 体积），条目明细折叠在 details 里。
    用列表而不是表格——层数固定为 4，表格的表头反而占地方。 */
 .layer-list {
-  margin: var(--spacing-sm) 0 0;
+  margin: 14px 0 0;
   padding: 0;
+  border-top: 1px solid var(--color-border-light);
   list-style: none;
 }
 
 .layer-row {
-  padding: var(--spacing-sm) 0;
+  padding: 12px 0;
   border-top: 1px solid var(--color-border-light);
 
   &:first-child {
@@ -835,5 +1205,61 @@ onMounted(() => {
 .usage-bytes {
   flex-shrink: 0;
   color: var(--color-text-primary);
+}
+
+@media (max-width: 980px) {
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .settings-index {
+    position: static;
+    flex-direction: row;
+    gap: 8px;
+    padding-bottom: 6px;
+    overflow-x: auto;
+  }
+
+  .index-group {
+    flex-direction: row;
+    gap: 4px;
+  }
+
+  .index-label {
+    display: none;
+  }
+
+  .index-item {
+    flex: none;
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 999px;
+
+    &.is-active::before {
+      display: none;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-page {
+    padding: 24px 16px 40px;
+  }
+
+  .row-head {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .row-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .material-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

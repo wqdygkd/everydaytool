@@ -2,6 +2,8 @@
 withDefaults(defineProps<{
   disabled?: boolean
   align?: 'center' | 'start'
+  /** 没有可见文案时，给开关一个可读名称 */
+  ariaLabel?: string
 }>(), {
   align: 'center',
 })
@@ -18,6 +20,7 @@ const value = defineModel<boolean>({ required: true })
       class="ui-switch"
       :class="{ 'is-on': value, 'is-disabled': disabled }"
       :aria-checked="value"
+      :aria-label="ariaLabel"
       :disabled="disabled"
       @click="value = !value"
     >

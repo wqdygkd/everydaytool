@@ -10,6 +10,7 @@ import ToolPane from './shared/components/ToolPane.vue'
 import UiToaster from './shared/components/ui/UiToaster.vue'
 import { useAppearance } from './shared/composables/useAppearance'
 import { useCommandPalette } from './shared/composables/useCommandPalette'
+import { useRailMode } from './shared/composables/useRailMode'
 import { runTabCloseGuard } from './shared/composables/useTabCloseGuard'
 import { appIpcChannels, onAppIpc } from './shared/ipc/useAppIpc'
 import { useToolTabsStore } from './stores/toolTabs'
@@ -19,6 +20,13 @@ const router = useRouter()
 const toolsStore = useToolTabsStore()
 
 const { appearance, load: loadAppearance, subscribe: subscribeAppearance } = useAppearance()
+const { mode: railMode, label: railToggleLabel, cycle: cycleRailMode } = useRailMode()
+const RAIL_TOGGLE_ICONS = {
+  compact: 'sidebar',
+  wide: 'sidebarWide',
+  collapsed: 'sidebarCollapsed',
+} as const
+const railToggleIcon = computed(() => RAIL_TOGGLE_ICONS[railMode.value])
 const isTransparent = computed(() => appearance.value?.enabled === true)
 const materialClass = computed(() => {
   const value = appearance.value
@@ -207,6 +215,16 @@ function onTopbarCommand(command: string) {
     :class="[`platform-${platform}`, modeClasses]"
   >
     <header class="app-topbar">
+      <UiIconButton
+        class="rail-toggle"
+        :icon="railToggleIcon"
+        :size="30"
+        :label="railToggleLabel"
+        aria-controls="app-rail"
+        :aria-expanded="railMode !== 'collapsed'"
+        @click="cycleRailMode"
+      />
+
       <template v-if="activeTool">
         <button
           type="button"
@@ -250,6 +268,7 @@ function onTopbarCommand(command: string) {
         :active-id="currentTabId"
         :open-tools="toolsStore.openTools"
         :show-settings="settingsTab !== undefined"
+        :mode="railMode"
         @home="goHome"
         @search="openPalette()"
         @settings="openSettings"
@@ -335,6 +354,16 @@ function onTopbarCommand(command: string) {
   background: transparent;
   color: var(--color-text-primary);
   -webkit-app-region: drag;
+}
+
+.rail-toggle {
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+
+.app-topbar .rail-toggle:hover {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  color: var(--color-text-primary);
 }
 
 /* macOS：红绿灯落在标题栏里（trafficLightPosition 见 electron/main.ts），

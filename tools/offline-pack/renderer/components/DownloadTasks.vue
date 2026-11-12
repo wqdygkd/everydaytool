@@ -108,7 +108,7 @@ function detail(task: OfflinePackTask): string {
   padding: 9px 10px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-fill) 40%, transparent);
+  background: var(--color-well);
 }
 
 .task-copy {

@@ -2288,7 +2288,7 @@ watch(activeTab, (tab) => {
   padding: 12px 10px;
   overflow: auto;
   border-right: 1px solid var(--color-border-light);
-  background: color-mix(in srgb, var(--color-fill) 34%, transparent);
+  background: var(--color-well);
 }
 
 .pane-label {
@@ -2318,7 +2318,7 @@ watch(activeTab, (tab) => {
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-on-solid) 40%, transparent);
+    background: var(--color-fill);
     color: var(--color-text-primary);
   }
 
@@ -2368,7 +2368,7 @@ watch(activeTab, (tab) => {
     text-align: left;
     cursor: pointer;
 
-    &:hover { background: color-mix(in srgb, var(--color-on-solid) 40%, transparent); color: var(--color-text-primary); }
+    &:hover { background: var(--color-fill); color: var(--color-text-primary); }
     &.is-active { color: var(--color-text-primary); }
   }
 }
@@ -2444,7 +2444,7 @@ watch(activeTab, (tab) => {
     height: 34px;
     padding: 0 12px;
     border-bottom: 1px solid var(--color-border-light);
-    background: color-mix(in srgb, var(--color-raised) 92%, var(--color-fill));
+    background: var(--color-fill);
     color: var(--color-text-tertiary);
     font-size: 11px;
     font-weight: var(--font-weight-medium);
@@ -2469,7 +2469,7 @@ watch(activeTab, (tab) => {
   padding: 0 12px !important;
   border-top: 1px solid var(--color-border-light);
   border-bottom: 1px solid var(--color-border-light) !important;
-  background: color-mix(in srgb, var(--color-fill) 52%, transparent);
+  background: var(--color-fill);
 }
 
 .group-line {
@@ -2496,7 +2496,7 @@ watch(activeTab, (tab) => {
   color: var(--color-text-tertiary);
   cursor: pointer;
 
-  &:hover { background: color-mix(in srgb, var(--color-on-solid) 46%, transparent); color: var(--color-text-primary); }
+  &:hover { background: var(--color-fill); color: var(--color-text-primary); }
   .ui-icon { transition: transform var(--transition-fast); }
   .ui-icon.is-collapsed { transform: rotate(-90deg); }
 }
@@ -3014,7 +3014,7 @@ watch(activeTab, (tab) => {
   padding: 12px 10px;
   overflow: auto;
   border-right: 1px solid var(--color-border-light);
-  background: color-mix(in srgb, var(--color-fill) 34%, transparent);
+  background: var(--color-well);
 }
 
 .collection-side-head {
@@ -3089,7 +3089,7 @@ watch(activeTab, (tab) => {
     margin: 0;
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
   }
 
   p {
@@ -3116,8 +3116,8 @@ watch(activeTab, (tab) => {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  background: var(--color-well);
 }
 
 .favorite-card-head,
@@ -3287,7 +3287,7 @@ watch(activeTab, (tab) => {
   padding: 5px 9px;
   border: 1px solid var(--color-border-light);
   border-radius: 7px;
-  background: var(--color-surface);
+  background: var(--color-well);
   color: var(--color-text-secondary);
   font-size: 11px;
 
@@ -3367,7 +3367,7 @@ watch(activeTab, (tab) => {
   padding: 10px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-control);
-  background: var(--color-surface);
+  background: var(--color-well);
   color: var(--color-text-primary);
   font-family: var(--font-mono);
   font-size: 11px;
@@ -3417,7 +3417,7 @@ watch(activeTab, (tab) => {
 .adopt-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .removed-note { margin: 0; color: var(--color-text-tertiary); font-size: var(--font-size-xs); line-height: 1.6; }
 .removed-source { overflow: hidden; color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.adopt-target { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); background: var(--color-bg-secondary); }
+.adopt-target { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 10px 12px; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); background: var(--color-well); }
 .adopt-target .mono { overflow: hidden; color: var(--color-text-tertiary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .adopt-modes { display: flex; gap: 6px; }
 
@@ -3485,7 +3485,7 @@ watch(activeTab, (tab) => {
   padding: 9px 11px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  background: var(--color-bg-secondary);
+  background: var(--color-well);
 }
 
 .settings-main {
@@ -3531,7 +3531,7 @@ watch(activeTab, (tab) => {
     padding: 0 8px;
     border: 1px solid var(--color-border-light);
     border-radius: var(--radius-control);
-    background: var(--color-surface);
+    background: var(--color-field);
     color: var(--color-text-primary);
     font: inherit;
   }
@@ -3539,7 +3539,7 @@ watch(activeTab, (tab) => {
 
 .settings-error {
   margin: 0;
-  color: var(--color-danger);
+  color: var(--color-error);
   font-size: var(--font-size-xs);
 }
 
@@ -3600,7 +3600,7 @@ watch(activeTab, (tab) => {
   padding: 14px;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-well);
 }
 
 .project-card-head {

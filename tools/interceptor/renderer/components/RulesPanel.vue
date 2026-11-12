@@ -1694,7 +1694,7 @@ async function remove(rule: InterceptorRule): Promise<void> {
   flex-direction: column;
   gap: var(--spacing-sm);
   padding: var(--spacing-lg) var(--spacing-xl);
-  background: var(--color-raised);
+  background: var(--color-well);
   border-radius: var(--radius-sm);
 }
 

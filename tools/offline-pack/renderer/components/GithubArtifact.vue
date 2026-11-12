@@ -28,7 +28,7 @@ defineProps<{
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-fill) 40%, transparent);
+  background: var(--color-well);
 }
 
 .artifact-head {

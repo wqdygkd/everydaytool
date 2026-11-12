@@ -91,6 +91,6 @@ function copyTitle(variant: OfflinePackGithubDownloadVariant): string {
 }
 
 .line-failure {
-  color: var(--color-danger);
+  color: var(--color-error);
 }
 </style>

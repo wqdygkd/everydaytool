@@ -160,7 +160,7 @@ function pathLabel(item: PlanItem): string {
   padding: 7px 9px;
   border-radius: 7px;
   background: color-mix(in srgb, var(--color-warning) 9%, transparent);
-  color: var(--color-warning-strong, var(--color-text-secondary));
+  color: var(--color-warning);
   font-size: var(--font-size-xs);
   line-height: 1.5;
 }
@@ -173,7 +173,7 @@ function pathLabel(item: PlanItem): string {
   overflow: auto;
   border: 1px solid var(--color-border-light);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--color-fill) 28%, transparent);
+  background: var(--color-well);
 }
 
 .plan-row {
@@ -197,8 +197,8 @@ function pathLabel(item: PlanItem): string {
   }
 
   > :deep(.ui-status-tag) { grid-area: action; }
-  &:hover { background: color-mix(in srgb, var(--color-on-solid) 40%, transparent); }
-  &.is-selected { background: color-mix(in srgb, var(--color-primary) 5%, transparent); }
+  &:hover { background: var(--color-fill); }
+  &.is-selected { background: var(--color-primary-soft); }
   &.is-static { cursor: default; opacity: .78; }
 }
 
@@ -223,7 +223,7 @@ function pathLabel(item: PlanItem): string {
   padding: 1px 5px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--color-warning) 11%, transparent);
-  color: var(--color-warning-strong, var(--color-text-secondary));
+  color: var(--color-warning);
   font-size: 10px;
   white-space: nowrap;
 }

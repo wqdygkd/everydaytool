@@ -3,7 +3,7 @@
 
 /* 工具页容器:填充主区域并在内部滚动。
    画布透明（translucency.scss 的 --color-canvas 恒为 transparent），
-   与主页同一观感：透出窗口 / 桌面，底色由卡片与控件自理。 */
+   与主页同一观感：透出窗口 / 桌面，底色由 ToolSurface 与内容表面自理。 */
 .tool-page {
   flex: 1;
   min-height: 0;

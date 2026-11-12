@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OpenTool } from '../../stores/toolTabs'
+import type { RailMode } from '../composables/useRailMode'
 import type { IconName } from './ui/icons'
 import { useToolLauncher } from '../composables/useToolLauncher'
 
@@ -8,10 +9,13 @@ const props = withDefaults(defineProps<{
   /** 已打开的工具（toolTabs store），按打开顺序 */
   openTools?: OpenTool[]
   showSettings?: boolean
+  /** 图标栏 / 宽栏 / 收起；由标题栏的侧栏按钮切换 */
+  mode?: RailMode
 }>(), {
   activeId: null,
   openTools: () => [],
   showSettings: true,
+  mode: 'compact',
 })
 
 const emit = defineEmits<{
@@ -23,6 +27,8 @@ const emit = defineEmits<{
 }>()
 
 const { pinnedTools, syncPreferencesWithConfigLayer } = useToolLauncher()
+const isWide = computed(() => props.mode === 'wide')
+const isCollapsed = computed(() => props.mode === 'collapsed')
 
 interface RailTool {
   id: string
@@ -71,7 +77,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <aside class="app-rail" aria-label="工具导航">
+  <aside
+    id="app-rail"
+    class="app-rail"
+    :class="`is-${props.mode}`"
+    :inert="isCollapsed"
+    aria-label="工具导航"
+  >
     <div class="rail-scroll">
       <UiTooltip text="首页">
         <button
@@ -83,6 +95,7 @@ onMounted(() => {
           @click="emit('home')"
         >
           <UiIcon name="home" :size="16" />
+          <span v-if="isWide" class="rail-label">首页</span>
         </button>
       </UiTooltip>
 
@@ -99,6 +112,7 @@ onMounted(() => {
             @click="emit('selectTool', tool.id)"
           >
             <UiIcon :name="tool.icon" :size="16" />
+            <span v-if="isWide" class="rail-label">{{ tool.name }}</span>
             <span v-if="tool.open && props.activeId !== tool.id" class="rail-run-dot" aria-hidden="true" />
           </button>
         </UiTooltip>
@@ -125,6 +139,7 @@ onMounted(() => {
           @click="emit('search')"
         >
           <UiIcon name="search" :size="16" />
+          <span v-if="isWide" class="rail-label">搜索工具</span>
         </button>
       </UiTooltip>
 
@@ -138,6 +153,7 @@ onMounted(() => {
           @click="emit('settings')"
         >
           <UiIcon name="gear" :size="16" />
+          <span v-if="isWide" class="rail-label">设置</span>
         </button>
       </UiTooltip>
     </div>
@@ -153,10 +169,73 @@ onMounted(() => {
   align-items: center;
   flex: 0 0 var(--rail-width);
   width: var(--rail-width);
+  min-width: 0;
   min-height: 0;
   padding: 10px 0 12px;
+  overflow: hidden;
   background: transparent;
   -webkit-app-region: drag;
+  transition:
+    flex-basis var(--transition-base),
+    width var(--transition-base),
+    padding var(--transition-base),
+    opacity var(--transition-fast);
+}
+
+/* 宽栏：名称与图标同排，行宽吃满轨道；宽度与标题栏切换按钮一一对应 */
+.app-rail.is-wide {
+  flex-basis: var(--rail-width-wide);
+  width: var(--rail-width-wide);
+  padding-right: 8px;
+  padding-left: 8px;
+  align-items: stretch;
+
+  .rail-scroll,
+  .rail-stack {
+    align-items: stretch;
+  }
+
+  .rail-button {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 9px;
+  }
+
+  .rail-item .rail-button {
+    padding-right: 26px;
+  }
+
+  .rail-close {
+    top: 9px;
+    right: 8px;
+  }
+
+  .rail-run-dot {
+    position: static;
+    flex: none;
+    margin-right: 4px;
+    margin-left: auto;
+  }
+
+  .rail-divider {
+    width: auto;
+    margin: 6px 8px;
+  }
+}
+
+/* 收起：轨道宽度归零，内容不可聚焦、不可点击；标题栏的切换按钮仍在 */
+.app-rail.is-collapsed {
+  flex-basis: 0;
+  width: 0;
+  padding-right: 0;
+  padding-left: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* 运行列表区：工具多到一列放不下时只滚这里，首页与底部搜索 / 设置始终可见。
@@ -208,7 +287,6 @@ onMounted(() => {
   width: var(--rail-control-size);
   height: var(--rail-control-size);
   padding: 0;
-  border: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: transparent;
@@ -308,6 +386,15 @@ onMounted(() => {
   transform: none;
 }
 
+.rail-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rail-divider {
   width: 24px;
   height: 1px;
@@ -328,6 +415,10 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-rail {
+    transition: none;
+  }
+
   .rail-button.is-active::before {
     animation: none;
   }

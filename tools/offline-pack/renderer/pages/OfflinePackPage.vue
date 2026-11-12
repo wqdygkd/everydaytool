@@ -348,7 +348,7 @@ function switchTab(key: string): void {
   overflow: hidden;
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-fill) 28%, transparent);
+  background: var(--color-well);
 }
 
 .downloader-stage {
