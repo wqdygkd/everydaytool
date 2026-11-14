@@ -16,3 +16,4 @@ Thumbs.db
 .env.*
 !.env.example
 .tmp-*
+.tmp

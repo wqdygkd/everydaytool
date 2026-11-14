@@ -1,6 +1,7 @@
 import type { IpcChannels } from '../shared/ipc-validation.ts'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/channels.ts'
+import { MEDIA_LIBRARY_IPC_CHANNELS } from '../tools/media-library/backend/ipc/channels.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
 import { SKILL_MANAGER_IPC_CHANNELS } from '../tools/skill-manager/backend/ipc/channels.ts'
 import { TREEASE_EDITOR_IPC_CHANNELS } from '../tools/treease-editor/backend/ipc/channels.ts'
@@ -26,4 +27,5 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'skillManager', channels: SKILL_MANAGER_IPC_CHANNELS },
   { preloadNamespace: 'twebCache', channels: TWEB_CACHE_IPC_CHANNELS },
   { preloadNamespace: 'workbuddy2apiPanel', channels: WB2API_PANEL_IPC_CHANNELS },
+  { preloadNamespace: 'mediaLibrary', channels: MEDIA_LIBRARY_IPC_CHANNELS },
 ]

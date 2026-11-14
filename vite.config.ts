@@ -12,7 +12,13 @@ export default defineConfig({
   root: path.join(__dirname, 'renderer'),
   base: './',
   plugins: [
-    vue(),
+    vue({
+      template: {
+        compilerOptions: {
+          isCustomElement: tag => tag === 'video-player' || tag === 'video-skin' || tag.startsWith('media-'),
+        },
+      },
+    }),
     tailwindcss(),
     AutoImport({
       dts: path.join(__dirname, 'auto-imports.d.ts'),

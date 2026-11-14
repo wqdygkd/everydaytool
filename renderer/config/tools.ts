@@ -1,6 +1,7 @@
 import type { ToolClientTarget, ToolDefinition } from '../shared/types/tool'
 import idCardGenerator from '@tools/id-card-generator/index'
 import interceptor from '@tools/interceptor/index'
+import mediaLibrary from '@tools/media-library/index'
 import offlinePack from '@tools/offline-pack/index'
 import skillManager from '@tools/skill-manager/index'
 import treeaseEditor from '@tools/treease-editor/index'
@@ -8,7 +9,7 @@ import twebCache from '@tools/tweb-cache/index'
 import workbuddy2apiPanel from '@tools/workbuddy2api-panel/index'
 import wxpEnhancer from '@tools/wxp-enhancer/index'
 
-export const allToolRegistry: ToolDefinition[] = [interceptor, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, skillManager, twebCache, workbuddy2apiPanel]
+export const allToolRegistry: ToolDefinition[] = [interceptor, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, skillManager, twebCache, workbuddy2apiPanel, mediaLibrary]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
   // 兼容预加载时序：优先读 window.edtRuntime，兜底 UA 判断
