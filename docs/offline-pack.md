@@ -101,6 +101,12 @@ quay.io/prometheus/node-exporter  → <mirror>/quay.io/prometheus/node-exporter
 - 前端只负责展示镜像「参考示例」与把 `mirror` 传给 IPC；真正的 URL 拼接只在后端，避免两套规则漂移。
 - 选中镜像后重新解析会自动刷新标签 / 平台 / 清单。
 
+**docker load TAR 打包**（`docker-service.ts` 的 `packDockerLoadTar`）：
+
+- 镜像 config 直接取清单 `config.digest` 指向的上游 blob，**原样**写成 `<sha256>.json`，`manifest.json` 的 `Config` 指向它。不要手工拼配置——手写会把 `Cmd` / `Entrypoint` 置成 `null`，加载后 `docker run` 报 `No command specified`。
+- config 里的 `rootfs.diff_ids` 是完整性基准：每层解压后逐层比对，不匹配直接失败并提示更换加速服务，不把损坏层包装成"能加载"的镜像。
+- `docker load` 的 TAR 只有 `RepoTags`，没有 `RepoDigests`。加载后 `docker image inspect -f '{{json .RepoDigests}}'` 为空是 Docker 的正常行为（digest 引用只来自 registry pull），不是导出缺字段。
+
 ## 5.1 GitHub Releases / 分支源码 / 单文件（`github-service.ts` + `GitHubDownloader.vue`）
 
 **只做公开仓库**，不做 Token / 私有仓库鉴权——私有资产必须带 `Authorization`，而加速节点是第三方反代，凭据一旦经它转发就等于交出去了。真要做私有仓库，必须强制直连并走 `config` 层 + `secret-box` 加密存储，见 AGENTS.md「凭据静态加密」。
