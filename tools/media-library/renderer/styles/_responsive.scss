@@ -1,0 +1,46 @@
+// 媒体库 · 桌面窄宽度收敛
+// 视觉基准：docs/preview/media-library.html（同名分节）。所有规则收在 .ml 命名空间下。
+.ml {
+  @media (max-width: 1360px) {
+    .topbar-desc { max-width: 32%; }
+    .search-field { width: 250px; }
+  }
+
+  @media (max-width: 1240px) {
+    .feature-band { grid-template-columns: minmax(0, 1.5fr) minmax(304px, 1fr); }
+    .billboard-body { width: 68%; }
+    .billboard .desc { -webkit-line-clamp: 2; }
+    .masonry { columns: 4; }
+    .topbar-desc { display: none; }
+    .series-hero { grid-template-columns: 250px minmax(0, 1fr); }
+    .artist-search { width: 220px; }
+  }
+
+  @media (max-width: 1120px) {
+    .search-field { width: 210px; }
+    .seg-btn { padding: 0 7px; }
+    .result-count { display: none; }
+    .video-layout { grid-template-columns: 1fr; }
+    .episode-panel { max-height: 300px; }
+    .info-layout { grid-template-columns: 1fr; gap: 20px; }
+    .source-row { grid-template-columns: minmax(0, 1.6fr) 92px 84px 104px 132px; }
+    .artist-hero-main { flex-wrap: wrap; }
+    .artist-hero-actions { width: 100%; }
+    .artist-edit-panel,
+    .series-create-grid,
+    .series-edit-panel,
+    .series-hero { grid-template-columns: 1fr; }
+    .series-hero-cover { height: 150px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

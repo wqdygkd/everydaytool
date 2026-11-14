@@ -1,0 +1,500 @@
+// 媒体库 · 生成式海报 / 剧照占位与封面拼图
+// 视觉基准：docs/preview/media-library.html（同名分节）。所有规则收在 .ml 命名空间下。
+.ml {
+  .poster {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    container-type: size;
+    background: var(--c1);
+    color: var(--fg);
+    isolation: isolate;
+  }
+
+  .poster .f1,
+  .poster .f2,
+  .poster .f3 {
+    position: absolute;
+    z-index: 1;
+    display: block;
+  }
+
+  .poster-title {
+    position: absolute;
+    z-index: 3;
+    left: 9%;
+    bottom: 11%;
+    max-width: 78%;
+    font-size: clamp(15px, 8.8cqw, 34px);
+    font-weight: 500;
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .poster-foot {
+    position: absolute;
+    z-index: 3;
+    left: 9%;
+    top: 8%;
+    max-width: 82%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(7px, 2.1cqw, 10px);
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+
+  .poster[data-m="horizon"] .f1 {
+    width: 50cqw;
+    aspect-ratio: 1;
+    right: 7%;
+    top: 15%;
+    border-radius: 50%;
+    background: var(--c2);
+  }
+  .poster[data-m="horizon"] .f2 {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 35%;
+    background: var(--c3);
+  }
+  .poster[data-m="horizon"] .f3 {
+    left: 0;
+    right: 0;
+    bottom: 35%;
+    height: 1px;
+    background: var(--fg);
+    opacity: 0.32;
+  }
+  .poster[data-m="horizon"] .poster-title { bottom: 39%; }
+
+  .poster[data-m="type"] .f1 {
+    left: 7%;
+    top: 8%;
+    bottom: 8%;
+    width: 1px;
+    background: var(--fg);
+    opacity: 0.28;
+  }
+  .poster[data-m="type"] .f2 {
+    right: 9%;
+    top: 9%;
+    width: 30%;
+    height: 1px;
+    background: var(--c3);
+  }
+  .poster[data-m="type"] .f3 {
+    left: 7%;
+    right: 7%;
+    bottom: 7%;
+    height: 7%;
+    border-top: 1px solid var(--c2);
+    opacity: 0.55;
+  }
+  .poster[data-m="type"] .poster-title {
+    left: auto;
+    right: 10%;
+    top: 12%;
+    bottom: auto;
+    max-height: 74%;
+    font-size: clamp(21px, 10.6cqw, 40px);
+    letter-spacing: 0.06em;
+    writing-mode: vertical-rl;
+  }
+  .poster[data-m="type"] .poster-foot { left: 12%; top: auto; bottom: 12%; }
+
+  .poster[data-m="bands"] .f1 {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 34%;
+    background: var(--c2);
+  }
+  .poster[data-m="bands"] .f2 {
+    top: 0;
+    bottom: 0;
+    right: 34%;
+    width: 7%;
+    background: var(--c3);
+  }
+  .poster[data-m="bands"] .f3 {
+    top: 0;
+    bottom: 0;
+    right: 41%;
+    width: 1px;
+    background: var(--fg);
+    opacity: 0.3;
+  }
+  .poster[data-m="bands"] .poster-title { max-width: 52%; }
+
+  .poster[data-m="arc"] .f1,
+  .poster[data-m="arc"] .f2,
+  .poster[data-m="arc"] .f3 {
+    border-radius: 50%;
+    border: 1px solid var(--c2);
+    opacity: 0.55;
+  }
+  .poster[data-m="arc"] .f1 {
+    width: 72cqw;
+    aspect-ratio: 1;
+    right: -20%;
+    top: -8%;
+  }
+  .poster[data-m="arc"] .f2 {
+    width: 54cqw;
+    aspect-ratio: 1;
+    right: -11%;
+    top: 2%;
+    border-color: var(--c3);
+  }
+  .poster[data-m="arc"] .f3 {
+    width: 22cqw;
+    aspect-ratio: 1;
+    right: 8%;
+    top: 24%;
+    background: var(--c3);
+    border: 0;
+    opacity: 1;
+  }
+  .poster[data-m="arc"] .poster-title { max-width: 56%; }
+
+  .poster[data-m="wave"] .f1,
+  .poster[data-m="wave"] .f2,
+  .poster[data-m="wave"] .f3 {
+    left: -18%;
+    right: -18%;
+    border-radius: 50% 50% 0 0;
+  }
+  .poster[data-m="wave"] .f1 {
+    bottom: -30%;
+    height: 74%;
+    background: var(--c3);
+  }
+  .poster[data-m="wave"] .f2 {
+    bottom: -36%;
+    height: 72%;
+    background: var(--c2);
+    opacity: 0.72;
+  }
+  .poster[data-m="wave"] .f3 {
+    bottom: -44%;
+    height: 70%;
+    background: var(--c1);
+    border-top: 1px solid color-mix(in srgb, var(--fg) 22%, transparent);
+  }
+  .poster[data-m="wave"] .poster-title { top: 24%; bottom: auto; }
+  .poster[data-m="wave"] .poster-foot { top: auto; bottom: 8%; }
+
+  .poster[data-m="contact"] .f1 {
+    inset: 0;
+    background:
+      linear-gradient(var(--c2), var(--c2)) 0 0 / 50% 50% no-repeat,
+      linear-gradient(var(--c3), var(--c3)) 100% 0 / 50% 50% no-repeat,
+      linear-gradient(var(--c1), var(--c1)) 0 100% / 50% 50% no-repeat,
+      linear-gradient(var(--c2), var(--c2)) 100% 100% / 50% 50% no-repeat;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 16%, transparent);
+  }
+  .poster[data-m="contact"] .f2 {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 34%;
+    background: linear-gradient(0deg, var(--c1) 34%, transparent);
+  }
+  .poster[data-m="contact"] .f3 { display: none; }
+  .poster[data-m="contact"] .poster-title { bottom: 10%; }
+  .poster[data-m="contact"] .poster-foot { top: 8%; right: 8%; left: auto; }
+
+  .poster[data-m="grid"] .f1 {
+    inset: 12% 10%;
+    background:
+      linear-gradient(90deg, transparent 32.8%, color-mix(in srgb, var(--fg) 28%, transparent) 33% 33.4%, transparent 33.6% 65.8%, color-mix(in srgb, var(--fg) 28%, transparent) 66% 66.4%, transparent 66.6%),
+      linear-gradient(0deg, transparent 32.8%, color-mix(in srgb, var(--fg) 28%, transparent) 33% 33.4%, transparent 33.6% 65.8%, color-mix(in srgb, var(--fg) 28%, transparent) 66% 66.4%, transparent 66.6%);
+  }
+  .poster[data-m="grid"] .f2 {
+    right: 10%;
+    top: 12%;
+    width: 22.2%;
+    height: 21.4%;
+    background: var(--c3);
+  }
+  .poster[data-m="grid"] .f3 {
+    left: 10%;
+    top: 12%;
+    width: 1px;
+    height: 76%;
+    background: var(--c2);
+    opacity: 0.5;
+  }
+  .poster[data-m="grid"] .poster-title { bottom: 9%; }
+
+  .poster[data-m="aperture"] .f1 {
+    width: 56cqw;
+    aspect-ratio: 1;
+    right: 7%;
+    top: 17%;
+    background: var(--c3);
+    transform: rotate(45deg);
+  }
+  .poster[data-m="aperture"] .f2 {
+    width: 34cqw;
+    aspect-ratio: 1;
+    right: 18%;
+    top: 28%;
+    border: 1px solid var(--c1);
+    transform: rotate(45deg);
+  }
+  .poster[data-m="aperture"] .f3 {
+    left: 0;
+    right: 0;
+    top: 22%;
+    height: 1px;
+    background: var(--c2);
+    opacity: 0.5;
+  }
+  .poster[data-m="aperture"] .poster-title { max-width: 54%; }
+
+  .mosaic {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .mosaic.m4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .mosaic .still {
+    position: relative;
+    inset: auto;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 2px;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .split-main { position: relative; min-width: 0; overflow: hidden; }
+  .split-quad {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .cover-caption-strip {
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 22px 10px 9px;
+    background: linear-gradient(0deg, rgba(6, 12, 19, 0.82), transparent);
+    color: #f5f8fb;
+  }
+
+  .cover-caption-strip span {
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cover-caption-strip small {
+    flex: 0 0 auto;
+    font-size: var(--font-size-xs);
+    color: rgba(245, 248, 251, 0.7);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .still {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: var(--c1);
+  }
+
+  .still i,
+  .still b {
+    position: absolute;
+    z-index: 1;
+    display: block;
+  }
+
+  .still[data-m="horizon"] {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--c1) 78%, #ffffff) 0%, var(--c1) 62%);
+  }
+  .still[data-m="horizon"] i {
+    width: 46%;
+    aspect-ratio: 1;
+    left: var(--x);
+    top: var(--y);
+    border-radius: 50%;
+    background: var(--c3);
+  }
+  .still[data-m="horizon"] b {
+    left: -8%;
+    right: -8%;
+    bottom: -12%;
+    height: 52%;
+    background: var(--c2);
+    clip-path: polygon(0 58%, 15% 44%, 29% 53%, 43% 30%, 58% 47%, 72% 26%, 86% 41%, 100% 34%, 100% 100%, 0 100%);
+  }
+
+  .still[data-m="wave"] {
+    background: linear-gradient(180deg, var(--c1) 0%, color-mix(in srgb, var(--c1) 70%, #ffffff) 100%);
+  }
+  .still[data-m="wave"] i,
+  .still[data-m="wave"] b {
+    left: -20%;
+    right: -20%;
+    border-radius: 50% 50% 0 0;
+  }
+  .still[data-m="wave"] i {
+    bottom: -32%;
+    height: 78%;
+    background: var(--c2);
+    transform: translateX(var(--x));
+  }
+  .still[data-m="wave"] b {
+    bottom: -42%;
+    height: 72%;
+    background: var(--c3);
+    opacity: 0.84;
+    transform: translateX(calc(var(--x) * -0.6));
+  }
+
+  .still[data-m="arc"] {
+    background:
+      radial-gradient(circle at 72% 38%, transparent 0 27%, var(--c2) 27.4% 28%, transparent 28.4% 40%, var(--c3) 40.4% 41%, transparent 41.4% 53%, color-mix(in srgb, var(--c2) 55%, transparent) 53.4% 54%, transparent 54.4%),
+      var(--c1);
+  }
+  .still[data-m="arc"] i {
+    width: 18%;
+    aspect-ratio: 1;
+    right: 16%;
+    top: 30%;
+    border-radius: 50%;
+    background: var(--c3);
+  }
+  .still[data-m="arc"] b {
+    left: 0;
+    right: 0;
+    top: 62%;
+    height: 1px;
+    background: var(--c2);
+    opacity: 0.4;
+  }
+
+  .still[data-m="bands"] {
+    background:
+      linear-gradient(90deg, transparent 0 52%, var(--c2) 52% 68%, var(--c3) 68% 78%, transparent 78%),
+      var(--c1);
+  }
+  .still[data-m="bands"] i {
+    left: 0;
+    right: 0;
+    top: 68%;
+    height: 1px;
+    background: var(--c2);
+    opacity: 0.45;
+  }
+  .still[data-m="bands"] b {
+    width: 8%;
+    top: 0;
+    bottom: 0;
+    right: 18%;
+    background: var(--c1);
+    opacity: 0.4;
+  }
+
+  .still[data-m="grid"] {
+    background:
+      linear-gradient(90deg, transparent 32.6%, color-mix(in srgb, var(--c2) 48%, transparent) 33% 33.5%, transparent 33.9% 65.6%, color-mix(in srgb, var(--c2) 48%, transparent) 66% 66.5%, transparent 66.9%),
+      linear-gradient(0deg, transparent 32.6%, color-mix(in srgb, var(--c2) 48%, transparent) 33% 33.5%, transparent 33.9% 65.6%, color-mix(in srgb, var(--c2) 48%, transparent) 66% 66.5%, transparent 66.9%),
+      var(--c1);
+  }
+  .still[data-m="grid"] i {
+    left: 33.5%;
+    top: 33.5%;
+    width: 32%;
+    height: 32%;
+    background: var(--c3);
+    opacity: 0.9;
+  }
+  .still[data-m="grid"] b {
+    left: 10%;
+    top: 10%;
+    width: 1px;
+    height: 80%;
+    background: var(--c3);
+    opacity: 0.55;
+  }
+
+  .still[data-m="aperture"] {
+    background: var(--c1);
+  }
+  .still[data-m="aperture"] i {
+    width: 48%;
+    aspect-ratio: 1;
+    right: 10%;
+    top: 22%;
+    background: var(--c3);
+    transform: rotate(45deg);
+  }
+  .still[data-m="aperture"] b {
+    width: 28%;
+    aspect-ratio: 1;
+    right: 20%;
+    top: 32%;
+    border: 1px solid var(--c2);
+    transform: rotate(45deg);
+  }
+
+  .still[data-m="bloom"] {
+    background:
+      radial-gradient(circle at 30% 34%, var(--c2) 0 18%, transparent 19%),
+      radial-gradient(circle at 68% 58%, var(--c3) 0 22%, transparent 23%),
+      radial-gradient(circle at 48% 78%, color-mix(in srgb, var(--c2) 70%, transparent) 0 14%, transparent 15%),
+      var(--c1);
+  }
+  .still[data-m="bloom"] i {
+    width: 18%;
+    aspect-ratio: 1;
+    left: 52%;
+    top: 22%;
+    border-radius: 50%;
+    border: 1px solid var(--c3);
+  }
+  .still[data-m="bloom"] b {
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--c2);
+    opacity: 0.25;
+  }
+}
