@@ -26,7 +26,12 @@ function getCurrentToolClientTarget(): ToolClientTarget {
 
 function filterToolsForCurrentTarget(tools: ToolDefinition[]): ToolDefinition[] {
   const target = getCurrentToolClientTarget()
-  return tools.filter(tool => !tool.disabled && tool.supportedTargets.includes(target))
+  const isPackaged = window.edtRuntime?.isPackaged === true
+  const bundledSiteMissing = isPackaged && window.edtRuntime?.hasTwebSite !== true
+  return tools.filter(tool => !tool.disabled
+    && !(tool.devOnly && isPackaged)
+    && !(tool.requiresBundledSite && bundledSiteMissing)
+    && tool.supportedTargets.includes(target))
 }
 
 // 动态 getter：避免在模块加载时固化 target，导致 Electron 中误判为 web

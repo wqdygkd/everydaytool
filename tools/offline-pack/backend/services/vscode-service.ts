@@ -1,5 +1,6 @@
 // VSCode Marketplace 代理：版本查询 + .vsix 直链生成。
 import type { OfflinePackVsCodeLinkResult, OfflinePackVsCodeQueryResult } from '../../../../shared/offline-pack.ts'
+import { isValidVsCodePackageId, isValidVsCodeVersion } from '../../../../shared/offline-pack.ts'
 import { postJson } from '../utils/http.ts'
 
 const MARKETPLACE_URL = 'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery'
@@ -20,10 +21,12 @@ export function extractVsCodeInfo(url: string): VsCodeInfo {
   if (dotIndex === -1) {
     throw new Error('无效的插件 ID 格式，应为 publisher.extension')
   }
-  return {
-    publisher: itemName.substring(0, dotIndex),
-    extension: itemName.substring(dotIndex + 1),
+  const publisher = itemName.substring(0, dotIndex)
+  const extension = itemName.substring(dotIndex + 1)
+  if (!isValidVsCodePackageId(publisher) || !isValidVsCodePackageId(extension)) {
+    throw new Error('无效的插件 ID 格式，应为 publisher.extension')
   }
+  return { publisher, extension }
 }
 
 export async function queryVsCodeVersions(url: string, maxVersions = 20): Promise<OfflinePackVsCodeQueryResult> {
@@ -54,9 +57,12 @@ export async function queryVsCodeVersions(url: string, maxVersions = 20): Promis
   return { versions: unique.slice(0, maxVersions) }
 }
 
-export function buildVsCodeLink(url: string, version: string): OfflinePackVsCodeLinkResult {
-  const info = extractVsCodeInfo(url)
+export function buildVsCodeLink(publisher: string, extension: string, version: string): OfflinePackVsCodeLinkResult {
+  if (!isValidVsCodePackageId(publisher) || !isValidVsCodePackageId(extension)) {
+    throw new Error('插件发布者或扩展名不合法')
+  }
+  if (!isValidVsCodeVersion(version)) throw new Error('插件版本号不合法')
   return {
-    downloadUrl: `https://marketplace.visualstudio.com/_apis/public/gallery/publishers/${info.publisher}/vsextensions/${info.extension}/${version}/vspackage`,
+    downloadUrl: `https://marketplace.visualstudio.com/_apis/public/gallery/publishers/${encodeURIComponent(publisher)}/vsextensions/${encodeURIComponent(extension)}/${encodeURIComponent(version)}/vspackage`,
   }
 }

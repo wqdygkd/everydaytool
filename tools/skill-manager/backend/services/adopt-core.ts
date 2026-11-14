@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/skill-manager.ts'
 import { randomUUID } from 'node:crypto'
 import { lstat } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
+import { join } from 'node:path'
 import { readGlobalLock, writeGlobalLock } from '../locks/global-lock.ts'
 import { readProjectLock, writeProjectLock } from '../locks/project-lock.ts'
 import { resolveSource } from '../sources/catalog.ts'
@@ -20,6 +20,7 @@ import { removePath, writeTextAtomic } from './executor.ts'
 import { hashSkillDirectory } from './hash.ts'
 import { appendSkillManagerHistory } from './history.ts'
 import { originKeyOf } from './installer-core.ts'
+import { projectSourceOf } from './project-source.ts'
 import { readSkillManagerRegistry, upsertGroup, upsertRecord, writeSkillManagerRegistry } from './registry.ts'
 
 export interface AdoptPaths {
@@ -35,13 +36,6 @@ export class AdoptError extends Error {
     super(message)
     this.code = code
   }
-}
-
-function projectSource(catalog: SourceCatalog, projectPath: string): string {
-  if (catalog.sourceType !== 'local' || !isAbsolute(catalog.source)) return catalog.source
-  const relativePath = relative(projectPath, catalog.source)
-  if (!relativePath || isAbsolute(relativePath)) return catalog.source
-  return relativePath.startsWith('.') ? relativePath : `./${relativePath}`
 }
 
 function sourceOrigin(catalog: SourceCatalog, entry: SourceCatalogEntry): SkillOrigin {
@@ -133,14 +127,14 @@ export async function adoptSkillCore(
         throw new AdoptError('already-tracked', `${request.name} 已在项目锁中`)
       }
       const lockEntry: ProjectLockEntry = {
-        source: projectSource(catalog, scope.projectPath),
+        source: projectSourceOf(catalog, scope.projectPath),
         sourceType: catalog.sourceType,
         skillPath: entry.skillPath,
         computedHash: entry.folderSha ?? contentHash,
       }
       if (catalog.sourceType === 'git') lockEntry.sourceUrl = catalog.sourceUrl ?? catalog.source
       if (catalog.ref) lockEntry.ref = catalog.ref
-      const next = { ...lock.data, version: 1 as const, skills: { ...lock.data.skills, [request.name]: lockEntry } }
+      const next = { ...lock.data, version: lock.data.version, skills: { ...lock.data.skills, [request.name]: lockEntry } }
       const written = await writeProjectLock(next, scope.projectPath, {
         operationId,
         backupRoot: paths.backupRoot,

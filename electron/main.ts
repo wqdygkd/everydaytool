@@ -1,6 +1,7 @@
 import type { WindowAppearance } from '../shared/appearance.ts'
 import type { ShellMenuAction } from '../shared/menu.ts'
 import type { WindowBoundsState } from '../shared/window-bounds.ts'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
@@ -9,11 +10,12 @@ import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { configureInstanceIdentity } from '../backend/utils/app-instance.ts'
 import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
 import { getAssetsRoot, loadAssetsRootSync } from '../backend/utils/assets-root.ts'
+import { resolveLayerPath } from '../backend/utils/data-layers.ts'
 import { upgradeDataLayout } from '../backend/utils/data-layout-upgrade.ts'
 import { getDataDirectory, isDevEnvironment, loadDataDirectoryOverrideSync } from '../backend/utils/data-root.ts'
 import { initIpcSafety, safeOn } from '../backend/utils/ipc-safety.ts'
 import { isTrustedIpcSenderUrl } from '../backend/utils/ipc-sender.ts'
-import { logger } from '../backend/utils/logger.ts'
+import { configureFileLogging, logger } from '../backend/utils/logger.ts'
 import { configureSessionDataDirectory } from '../backend/utils/session-data.ts'
 import { clearWindowBoundsGeometry, getWindowBoundsState, loadWindowBounds, recordWindowBounds, setWindowBoundsEnabled } from '../backend/utils/window-bounds-store.ts'
 import { parseWindowsBuild, resolveAppearanceCapabilities, resolveWindowAppearance, sanitizeWindowAppearance } from '../shared/appearance.ts'
@@ -21,6 +23,14 @@ import { SHELL_MENUS } from '../shared/menu.ts'
 import { DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE, resolveWindowPlacement } from '../shared/window-bounds.ts'
 import { applyDevDockIcon, resolveDevWindowIconPath } from './dev-icon.ts'
 import { toolBackends } from './tool-registry.ts'
+
+const startupStartedAt = Date.now()
+const startupTraceEnabled = process.env.EDT_STARTUP_TRACE === '1'
+
+function traceStartup(step: string): void {
+  if (!startupTraceEnabled) return
+  logger.info('Startup trace', { step, elapsedMs: Date.now() - startupStartedAt })
+}
 
 // 应用身份先定：开发态把 userData 换成 `<appData>/<应用名>-dev`，与安装版各持一把
 // Chromium 单实例锁，两者才能同时运行（见 backend/utils/app-instance.ts）。
@@ -36,6 +46,18 @@ loadDataDirectoryOverrideSync()
 loadAssetsRootSync()
 upgradeDataLayoutAtStartup()
 configureSessionDataDirectory()
+configureFileLogging(resolveLayerPath('cache', 'app', 'logs'))
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception; continuing', {
+    error: error instanceof Error ? error.stack ?? error.message : String(error),
+  })
+})
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled rejection; continuing', {
+    error: reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+  })
+})
 
 if (isDevEnvironment) {
   // 两种形态同时在跑时，日志里要能一眼看出这一条来自哪个 profile
@@ -262,7 +284,11 @@ function isSafeWebUrl(rawUrl: string | undefined): boolean {
  *  注意白名单按 loopback 放行——任意 http://localhost:<port> 都算自身来源（与 IPC 来源校验同一规则）。
  */
 function isAppOwnUrl(url: string | undefined): boolean {
-  return isTrustedIpcSenderUrl(url, { appPath: app.getAppPath() })
+  return isTrustedIpcSenderUrl(url, {
+    appPath: app.getAppPath(),
+    allowLoopbackHttp: isDevServer,
+    devServerPort: 5173,
+  })
 }
 
 // ── 权限策略 ──
@@ -357,7 +383,7 @@ function registerWebviewGuards(): void {
 // 必须在任何 safeHandle 注册之前注入 IPC 来源白名单根路径：不注就会导致打包后（file:// 协议）
 // 所有 IPC 调用被误判为不可信（白名单规则见 backend/utils/ipc-sender.ts）。
 function registerAppIpc(): void {
-  initIpcSafety({ appPath: app.getAppPath() })
+  initIpcSafety({ appPath: app.getAppPath(), allowLoopbackHttp: isDevServer, devServerPort: 5173 })
 
   registerAppIpcHandlers({
     applyWindowAppearance,
@@ -375,18 +401,20 @@ function registerAppIpc(): void {
   })
 }
 
-async function initializeBackend(): Promise<void> {
+function initializeBackend(): void {
   if (backendInitialized) return
   backendInitialized = true
+  traceStartup('initialize-backend:start')
 
   for (const backend of toolBackends) {
     try {
-      await backend.initialize()
+      backend.initialize()
     } catch (error) {
       // 单工具初始化失败（如端口段耗尽）不拖垮其它工具：记错继续
       logger.error('Tool backend initialize failed', { error: (error as Error).message })
     }
   }
+  traceStartup('initialize-backend:done')
 }
 
 async function disposeBackend(): Promise<void> {
@@ -440,6 +468,13 @@ async function createWindow(): Promise<void> {
       nodeIntegration: false,
       sandbox: true,
       webviewTag: true,
+      // 沙箱 preload 读不到 app.isPackaged，用启动参数把打包形态传给渲染层
+      additionalArguments: [
+        app.isPackaged ? '--edt-packaged' : '--edt-development',
+        ...(app.isPackaged && existsSync(path.join(process.resourcesPath, 'tweb', 'dist', 'index.html'))
+          ? ['--edt-tweb-site']
+          : []),
+      ],
     },
   })
 
@@ -457,6 +492,7 @@ async function createWindow(): Promise<void> {
   win.on('leave-full-screen', notifyFullscreen)
   // 页面加载完成后推一次初始状态，避免渲染层默认值与窗口实际状态不一致
   win.webContents.on('did-finish-load', notifyFullscreen)
+  win.webContents.on('did-finish-load', () => traceStartup('did-finish-load'))
 
   win.on('closed', () => {
     // 置空避免后续菜单 / IPC 操作已销毁的 webContents 而抛异常
@@ -555,6 +591,7 @@ async function bootstrap(): Promise<void> {
   buildApplicationMenu()
 
   await app.whenReady()
+  traceStartup('app-ready')
 
   // 开发态 Dock 图标：dock API 在 ready 之后才可用，放在这里最早——晚于建窗只会让 Dock
   // 先闪一下 Electron 默认图标。进程级设置，与窗口数量无关。
@@ -564,13 +601,16 @@ async function bootstrap(): Promise<void> {
   configureSessionPermissions(session.defaultSession)
   app.on('session-created', createdSession => configureSessionPermissions(createdSession))
 
-  await initializeBackend()
+  initializeBackend()
+  traceStartup('backend-ready')
   // 外观必须先于 createWindow 读盘：窗口构造参数（transparent / vibrancy / backgroundMaterial）
   // 只在创建时生效，之后再改只能部分切换，读不到就等于这次启动丢了用户选择。
   await loadWindowAppearance()
   // 窗口几何同样必须在 createWindow 之前读盘：恢复位置只能通过构造参数传入
   loadWindowBounds()
+  traceStartup('create-window:start')
   await createWindow()
+  traceStartup('create-window:done')
 }
 
 // 单实例锁：JSON store 是「进程内缓存 + 原子写」，双实例并发会 last-writer-wins 丢更新；

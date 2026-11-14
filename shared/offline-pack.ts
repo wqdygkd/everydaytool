@@ -587,9 +587,42 @@ export interface OfflinePackSimpleDownloadRequest {
   id?: string
   /** github：加速线路基址（白名单校验，缺省直连） */
   mirror?: string
+  /** github 资产：GitHub API 返回的 sha256 摘要（存在时下载后校验） */
+  sha256?: string
+  /** vscode：发布者、扩展名、版本；由后端拼 Marketplace 地址 */
+  publisher?: string
+  extension?: string
+  version?: string
   filename: string
   /** chrome / edge 下载后转 ZIP */
   convertToZip?: boolean
+}
+
+/** Microsoft Store 文件只来自微软 CDN，避免下载 IPC 被当成任意 URL 抓取器。 */
+export function isAllowedMsStoreDownloadUrl(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(raw)
+  }
+  catch {
+    return false
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  const host = url.hostname.toLowerCase()
+  return host === 'microsoft.com'
+    || host.endsWith('.microsoft.com')
+    || host === 'windowsupdate.com'
+    || host.endsWith('.windowsupdate.com')
+    || host === 'sfx.ms'
+    || host.endsWith('.sfx.ms')
+}
+
+export function isValidVsCodePackageId(value: string): boolean {
+  return /^[a-z0-9][a-z0-9.-]{0,99}$/i.test(value)
+}
+
+export function isValidVsCodeVersion(value: string): boolean {
+  return /^[0-9a-z][0-9a-z.+-]{0,63}$/i.test(value)
 }
 
 export interface OfflinePackDockerDownloadRequest {

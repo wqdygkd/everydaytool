@@ -27,12 +27,16 @@ interface SourceParts {
 const TRAILING_SKILL = /@([\w.-]+)$/
 const GITHUB_SHORTHAND = /^([\w.-]+)\/([\w.-]+?)(?:\.git)?$/
 const WINDOWS_PATH = /^[a-z]:[\\/]/i
+const GIT_SCHEMES = new Set(['http:', 'https:', 'ssh:', 'git:', 'file:'])
 
 /** 解析安装输入；支持 owner/repo、GitHub URL、通用 git/TFS、本地目录。 */
 export function parseSourceInput(raw: string, refOverride?: string): ParsedSource {
   const trimmed = raw.trim()
   if (!trimmed) throw new SourceResolutionError('empty-source', '请输入技能来源')
   if (trimmed.length > 2000) throw new SourceResolutionError('source-too-long', '来源过长')
+  if (trimmed.startsWith('-')) {
+    throw new SourceResolutionError('invalid-source', '来源不能以 - 开头')
+  }
 
   const parts = splitSource(trimmed)
   if (refOverride?.trim()) parts.ref = refOverride.trim()
@@ -119,6 +123,9 @@ function parseGithub(parts: SourceParts): ParsedSource | null {
 }
 
 function githubResult(parts: SourceParts, owner: string, repo: string): ParsedSource {
+  if (!isSafeGithubPart(owner) || !isSafeGithubPart(repo)) {
+    throw new SourceResolutionError('invalid-github-url', 'GitHub owner / repo 不合法')
+  }
   const source = `${owner}/${repo}`
   return {
     sourceType: 'github',
@@ -142,6 +149,7 @@ function parseGit(parts: SourceParts): ParsedSource | null {
     || /\.git$/i.test(value)
     || (isHttpUrl(value) && !isGithubHost(value))
   if (!isGitUrl) return null
+  assertAllowedGitSource(value)
 
   let host = 'git'
   let repoName = value.replace(/\/+$/, '').replace(/\.git$/i, '').split(/[/:]/).pop() ?? value
@@ -210,6 +218,9 @@ function normalizeRef(value: string | undefined): string | undefined {
   if (!value) return undefined
   let ref = value.trim()
   if (!ref) return undefined
+  if (ref.startsWith('-')) {
+    throw new SourceResolutionError('invalid-ref', '分支 / 标签不能以 - 开头')
+  }
   ref = ref.replace(/^refs\/(?:heads|tags)\//, '')
   if (/^G[BT]\w+/.test(ref)) return ref.slice(2)
   if (/^GC\w+/.test(ref)) return ref.slice(2)
@@ -246,6 +257,36 @@ function isGithubHost(value: string): boolean {
   }
   catch {
     return false
+  }
+}
+
+function isSafeGithubPart(value: string): boolean {
+  return /^[\w.-]+$/.test(value)
+    && !value.startsWith('-')
+    && value !== '.'
+    && value !== '..'
+}
+
+/** git 来源只接受明确协议：未知 scheme 不能被当成仓库地址传给 git。 */
+function assertAllowedGitSource(value: string): void {
+  if (value.startsWith('git@')) {
+    if (!/^git@[^:\s]+:\S+$/.test(value)) {
+      throw new SourceResolutionError('invalid-git-url', 'git SSH 地址格式不正确')
+    }
+    return
+  }
+  if (value.includes('/_git/') && !value.includes('://')) {
+    throw new SourceResolutionError('invalid-git-url', 'git 来源必须带 http(s) / ssh 协议')
+  }
+  let url: URL
+  try {
+    url = new URL(value)
+  }
+  catch {
+    throw new SourceResolutionError('invalid-git-url', 'git 地址格式不正确')
+  }
+  if (!GIT_SCHEMES.has(url.protocol)) {
+    throw new SourceResolutionError('invalid-git-url', `不支持的 git 协议：${url.protocol}`)
   }
 }
 

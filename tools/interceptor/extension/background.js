@@ -202,6 +202,17 @@ function tryConnectOnce(port) {
   })
 }
 
+async function readBridgeToken() {
+  try {
+    const response = await fetch(chrome.runtime.getURL('bridge-token.json'), { cache: 'no-store' })
+    if (!response.ok) return ''
+    const data = await response.json()
+    return typeof data?.token === 'string' ? data.token : ''
+  } catch {
+    return ''
+  }
+}
+
 function awaitHello(socket) {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, HELLO_TIMEOUT_MS, { type: 'timeout' })
@@ -219,12 +230,15 @@ function awaitHello(socket) {
       }
     }
     socket.addEventListener('message', onMessage)
-    socket.send(JSON.stringify({
-      type: 'hello',
-      appId: state.appId,
-      clientId: state.clientId,
-      version: state.version,
-    }))
+    readBridgeToken().then((token) => {
+      socket.send(JSON.stringify({
+        type: 'hello',
+        appId: state.appId,
+        clientId: state.clientId,
+        version: state.version,
+        token,
+      }))
+    })
   })
 }
 
@@ -248,7 +262,11 @@ async function connect() {
 
       const hello = await awaitHello(socket)
       if (hello.type === 'hello-reject') {
-        state.lastError = hello.reason === 'bad-origin' ? '连接被拒绝：扩展来源校验未通过（版本不匹配？）' : `连接被拒绝（${hello.reason}）`
+        state.lastError = hello.reason === 'bad-origin'
+          ? '连接被拒绝：扩展来源校验未通过（版本不匹配？）'
+          : hello.reason === 'bad-token'
+            ? '连接被拒绝：桥接令牌无效，请重启 everydaytool 并重新加载扩展'
+            : `连接被拒绝（${hello.reason}）`
         try {
           socket.close()
         } catch {}
@@ -699,8 +717,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'toggle-target' || message.type === 'toggle-rule') {
+    const type = message.type === 'toggle-target' ? 'target-toggle' : 'rule-toggle'
     const ok = sendToEdt({
-      type: message.type,
+      type,
       id: message.id,
       enabled: message.enabled === true,
     })
@@ -709,7 +728,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'remove-target-id' || message.type === 'remove-rule') {
-    const ok = sendToEdt({ type: message.type, id: message.id })
+    const type = message.type === 'remove-target-id' ? 'target-remove-id' : 'rule-remove'
+    const ok = sendToEdt({ type, id: message.id })
     sendResponse({ ok, error: ok ? undefined : '尚未连接 edt' })
     return false
   }

@@ -4,6 +4,7 @@ import { session as electronSession, webContents } from 'electron'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { TREEASE_WEBVIEW_PARTITION } from '../../../../shared/webview.ts'
 import { TREEASE_EDITOR_IPC_CHANNELS } from '../ipc/channels.ts'
+import { hasUnsafeJsonPath, isUnsafeJsonPathSegment } from '../utils/json-path.ts'
 
 type GuestSession = import('electron').Session
 
@@ -69,6 +70,7 @@ function isRuleActive(rule: TreeaseInterceptRule): boolean {
 function setPath(root: unknown, path: string, value: unknown): boolean {
   const keys = path.split('.').map(k => k.trim()).filter(k => k.length > 0)
   if (!keys.length || typeof root !== 'object' || root === null) return false
+  if (keys.some(isUnsafeJsonPathSegment)) return false
   let cur: unknown = root
   for (let i = 0; i < keys.length - 1; i += 1) {
     if (typeof cur !== 'object' || cur === null) return false
@@ -86,7 +88,7 @@ function setPath(root: unknown, path: string, value: unknown): boolean {
 }
 
 function applyPatches(raw: Buffer, patches: TreeaseInterceptPatch[]): { buf: Buffer, applied: number } | null {
-  const valid = patches.filter(p => p && p.path && p.path.trim())
+  const valid = patches.filter(p => p && p.path && p.path.trim() && !hasUnsafeJsonPath(p.path))
   if (!valid.length) return null
   let data: unknown
   try {
@@ -231,7 +233,7 @@ function sanitizeRules(rules: TreeaseInterceptRule[]): TreeaseInterceptRule[] {
         ? r.urlPattern.slice(0, MAX_URL_PATTERN_LENGTH)
         : r.urlPattern,
       action: r.action === 'block' ? 'block' as const : 'modify' as const,
-      patches: r.patches.filter(p => p && typeof p.path === 'string'),
+      patches: r.patches.filter(p => p && typeof p.path === 'string' && !hasUnsafeJsonPath(p.path)),
     }))
 }
 

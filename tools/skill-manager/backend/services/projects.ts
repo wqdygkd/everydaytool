@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, parse, resolve } from 'node:path'
+import process from 'node:process'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { readProjectLock } from '../locks/project-lock.ts'
 
@@ -39,13 +40,37 @@ export function projectScopeId(projectPath: string): string {
 export async function normalizeProjectPath(input: string): Promise<string> {
   if (!input.trim()) throw new Error('项目路径不能为空')
   const absolute = resolve(input)
-  const normalized = await realpath(absolute)
-  const info = await stat(normalized)
+  assertNotSystemPath(absolute)
+
+  let normalized: string
+  try {
+    normalized = await realpath(absolute)
+  } catch {
+    throw new Error(`项目路径不存在或无法访问：${absolute}`)
+  }
+  assertNotSystemPath(normalized)
+
+  let info
+  try {
+    info = await stat(normalized)
+  } catch {
+    throw new Error(`项目路径不存在或无法访问：${normalized}`)
+  }
   if (!info.isDirectory()) throw new Error('项目路径不是目录')
-  const root = parse(normalized).root
-  if (normalized === root) throw new Error('不能把文件系统根目录登记为项目')
-  if (normalized === homedir()) throw new Error('不能把用户主目录登记为项目')
   return normalized
+}
+
+function samePath(a: string, b: string): boolean {
+  const normalize = (value: string) => {
+    const resolved = resolve(value)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+  }
+  return normalize(a) === normalize(b)
+}
+
+function assertNotSystemPath(path: string): void {
+  if (samePath(path, parse(path).root)) throw new Error('不能把文件系统根目录登记为项目')
+  if (samePath(path, homedir())) throw new Error('不能把用户主目录登记为项目')
 }
 
 export async function registerProject(

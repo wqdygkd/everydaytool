@@ -16,6 +16,7 @@
     "output": "release"
   },
   "afterSign": "scripts/after-sign.mjs",
+  "afterPack": "scripts/after-pack.mjs",
   "files": [
     "dist-electron/**/*",
     "dist/**/*",
@@ -35,8 +36,7 @@
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "unicode": true,
-    "warningsAsErrors": false,
-    "include": "build/installer.nsh"
+    "warningsAsErrors": false
   },
   "mac": {
     "target": "dmg",
@@ -49,8 +49,5 @@
   "linux": {
     "target": "AppImage",
     "icon": "resources/icons/icon.png"
-  },
-  "publish": {
-    "provider": "github"
   }
 }

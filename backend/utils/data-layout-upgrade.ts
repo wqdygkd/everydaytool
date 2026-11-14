@@ -14,7 +14,7 @@
 // - `layoutVersion` 高于本版支持值 → 拒绝升级并如实报告（新版数据不能被老版按自己的理解覆盖）；
 // - 只有「零错误且零冲突」才写布局版本标记，否则保持 v1 供下次重试。
 import type { DataLayer } from '../../shared/data-layers.ts'
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import {
@@ -237,15 +237,28 @@ function moveEntry(from: string, to: string, kind: 'file' | 'dir'): void {
     renameSync(from, to)
     return
   } catch {
-    // EXDEV（跨卷）/ EPERM（占用）：退化为复制 + 删除
+    // EXDEV（跨卷）/ EPERM（占用）：退化为复制
   }
-  if (kind === 'dir') {
-    cpSync(from, to, { recursive: true, force: false, errorOnExist: true })
-    rmSync(from, { recursive: true, force: true })
-  } else {
-    copyFileSync(from, to)
-    unlinkSync(from)
+  // 复制到临时名 → 原子改名到最终位置 → 才删源。
+  // 直接 cp 到 to 再删源的话，复制中途失败会留下半份数据，而源已经被删掉。
+  const temp = `${to}.edt-migrating-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  rmSync(temp, { recursive: true, force: true })
+  try {
+    if (kind === 'dir') {
+      cpSync(from, temp, { recursive: true, force: false, errorOnExist: true })
+    } else {
+      copyFileSync(from, temp)
+    }
+    renameSync(temp, to)
+  } catch (error) {
+    try {
+      rmSync(temp, { recursive: true, force: true })
+    } catch {
+      // 临时残留不影响源数据，下次升级会重新处理
+    }
+    throw error
   }
+  rmSync(from, { recursive: true, force: true })
 }
 
 /**

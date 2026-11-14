@@ -451,6 +451,7 @@ async function resolveFile(): Promise<void> {
               :official-url="asset.browserDownloadUrl"
               :filename="assetFilename(asset)"
               :title="`${resolved.repo} ${release?.tag ?? ''} · ${asset.name}`"
+              :digest="asset.digest"
             />
           </GithubArtifact>
 

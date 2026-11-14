@@ -2,7 +2,7 @@ import type { WriteStream } from 'node:fs'
 import { Buffer } from 'node:buffer'
 // 流式 TAR 构建器：直接写入 Node WriteStream，避免把整个归档常驻内存。
 // header 512 字节 + checksum 计算。
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 
 function createHeader(
   name: string,
@@ -50,6 +50,22 @@ export class TarWriter {
     await this.writeChunk(createHeader(name, data.length))
     await this.writeChunk(data)
     const padding = (512 - (data.length % 512)) % 512
+    if (padding > 0) await this.writeChunk(Buffer.alloc(padding))
+  }
+
+  /** 从磁盘文件流式写入（镜像层等大文件不整块进内存） */
+  async addFileFromPath(name: string, filePath: string, size: number): Promise<void> {
+    await this.writeChunk(createHeader(name, size))
+    let written = 0
+    for await (const chunk of createReadStream(filePath)) {
+      const buffer = chunk as Buffer
+      written += buffer.length
+      await this.writeChunk(buffer)
+    }
+    if (written !== size) {
+      throw new Error(`TAR 条目大小不一致：${name}（期望 ${size}，实际 ${written}）`)
+    }
+    const padding = (512 - (size % 512)) % 512
     if (padding > 0) await this.writeChunk(Buffer.alloc(padding))
   }
 

@@ -99,7 +99,7 @@ function extractPayloadValue(body: Buffer | null | undefined, contentType: strin
   return null
 }
 
-function matchesFilters(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
+function matchesFilters(rule: InterceptorRule, ctx: RuleMatchContext, ignorePayload = false): boolean {
   const filters = rule.filters
   if (!filters) return true
 
@@ -115,7 +115,7 @@ function matchesFilters(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
     if (!page.toLowerCase().includes(filters.pageUrl.toLowerCase())) return false
   }
 
-  if (filters.requestPayload) {
+  if (!ignorePayload && filters.requestPayload) {
     const { key, operator, value } = filters.requestPayload
     if (!key) return false
     const actual = extractPayloadValue(ctx.requestBody, ctx.requestContentType, key)
@@ -124,6 +124,19 @@ function matchesFilters(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
   }
 
   return true
+}
+
+/**
+ * 请求体可用之前的预筛：只看方法 / 资源类型 / 页面 URL / 来源，
+ * 忽略 requestPayload（没有体时它必然不匹配）。用于判断是否值得缓冲请求体。
+ */
+export function ruleMayMatchWithoutBody(rule: InterceptorRule, ctx: RuleMatchContext): boolean {
+  return matchesSource(rule.source, ctx) && matchesFilters(rule, ctx, true)
+}
+
+/** 这条规则要处理请求体吗（改体规则 / 请求体过滤器） */
+export function ruleNeedsRequestBody(rule: InterceptorRule): boolean {
+  return rule.type === 'request' || Boolean(rule.filters?.requestPayload)
 }
 
 /** 单条规则的匹配（不看 enabled；弹窗要连禁用的规则一起列出） */

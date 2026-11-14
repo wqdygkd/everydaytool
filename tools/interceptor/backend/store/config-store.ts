@@ -4,7 +4,7 @@ import type { InterceptorTarget } from '../../../../shared/interceptor.ts'
 import type { InterceptorConfigData } from '../types.ts'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { readJsonFile, writeJson } from '../../../../backend/utils/file-ops.ts'
+import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { INTERCEPTOR_PROXY_PORT_MAX, INTERCEPTOR_PROXY_PORT_MIN, normalizeTargetHostInput, originOf, parseTargetOrigin } from '../../../../shared/interceptor.ts'
 import { getInterceptorDataDirectory } from '../utils/paths.ts'
@@ -133,7 +133,7 @@ function legacyTargetOf(candidate: Record<string, unknown>): { host: string, por
 export async function loadConfig(): Promise<InterceptorConfigData> {
   if (cache) return cache
 
-  const raw = await readJsonFile<Partial<InterceptorConfigData> & { token?: string }>(getConfigPath(), {})
+  const raw = readJsonDocument<Partial<InterceptorConfigData> & { token?: string }>(getConfigPath(), () => ({}))
   const parsed = parseTargets(raw.targets)
   const config: InterceptorConfigData = {
     proxyPort: parsePort(raw.proxyPort),
@@ -142,14 +142,14 @@ export async function loadConfig(): Promise<InterceptorConfigData> {
   cache = config
   // 需要重写：缺字段 / 名单结构迁移 / 旧版 token 残留（已取消配对码）
   if (!('proxyPort' in raw) || parsed.migrated || 'token' in raw) {
-    await writeJson(getConfigPath(), config)
+    writeJsonDocument(getConfigPath(), config)
   }
   return config
 }
 
 export async function saveConfig(): Promise<void> {
   if (!cache) return
-  await writeJson(getConfigPath(), cache)
+  writeJsonDocument(getConfigPath(), cache)
 }
 
 export function getConfigSnapshot(): InterceptorConfigData {

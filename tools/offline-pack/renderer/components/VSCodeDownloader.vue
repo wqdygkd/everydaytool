@@ -31,6 +31,13 @@ function itemNameFromUrl(url: string): string {
   }
 }
 
+function vsCodeIdFromUrl(url: string): { publisher: string, extension: string } | null {
+  const itemName = itemNameFromUrl(url)
+  const dot = itemName.lastIndexOf('.')
+  if (dot <= 0 || dot === itemName.length - 1) return null
+  return { publisher: itemName.slice(0, dot), extension: itemName.slice(dot + 1) }
+}
+
 function useExample(value: string): void {
   input.value = value
   void handleSubmit()
@@ -62,8 +69,13 @@ async function handleSubmit(): Promise<void> {
 
 async function buildLink(): Promise<void> {
   if (!api || !selectedVersion.value) return
+  const id = vsCodeIdFromUrl(input.value.trim())
+  if (!id) {
+    toast.error('插件 ID 非法，应为 publisher.extension')
+    return
+  }
   try {
-    const res = await api.invoke(api.channels.VSCODE_LINK, input.value.trim(), selectedVersion.value) as OfflinePackVsCodeLinkResult
+    const res = await api.invoke(api.channels.VSCODE_LINK, id.publisher, id.extension, selectedVersion.value) as OfflinePackVsCodeLinkResult
     linkUrl.value = res.downloadUrl
   } catch (error) {
     toast.error((error as Error).message || '生成链接失败')
@@ -72,9 +84,20 @@ async function buildLink(): Promise<void> {
 
 async function handleDownload(): Promise<void> {
   if (!linkUrl.value) return
+  const id = vsCodeIdFromUrl(input.value.trim())
+  if (!id) {
+    toast.error('插件 ID 非法，应为 publisher.extension')
+    return
+  }
   const itemName = itemNameFromUrl(input.value)
   await downloads.start(
-    { kind: 'vscode', url: linkUrl.value, filename: `${itemName}-${selectedVersion.value}.vsix` },
+    {
+      kind: 'vscode',
+      publisher: id.publisher,
+      extension: id.extension,
+      version: selectedVersion.value,
+      filename: `${itemName}-${selectedVersion.value}.vsix`,
+    },
     `${itemName} ${selectedVersion.value}`,
   )
 }

@@ -49,8 +49,8 @@ async function search(query: string): Promise<void> {
   if (!api) return
   searching.value = true
   try {
-    const res = await api.invoke(api.channels.EDGE_SEARCH, query.trim()) as { results: OfflinePackEdgeSearchItem[] }
-    searchResults.value = res.results ?? []
+    const res = await api.invoke(api.channels.EDGE_SEARCH, query.trim()) as OfflinePackEdgeSearchItem[]
+    searchResults.value = Array.isArray(res) ? res : []
   } catch {
     searchResults.value = []
   } finally {

@@ -8,7 +8,6 @@ import type {
   ArchiveCommitRequest,
   ArchiveLibraryEvent,
   ArchiveMessageStatusEntry,
-  ArchiveMessageStatusHint,
   ArchivePrepareRequest,
 } from '../../../../shared/media-archive.ts'
 import type { SiteApiContext } from './site-server.ts'
@@ -27,6 +26,13 @@ import {
   saveArchiveThumbnail,
 } from './message-store.ts'
 import {
+  readMessageIdValue,
+  readOptionalDays,
+  readPeerIdValue,
+  readStatusHints,
+  readTrashId,
+} from './params.ts'
+import {
   emptyArchiveTrash,
   listArchiveTrash,
   moveArchiveMessageToTrash,
@@ -34,7 +40,6 @@ import {
 } from './trash-service.ts'
 
 const MAX_STATUS_IDS = 500
-const MAX_STATUS_MEDIA_KEYS = 32
 
 function readIntParam(url: URL, name: string, min: number, max: number): number {
   const raw = url.searchParams.get(name)
@@ -47,49 +52,6 @@ function readPeerId(url: URL): string {
   const peer = url.searchParams.get('peer') ?? ''
   if (!/^-?\d{1,20}$/.test(peer)) throw new Error('peer 非法')
   return peer
-}
-
-function readPeerIdValue(value: unknown): string {
-  if (typeof value !== 'string' || !/^-?\d{1,20}$/.test(value)) throw new Error('peer 非法')
-  return value
-}
-
-/** 页面传来的等价线索：只保留可校验的字段，数组长度与 key 长度都设上限 */
-function sanitizeStatusHints(raw: unknown): ArchiveMessageStatusHint[] {
-  if (!Array.isArray(raw)) return []
-  const hints: ArchiveMessageStatusHint[] = []
-  for (const item of raw.slice(0, MAX_STATUS_IDS)) {
-    if (typeof item !== 'object' || item === null) continue
-    const record = item as Record<string, unknown>
-    const messageId = record.messageId
-    if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) continue
-    const hint: ArchiveMessageStatusHint = { messageId }
-
-    const source = record.forwardSource
-    if (typeof source === 'object' && source !== null) {
-      const sourceRecord = source as Record<string, unknown>
-      const sourcePeerId = sourceRecord.id
-      const sourceMessageId = sourceRecord.messageId
-      if (typeof sourcePeerId === 'string' && /^-?\d{1,20}$/.test(sourcePeerId)
-        && typeof sourceMessageId === 'number' && Number.isSafeInteger(sourceMessageId) && sourceMessageId > 0) {
-        hint.forwardSource = { id: sourcePeerId, messageId: sourceMessageId }
-      }
-    }
-
-    const mediaKeys = record.mediaKeys
-    if (Array.isArray(mediaKeys)) {
-      hint.mediaKeys = mediaKeys
-        .filter((key): key is string => typeof key === 'string' && /^[\w.-]{1,200}$/.test(key))
-        .slice(0, MAX_STATUS_MEDIA_KEYS)
-    }
-
-    const textChars = record.textChars
-    if (typeof textChars === 'number' && Number.isSafeInteger(textChars) && textChars >= 0) {
-      hint.textChars = textChars
-    }
-    hints.push(hint)
-  }
-  return hints
 }
 
 function headerValue(context: SiteApiContext, name: string): string | undefined {
@@ -145,6 +107,8 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
       if (!body || typeof body !== 'object' || !Array.isArray(body.attachments)) {
         throw new Error('prepare 参数非法')
       }
+      readPeerIdValue(body.peer?.id)
+      readMessageIdValue(body.messageId)
       const result = await prepareArchiveMessage(body)
       publishStatus(context, {
         peerId: body.peer.id,
@@ -188,6 +152,8 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
       if (!body || typeof body !== 'object' || !body.peer || typeof body.messageId !== 'number') {
         throw new Error('commit 参数非法')
       }
+      readPeerIdValue(body.peer.id)
+      readMessageIdValue(body.messageId)
       const result = await commitArchiveMessage({
         peerId: body.peer.id,
         messageId: body.messageId,
@@ -235,7 +201,7 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
     if (method === 'POST' && url.pathname === '/api/archive/status') {
       const body = await readJson<{ peer?: { id?: string }, messages?: unknown }>()
       const peerId = readPeerIdValue(body?.peer?.id)
-      const hints = sanitizeStatusHints(body?.messages)
+      const hints = readStatusHints(body?.messages)
       const statuses: Record<string, ArchiveMessageStatusEntry> = await getArchiveMessageStatuses(
         peerId,
         hints.map(hint => hint.messageId),
@@ -247,16 +213,19 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
 
     if (method === 'POST' && url.pathname === '/api/archive/delete') {
       const body = await readJson<{ peer?: { id?: string }, messageId?: number, retentionDays?: number }>()
-      if (!body?.peer?.id || typeof body.messageId !== 'number') throw new Error('delete 参数非法')
-      const equivalents = await listArchiveEquivalents(body.peer.id, body.messageId)
-      const entry = await moveArchiveMessageToTrash(body.peer.id, body.messageId, body.retentionDays)
+      if (!body || typeof body !== 'object') throw new Error('delete 参数非法')
+      const peerId = readPeerIdValue(body.peer?.id)
+      const messageId = readMessageIdValue(body.messageId)
+      const retentionDays = readOptionalDays(body.retentionDays, 'retentionDays')
+      const equivalents = await listArchiveEquivalents(peerId, messageId)
+      const entry = await moveArchiveMessageToTrash(peerId, messageId, retentionDays)
       publishStatus(context, {
-        peerId: body.peer.id,
-        messageId: body.messageId,
+        peerId,
+        messageId,
         state: 'missing',
       })
       if (equivalents.length) {
-        await publishEquivalents(context, equivalents, { peerId: body.peer.id, messageId: body.messageId }, true)
+        await publishEquivalents(context, equivalents, { peerId, messageId }, true)
       }
       sendJson(200, { state: 'missing', entry })
       return true
@@ -264,8 +233,10 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
 
     if (method === 'POST' && url.pathname === '/api/archive/reveal') {
       const body = await readJson<{ peer?: { id?: string }, messageId?: number }>()
-      if (!body?.peer?.id || typeof body.messageId !== 'number') throw new Error('reveal 参数非法')
-      const dir = archiveMessageDir(body.peer.id, body.messageId)
+      if (!body || typeof body !== 'object') throw new Error('reveal 参数非法')
+      const peerId = readPeerIdValue(body.peer?.id)
+      const messageId = readMessageIdValue(body.messageId)
+      const dir = archiveMessageDir(peerId, messageId)
       if (!existsSync(dir)) throw new Error('本地没有该消息缓存')
       shell.showItemInFolder(dir)
       sendJson(200, { ok: true })
@@ -279,8 +250,8 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
 
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
       const body = await readJson<{ trashId?: string }>()
-      if (!body?.trashId) throw new Error('restore 参数非法')
-      const restored = await restoreArchiveTrash(body.trashId)
+      const trashId = readTrashId(body?.trashId)
+      const restored = await restoreArchiveTrash(trashId)
       const equivalents = restored.state === 'complete'
         ? await listArchiveEquivalents(restored.peerId, restored.messageId)
         : []
@@ -301,7 +272,7 @@ export async function handleArchiveApi(context: SiteApiContext): Promise<boolean
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
       const body = await readJson<{ olderThanDays?: number }>()
-      const removed = await emptyArchiveTrash(body?.olderThanDays)
+      const removed = await emptyArchiveTrash(readOptionalDays(body?.olderThanDays, 'olderThanDays'))
       sendJson(200, { removed })
       return true
     }

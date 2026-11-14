@@ -7,6 +7,10 @@ import process from 'node:process'
 export interface IpcSafetyOptions {
   /** 打包后应用入口目录（通常为 app.getAppPath()） */
   appPath?: string
+  /** 只有开发形态才允许 http(s) 回环来源 */
+  allowLoopbackHttp?: boolean
+  /** 开发服务器固定端口；不匹配的端口一律拒绝 */
+  devServerPort?: number
 }
 
 function normalizeForCompare(target: string): string {
@@ -38,6 +42,8 @@ export function isTrustedIpcSenderUrl(url: string | undefined, options: IpcSafet
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    if (!options.allowLoopbackHttp) return false
+    if (options.devServerPort !== undefined && Number(parsed.port) !== options.devServerPort) return false
     const host = parsed.hostname.toLowerCase()
     return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
   }

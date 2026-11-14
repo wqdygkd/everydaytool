@@ -253,7 +253,9 @@ async function selectAssetsDirectory() {
     )
     assetsInfo.value = result
     if (result.changed) {
-      toast.success('已记录新的资产目录；重启应用后会迁移并生效')
+      toast.success(result.adopted
+        ? '已记录：重启后直接使用该目录里的现有归档；原目录保留，不迁移、不合并'
+        : '已记录新的资产目录；重启应用后会迁移并生效')
     } else {
       toast.info('目录未发生变化')
     }
@@ -411,6 +413,14 @@ async function openDirectory() {
   }
 }
 
+async function openLogsDirectory() {
+  try {
+    await invokeAppIpc(appIpcChannels().LOGS_OPEN)
+  } catch (error) {
+    toast.error((error as Error).message || '打开日志目录失败')
+  }
+}
+
 async function selectDirectory() {
   let directory: string | null = null
   try {
@@ -429,7 +439,9 @@ async function selectDirectory() {
     )
     info.value = result
     if (result.changed) {
-      toast.success('已记录新的数据目录；重启应用后会整体迁移并生效')
+      toast.success(result.adopted
+        ? '已记录：重启后改用该目录里的现有数据；原目录数据保留，不迁移、不合并'
+        : '已记录新的数据目录；重启应用后整体迁移并生效')
     } else {
       toast.info('目录未发生变化')
     }
@@ -443,7 +455,7 @@ async function selectDirectory() {
 async function clearCache() {
   try {
     await confirm(
-      '将删除「缓存」层（浏览器 Cache / Code Cache / GPU 缓存、工具下载与运行产物）以及「会话」层内部的浏览器缓存目录；\n配置（账号 / 规则 / 证书）、资产（归档）与登录态都不会被删除。',
+      '将删除「缓存」层（浏览器 Cache / Code Cache / GPU 缓存、工具运行产物）以及「会话」层内部的浏览器缓存目录；\n配置（账号 / 规则 / 证书）、资产（归档）、登录态与已下载的离线包都不会被删除。',
       '清除缓存',
       { confirmButtonText: '清除', cancelButtonText: '取消', type: 'warning' },
     )
@@ -554,7 +566,7 @@ onMounted(() => {
               </div>
               <div class="row-foot">
                 <UiHint size="xs">
-                  更改后重启生效：启动时先整体迁移旧目录，目标目录必须为空。
+                  更改后重启生效：空目录会整体迁移，已有 everydaytool 数据的目录直接接管（不迁移、不合并）。
                 </UiHint>
                 <UiGroup>
                   <UiButton size="small" @click="openDirectory">
@@ -607,7 +619,7 @@ onMounted(() => {
                       待切换 {{ assetsInfo.pendingAssetsRoot }}（重启后生效）
                     </p>
                     <p class="layer-summary">
-                      归档体量大且不可再生，可放到另一块盘；下次启动会整体迁移，非空目录不覆盖。
+                      归档体量大且不可再生，可放到另一块盘；空目录会整体迁移，已有归档的目录直接接管，原目录保留。
                     </p>
                     <UiGroup>
                       <UiButton size="small" @click="openAssetsDirectory">
@@ -775,6 +787,17 @@ onMounted(() => {
                 </div>
                 <UiButton size="small" @click="openDevTools">
                   打开调试控制台
+                </UiButton>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="row-head">
+                <div class="row-copy">
+                  <h3>日志目录</h3>
+                  <p>主进程日志按 5 MB 轮转，保留当前与上一份；排障时先看这里。</p>
+                </div>
+                <UiButton size="small" @click="openLogsDirectory">
+                  打开日志目录
                 </UiButton>
               </div>
             </div>

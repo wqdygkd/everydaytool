@@ -5,7 +5,7 @@ import type {
 } from '../../../../shared/offline-pack.ts'
 // 下载目录 + 统一下载任务编排：流式落盘到 data-root/offline-pack/downloads，
 // 进度经 broadcastToWindows 推送，支持按 taskId 取消。
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { resolveLayerPath } from '../../../../backend/utils/data-layers.ts'
@@ -43,10 +43,79 @@ export function cancelDownload(taskId: string): boolean {
   return true
 }
 
-export function emitProgress(progress: OfflinePackDownloadProgress): void {
+/** 退出前取消所有进行中的下载；任务自身的 finally 仍会清理临时文件 */
+export function cancelAllDownloads(): void {
+  for (const controller of activeDownloads.values()) controller.abort()
+  activeDownloads.clear()
+}
+
+/** 启动时清扫上次崩溃 / 强退留下的 .part；只处理下载目录内的普通文件 */
+export async function sweepOfflinePackTempFiles(): Promise<void> {
+  const dir = getOfflinePackDownloadDir()
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.part')) continue
+    await rm(path.join(dir, entry.name), { force: true }).catch(() => undefined)
+  }
+}
+
+const PROGRESS_THROTTLE_MS = 150
+
+interface ProgressThrottle {
+  lastEmit: number
+  timer: ReturnType<typeof setTimeout> | null
+  pending: OfflinePackDownloadProgress | null
+}
+
+const progressThrottles = new Map<string, ProgressThrottle>()
+
+function broadcastProgress(progress: OfflinePackDownloadProgress): void {
   broadcastToWindows(OFFLINE_PACK_IPC_CHANNELS.EVENT_PROGRESS, progress, {
     onError: error => logger.warn('OfflinePack progress broadcast failed', { error: error.message }),
   })
+}
+
+/**
+ * 进度按任务节流到 150ms 一次；下载中的最后一个事件留在 pending 里由定时器补发。
+ * 终态 / 阶段切换（processing / completed / error / cancelled）不节流，保证 UI 不会停在旧状态。
+ */
+export function emitProgress(progress: OfflinePackDownloadProgress): void {
+  const now = Date.now()
+  let entry = progressThrottles.get(progress.taskId)
+  if (!entry) {
+    entry = { lastEmit: 0, timer: null, pending: null }
+    progressThrottles.set(progress.taskId, entry)
+  }
+
+  if (progress.status !== 'downloading') {
+    if (entry.timer) clearTimeout(entry.timer)
+    entry.timer = null
+    entry.pending = null
+    entry.lastEmit = now
+    broadcastProgress(progress)
+    if (progress.status === 'completed' || progress.status === 'error' || progress.status === 'cancelled') {
+      progressThrottles.delete(progress.taskId)
+    }
+    return
+  }
+
+  if (now - entry.lastEmit >= PROGRESS_THROTTLE_MS) {
+    entry.lastEmit = now
+    broadcastProgress(progress)
+    return
+  }
+
+  entry.pending = progress
+  if (entry.timer) return
+  entry.timer = setTimeout(() => {
+    entry.timer = null
+    const pending = entry.pending
+    entry.pending = null
+    if (!pending) return
+    entry.lastEmit = Date.now()
+    broadcastProgress(pending)
+  }, Math.max(0, PROGRESS_THROTTLE_MS - (now - entry.lastEmit)))
+  entry.timer.unref?.()
 }
 
 export interface SimpleDownloadSpec {
@@ -59,6 +128,8 @@ export interface SimpleDownloadSpec {
   convertToZip?: boolean
   /** 拒绝 HTML 响应：代理节点用 200 + 网页冒充文件时直接报错，不落盘 */
   rejectHtml?: boolean
+  /** 上游提供的 sha256（可带 sha256: 前缀） */
+  sha256?: string
 }
 
 /** 下载单个 URL 到文件；convertToZip 时先在临时文件落盘再转换，保证失败不留半成品 */
@@ -82,6 +153,7 @@ export async function downloadSimpleFile(spec: SimpleDownloadSpec): Promise<Offl
       headers: spec.headers,
       signal: controller.signal,
       rejectHtml: spec.rejectHtml,
+      expectedSha256: spec.sha256,
       onProgress: (downloaded, total) => emit('downloading', downloaded, total, `正在下载 ${spec.filename}`),
     })
 

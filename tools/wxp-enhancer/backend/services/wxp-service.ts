@@ -2,6 +2,7 @@ import type { WxpClearLoginCacheResult, WxpRunningState, WxpSettings } from '../
 import { logger } from '../../../../backend/utils/logger.ts'
 import { sleep } from '../../../../shared/sleep.ts'
 import { normalizeWxpLinkFavorites } from '../../../../shared/wxp-favorite.ts'
+import { assertWxpExtraArgs } from '../../../../shared/wxp.ts'
 import { wxpConfigStore } from '../store/config-store.ts'
 import { dataCacheStore } from '../store/data-cache-store.ts'
 import { isExecutableRunning } from '../utils/process-detect.ts'
@@ -125,6 +126,7 @@ export function assertSettings(settings: WxpSettings): void {
   if (!Number.isInteger(settings.debugPort) || settings.debugPort < 1024 || settings.debugPort > 65535) {
     throw new Error('调试端口需在 1024 - 65535 之间')
   }
+  assertWxpExtraArgs(settings.extraArgs ?? '')
 }
 
 async function buildInjectionSourceFromStore(clearLoginCacheOnce = false): Promise<string> {

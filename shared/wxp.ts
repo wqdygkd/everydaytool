@@ -26,6 +26,40 @@ export const DEFAULT_WXP_SETTINGS: Required<WxpSettings> = {
   extraArgs: '',
 }
 
+const WXP_EXTRA_ARG_DENYLIST = [
+  '--user-data-dir',
+  '--load-extension',
+  '--disable-web-security',
+  '--allow-running-insecure-content',
+  '--no-sandbox',
+  '--remote-debugging-pipe',
+  '--remote-debugging-port',
+  '--remote-allow-origins',
+  '--proxy-server',
+] as const
+
+/** Chromium 启动参数分词；引号内的空格不拆开。 */
+export function parseWxpExtraArgs(input: string): string[] {
+  const text = input.trim()
+  if (!text) return []
+  const tokens: string[] = []
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
+  for (const match of text.matchAll(re)) {
+    tokens.push(match[1] ?? match[2] ?? match[3])
+  }
+  return tokens
+}
+
+/** 只允许常规 Chromium 开关；危险开关由主进程统一补齐。 */
+export function assertWxpExtraArgs(input: string): void {
+  for (const arg of parseWxpExtraArgs(input)) {
+    const name = arg.split('=', 1)[0]?.toLowerCase() ?? ''
+    if (WXP_EXTRA_ARG_DENYLIST.includes(name as typeof WXP_EXTRA_ARG_DENYLIST[number])) {
+      throw new Error(`启动参数不允许使用 ${name}`)
+    }
+  }
+}
+
 export interface WxpRunningState {
   pid?: number
   port: number

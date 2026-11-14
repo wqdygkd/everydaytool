@@ -62,4 +62,6 @@ export interface TwebCacheArchiveDirChangeResult extends TwebCacheArchiveDirInfo
   changed: boolean
   /** 实际迁移的条目名（messages / trash） */
   moved: string[]
+  /** true = 目标目录已有归档，直接接管（不迁移、不合并，原目录数据保持原位） */
+  adopted: boolean
 }

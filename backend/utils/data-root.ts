@@ -6,6 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app } from 'electron'
+import { DATA_LAYOUT_V1_TO_V2 } from '../../shared/data-layers.ts'
 import { migrateDataDirectory } from './data-migration.ts'
 import { pathExists, readJson, removeIfExists, writeJson } from './file-ops.ts'
 import { writeJsonDocument } from './json-store.ts'
@@ -90,33 +91,58 @@ function setDataDirectoryOverride(dir: string | null): void {
   dataDirectoryOverride = normalizeDataDirectory(dir)
 }
 
+/** 认得出的数据目录标记：v2 分层目录 / 版本文件 / v1 扁平工具目录 */
+const DATA_DIRECTORY_MARKERS = new Set<string>([
+  '.edt-layout.json',
+  'config',
+  'assets',
+  'session',
+  'cache',
+  ...DATA_LAYOUT_V1_TO_V2.map(rule => rule.from.split('/')[0]),
+])
+
+/** 目标目录非空时，只有认得出来的 everydaytool 数据目录才允许「接管」（不迁移、不合并） */
+function looksLikeDataDirectory(directory: string): boolean {
+  try {
+    return readdirSync(directory).some(name => DATA_DIRECTORY_MARKERS.has(name))
+  } catch {
+    return false
+  }
+}
+
 /**
  * 请求切换数据目录：只写入 pending 标记，不立即切换。
- * 下次启动会在 ready 之前把旧目录整体迁移到新目录，再指向新目录——
- * 这样 sessionData 与各工具缓存都能保持有效。
+ * - 空目录：下次启动把旧目录整体迁移过去（mode=migrate）。
+ * - 已有数据的 everydaytool 目录：下次启动直接接管（mode=adopt），不迁移、不合并，
+ *   当前目录的数据原样留在磁盘上——恢复旧数据目录走这条路径。
  */
 export async function requestDataDirectoryChange(
   nextDirectory: string,
-): Promise<{ dataDirectory: string, pendingDataDirectory: string | null, changed: boolean }> {
+): Promise<{ dataDirectory: string, pendingDataDirectory: string | null, changed: boolean, adopted: boolean }> {
   const normalized = normalizeDataDirectory(nextDirectory) || getDefaultDataDirectory()
   const current = getDataDirectory()
   if (isSamePath(normalized, current)) {
     await removeIfExists(getPendingConfigPath())
-    return { dataDirectory: current, pendingDataDirectory: null, changed: false }
+    return { dataDirectory: current, pendingDataDirectory: null, changed: false, adopted: false }
   }
   if (isStrictlyWithin(current, normalized) || isStrictlyWithin(normalized, current)) {
     throw new Error('新旧数据目录不能互相嵌套')
   }
   if (existsSync(normalized) && readdirSync(normalized).length > 0) {
-    throw new Error('目标目录非空，请选择一个空目录（迁移不会覆盖已有文件）')
+    if (!looksLikeDataDirectory(normalized)) {
+      throw new Error('目标目录非空，且不是 everydaytool 的数据目录；请选择空目录，或选择包含 config/ 的旧数据目录')
+    }
+    await writeJson(getPendingConfigPath(), { dataDirectory: normalized, mode: 'adopt' })
+    logger.info('Data directory adopt requested; will switch on next launch', { from: current, to: normalized })
+    return { dataDirectory: current, pendingDataDirectory: normalized, changed: true, adopted: true }
   }
 
-  await writeJson(getPendingConfigPath(), { dataDirectory: normalized })
+  await writeJson(getPendingConfigPath(), { dataDirectory: normalized, mode: 'migrate' })
   logger.info('Data directory change requested; migration will run on next launch', {
     from: current,
     to: normalized,
   })
-  return { dataDirectory: current, pendingDataDirectory: normalized, changed: true }
+  return { dataDirectory: current, pendingDataDirectory: normalized, changed: true, adopted: false }
 }
 
 export function getPendingDataDirectory(): string | null {
@@ -127,6 +153,15 @@ export function getPendingDataDirectory(): string | null {
     return typeof raw.dataDirectory === 'string' ? normalizeDataDirectory(raw.dataDirectory) : null
   } catch {
     return null
+  }
+}
+
+function getPendingDataDirectoryMode(): 'migrate' | 'adopt' {
+  try {
+    const raw = JSON.parse(readFileSync(getPendingConfigPath(), 'utf8')) as { mode?: unknown }
+    return raw.mode === 'adopt' ? 'adopt' : 'migrate'
+  } catch {
+    return 'migrate'
   }
 }
 
@@ -195,6 +230,15 @@ export function loadDataDirectoryOverrideSync(): void {
   if (!pending) return
   if (isSamePath(pending, getDataDirectory())) {
     clearPendingConfigSync()
+    return
+  }
+
+  if (getPendingDataDirectoryMode() === 'adopt') {
+    const bootstrapTarget = isSamePath(pending, getDefaultDataDirectory()) ? null : pending
+    saveDataDirectoryOverrideSync(bootstrapTarget)
+    clearPendingConfigSync()
+    setDataDirectoryOverride(bootstrapTarget)
+    logger.info('Existing data directory adopted', { dataDirectory: getDataDirectory(), pending })
     return
   }
 

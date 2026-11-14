@@ -8,7 +8,7 @@ import type {
   ProjectLockFile,
 } from '../../../../shared/skill-manager.ts'
 import { randomBytes } from 'node:crypto'
-import { join } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { readGlobalLock, writeGlobalLock } from '../locks/global-lock.ts'
 import { readProjectLock, writeProjectLock } from '../locks/project-lock.ts'
 import { createTrashSession, moveToTrash } from './executor.ts'
@@ -34,6 +34,14 @@ interface ItemGroup {
   input: string
   ref?: string
   items: PresetItem[]
+}
+
+/** 锁文件里的键可能是外部写入的：移动前再确认目标仍落在技能目录内。 */
+function assertInsideSkillsDir(paths: PresetApplyPaths, target: string): void {
+  const rel = relative(resolve(paths.skillsDir), resolve(target))
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`技能目录越界：${target}`)
+  }
 }
 
 function groupItems(items: PresetItem[]): ItemGroup[] {
@@ -109,6 +117,7 @@ async function removeExtras(
       const session = await createTrashSession(paths.trashRoot, operationId, paths.scopeId, 'preset-exact')
       for (const name of extras) {
         const target = join(paths.skillsDir, name)
+        assertInsideSkillsDir(paths, target)
         await moveToTrash(session, target, name)
       }
     }
@@ -129,7 +138,9 @@ async function removeExtras(
   if (paths.removePolicy !== 'keep') {
     const session = await createTrashSession(paths.trashRoot, operationId, paths.scopeId, 'preset-exact')
     for (const name of extras) {
-      await moveToTrash(session, join(paths.skillsDir, name), name)
+      const target = join(paths.skillsDir, name)
+      assertInsideSkillsDir(paths, target)
+      await moveToTrash(session, target, name)
     }
   }
   for (const name of extras) delete lock.data.skills[name]

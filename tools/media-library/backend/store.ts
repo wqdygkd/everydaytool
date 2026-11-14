@@ -19,8 +19,8 @@ import type {
   TagRecord,
 } from '../../../shared/media-library.ts'
 import { rmSync } from 'node:fs'
-import { readJsonDocument, writeJsonDocument } from '../../../backend/utils/json-store.ts'
 import { resolveLayerPath } from '../../../backend/utils/data-layers.ts'
+import { readJsonDocument, writeJsonDocument } from '../../../backend/utils/json-store.ts'
 import { DEFAULT_PREFS } from '../../../shared/media-library.ts'
 
 const TOOL_DIR = 'media-library'

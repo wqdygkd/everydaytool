@@ -17,10 +17,10 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { readGlobalLock, writeGlobalLock } from '../locks/global-lock.ts'
-import { resolveSource } from '../sources/catalog.ts'
+import { resolveSource, resolveSourceAuth } from '../sources/catalog.ts'
 import { cloneGitSource } from '../sources/git.ts'
 import { parseSourceInput } from '../sources/parse.ts'
-import { downloadGithubTarball, extractTarGz } from './archive.ts'
+import { downloadGithubTarball, extractTarGzFile } from './archive.ts'
 import {
   commitStagedDirectory,
   copyTreeSafe,
@@ -264,9 +264,15 @@ export async function stageCatalog(
 
   if (catalog.sourceType === 'github') {
     const tarball = join(stagingRoot, 'source.tar.gz')
-    await downloadGithubTarball(catalog.source, catalog.resolvedRef, tarball, githubToken())
+    const parsed = parseSourceInput(catalog.source, catalog.ref ?? undefined)
+    const auth = await resolveSourceAuth(parsed)
+    await downloadGithubTarball(catalog.source, catalog.resolvedRef, tarball, auth?.token ?? githubToken())
     const unpacked = join(stagingRoot, 'unpacked')
-    await extractTarGz(await readFile(tarball), unpacked)
+    // 只解压选中的技能目录：仓库其余内容不落盘（根目录技能需要整包，用空串表示全部）
+    const includes = selected.map(entry => (
+      entry.skillPath === SKILL_FILE ? '' : dirname(entry.skillPath).replace(/\\/g, '/')
+    ))
+    await extractTarGzFile(tarball, unpacked, { includes })
     const sourceRoot = await singleTopDirectory(unpacked)
     for (const entry of selected) await stageEntry(sourceRoot, entry, stagingRoot, staged)
     return
@@ -275,7 +281,8 @@ export async function stageCatalog(
   if (catalog.sourceType === 'git') {
     const repoRoot = join(stagingRoot, 'repo')
     const parsed = parseSourceInput(catalog.source, catalog.ref ?? undefined)
-    await cloneGitSource(parsed, repoRoot)
+    const auth = await resolveSourceAuth(parsed)
+    await cloneGitSource(parsed, repoRoot, auth)
     for (const entry of selected) await stageEntry(repoRoot, entry, stagingRoot, staged)
     return
   }

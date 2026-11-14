@@ -2,7 +2,7 @@
 // tweb 构建入口（tweb-cache 阶段 0）：Node 24 + corepack pnpm（packageManager 钉死 11.16）+ vite build + 产物校验。
 //
 // 为什么要单独一个脚本：
-// - tweb 的 engines 是 `^22.18 || >=24.11`，而 everydaytool 默认 Node 22.15 不满足；
+// - tweb 的 engines 是 `^22.18 || >=24.11`，仓库默认 Node 26 满足（Node 22.15 不满足）；
 // - tweb 用 pnpm（pnpm-lock.yaml + packageManager pnpm@11.16.0），系统 pnpm 10 会被 packageManager 拒掉；
 //   corepack 按 packageManager 自动取对版本，用 Node 安装目录里自带的 corepack.js 免去 PATH 折腾；
 // - 构建失败要给出可执行的下一步，而不是一句 ELIFECYCLE。

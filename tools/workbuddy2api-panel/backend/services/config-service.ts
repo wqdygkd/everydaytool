@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto'
-import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, rename, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { writeJson } from '../../../../backend/utils/file-ops.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
 import {
   forceLocalListen,
   parseListenPort,
@@ -53,13 +55,34 @@ async function findExampleConfig(currentDir: string): Promise<string | null> {
   return null
 }
 
+async function backupCorruptedConfig(configPath: string): Promise<void> {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const backupPath = `${configPath}.corrupt-${stamp}`
+  try {
+    await rename(configPath, backupPath)
+    logger.warn('wb2api run config is corrupted, backup created', { backupPath })
+  } catch (error) {
+    logger.warn('wb2api run config is corrupted, backup failed', {
+      error: (error as Error).message,
+    })
+    await rm(configPath, { force: true }).catch(() => undefined)
+  }
+}
+
 export async function readConfigJson(): Promise<Record<string, unknown> | null> {
   const configPath = getWb2apiConfigPath()
   if (!(await pathExists(configPath))) return null
   try {
     const raw = await readFile(configPath, 'utf8')
-    return JSON.parse(raw) as Record<string, unknown>
-  } catch {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('config.json 顶层必须是对象')
+    }
+    return parsed as Record<string, unknown>
+  } catch (error) {
+    // 损坏的配置不能保留原文件：否则 ensure 会因「文件存在」跳过重建，重装也修不好
+    logger.warn('wb2api run config parse failed', { error: (error as Error).message })
+    await backupCorruptedConfig(configPath)
     return null
   }
 }
@@ -96,7 +119,7 @@ export async function enforceStartConfig(preferredPort?: number): Promise<{ port
   // 早期安装可能已写入 example 的 test_key：下次 START 时换成随机密钥
   ensureRealApiKey(config)
 
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
+  await writeJson(configPath, config)
   writeAppSettings({ port })
   return { port, configPath }
 }
@@ -104,7 +127,7 @@ export async function enforceStartConfig(preferredPort?: number): Promise<{ port
 /** 无 run/config.json 时从 example 初始化，并改 listen / 关自更新 / 随机 api_key */
 export async function ensureRunConfigInitialized(): Promise<boolean> {
   const configPath = getWb2apiConfigPath()
-  if (await pathExists(configPath)) return false
+  if (await readConfigJson()) return false
 
   await mkdir(path.join(getWb2apiRunDir(), 'auths'), { recursive: true })
   await mkdir(path.join(getWb2apiRunDir(), 'data'), { recursive: true })
@@ -112,9 +135,24 @@ export async function ensureRunConfigInitialized(): Promise<boolean> {
   const example = await findExampleConfig(getWb2apiCurrentDir())
   let config: Record<string, unknown>
   if (example) {
-    await copyFile(example, configPath)
-    const raw = await readFile(configPath, 'utf8')
-    config = JSON.parse(raw) as Record<string, unknown>
+    try {
+      const raw = await readFile(example, 'utf8')
+      const parsed = JSON.parse(raw) as unknown
+      config = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {}
+    } catch {
+      config = {}
+    }
+    if (Object.keys(config).length === 0) {
+      config = {
+        listen: forceLocalListen(WB2API_DEFAULT_PORT),
+        api_key: '',
+        auth_dir: './auths',
+        state_file: './data/state.json',
+        update: { auto_enabled: false },
+      }
+    }
   } else {
     config = {
       listen: forceLocalListen(WB2API_DEFAULT_PORT),
@@ -135,7 +173,7 @@ export async function ensureRunConfigInitialized(): Promise<boolean> {
   // example 是占位 test_key；空 = 不鉴权。首启一律写入随机密钥（对齐上游「无 config 时 crypto/rand」）
   ensureRealApiKey(config)
 
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
+  await writeJson(configPath, config)
   writeAppSettings({ port })
   return true
 }

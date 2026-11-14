@@ -9,9 +9,10 @@ import type {
   InterceptorTarget,
   InterceptorTargetPatch,
   TrafficEntry,
+  TrafficSummary,
 } from '../../../../shared/interceptor.ts'
-import { randomUUID } from 'node:crypto'
-import { rm, writeFile } from 'node:fs/promises'
+import { randomBytes, randomUUID } from 'node:crypto'
+import { chmod, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
@@ -26,6 +27,7 @@ import {
   originOf,
   parseTargetOrigin,
   RULE_TYPE_LABELS,
+  toTrafficSummary,
 } from '../../../../shared/interceptor.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getConfigSnapshot, loadConfig, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
@@ -37,7 +39,7 @@ import { createProxyService } from './proxy-service.ts'
 import { ruleAppliesToHost } from './rule-engine.ts'
 import { compileScriptRules } from './script-compile.ts'
 import { normalizeHost } from './target-list.ts'
-import { addTrafficEntry, clearTrafficEntries, listTrafficEntries, suggestHostsForUrl } from './traffic-store.ts'
+import { addTrafficEntry, clearTrafficEntries, findTrafficEntry, listTrafficSummaries, suggestHostsForUrl } from './traffic-store.ts'
 import { createWsBridge } from './ws-bridge.ts'
 
 const CA_STATUS_CACHE_MS = 3_000
@@ -57,12 +59,41 @@ let proxyPortNote: string | null = null
 
 let wsBridge: ReturnType<typeof createWsBridge>
 
+/** 流量摘要批量推送：80ms 一批，渲染层不再为每条流量做一次 IPC + 全表过滤 */
+const TRAFFIC_BATCH_MS = 80
+const TRAFFIC_BATCH_MAX = 100
+let trafficBatch: TrafficSummary[] = []
+let trafficBatchTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushTrafficBatch(): void {
+  if (!trafficBatch.length) return
+  const batch = trafficBatch
+  trafficBatch = []
+  emit(INTERCEPTOR_IPC_CHANNELS.EVENT_TRAFFIC_BATCH, batch)
+}
+
+function queueTrafficSummary(entry: TrafficEntry): void {
+  trafficBatch.push(toTrafficSummary(entry))
+  if (trafficBatch.length >= TRAFFIC_BATCH_MAX) {
+    if (trafficBatchTimer) clearTimeout(trafficBatchTimer)
+    trafficBatchTimer = null
+    flushTrafficBatch()
+    return
+  }
+  if (trafficBatchTimer) return
+  trafficBatchTimer = setTimeout(() => {
+    trafficBatchTimer = null
+    flushTrafficBatch()
+  }, TRAFFIC_BATCH_MS)
+  trafficBatchTimer.unref?.()
+}
+
 const proxyService = createProxyService({
   getTargets: () => getConfigSnapshot().targets,
   getRules: () => getRulesSnapshot(),
   onTraffic: (entry: TrafficEntry) => {
     addTrafficEntry(entry)
-    emit(INTERCEPTOR_IPC_CHANNELS.EVENT_TRAFFIC, entry)
+    queueTrafficSummary(entry)
   },
   isOwnPort: (port) => {
     const wsPort = wsBridge.getPort()
@@ -156,6 +187,15 @@ async function prepareExtensionDirectory(): Promise<string> {
     logger.warn('Failed to prepare extension directory', { error: (error as Error).message })
   }
   return target
+}
+
+/** 每次启动轮换的 WS 共享令牌：扩展从自己的包内文件读取，不依赖固定配对码。 */
+async function prepareBridgeToken(dir: string): Promise<string> {
+  const token = randomBytes(32).toString('hex')
+  const tokenPath = path.join(dir, 'bridge-token.json')
+  await writeFile(tokenPath, JSON.stringify({ token }), { encoding: 'utf8', mode: 0o600 })
+  await chmod(tokenPath, 0o600).catch(() => {})
+  return token
 }
 
 // ---------------------------------------------------------------------------
@@ -592,8 +632,9 @@ export const interceptorService = {
           logger.warn('Root CA init failed (will retry on demand)', { error: (error as Error).message })
         }
         extensionDir = await prepareExtensionDirectory()
+        const bridgeToken = await prepareBridgeToken(extensionDir)
         await startProxyOnConfiguredPort()
-        await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE)
+        await wsBridge.start(INTERCEPTOR_WS_PORT_BASE, INTERCEPTOR_WS_PORT_RANGE, bridgeToken)
         logger.info('Browser bridge started', { proxyPort: proxyService.getPort(), wsPort: wsBridge.getPort() })
         emitRuntimeStatus()
       } catch (error) {
@@ -620,6 +661,14 @@ export const interceptorService = {
   },
 
   getRuntimeStatus: buildRuntimeStatus,
-  getTraffic: listTrafficEntries,
-  clearTraffic: clearTrafficEntries,
+  getTraffic: listTrafficSummaries,
+  getTrafficEntry: (id: string) => findTrafficEntry(id) ?? null,
+  clearTraffic: () => {
+    trafficBatch = []
+    if (trafficBatchTimer) {
+      clearTimeout(trafficBatchTimer)
+      trafficBatchTimer = null
+    }
+    clearTrafficEntries()
+  },
 }

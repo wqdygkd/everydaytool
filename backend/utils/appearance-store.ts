@@ -7,7 +7,8 @@ import path from 'node:path'
 import { app } from 'electron'
 import { DEFAULT_WINDOW_APPEARANCE, sanitizeWindowAppearance } from '../../shared/appearance.ts'
 import { resolveLayerPath, resolveLegacyPath } from './data-layers.ts'
-import { pathExists, readJson, writeJson } from './file-ops.ts'
+import { pathExists } from './file-ops.ts'
+import { readJsonDocument, writeJsonDocument } from './json-store.ts'
 import { logger } from './logger.ts'
 
 const FILENAME = 'window-appearance.json'
@@ -78,12 +79,8 @@ async function migrateLegacyAppearance(): Promise<void> {
 /** 启动时调用一次：读盘失败不影响应用启动（退回默认外观） */
 export async function loadWindowAppearance(): Promise<WindowAppearance> {
   await migrateLegacyAppearance()
-  try {
-    const stored = await readJson<unknown>(getConfigPath())
-    current = normalizeStored(stored)
-  } catch {
-    current = { ...DEFAULT_WINDOW_APPEARANCE }
-  }
+  const stored = readJsonDocument<unknown>(getConfigPath(), () => null)
+  current = normalizeStored(stored)
   return current
 }
 
@@ -111,7 +108,7 @@ export async function updateWindowAppearance(
   const next = sanitizeWindowAppearance(merged, capabilities)
   current = next
   try {
-    await writeJson(getConfigPath(), next)
+    writeJsonDocument(getConfigPath(), next)
   } catch (error) {
     logger.warn('Failed to persist window appearance', { error: (error as Error).message })
   }

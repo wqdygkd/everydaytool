@@ -8,6 +8,7 @@ import { ipcMain, shell } from 'electron'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import {
   isAllowedGithubDownloadUrl,
+  isAllowedMsStoreDownloadUrl,
   isValidGithubFilePath,
   isValidGithubOwnerRepo,
   isValidGithubRefName,
@@ -70,8 +71,12 @@ export function registerOfflinePackHandlers(): void {
   safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.VSCODE_QUERY, async (_event, url: unknown) => {
     return guard(() => queryVsCodeVersions(requireString(url, '插件 URL')), '查询插件版本')
   })
-  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.VSCODE_LINK, async (_event, url: unknown, version: unknown) => {
-    return buildVsCodeLink(requireString(url, '插件 URL'), requireString(version, '版本号'))
+  safeHandle(ipcMain, OFFLINE_PACK_IPC_CHANNELS.VSCODE_LINK, async (_event, publisher: unknown, extension: unknown, version: unknown) => {
+    return buildVsCodeLink(
+      requireString(publisher, '发布者'),
+      requireString(extension, '扩展名'),
+      requireString(version, '版本号'),
+    )
   })
 
   // ---- Chrome ----
@@ -197,6 +202,15 @@ export function registerOfflinePackHandlers(): void {
       url = mirror ? `${mirror}/${target}` : target
       // 代理节点偶尔用 200 + HTML 错误页冒充文件，落盘前按响应头拦掉
       rejectHtml = true
+    } else if (simple.kind === 'vscode') {
+      url = buildVsCodeLink(
+        requireString(simple.publisher, '发布者'),
+        requireString(simple.extension, '扩展名'),
+        requireString(simple.version, '版本号'),
+      ).downloadUrl
+    } else if (simple.kind === 'msstore') {
+      url = requireString(simple.url, '下载链接')
+      if (!isAllowedMsStoreDownloadUrl(url)) throw new Error('Microsoft Store 下载链接域名非法')
     } else {
       url = requireString(simple.url, '下载链接')
     }
@@ -210,6 +224,7 @@ export function registerOfflinePackHandlers(): void {
       headers,
       convertToZip: simple.convertToZip === true,
       rejectHtml,
+      sha256: simple.sha256,
     })
   })
 

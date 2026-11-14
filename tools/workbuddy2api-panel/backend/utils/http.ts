@@ -1,7 +1,6 @@
-import { Buffer } from 'node:buffer'
-import { createWriteStream } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { net } from 'electron'
+import { downloadToFile as downloadFile } from '../../../../backend/utils/http-download.ts'
 import { isAllowedWb2apiDownloadUrl } from '../../../../shared/workbuddy2api-panel.ts'
 
 const DEFAULT_TIMEOUT_MS = 120_000
@@ -56,39 +55,17 @@ export async function downloadToFile(
   options: { signal?: AbortSignal, onProgress?: DownloadProgress } = {},
 ): Promise<void> {
   const tempPath = `${destPath}.part`
-  const res = await request(url, { signal: options.signal }, DEFAULT_TIMEOUT_MS)
-  if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}`)
-  if (!res.body) throw new Error('上游未返回文件流')
-  const total = Number(res.headers.get('content-length') ?? 0)
-  const writer = createWriteStream(tempPath)
-  const reader = res.body.getReader()
-  let downloaded = 0
   try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!writer.write(Buffer.from(value))) {
-        await new Promise<void>(resolve => writer.once('drain', () => resolve()))
-      }
-      downloaded += value.length
-      options.onProgress?.(downloaded, total)
-    }
-    await new Promise<void>((resolve, reject) => {
-      writer.end((err?: Error | null) => (err ? reject(err) : resolve()))
+    assertAllowedUrl(url)
+    await downloadFile(url, tempPath, {
+      headers: { 'User-Agent': UA },
+      signal: options.signal,
+      idleTimeoutMs: DEFAULT_TIMEOUT_MS,
+      onProgress: options.onProgress,
     })
-    // 等 fd 真正关闭再 rename：Windows 上句柄未释放时改名可能 EBUSY
-    if (!writer.closed) {
-      await new Promise<void>(resolve => writer.once('close', () => resolve()))
-    }
     await rename(tempPath, destPath)
-  } catch (error) {
-    // 先把句柄关掉再删：Windows 下仍打开的文件删不掉
-    if (!writer.closed) {
-      await new Promise<void>((resolve) => {
-        writer.once('close', () => resolve())
-        writer.destroy()
-      })
-    }
+  }
+  catch (error) {
     await rm(tempPath, { force: true }).catch(() => {})
     throw error
   }

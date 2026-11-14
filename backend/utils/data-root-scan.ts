@@ -11,7 +11,7 @@ import type { DataLayerUsageInfo, DataUsage } from '../../shared/app.ts'
 import type { DataLayer } from '../../shared/data-layers.ts'
 import { readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { CHROMIUM_SESSION_CACHE_DIRS, DATA_LAYER_META, DATA_LAYERS } from '../../shared/data-layers.ts'
+import { CHROMIUM_SESSION_CACHE_DIRS, DATA_LAYER_ENTRIES, DATA_LAYER_META, DATA_LAYERS } from '../../shared/data-layers.ts'
 import { getAssetsRoot } from './assets-root.ts'
 import { clearCacheLayer, getLayerRoot, measureLayers } from './data-layers.ts'
 import { getDataDirectory } from './data-root.ts'
@@ -183,11 +183,17 @@ export async function scanDataLayers(options: { force?: boolean } = {}): Promise
     // 整个 cache 层都可清（隔离区在配置层，不在这个范围里）
     const cacheLayerDirs: CacheDirInfo[] = [{ path: getLayerRoot('cache'), bytes: usages.cache.bytes }]
 
+    // 只有清单里 `clean: 'always'` 的 cache 条目才计入「可清理」，否则 UI 会虚报，
+    // 用户以为能清掉的体积和真正会释放的体积对不上。
+    const cleanableCacheEntryIds = new Set(DATA_LAYER_ENTRIES
+      .filter(entry => entry.layer === 'cache' && entry.clean === 'always')
+      .map(entry => entry.id))
+
     const layers: DataLayerUsageInfo[] = DATA_LAYERS.map((layer: DataLayer) => {
       const meta = DATA_LAYER_META[layer]
       const usage = usages[layer]
       const cleanableBytes = layer === 'cache'
-        ? usage.bytes
+        ? usage.entries.reduce((sum, item) => cleanableCacheEntryIds.has(item.id) ? sum + item.bytes : sum, 0)
         : layer === 'session'
           ? sessionCacheBytes
           : 0
@@ -225,7 +231,7 @@ export function invalidateScanCache(): void {
 }
 
 /**
- * 清理可再生数据：整个 cache 层 + 会话层内的 Chromium 缓存目录。
+ * 清理可再生数据：cache 层里 `clean: 'always'` 的条目 + 会话层内的 Chromium 缓存目录。
  * **配置层与资产层不在这里出现**——它们的 clean 策略是 `never`（shared/data-layers.ts）。
  */
 export async function clearDataLayerCaches(): Promise<CacheCleanResult> {
@@ -251,7 +257,8 @@ export async function clearDataLayerCaches(): Promise<CacheCleanResult> {
     }
   }
 
-  // 2) cache 层整体（工具自己的可再生数据：objects / downloads / runtime / 隔离区 …）
+  // 2) cache 层里清单标记 clean: 'always' 的条目（objects / runtime / 临时目录 …）；
+  //    未登记目录与已下载成品（offline-pack/downloads）原地保留
   const cacheLayer = await clearCacheLayer({ skipPaths: [...skipPaths] })
   result.freedBytes += cacheLayer.freedBytes
   result.cleanedDirs += cacheLayer.removedItems

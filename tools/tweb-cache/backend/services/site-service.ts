@@ -32,13 +32,20 @@ function enqueueLifecycle<T>(task: () => Promise<T>): Promise<T> {
   return run
 }
 
-function resolveSiteRoot(): string {
-  return path.join(app.getAppPath(), 'tweb', 'dist')
+/** 打包态读安装包内置资源（`scripts/after-pack.mjs` 写进 `resources/tweb`）；开发态读仓库里的 `tweb/` */
+function resolveTwebBaseDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'tweb')
+    : path.join(app.getAppPath(), 'tweb')
 }
 
 /** tweb 的 dist 只有 chunk，assets / wasm / 字体在 public/ 里 —— 两层都要托管 */
+function resolveSiteRoot(): string {
+  return path.join(resolveTwebBaseDir(), 'dist')
+}
+
 function resolveSiteExtraRoot(): string {
-  return path.join(app.getAppPath(), 'tweb', 'public')
+  return path.join(resolveTwebBaseDir(), 'public')
 }
 
 export function getTwebCacheSiteStatus(): TwebCacheSiteInfo {
@@ -50,7 +57,7 @@ export function getTwebCacheMediaOrigin(): { url: string, token: string } | unde
   return siteHandle ? { url: siteHandle.url, token: siteHandle.token } : undefined
 }
 
-export async function initializeTwebCacheSite(): Promise<void> {
+export function initializeTwebCacheSite(): void {
   siteStatus = { ...EMPTY_SITE }
 }
 

@@ -18,9 +18,13 @@ export function createIpcForbiddenError(): Error {
 // 打包后渲染页是 file://.../app.asar/dist/index.html，校验 file: 来源时必须用
 // app.getAppPath() 做前缀比对；electron/main.ts 在注册任何 handler 之前注入。
 let trustedAppPath: string | undefined
+let allowLoopbackHttp = false
+let devServerPort: number | undefined
 
-export function initIpcSafety(options: { appPath?: string }): void {
+export function initIpcSafety(options: { appPath?: string, allowLoopbackHttp?: boolean, devServerPort?: number }): void {
   trustedAppPath = options.appPath?.trim() || undefined
+  allowLoopbackHttp = options.allowLoopbackHttp === true
+  devServerPort = options.devServerPort
 }
 
 function resolveSenderUrls(event: IpcEventLike): string[] {
@@ -41,7 +45,11 @@ function resolveSenderUrls(event: IpcEventLike): string[] {
 function isSenderTrusted(event: IpcEventLike): boolean {
   const candidates = resolveSenderUrls(event)
   if (candidates.length === 0) return false
-  return candidates.some(url => isTrustedIpcSenderUrl(url, { appPath: trustedAppPath }))
+  return candidates.some(url => isTrustedIpcSenderUrl(url, {
+    appPath: trustedAppPath,
+    allowLoopbackHttp,
+    devServerPort,
+  }))
 }
 
 /**

@@ -82,7 +82,7 @@
 - 定位文件：`userData/assets-root.json`（与 `data-root.json` 同级、同 `app-instance` 形态区分，dev 与安装版各自独立）。
   放在 userData 而非数据根内，因为它指向数据根**之外**；数据目录切换不应改动它。
 - 默认值：`<data>/assets`。设置页给出建议文案：资产体量大时可指到另一块盘。
-- 切换流程与数据目录同构、**不立即生效**：`ASSETS_DIRECTORY_UPDATE` 只写 `userData/assets-root.pending.json`，下次启动在 `ready` 之前执行 `migrateAssetsDirectory()`（复制 → 逐文件 sha256 校验 → 删源；失败保留旧位置并保留 pending，下次重试）。
+- 切换流程与数据目录同构、**不立即生效**：`ASSETS_DIRECTORY_UPDATE` 只写 `userData/assets-root.pending.json`；空目录走迁移（复制 → 文件数/字节数校验 → 删源，失败保留旧位置并保留 pending，下次重试），非空但认得出是既有归档目录（含 `tweb-cache` / `skill-manager`）则走 `mode=adopt` 直接接管，不迁移、不合并。
 - 路径守卫（`isSafeAssetsDirectory`）：禁止盘根 / 用户主目录本身 / 与数据根完全相同；允许位于数据根内（默认即如此）；禁止数据根位于资产根内。
 
 ### 3.2 索引不写死绝对路径
@@ -123,11 +123,13 @@ peer 目录改名不影响这些文件。
 | `interceptor/certs/` | `config/interceptor/certs/` | config | include | never | `sensitive`（私钥必须进备份） |
 | `interceptor/extension/` | `cache/interceptor/` | cache | never | always | 从 resources 重建 |
 | `offline-pack/history.json` | `config/offline-pack/` | config | include | never | `savedPath` 指向 cache，清后显示「文件已缺失」 |
-| `offline-pack/downloads/` | `cache/offline-pack/downloads` | cache | never | always | 可重下 |
+| `offline-pack/downloads/` | `cache/offline-pack/downloads` | cache | never | never | 已下载成品（安装包 / 离线包）；重下要再花一次流量，清缓存不删 |
 | `wxp-enhancer/config.json` | `config/wxp-enhancer/` | config | include | never | — |
 | `wxp-enhancer/data-cache.json` | `config/wxp-enhancer/` | config | include | never | `sensitive`（我们写的登录态 → 按判据归 config，不塞进 `session/`） |
 | `tweb-cache/config.json` | `config/tweb-cache/` | config | include | never | 站点端口（origin 固定） |
 | `tweb-cache/archive-alias.json` | `config/tweb-cache/` | config | optional | never | 等价缓存索引（转发 / 同媒体副本）；可由 manifest 重建 |
+| `tweb-cache/media-index.json` | `config/tweb-cache/` | config | include | never | 媒体索引；规范化扫描时由 manifest 重建 |
+| `tweb-cache/messages-index/*.json` | `config/tweb-cache/` | config | include | never | 消息状态索引（按 peer 分片）；规范化扫描时由 manifest 重建 |
 | `tweb-cache/peer-dirs.json` | `config/tweb-cache/` | config | include | never | 群目录名登记（username + peer id）；丢失后可从 manifest 重建 |
 | `tweb-cache/{messages,trash}` | `<assets>/tweb-cache/`（工具内可单独覆盖） | **assets** | manifest-only | never | 消息级缓存 / 回收站，源可能已被删，不可再生 |
 | `tweb-cache/{objects,tmp,diagnostics}` | `cache/tweb-cache/` | cache | never | always | 清后须修剪媒体索引 |
@@ -318,7 +320,7 @@ P1（资产独立根）追加验证：
 - 启动顺序 `loadDataDirectoryOverrideSync()` → **`loadAssetsRootSync()`** → `upgradeDataLayout()` → `configureSessionDataDirectory()`：
   归档随布局升级直接落到生效的资产根（自定义根时不会写进数据目录）；
 - 迁移复用 `migrateDataDirectory()`（复制全部成功才删源）；失败保留旧位置 + pending，下次重试；
-- 关系守卫拒绝对话：资产根 = 数据根、数据根在资产根内、资产根落在 `config`/`session`/`cache` 层内、目标目录非空。
+- 关系守卫拒绝对话：资产根 = 数据根、数据根在资产根内、资产根落在 `config`/`session`/`cache` 层内；目标目录非空且认不出是既有归档目录时拒绝（认得出的走接管，不迁移）。
 
 P2（备份导出/恢复）追加验证：
 
@@ -354,7 +356,7 @@ P2（备份导出/恢复）追加验证：
 
 ## 11. 不变量（验收断言）
 
-1. 清空 `cache/` 后：应用正常启动；账号 / 规则 / 登录态 / 证书 / 归档全在；tweb-cache 媒体状态显示为未缓存；workbuddy 显示「需重新下载」；offline-pack 历史标缺失；隔离区（`config/quarantine/`）不受影响。
+1. 清空 `cache/` 后：应用正常启动；账号 / 规则 / 登录态 / 证书 / 归档全在；tweb-cache 媒体状态显示为未缓存；workbuddy 显示「需重新下载」；`offline-pack/downloads` 里的已下载成品保留；隔离区（`config/quarantine/`）不受影响。
 2. 导出包内零 `cache` 条目；`sensitive` 按开关处理；`assets` 默认只有清单；包内 sha256 全通过。
 3. 导入只写 `config`（+可选 `session`），失败**自动回滚**并返回 `rollbackSnapshot`（报告里必须能拿到快照路径，可据此人工复核）。
 4. 迁移跳过 `cache` 时：新目录可用、旧目录保留且只剩 `cache/`、迁移结果里 `skipped` 列出了它。

@@ -14,6 +14,8 @@ const props = defineProps<{
   filename: string
   /** 任务标题：下载抽屉与历史里显示，同时作为「同一文件是否在下载」的判据 */
   title: string
+  /** GitHub 发布资产摘要（有则后端下载后校验） */
+  digest?: string
 }>()
 
 const downloads = useOfflinePackDownloadsStore()
@@ -35,6 +37,7 @@ async function download(variant: OfflinePackGithubDownloadVariant): Promise<void
       url: props.officialUrl,
       filename: props.filename,
       mirror: variant.mirror,
+      sha256: props.digest,
     },
     props.title,
   )

@@ -52,6 +52,8 @@ data-collector.ts          数据采集：buildCollectExpression() + collectWxpD
 cdp-client.ts              CDP 基础：连接/求值/注入；evaluateInPageTargets（全页面，无返回值）、evaluateOnMainPage（主页面，有返回值）
 ```
 
+注入会话对每个目标保持一条常驻 CDP 连接：`Page.addScriptToEvaluateOnNewDocument` 的注册随会话关闭失效，短连接注入后立刻断开等于没有注册；连接在目标关闭或会话 `stop()` 时统一释放。
+
 **硬约束（违反即产残缺脚本）**：
 - `injectionMain` 必须自包含：只引用浏览器全局与 `window.__wxpEnv`，**禁止引用模块导入/外部闭包**（toString 序列化后外部引用悬空）；保持 ES5 风格（var/function），防降级 helper 混入；
 - 文件头有 eslint-disable 组与最小 `declare const`；`@ts-nocheck` 被 `ts/ban-ts-comment` 禁用，改用显式 `any` 注解；

@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { logger } from '../../../../backend/utils/logger.ts'
+import { withArchiveMessageLock } from './message-lock.ts'
 import {
   archiveMessageDir,
   readArchiveMessageManifest,
@@ -48,41 +49,42 @@ export async function moveArchiveMessageToTrash(
   retentionDays = 30,
 ): Promise<ArchiveTrashEntry> {
   const source = archiveMessageDir(peerId, messageId)
-  if (!existsSync(source)) throw new Error('本地没有该消息缓存')
+  return withArchiveMessageLock(source, async () => {
+    if (!existsSync(source)) throw new Error('本地没有该消息缓存')
 
-  const manifest = await readArchiveMessageManifest(peerId, messageId)
-  const now = Date.now()
-  const trashId = trashIdFor(peerId, messageId, now)
-  const target = path.join(getArchiveTrashRoot(), trashId)
-  await mkdir(path.dirname(target), { recursive: true })
-  await rename(source, target)
+    const manifest = await readArchiveMessageManifest(peerId, messageId)
+    const now = Date.now()
+    const trashId = trashIdFor(peerId, messageId, now)
+    const target = path.join(getArchiveTrashRoot(), trashId)
+    await mkdir(path.dirname(target), { recursive: true })
+    await rename(source, target)
 
-  const entry: ArchiveTrashEntry = {
-    trashId,
-    deletedAt: now,
-    expiresAt: now + Math.max(0, retentionDays) * 24 * 60 * 60 * 1000,
-    originalPath: toArchiveRelativePath(source),
-    peerId,
-    messageId,
-  }
-  await writeFile(
-    path.join(target, 'trash.json'),
-    `${JSON.stringify({ schemaVersion: 1, ...entry }, null, 2)}\n`,
-    'utf8',
-  )
+    const entry: ArchiveTrashEntry = {
+      trashId,
+      deletedAt: now,
+      expiresAt: now + Math.max(0, retentionDays) * 24 * 60 * 60 * 1000,
+      originalPath: toArchiveRelativePath(source),
+      peerId,
+      messageId,
+    }
+    await writeFile(
+      path.join(target, 'trash.json'),
+      `${JSON.stringify({ schemaVersion: 1, ...entry }, null, 2)}\n`,
+      'utf8',
+    )
 
-  for (const attachment of manifest?.attachments ?? []) {
-    if (attachment.mediaKey) removeArchiveMedia(attachment.mediaKey)
-  }
-  removeArchiveMessageIndexEntry(peerId, messageId)
-  unregisterArchiveAliases(peerId, messageId)
-  logger.info('Archive message moved to trash', { peerId, messageId, trashId })
-  return entry
+    for (const attachment of manifest?.attachments ?? []) {
+      if (attachment.mediaKey) removeArchiveMedia(attachment.mediaKey)
+    }
+    removeArchiveMessageIndexEntry(peerId, messageId)
+    unregisterArchiveAliases(peerId, messageId)
+    logger.info('Archive message moved to trash', { peerId, messageId, trashId })
+    return entry
+  })
 }
 
 export async function listArchiveTrash(): Promise<ArchiveTrashEntry[]> {
   const root = getArchiveTrashRoot()
-  if (!existsSync(root)) return []
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   const result: ArchiveTrashEntry[] = []
   for (const entry of entries) {
@@ -113,37 +115,39 @@ export async function restoreArchiveTrash(trashId: string): Promise<{
   const manifest = await readTrashJsonManifest(trashDir)
   // 目录已不再带 acc-<scope> 这一级：恢复位置按 peerId / messageId 重新算，旧 originalPath 只作记录
   const target = archiveMessageDir(document.peerId, document.messageId)
-  if (existsSync(target)) throw new Error('原路径已被占用，无法恢复')
+  return withArchiveMessageLock(target, async () => {
+    if (existsSync(target)) throw new Error('原路径已被占用，无法恢复')
 
-  await mkdir(path.dirname(target), { recursive: true })
-  await rename(trashDir, target)
-  await rm(path.join(target, 'trash.json'), { force: true }).catch(() => undefined)
+    await mkdir(path.dirname(target), { recursive: true })
+    await rename(trashDir, target)
+    await rm(path.join(target, 'trash.json'), { force: true }).catch(() => undefined)
 
-  for (const attachment of manifest?.attachments ?? []) {
-    if (!attachment.mediaKey || !attachment.relativePath) continue
-    const absolutePath = resolveMessageRelativePath(target, attachment.relativePath)
-    if (!absolutePath) continue
-    recordArchiveMedia({
-      mediaKey: attachment.mediaKey,
-      relativePath: toArchiveRelativePath(absolutePath),
-      size: attachment.actualSize ?? 0,
-      mimeType: attachment.mimeType,
-      sha256: attachment.sha256,
+    for (const attachment of manifest?.attachments ?? []) {
+      if (!attachment.mediaKey || !attachment.relativePath) continue
+      const absolutePath = resolveMessageRelativePath(target, attachment.relativePath)
+      if (!absolutePath) continue
+      recordArchiveMedia({
+        mediaKey: attachment.mediaKey,
+        relativePath: toArchiveRelativePath(absolutePath),
+        size: attachment.actualSize ?? 0,
+        mimeType: attachment.mimeType,
+        sha256: attachment.sha256,
+      })
+    }
+    registerArchiveAliases({
+      peerId: document.peerId,
+      messageId: document.messageId,
+      forwardSource: manifest?.forwardSource,
+      mediaKeys: manifest?.attachments.map(attachment => attachment.mediaKey) ?? [],
+      textChars: manifest?.text?.chars ?? 0,
     })
-  }
-  registerArchiveAliases({
-    peerId: document.peerId,
-    messageId: document.messageId,
-    forwardSource: manifest?.forwardSource,
-    mediaKeys: manifest?.attachments.map(attachment => attachment.mediaKey) ?? [],
-    textChars: manifest?.text?.chars ?? 0,
+    logger.info('Archive message restored from trash', { trashId })
+    return {
+      state: manifest ? 'complete' : 'partial',
+      peerId: document.peerId,
+      messageId: document.messageId,
+    }
   })
-  logger.info('Archive message restored from trash', { trashId })
-  return {
-    state: manifest ? 'complete' : 'partial',
-    peerId: document.peerId,
-    messageId: document.messageId,
-  }
 }
 
 async function readTrashJsonManifest(dir: string): Promise<ArchiveMessageManifest | undefined> {

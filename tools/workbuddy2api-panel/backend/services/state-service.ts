@@ -96,9 +96,14 @@ export async function buildState(): Promise<Wb2apiPanelState> {
   const alive = isProcessManagedAlive()
   if (!alive) {
     const orphans = await findOrphanPids(port)
-    state.orphanLikely = orphans.length > 0
+    const health = orphans.length > 0 ? await probeHealthz(port) : null
+    // 只有探活确认是本服务，才把「结束占用」提供给用户；别的程序占着端口不能强杀
+    state.orphanLikely = Boolean(health?.ok)
+    if (orphans.length > 0 && !health?.ok) {
+      state.lastError = state.lastError || `端口 ${port} 被其它程序占用，请更换端口`
+    }
     // 主动 STOP 会 clearLastStderr，避免关停日志冒充错误
-    state.status = lastError ? 'error' : 'stopped'
+    state.status = state.lastError ? 'error' : 'stopped'
     return state
   }
 

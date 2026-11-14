@@ -15,9 +15,6 @@ interface LoginProbeState {
 
 let timer: NodeJS.Timeout | null = null
 let generation = 0
-let ticking = false
-let lastFavTs: number | null = null
-let lastCollectedAt = 0
 
 let cacheEmitter: ((cache: WxpDataCache) => void) | null = null
 
@@ -33,8 +30,10 @@ export function setWxpDataCacheEmitter(emitter: ((cache: WxpDataCache) => void) 
 export function startAutoCollect(port: number): void {
   stopAutoCollect()
   const gen = ++generation
-  lastFavTs = null
-  lastCollectedAt = 0
+  // 每次启动独立一份运行态：stop 后旧 tick 还在跑时不会把新一轮的 ticking 卡死
+  let ticking = false
+  let lastFavTs: number | null = null
+  let lastCollectedAt = 0
 
   const tick = async (): Promise<void> => {
     if (gen !== generation || ticking) return
@@ -57,7 +56,7 @@ export function startAutoCollect(port: number): void {
     } catch {
       // 页面未就绪 / 目标繁忙：下轮继续
     } finally {
-      if (gen === generation) ticking = false
+      ticking = false
     }
   }
 

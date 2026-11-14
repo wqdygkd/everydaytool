@@ -13,22 +13,22 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { createServer, request as httpRequest, STATUS_CODES } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { connect as netConnect } from 'node:net'
+import { pipeline } from 'node:stream'
 import { createSecureContext, connect as tlsConnect, TLSSocket } from 'node:tls'
-import { promisify } from 'node:util'
 import * as zlib from 'node:zlib'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { INTERCEPTOR_PROXY_PORT_RANDOM_MAX, INTERCEPTOR_PROXY_PORT_RANDOM_MIN, originOf, TRAFFIC_BODY_MAX_CHARS } from '../../../../shared/interceptor.ts'
 import { runRequestBodyScript } from './body-script.ts'
 import { getLeafCertificate } from './cert-service.ts'
-import { applyHeaderOperations, applyResponseMutations, findHeaderKey, findMatchingRules, findMockRule, planRequest, setHeaderValue } from './rule-engine.ts'
+import { applyHeaderOperations, applyResponseMutations, findHeaderKey, findMatchingRules, findMockRule, planRequest, ruleMayMatchWithoutBody, ruleNeedsRequestBody, setHeaderValue } from './rule-engine.ts'
 import { isLoopbackHost, matchTarget, normalizeHost } from './target-list.ts'
-
-const gunzip = promisify(zlib.gunzip)
-const inflate = promisify(zlib.inflate)
-const brotliDecompress = promisify(zlib.brotliDecompress)
 
 /** 内存缓冲上限：请求/响应体在此范围内完整缓冲（支持改体与完整日志）。超出时请求侧（需缓冲才能匹配/改体）直接 502，响应侧放弃改体改为直通 */
 const BUFFER_LIMIT_BYTES = 8 * 1024 * 1024
+/** 日志采样上限：只保留正文前缀，避免为一个 64KB 的展示字段缓冲 / 解压整包 */
+const TRAFFIC_SAMPLE_BYTES = 512 * 1024
+/** 解压后的日志正文上限（TRAFFIC_BODY_MAX_CHARS 的 4 倍，足够覆盖 UTF-8） */
+const TRAFFIC_SAMPLE_OUTPUT_BYTES = 256 * 1024
 /** 上游请求超时 */
 const UPSTREAM_TIMEOUT_MS = 30_000
 /** WebSocket 隧道无超时，但握手后空闲保护交给 TCP 自身 */
@@ -197,16 +197,55 @@ function writeHeadWithStatus(
   else res.writeHead(statusCode, toWriteHeaders(finalHeaders))
 }
 
-async function decodeBody(buffer: Buffer, encoding: string | undefined): Promise<Buffer | null> {
-  if (!encoding || encoding === 'identity') return buffer
-  try {
-    if (encoding === 'gzip') return await gunzip(buffer)
-    if (encoding === 'deflate') return await inflate(buffer)
-    if (encoding === 'br') return await brotliDecompress(buffer)
-  } catch {
-    return null
+interface DecodedSample {
+  body: Buffer | null
+  truncated: boolean
+}
+
+/**
+ * 流式解压并限制输出：最多产出 TRAFFIC_SAMPLE_OUTPUT_BYTES。
+ * 输入是截断的压缩流时用 Z_SYNC_FLUSH 取已解出的前缀，而不是整段丢弃。
+ */
+async function decodeBodySample(buffer: Buffer, encoding: string | undefined): Promise<DecodedSample> {
+  if (!encoding || encoding === 'identity') {
+    return buffer.length > TRAFFIC_SAMPLE_OUTPUT_BYTES
+      ? { body: buffer.subarray(0, TRAFFIC_SAMPLE_OUTPUT_BYTES), truncated: true }
+      : { body: buffer, truncated: false }
   }
-  return null
+  const create = encoding === 'gzip'
+    ? zlib.createGunzip
+    : encoding === 'deflate'
+      ? zlib.createInflate
+      : encoding === 'br'
+        ? zlib.createBrotliDecompress
+        : null
+  if (!create) return { body: null, truncated: true }
+
+  return await new Promise<DecodedSample>((resolve) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    let settled = false
+    const finish = (body: Buffer | null, truncated: boolean): void => {
+      if (settled) return
+      settled = true
+      resolve({ body, truncated })
+    }
+    const stream = create(encoding === 'br' ? {} : { finishFlush: zlib.constants.Z_SYNC_FLUSH })
+    stream.on('data', (chunk: Buffer) => {
+      if (size >= TRAFFIC_SAMPLE_OUTPUT_BYTES) return
+      const room = TRAFFIC_SAMPLE_OUTPUT_BYTES - size
+      const slice = chunk.length > room ? chunk.subarray(0, room) : chunk
+      chunks.push(slice)
+      size += slice.length
+      if (size >= TRAFFIC_SAMPLE_OUTPUT_BYTES) {
+        stream.destroy()
+        finish(Buffer.concat(chunks), true)
+      }
+    })
+    stream.on('end', () => finish(Buffer.concat(chunks), false))
+    stream.on('error', () => finish(Buffer.concat(chunks), true))
+    stream.end(buffer)
+  })
 }
 
 interface CollectedBody {
@@ -266,6 +305,12 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     socket.on('close', () => clientSockets.delete(socket))
   }
 
+  /** 双向隧道：任一侧断开 / 出错都收尾，避免上游中途断开后浏览器请求一直挂着 */
+  function bridgeSockets(a: Duplex, b: Duplex, onDone: () => void): void {
+    pipeline(a, b, () => onDone())
+    pipeline(b, a, () => onDone())
+  }
+
   function isOwnConnection(host: string, portToCheck: number): boolean {
     return isLoopbackHost(host) && deps.isOwnPort(portToCheck)
   }
@@ -293,6 +338,17 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
   // -------------------------------------------------------------------------
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      await handleRequestInner(req, res)
+    } catch (error) {
+      // 规则数据损坏 / 流异常等可能发生在内层 try 之外：这里兜底，避免整个代理进程被打断
+      logger.error('Proxy request handler failed', { url: req.url, error: (error as Error).stack ?? (error as Error).message })
+      if (!res.headersSent) sendPlainError(res, 502, `Bad Gateway: ${(error as Error).message}`)
+      else res.destroy()
+    }
+  }
+
+  async function handleRequestInner(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const mitm = (req.socket as EdtSocket).__edtMitm
     const startedAt = Date.now()
 
@@ -345,9 +401,21 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     const path = pathAndQuery.split('?')[0] ?? '/'
     const requestContentType = headerValue(req.headers['content-type'])
 
-    // 请求体：任一启用规则需要体（payload 过滤器 / 改体）时先整体缓冲，否则边转发边采样
+    // 请求体：先用不需要体的条件预筛，只有确实可能命中「改体 / 请求体过滤器」时才整体缓冲。
+    // 否则所有名单内请求都会被一条无关规则拖进 8 MB 缓冲（大请求直接 502）。
     const allRules = deps.getRules()
-    const requiresBody = allRules.some(rule => rule.enabled && (rule.type === 'request' || rule.filters?.requestPayload))
+    const baseCtx: RuleMatchContext = {
+      method: req.method ?? 'GET',
+      url: fullUrl,
+      host: normalizeHost(host),
+      path,
+      resourceType: inferResourceType(req.headers),
+      pageUrl: headerValue(req.headers.referer) ?? headerValue(req.headers.origin),
+      requestBody: null,
+      requestContentType,
+    }
+    const candidateRules = allRules.filter(rule => rule.enabled && ruleMayMatchWithoutBody(rule, baseCtx))
+    const requiresBody = candidateRules.some(ruleNeedsRequestBody)
 
     let requestBody: Buffer | null = null
     let requestBodyBuffered = false
@@ -373,17 +441,8 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       requestBodyBuffered = true
     }
 
-    const ctx: RuleMatchContext = {
-      method: req.method ?? 'GET',
-      url: fullUrl,
-      host: normalizeHost(host),
-      path,
-      resourceType: inferResourceType(req.headers),
-      pageUrl: headerValue(req.headers.referer) ?? headerValue(req.headers.origin),
-      requestBody,
-      requestContentType,
-    }
-    const matchedRules = findMatchingRules(allRules, ctx)
+    const ctx: RuleMatchContext = { ...baseCtx, requestBody }
+    const matchedRules = findMatchingRules(candidateRules, ctx)
     const matchedRuleIds = matchedRules.map(rule => rule.id)
     const matchedRuleNames = matchedRules.map(rule => rule.name)
     const plan = planRequest(matchedRules, new URL(fullUrl))
@@ -544,16 +603,23 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
   ): void {
     const headers = stripHopByHop(flattenHeaders(req.headers))
     const upstreamReq = createUpstreamRequest(scheme, host, targetPort, req.method ?? 'GET', pathAndQuery, headers)
+    upstreamReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
+      upstreamReq.destroy(new Error(`upstream timeout (${UPSTREAM_TIMEOUT_MS}ms)`))
+    })
     upstreamReq.on('error', (error) => {
       if (!res.headersSent) sendPlainError(res, 502, `Bad Gateway: ${error.message}`)
       else res.destroy()
     })
-    req.pipe(upstreamReq)
+    pipeline(req, upstreamReq, (error) => {
+      if (error) logger.debug('Transparent request pipeline ended', { host, error: error.message })
+    })
     upstreamReq.on('response', (upstreamRes) => {
       // 逐跳头不能跨代理转发：原样回传 connection/keep-alive 会让我们的连接行为跟着上游走
       // （客户端发 Connection: close 时反而被上游的 keep-alive 覆盖，连接不关，部分客户端会一直等）
       res.writeHead(upstreamRes.statusCode ?? 502, toWriteHeaders(stripHopByHop(flattenHeaders(upstreamRes.headers))))
-      upstreamRes.pipe(res)
+      pipeline(upstreamRes, res, (error) => {
+        if (error) logger.debug('Transparent response pipeline ended', { host, error: error.message })
+      })
     })
   }
 
@@ -613,12 +679,14 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       let truncated = false
       req.on('data', (chunk: Buffer) => {
         size += chunk.length
-        if (size <= BUFFER_LIMIT_BYTES && isTextualContentType(requestContentType)) chunks.push(chunk)
-        else if (size > BUFFER_LIMIT_BYTES) truncated = true
+        if (size <= TRAFFIC_SAMPLE_BYTES && isTextualContentType(requestContentType)) chunks.push(chunk)
+        else if (size > TRAFFIC_SAMPLE_BYTES) truncated = true
       })
-      req.pipe(upstreamReq)
+      pipeline(req, upstreamReq, (error) => {
+        if (error) logger.debug('Request body pipeline ended', { url: ctx.url, error: error.message })
+      })
       req.on('end', () => {
-        if (isTextualContentType(requestContentType) && !truncated) requestBodyForLog = Buffer.concat(chunks)
+        if (isTextualContentType(requestContentType) && chunks.length) requestBodyForLog = Buffer.concat(chunks)
         requestBodyTruncated = truncated
       })
     } else {
@@ -641,38 +709,15 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     const mocked = false
 
     if (wantsBodyReplace) {
-      const collected = await collectStream(upstreamRes, BUFFER_LIMIT_BYTES)
-      if (!collected.truncated) {
-        const decoded = await decodeBody(collected.buffer, responseContentEncoding)
-        if (decoded) {
-          const mutated = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, decoded)
-          const finalStatus = mutated.statusCode
-          writeHeadWithStatus(res, finalStatus, mutated.statusText, mutated.headers, noCache)
-          res.end(mutated.body ?? undefined)
-          loggedBody = mutated.body
-          finishEntry(finalStatus, mutated.statusText, mutated.headers)
-          return
-        }
-        // 解码失败（异常编码）：按原始内容回写，不改体；状态码 / 响应头变更照常应用
-        const passthrough = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, null)
-        writeHeadWithStatus(res, passthrough.statusCode, passthrough.statusText, passthrough.headers, noCache)
-        res.end(collected.buffer)
-        loggedBody = collected.buffer
-        loggedTruncated = true
-        finishEntry(passthrough.statusCode, passthrough.statusText, passthrough.headers)
-        return
-      }
-      // 超出缓冲上限：放弃改体，直通（已读部分顺序写出）
-      const withoutBodyReplace = matchedRules.map(rule =>
-        rule.type === 'response' && rule.response
-          ? { ...rule, response: { ...rule.response, bodyReplace: undefined } }
-          : rule)
-      const mutatedHeaders = applyResponseMutations(withoutBodyReplace, statusCode, flatResponseHeaders, null)
-      writeHeadWithStatus(res, mutatedHeaders.statusCode, mutatedHeaders.statusText, mutatedHeaders.headers, noCache)
-      res.write(collected.buffer)
-      upstreamRes.pipe(res)
-      loggedTruncated = true
-      upstreamRes.on('end', () => finishEntry(mutatedHeaders.statusCode, mutatedHeaders.statusText, mutatedHeaders.headers))
+      // 有整体替换时不读上游正文：替换体与上游的压缩编码 / 长度无关，
+      // 先解码再替换既会被 8 MB 上限截断，解码失败时还会写出「替换头 + 原始压缩字节」。
+      const mutated = applyResponseMutations(matchedRules, statusCode, flatResponseHeaders, null)
+      writeHeadWithStatus(res, mutated.statusCode, mutated.statusText, mutated.headers, noCache)
+      res.end(mutated.body ?? undefined)
+      loggedBody = mutated.body
+      upstreamRes.on('error', () => {})
+      upstreamRes.destroy()
+      finishEntry(mutated.statusCode, mutated.statusText, mutated.headers)
       return
     }
 
@@ -687,19 +732,20 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
 
     upstreamRes.on('data', (chunk: Buffer) => {
       size += chunk.length
-      if (size <= BUFFER_LIMIT_BYTES && textual) chunks.push(chunk)
-      else if (size > BUFFER_LIMIT_BYTES) truncated = true
+      if (size <= TRAFFIC_SAMPLE_BYTES && textual) chunks.push(chunk)
+      else if (size > TRAFFIC_SAMPLE_BYTES) truncated = true
     })
-    upstreamRes.pipe(res)
-
     await new Promise<void>((resolve) => {
-      res.on('close', resolve)
-      res.on('finish', resolve)
+      pipeline(upstreamRes, res, (error) => {
+        if (error) logger.debug('Response pipeline ended', { url: ctx.url, error: error.message })
+        resolve()
+      })
     })
 
-    if (textual && !truncated) {
-      loggedBody = await decodeBody(Buffer.concat(chunks), responseContentEncoding)
-      loggedTruncated = loggedBody === null
+    if (textual && chunks.length) {
+      const sample = await decodeBodySample(Buffer.concat(chunks), responseContentEncoding)
+      loggedBody = sample.body
+      loggedTruncated = truncated || sample.truncated
     } else {
       loggedTruncated = true
     }
@@ -892,10 +938,9 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
     const upstream = netConnect({ host, port: targetPort }, () => {
       clientSocket.write('HTTP/1.1 200 Connection Established\r\nProxy-Agent: edt-interceptor\r\n\r\n')
       if (head?.length) upstream.write(head)
-      upstream.pipe(clientSocket)
-      clientSocket.pipe(upstream)
+      bridgeSockets(upstream, clientSocket, destroyBoth)
     })
-    const destroyBoth = () => {
+    function destroyBoth(): void {
       upstream.destroy()
       clientSocket.destroy()
     }
@@ -978,8 +1023,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       raw += '\r\n'
       upstream.write(raw)
       if (head?.length) upstream.write(head)
-      upstream.pipe(clientSocket)
-      clientSocket.pipe(upstream)
+      bridgeSockets(upstream, clientSocket, destroyBoth)
     })
 
     if (matched) {
@@ -1009,7 +1053,7 @@ export function createProxyService(deps: ProxyServiceDeps): ProxyService {
       })
     }
 
-    const destroyBoth = () => {
+    function destroyBoth(): void {
       upstream.destroy()
       clientSocket.destroy()
     }

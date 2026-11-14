@@ -15,6 +15,18 @@ import { getArchiveDir, getDefaultArchiveDir } from './paths.ts'
 
 /** 归档根下由本工具独占、切换目录时需要一起搬走的条目 */
 const MOVED_ENTRIES = ['messages', 'trash'] as const
+/** 旧布局残留与资源管理器垃圾文件：接管时原样保留，不参与判定 */
+const IGNORED_ENTRIES = new Set([
+  '.DS_Store',
+  'Thumbs.db',
+  'desktop.ini',
+  'objects',
+  'media-index.json',
+  'messages-index',
+  'peer-dirs.json',
+  'archive-alias.json',
+  '.edt-layout.json',
+])
 
 export function getArchiveDirInfo(): TwebCacheArchiveDirInfo {
   const archiveDir = getArchiveDir()
@@ -34,18 +46,21 @@ async function entryNames(directory: string): Promise<string[]> {
 }
 
 /**
- * 目标目录必须为空；允许预建空的 messages/、trash/（方便用户按提示准备目录）。
- * 返回需要先移除的空壳目录。
+ * 目标目录的两种合法形态：
+ * - 空目录（允许预建空的 messages/、trash/）：把当前归档迁移过去；
+ * - 已有 messages/ 或 trash/ 的旧归档目录：直接接管，不迁移、不合并、不删除任何一侧的数据。
+ * 认不出来的非空目录仍然拒绝，避免把无关目录写坏。
  */
-async function assertTargetIsEmpty(target: string): Promise<string[]> {
-  if (!existsSync(target)) return []
+async function inspectTarget(target: string): Promise<{ emptyShells: string[], adopt: boolean }> {
+  if (!existsSync(target)) return { emptyShells: [], adopt: false }
 
   const info = await stat(target).catch(() => null)
-  if (!info) return []
+  if (!info) return { emptyShells: [], adopt: false }
   if (!info.isDirectory()) throw new Error('目标路径不是目录')
 
   const entries = await readdir(target, { withFileTypes: true })
   const emptyShells: string[] = []
+  let adopt = false
   for (const entry of entries) {
     if (entry.isDirectory() && (MOVED_ENTRIES as readonly string[]).includes(entry.name)) {
       const child = path.join(target, entry.name)
@@ -53,10 +68,13 @@ async function assertTargetIsEmpty(target: string): Promise<string[]> {
         emptyShells.push(child)
         continue
       }
+      adopt = true
+      continue
     }
-    throw new Error('目标目录非空，请选择一个空目录（迁移不会覆盖已有文件）')
+    if (entry.name.startsWith('.') || IGNORED_ENTRIES.has(entry.name)) continue
+    throw new Error('目标目录非空，且不是 tweb-cache 归档目录；请选择空目录，或包含 messages/ 的旧归档目录')
   }
-  return emptyShells
+  return { emptyShells, adopt }
 }
 
 function isCrossDevice(error: unknown): boolean {
@@ -118,7 +136,8 @@ function assertSameVolumeRelation(from: string, to: string): void {
 
 /**
  * 切换归档根目录。传 null / 空字符串表示恢复默认 `<assets>/tweb-cache`。
- * 目标必须为空；现有 messages/、trash/ 会迁移过去，失败时回滚。
+ * 空目录：现有 messages/、trash/ 迁移过去，失败时回滚；
+ * 已有归档的目录：直接接管（改配置指向它），不迁移也不删除任何一侧的数据。
  */
 export async function changeArchiveDirectory(nextDirectory: string | null): Promise<TwebCacheArchiveDirChangeResult> {
   const currentDir = getArchiveDir()
@@ -126,7 +145,7 @@ export async function changeArchiveDirectory(nextDirectory: string | null): Prom
   const target = nextDirectory?.trim() ? path.resolve(nextDirectory.trim()) : defaultDir
 
   if (isSamePath(target, currentDir)) {
-    return { ...getArchiveDirInfo(), changed: false, moved: [] }
+    return { ...getArchiveDirInfo(), changed: false, moved: [], adopted: false }
   }
 
   const guard = isSafeAssetsDirectory(target)
@@ -138,7 +157,17 @@ export async function changeArchiveDirectory(nextDirectory: string | null): Prom
   }
   assertSameVolumeRelation(currentDir, target)
 
-  const emptyShells = await assertTargetIsEmpty(target)
+  const { emptyShells, adopt } = await inspectTarget(target)
+
+  if (adopt) {
+    updateTwebCacheConfig({ archiveDir: isSamePath(target, defaultDir) ? null : target })
+    logger.info('Existing archive directory adopted', {
+      from: currentDir,
+      to: target,
+    })
+    return { ...getArchiveDirInfo(), changed: true, moved: [], adopted: true }
+  }
+
   for (const shell of emptyShells) {
     await rm(shell, { recursive: true, force: true })
   }
@@ -173,5 +202,5 @@ export async function changeArchiveDirectory(nextDirectory: string | null): Prom
     moved,
   })
 
-  return { ...getArchiveDirInfo(), changed: true, moved }
+  return { ...getArchiveDirInfo(), changed: true, moved, adopted: false }
 }

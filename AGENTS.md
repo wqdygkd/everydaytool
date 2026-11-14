@@ -6,7 +6,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程�
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 8 个工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / skill-manager / tweb-cache / workbuddy2api-panel）。
+Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 9 个工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / skill-manager / tweb-cache / workbuddy2api-panel / media-library）。
 
 ## 编码规范
 
@@ -90,6 +90,7 @@ pnpm web          # 纯浏览器预览（无 preload / IPC：只列 supportedTar
 pnpm create:tool <id>     # 脚手架：新建工具目录并自动注册
 pnpm vite build   # 仅构建前端
 pnpm typecheck    # TS 类型检查（前端 + 后端两套 tsconfig）
+pnpm test         # Node 内置 test runner（backend + 各工具测试）
 pnpm data-layers:check   # 分层断言：清单/搬迁表一致 + 禁止绕过 resolveLayerPath 拼数据根（含别名）
 pnpm data-layout plan    # 预览 v1→v2 数据布局搬迁计划（只读）
 pnpm lint         # ESLint（含 tools 内文件）
@@ -121,7 +122,7 @@ export default defineTool({
   icon: 'toolbox',
   category: { key: 'general', name: '通用工具' },
   keywords: ['tool-name'],
-  supportedTargets: ['web', 'win', 'mac', 'linux'], // web 网页端 / win Windows / mac macOS / linux
+  supportedTargets: ['win', 'mac'], // web 网页端 / win Windows / mac macOS（Linux 不在发布矩阵）
   route: {
     path: 'tool-name',
     name: 'tool-tool-name',
@@ -133,6 +134,8 @@ export default defineTool({
 
 - 路由由 `renderer/config/tools.ts` 的注册表自动汇总，无需手工登记路由。
 - `meta.toolId` 必填：标题栏上下文与活动组件解析依赖它。
+- 发布矩阵只含 Windows / macOS；除身份证号生成器（无 IPC 依赖）外不要声明 `web`，Linux 也不在当前发布范围。
+- 依赖本机独有产物、装包时可能不存在的工具：能随包内置的在 `scripts/after-pack.mjs` 复制并在定义里标 `requiresBundledSite: true`（如 `tweb-cache` 的 `tweb/dist|public`）；确实无法分发的才标 `devOnly: true`，安装版自动隐藏。
 - 工具内多视图（页签 / 分类）用 `subRoutes` + 路由驱动状态，不要用纯本地 ref（详见「布局、左轨与标题栏」）。
 - **UI 一律先读 [DESIGN.md](./DESIGN.md)**：新页面优先复用 §5 的组件与 §6 的工具类，不要在业务文件里重写卡片 / 分组 / 表格 / 提示的通用样式。
 
@@ -176,6 +179,7 @@ export default defineTool({
 | IPC 处理 | `tools/interceptor/backend/ipc/handlers.ts` |
 | 拦截配置与规则（`config.json` / `rules.json`） | `tools/interceptor/backend/store/` |
 | 平台后端基建（logger / file-ops / 数据根目录 / JSON 存储） | `backend/utils/` |
+| 主进程日志落盘（缓存层 `app/logs`，5 MB 轮转，设置页可打开目录） | `backend/utils/logger.ts` |
 | **应用身份（安装版 / 开发版 userData 隔离）** | `backend/utils/app-instance.ts` |
 | **开发态图标（Dock / 任务栏 DEV 标识）** | `electron/dev-icon.ts`；素材 `resources/dev/`（`scripts/make-dev-icon.py` 生成） |
 | IPC 调用方白名单（safeHandle / safeOn sender 校验） | `backend/utils/ipc-safety.ts` |
@@ -209,4 +213,4 @@ export default defineTool({
 | **offline-pack 模块记忆（下载任务 store / Docker 镜像改写 / 历史抽屉与数据落点）** | `docs/offline-pack.md` |
 | **treease-editor 模块记忆（sessionData 物理落盘 / 拦截缓存常驻）** | `docs/treease-editor.md` |
 | **workbuddy2api-panel 模块记忆（托管上游二进制 / 探活 / 更新回滚）** | `docs/workbuddy2api-panel.md` |
-| **tweb-cache 模块记忆（tweb 页面侧归档客户端 / 触点重放 / SW 与 PeerId 坑）** | `docs/tweb-cache.md` |
+| **tweb-cache 模块记忆（tweb 页面侧归档客户端 / 触点重放 / SW 与 PeerId 坑；安装包内置 tweb 站点，未内置时安装版隐藏）** | `docs/tweb-cache.md` |

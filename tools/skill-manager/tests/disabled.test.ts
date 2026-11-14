@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { writeGlobalLock } from '../backend/locks/global-lock.ts'
 import { readProjectLock, writeProjectLock } from '../backend/locks/project-lock.ts'
+import { getDisabledIndexPath, writeDisabledIndex } from '../backend/services/disabled-index.ts'
 import { setEnabledCore } from '../backend/services/disabled.ts'
 import { createTrashSession, moveToTrash } from '../backend/services/executor.ts'
 import { hashSkillDirectory } from '../backend/services/hash.ts'
@@ -181,6 +182,121 @@ test('project disable keeps the lock entry and enable returns the directory', as
   assert.equal((await lstat(join(scope.skillsDir, 'pfoo'))).isDirectory(), true)
   const restored = await readProjectLock(projectPath)
   assert.ok(restored.ok && restored.data.skills.pfoo.computedHash !== 'old')
+})
+
+test('batch disable rollback restores the first moved directory without deleting it', async () => {
+  const root = await tempRoot()
+  const scope = globalScope(root)
+  const p = await paths(root)
+  await mkdir(scope.skillsDir, { recursive: true })
+  const first = await makeSkill(scope.skillsDir, 'first', 'first-content')
+  await makeSkill(scope.skillsDir, 'second')
+  await mkdir(join(p.disabledRoot, 'global', 'second'), { recursive: true })
+  await writeGlobalLock({
+    version: 3,
+    skills: {
+      first: {
+        source: 'owner/repo',
+        sourceType: 'github',
+        skillFolderHash: 'h1',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      second: {
+        source: 'owner/repo',
+        sourceType: 'github',
+        skillFolderHash: 'h2',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+  }, scope.lockPath)
+
+  await assert.rejects(
+    setEnabledCore({ scopeId: 'global', names: ['first', 'second'], enabled: false }, scope, p),
+    /禁用目标已存在：second/,
+  )
+  assert.equal(await lstat(join(p.disabledRoot, 'global', 'first')).then(() => true).catch(() => false), false)
+  assert.equal((await lstat(first)).isDirectory(), true)
+  assert.match(await readFile(join(first, 'SKILL.md'), 'utf8'), /first-content/)
+  assert.deepEqual(JSON.parse(await readFile(scope.lockPath, 'utf8')).skills.first.skillFolderHash, 'h1')
+})
+
+test('batch enable rollback returns the first restored directory to the disabled area', async () => {
+  const root = await tempRoot()
+  const scope = globalScope(root)
+  const p = await paths(root)
+  await mkdir(scope.skillsDir, { recursive: true })
+  await makeSkill(scope.skillsDir, 'first', 'first-content')
+  await makeSkill(scope.skillsDir, 'second')
+  await writeGlobalLock({
+    version: 3,
+    skills: {
+      first: {
+        source: 'owner/repo',
+        sourceType: 'github',
+        skillFolderHash: 'h1',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      second: {
+        source: 'owner/repo',
+        sourceType: 'github',
+        skillFolderHash: 'h2',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+  }, scope.lockPath)
+
+  await setEnabledCore({ scopeId: 'global', names: ['first', 'second'], enabled: false }, scope, p)
+  await makeSkill(scope.skillsDir, 'second', 'occupied')
+  await assert.rejects(
+    setEnabledCore({ scopeId: 'global', names: ['first', 'second'], enabled: true }, scope, p),
+    /启用目标已存在：second/,
+  )
+  assert.equal(await lstat(join(scope.skillsDir, 'first')).then(() => true).catch(() => false), false)
+  assert.equal((await lstat(join(p.disabledRoot, 'global', 'first'))).isDirectory(), true)
+  assert.match(await readFile(join(p.disabledRoot, 'global', 'first', 'SKILL.md'), 'utf8'), /first-content/)
+})
+
+test('failed transaction does not leave empty lock/registry when they did not exist', async () => {
+  const root = await tempRoot()
+  const scope = globalScope(root)
+  const p = await paths(root)
+  // 历史文件位置是目录：事务在最后一步必然失败，触发一次“写完之后”的回滚
+  p.historyPath = join(root, 'history-as-directory')
+  await mkdir(p.historyPath, { recursive: true })
+  await mkdir(scope.skillsDir, { recursive: true })
+
+  const disabledDir = join(p.disabledRoot, 'global', 'bar')
+  await mkdir(disabledDir, { recursive: true })
+  await writeFile(join(disabledDir, 'SKILL.md'), '---\nname: bar\ndescription: test\n---\nbody\n')
+  const contentHash = await hashSkillDirectory(disabledDir)
+  await writeDisabledIndex({
+    version: 1,
+    scopeId: 'global',
+    entries: {
+      bar: {
+        name: 'bar',
+        scopeId: 'global',
+        groupKey: 'global|github:owner/repo@',
+        origin: { sourceType: 'github', source: 'owner/repo', ref: null, skillPath: 'skills/bar/SKILL.md' },
+        installMode: 'copy',
+        contentHash,
+        disabledAt: new Date().toISOString(),
+      },
+    },
+  }, p.disabledRoot)
+
+  await assert.rejects(
+    setEnabledCore({ scopeId: 'global', names: ['bar'], enabled: true }, scope, p),
+  )
+  assert.equal(await lstat(scope.lockPath).then(() => true).catch(() => false), false)
+  assert.equal(await lstat(p.registryPath).then(() => true).catch(() => false), false)
+  assert.equal((await lstat(disabledDir)).isDirectory(), true)
+  const index = JSON.parse(await readFile(getDisabledIndexPath(p.disabledRoot, 'global'), 'utf8'))
+  assert.deepEqual(Object.keys(index.entries), ['bar'])
 })
 
 test('trash list/restore keeps the directory and removes the manifest entry', async () => {

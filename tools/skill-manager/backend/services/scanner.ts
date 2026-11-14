@@ -3,7 +3,6 @@ import type {
   InstalledSkill,
   Inventory,
   ProjectLockEntry,
-  ProjectRecord,
   ReadSkillResult,
   RepoGroupView,
   ScanDiagnostic,
@@ -16,13 +15,19 @@ import type {
   SkillSourceType,
   SkillState,
 } from '../../../../shared/skill-manager.ts'
-import { createHash } from 'node:crypto'
-import { lstat, readdir, readFile, readlink, realpath, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
-import process from 'node:process'
-import { getGlobalLockPath, readGlobalLock } from '../locks/global-lock.ts'
-import { getProjectLockPath, readProjectLock } from '../locks/project-lock.ts'
+import { lstat, readdir, readFile, readlink, stat } from 'node:fs/promises'
+import { basename, join } from 'node:path'
+import { readGlobalLock } from '../locks/global-lock.ts'
+import { readProjectLock } from '../locks/project-lock.ts'
+import { buildScopes, resolveScannerEnvironment } from './scanner-core.ts'
+
+export type { ScannerEnvironment } from './scanner-core.ts'
+export {
+  buildScopes,
+  configureProjectRegistryProvider,
+  configureScannerEnvironment,
+  resolveScannerEnvironment,
+} from './scanner-core.ts'
 
 const SKILL_FILE = 'SKILL.md'
 const MAX_PREVIEW_FILES = 200
@@ -123,70 +128,6 @@ function isSafeName(name: string): boolean {
     && !name.includes('/')
     && !name.includes('\\')
     && !name.startsWith('.')
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await lstat(path)
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function hashPath(path: string): Promise<string> {
-  return createHash('sha256').update(path).digest('hex').slice(0, 12)
-}
-
-let projectRegistryProvider: (() => ProjectRecord[]) | undefined
-
-/** IPC 层注入项目登记表；测试不注入时只扫描 global 与当前工作目录。 */
-export function configureProjectRegistryProvider(provider: (() => ProjectRecord[]) | undefined): void {
-  projectRegistryProvider = provider
-}
-
-export async function buildScopes(): Promise<Scope[]> {
-  const globalSkillsDir = join(homedir(), '.agents', 'skills')
-  const globalLockPath = getGlobalLockPath()
-  const scopes: Scope[] = [{
-    id: 'global',
-    kind: 'global',
-    label: '全局',
-    skillsDir: globalSkillsDir,
-    lockPath: globalLockPath,
-    lockState: 'missing',
-  }]
-
-  const seen = new Set<string>()
-  const addProject = async (inputPath: string, label?: string, force = false): Promise<void> => {
-    let projectPath = resolve(inputPath)
-    try {
-      projectPath = await realpath(projectPath)
-    } catch {
-      return
-    }
-    if (seen.has(projectPath)) return
-    const skillsDir = join(projectPath, '.agents', 'skills')
-    const lockPath = getProjectLockPath(projectPath)
-    if (!force && !(await pathExists(skillsDir)) && !(await pathExists(lockPath))) return
-    seen.add(projectPath)
-    scopes.push({
-      id: `project:${await hashPath(projectPath)}`,
-      kind: 'project',
-      label: label || basename(projectPath) || projectPath,
-      skillsDir,
-      lockPath,
-      projectPath,
-      lockState: 'missing',
-    })
-  }
-
-  const registered = projectRegistryProvider?.() ?? []
-  for (const project of registered) {
-    if (project.enabled !== false) await addProject(project.path, project.name, true)
-  }
-  await addProject(process.cwd())
-  return scopes
 }
 
 async function scanEntry(
@@ -424,7 +365,7 @@ async function scanScope(scope: Scope): Promise<ScopeInventory> {
   const diagnostics: ScanDiagnostic[] = []
   const lockResult = scope.kind === 'global'
     ? await readGlobalLock(scope.lockPath)
-    : await readProjectLock(scope.projectPath || process.cwd())
+    : await readProjectLock(scope.projectPath || resolveScannerEnvironment().cwd)
 
   if (!lockResult.ok) {
     scope.lockState = lockResult.reason === 'unsupported' ? 'unsupported' : 'invalid'

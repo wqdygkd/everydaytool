@@ -1,3 +1,4 @@
+import { logger } from '../../../../backend/utils/logger.ts'
 import { sleep } from '../../../../shared/sleep.ts'
 
 interface CdpTargetRaw {
@@ -113,29 +114,61 @@ async function connectWebSocket(wsUrl: string): Promise<WebSocket> {
   return ws
 }
 
+interface CdpConnection {
+  ws: WebSocket
+  call: CdpCaller
+}
+
+const connections = new Map<string, Promise<CdpConnection>>()
+
+/**
+ * 每个目标保持一条常驻连接：`Page.addScriptToEvaluateOnNewDocument` 的注册
+ * 会随调试会话关闭失效，短连接注入后立刻断开等于白注册。
+ */
+function getConnection(wsUrl: string): Promise<CdpConnection> {
+  const existing = connections.get(wsUrl)
+  if (existing) return existing
+  const promise = (async () => {
+    const ws = await connectWebSocket(wsUrl)
+    const call = createCdpCaller(ws)
+    ws.addEventListener('close', () => {
+      if (connections.get(wsUrl) === promise) connections.delete(wsUrl)
+    }, { once: true })
+    return { ws, call }
+  })()
+  connections.set(wsUrl, promise)
+  promise.catch(() => {
+    if (connections.get(wsUrl) === promise) connections.delete(wsUrl)
+  })
+  return promise
+}
+
+/** 关闭全部常驻调试连接（注入会话停止 / 应用退出时调用） */
+export function closeCdpConnections(): void {
+  for (const entry of connections.values()) {
+    void entry.then(connection => connection.ws.close()).catch(() => undefined)
+  }
+  connections.clear()
+}
+
 async function injectTarget(
   wsUrl: string,
   scriptSource: string,
   previousIdentifier: string | null = null,
 ): Promise<string> {
-  const ws = await connectWebSocket(wsUrl)
-  const call = createCdpCaller(ws)
-  try {
-    await call('Page.enable')
-    if (previousIdentifier) {
-      try {
-        await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: previousIdentifier })
-      } catch {
-        // 旧标识可能已失效，忽略
-      }
+  const { call } = await getConnection(wsUrl)
+  await call('Page.enable')
+  if (previousIdentifier) {
+    try {
+      await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: previousIdentifier })
+    } catch {
+      // 旧标识可能已失效，忽略
     }
-    const result = await call('Page.addScriptToEvaluateOnNewDocument', { source: scriptSource })
-    const identifier = result.identifier as string
-    await call('Runtime.evaluate', { expression: scriptSource, returnByValue: true })
-    return identifier
-  } finally {
-    ws.close()
   }
+  const result = await call('Page.addScriptToEvaluateOnNewDocument', { source: scriptSource })
+  const identifier = result.identifier as string
+  await call('Runtime.evaluate', { expression: scriptSource, returnByValue: true })
+  return identifier
 }
 
 /**
@@ -145,17 +178,12 @@ async function injectTarget(
  * 探针读脚本写入的版本指纹，无 rev 的旧脚本视为过期。
  */
 async function probeInjectionAlive(wsUrl: string, rev: number): Promise<boolean> {
-  const ws = await connectWebSocket(wsUrl)
-  const call = createCdpCaller(ws)
-  try {
-    const result = await call('Runtime.evaluate', {
-      expression: `!!(window.__wxpEnv&&window.__wxpEnv.rev===${rev})`,
-      returnByValue: true,
-    })
-    return (result as { result?: { value?: unknown } }).result?.value === true
-  } finally {
-    ws.close()
-  }
+  const { call } = await getConnection(wsUrl)
+  const result = await call('Runtime.evaluate', {
+    expression: `!!(window.__wxpEnv&&window.__wxpEnv.rev===${rev})`,
+    returnByValue: true,
+  })
+  return (result as { result?: { value?: unknown } }).result?.value === true
 }
 
 /**
@@ -231,6 +259,11 @@ interface TargetInjectionState {
   scriptIdentifier: string
 }
 
+interface TargetRetryState {
+  failures: number
+  retryAt: number
+}
+
 interface CdpInjectionSessionOptions {
   port: number
   scriptSource: string
@@ -250,6 +283,7 @@ export class CdpInjectionSession {
   pollIntervalMs: number
   onTargetsInjected?: (info: { count: number, total: number }) => void
   private targetState = new Map<string, TargetInjectionState>()
+  private retryState = new Map<string, TargetRetryState>()
   private stopped = false
   private pollTimer: NodeJS.Timeout | null = null
   private injecting = false
@@ -271,7 +305,9 @@ export class CdpInjectionSession {
   async start(): Promise<void> {
     await this.scanAndInject()
     this.pollTimer = setInterval(() => {
-      this.scanAndInject().catch(() => {})
+      this.scanAndInject().catch((error) => {
+        logger.warn('wxp injection poll failed', { error: (error as Error).message })
+      })
     }, this.pollIntervalMs)
   }
 
@@ -282,6 +318,8 @@ export class CdpInjectionSession {
       this.pollTimer = null
     }
     this.targetState.clear()
+    this.retryState.clear()
+    closeCdpConnections()
   }
 
   private async injectIntoTarget(target: CdpTargetRaw, force = false): Promise<boolean> {
@@ -316,14 +354,34 @@ export class CdpInjectionSession {
 
       for (const target of targets) {
         activeIds.add(target.id)
-        if (await this.injectIntoTarget(target, force)) {
-          injectedCount += 1
+        const prev = this.targetState.get(target.id)
+        const retry = this.retryState.get(target.id)
+        if (!force && retry && retry.retryAt > Date.now() && prev?.url === (target.url || '')) continue
+
+        try {
+          if (await this.injectIntoTarget(target, force)) {
+            injectedCount += 1
+          }
+          this.retryState.delete(target.id)
+        } catch (error) {
+          // 单个目标失败不能挡住后面的页面；按失败次数指数退避，最长 30s
+          const failures = (retry?.failures ?? 0) + 1
+          const backoffMs = Math.min(30_000, 1000 * 2 ** Math.min(failures - 1, 5))
+          this.retryState.set(target.id, { failures, retryAt: Date.now() + backoffMs })
+          logger.warn('wxp injection failed', {
+            targetId: target.id,
+            url: target.url,
+            failures,
+            retryInMs: backoffMs,
+            error: (error as Error).message,
+          })
         }
       }
 
       for (const id of this.targetState.keys()) {
         if (!activeIds.has(id)) {
           this.targetState.delete(id)
+          this.retryState.delete(id)
         }
       }
 
@@ -355,6 +413,7 @@ export class CdpInjectionSession {
       alive = await probeInjectionAlive(target.webSocketDebuggerUrl as string, this.scriptRev)
     } catch {
       // 目标正忙或已关闭：下轮继续，不视为死亡
+      logger.debug('wxp injection verify skipped', { targetId: target.id, url: target.url })
       return 0
     }
     if (!alive && !this.stopped) {
@@ -362,6 +421,7 @@ export class CdpInjectionSession {
         if (await this.injectIntoTarget(target, true)) return 1
       } catch {
         // 重注失败下轮继续
+        logger.debug('wxp injection re-inject failed', { targetId: target.id, url: target.url })
       }
     }
     return 0

@@ -15,7 +15,7 @@
 ## 实现状态（2026-11-06）
 
 - 已落地：全局/项目扫描、安装与项目锁事务、更新计划/应用/撤销、禁用/启用与回收站、收藏/预设、墓碑/接管/恢复、项目登记与重扫、设置与按 host PAT、通用 git/TFS URL 解析。
-- 兼容：global 锁 v3、project 锁 v1；`skills@1.7.6 check` 可读取项目锁（26 up-to-date / 8 updates）。
+- 兼容：global 锁 v3、project 锁 v1 / v2；项目锁按读入版本写回，新建时仍为 v1。
 - 未覆盖：真实 TFS/Azure 内网与 PAT 端到端、Electron 内完整 IPC 手测、常驻自动检查调度器。实现细节与每步验收见 [skill-manager-implementation-plan.md](./skill-manager-implementation-plan.md)。
 
 ---
@@ -43,7 +43,7 @@
 | --- | --- |
 | 禁用后放哪 | **应用数据区** `<assets>/skill-manager/disabled/<scopeId>/<name>/`（§10） |
 | 禁用时锁怎么处理 | **分 scope**：`global` 删锁条目；`project` 保留锁条目，项目级可切换为删（§10.3） |
-| 项目 `skills-lock.json` | **直接读写**，严格保持 v1 格式、排序与字段兼容（§2.2、§12.2） |
+| 项目 `skills-lock.json` | **直接读写**，兼容 v1 / v2，严格保持读入版本的格式、排序与字段（§2.2、§12.2） |
 | 上游已删除的默认处置 | 更新计划里**默认勾选**「移到回收站 + 移除锁」，可撤销（§9.3、§9.5） |
 | 首版范围 | 只管理 `.agents/skills`；其它 agent 目录**只读识别**（§3、§12） |
 | 仓库内只装部分技能 | 安装/更新都按技能勾选；更新**只作用于已选中技能**，未选中的远端技能只提示、不下载、不安装（§9.8） |
@@ -100,7 +100,7 @@
 | | 项目级 | 全局级 |
 | --- | --- | --- |
 | 路径 | `<project>/skills-lock.json` | `~/.agents/.skill-lock.json`（若设 `XDG_STATE_HOME` 则为 `$XDG_STATE_HOME/skills/.skill-lock.json`） |
-| 当前版本 | `version: 1` | `version: 3` |
+| 当前版本 | `version: 1 / 2`（写回保持读入版本） | `version: 3` |
 | 键 | 技能名 | 技能名 |
 | 来源字段 | `source` / `sourceType` / `skillPath`（可选 `sourceUrl`/`ref`/`version`/`via`） | `source` / `sourceType` / `sourceUrl` / `ref?` / `skillPath` |
 | 哈希 | `computedHash` = **本地技能目录内容哈希**（相对路径 + 文件内容，排序后 SHA-256） | `skillFolderHash` = **GitHub Tree SHA**（整个技能目录，远端） |
@@ -142,16 +142,16 @@
 
 ### 2.1 读：宽松但可解释
 
-- 能读 v1 / v3；未知版本、JSON 损坏、含 merge 冲突标记 → **只读模式**，卡片上给出具体原因与文件路径，不提供写入按钮。
+- 能读 project v1 / v2 与 global v3；未知版本、JSON 损坏、含 merge 冲突标记 → **只读模式**，卡片上给出具体原因与文件路径，不提供写入按钮。
 - 单条记录缺 `skillPath`（早期安装）→ 状态 `legacy`，可更新但只能按「唯一同名」匹配，或引导重新安装。
 - 记录缺 `sourceUrl` 的 generic git 源 → 不可更新（与 CLI 一致），标 `needs-reinstall`。
 - `sourceType` 不在支持列表 → 只读展示，不参与更新。
 
-### 2.2 写：只写当前版本，保留未知字段
+### 2.2 写：按读入版本写回，保留未知字段
 
-| 规则 | 项目锁 v1 | 全局锁 v3 |
+| 规则 | 项目锁 v1 / v2 | 全局锁 v3 |
 | --- | --- | --- |
-| 版本 | 只写 `1` | 只写 `3` |
+| 版本 | 按读入版本写回；新建时写 `1` | 只写 `3` |
 | 排序 | 技能名字典序 | 技能名字典序 |
 | 格式 | `JSON.stringify(lock, null, 2) + '\n'` | `JSON.stringify(lock, null, 2)`（CLI 无尾换行） |
 | 未知字段 | 条目级 spread 保留 | 条目级 spread 保留；顶层 `dismissed` / `lastSelectedAgents` 原样保留 |
@@ -984,7 +984,7 @@ skillPath：仓库相对路径，根目录技能写 'SKILL.md'
 | `target.kind` | 落点 | 锁 |
 | --- | --- | --- |
 | `global` | `~/.agents/skills` | 全局锁 v3 |
-| `project` | `<project>/.agents/skills` | 项目锁 v1（已登记项目） |
+| `project` | `<project>/.agents/skills` | 项目锁 v1 / v2（已登记项目） |
 | `custom` | `<path>/.agents/skills`（默认） | 成功后登记为项目才写项目锁（无锁则创建 v1）；`asSkillsRoot: true` 时直接把 `<path>` 当技能根，不写锁 |
 
 - `custom.path` 必须 `realpath` 后校验：存在、是目录、不是 `/`、home 根、应用数据根或系统目录；不允许 `..`。
@@ -1917,7 +1917,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 | --- | --- | --- |
 | Q1 | 禁用后的技能放哪？ | **应用数据区** `<assets>/skill-manager/disabled/...`（唯一能保证所有 agent 都不加载） |
 | Q2 | 禁用时锁条目怎么处理？ | **分 scope**：global 删条目、project 保留；project 可单独切换为「删条目」 |
-| Q3 | 是否直接维护项目 `skills-lock.json`？ | **读写**，严格保持 v1 格式、排序与字段兼容 |
+| Q3 | 是否直接维护项目 `skills-lock.json`？ | **读写**，兼容 v1 / v2 并按读入版本写回 |
 | Q4 | 上游已删除的技能默认怎么处理？ | **默认勾选**「移到回收站 + 移除锁」，可撤销 |
 | Q6 | 首版是否管理 `.claude/skills` 等非 `.agents` 目录？ | **否**，只读识别；canonical 目录才可写 |
 | Q7 | 私有仓库 / 无 API 的 git 源怎么认证？ | **PAT**：GitHub 用 `GITHUB_TOKEN`/`GH_TOKEN`，TFS 用 PAT；按 host 保存（env 或应用内加密）；不要求 API |

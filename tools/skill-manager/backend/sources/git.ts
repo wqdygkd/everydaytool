@@ -72,8 +72,8 @@ export async function resolveGitCatalog(parsed: ParsedSource, auth: GitAuth = {}
 
 async function lsRemote(url: string, requestedRef: string | undefined, auth: GitAuth): Promise<RemoteInfo> {
   const args = requestedRef
-    ? ['ls-remote', url, requestedRef, `refs/heads/${requestedRef}`, `refs/tags/${requestedRef}`]
-    : ['ls-remote', '--symref', url, 'HEAD']
+    ? ['ls-remote', '--', url, requestedRef, `refs/heads/${requestedRef}`, `refs/tags/${requestedRef}`]
+    : ['ls-remote', '--symref', '--', url, 'HEAD']
   const output = await runGit(args, auth.timeoutMs ?? 30_000, auth.token)
   const lines = output.split(/\r?\n/).filter(Boolean)
 
@@ -167,7 +167,7 @@ async function revParse(dir: string, spec: string): Promise<string> {
 export async function cloneGitSource(parsed: ParsedSource, destination: string, auth: GitAuth = {}): Promise<void> {
   const cloneArgs = ['clone', '--depth', '1', '--no-tags', '--single-branch']
   if (parsed.ref && !/^[\da-f]{40}$/i.test(parsed.ref)) cloneArgs.push('--branch', parsed.ref)
-  cloneArgs.push(parsed.source, destination)
+  cloneArgs.push('--', parsed.source, destination)
   await runGit(cloneArgs, auth.timeoutMs ?? GIT_TIMEOUT, auth.token)
 
   if (parsed.ref && /^[\da-f]{40}$/i.test(parsed.ref)) {

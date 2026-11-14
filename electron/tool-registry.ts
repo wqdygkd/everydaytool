@@ -8,7 +8,7 @@ import { workbuddy2apiPanelBackend } from '../tools/workbuddy2api-panel/backend/
 import { wxpEnhancerBackend } from '../tools/wxp-enhancer/backend/index.ts'
 
 export interface ToolBackend {
-  initialize: () => Promise<void> | void
+  initialize: () => void
   dispose?: () => Promise<void> | void
 }
 

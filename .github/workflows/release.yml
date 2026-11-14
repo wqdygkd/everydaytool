@@ -34,9 +34,6 @@ jobs:
           - os: macos-latest
             platform: mac
             args: --mac
-          - os: ubuntu-latest
-            platform: linux
-            args: --linux
 
     steps:
       - name: Checkout
@@ -50,11 +47,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Data layers
+        run: pnpm data-layers:check
+
+      - name: Test
+        run: pnpm test
 
       - name: Build frontend
         run: pnpm build
@@ -71,9 +80,6 @@ jobs:
           path: |
             release/*.exe
             release/*.dmg
-            release/*.AppImage
-            release/*.yml
-            release/*.blockmap
           if-no-files-found: error
 
   publish:

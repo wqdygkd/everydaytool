@@ -9,6 +9,7 @@ const tool = defineTool({
   category: { key: 'browser', name: '浏览器工具' },
   keywords: ['telegram', 'tweb', 'webk', '缓存', '归档', '影库', '离线播放', '下载'],
   supportedTargets: ['web', 'win', 'mac'],
+  requiresBundledSite: true,
   createdAt: '2026-10-30',
   route: {
     path: 'tweb-cache',

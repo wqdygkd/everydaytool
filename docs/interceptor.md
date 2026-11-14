@@ -64,6 +64,7 @@
 ## 5. 流量
 
 - 流量页只记录**命中名单的请求**，内存环形 1000 条（不落库），body 超过 64KB 截断；详情里显示的是**实际发给浏览器**的响应头。
+- 渲染层只持有**摘要**：主进程每 80ms 批量推送 `TrafficSummary`（不含请求/响应头与正文），打开详情时再按 id 经 `TRAFFIC_GET_ENTRY` 拉取完整条目；流量表用 `UiTable` 的虚拟滚动，只渲染可视区行。
 - 实现约束：请求体需要改体或 payload 过滤时先整体缓冲，上限 **8MB**（超限直接 502，不假装成功）；上游超时 **30s**；`Upgrade`（WebSocket / SSE）只桥接不改帧。
 - 空白 / 缺条目的排查顺序：
 
@@ -76,7 +77,7 @@
 
 ## 6. 证书
 
-- 生成：node-forge 纯 JS；根 CA（`edt Interceptor CA`）有效期 10 年，落盘 `data/interceptor/certs/`（`ca.key` / `ca.crt`）；叶证书按 host 现场签发（SAN 含域名与 IP），仅内存缓存，进程重启按需重签。
+- 生成：node-forge 纯 JS；根 CA（`edt Interceptor CA`）有效期 10 年，落盘 `data/interceptor/certs/`（`ca.key` 经 `secret-box` 加密并 `0600`）；叶证书按 host 现场签发（SAN 含域名与 IP），**所有叶证书共用一把首次异步生成的 RSA 密钥**，仅内存缓存，进程重启按需重签。
 - Windows：`certutil -user -addstore Root ca.crt`（当前用户根库、免 UAC，Chrome 读系统库）；检测 / 删除都走 SHA1 指纹。
 - macOS：**登录钥匙串** `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db ca.crt`，经 `osascript do shell script … with prompt "…"` 由系统弹窗授权（无需管理员 / 不用 System.keychain）；检测 `security find-certificate -Z -c 'edt Interceptor CA' <keychain>`，删除按指纹。
 - UI：证书页显示状态（未生成 / 已生成 / 未信任）、一键安装 / 卸载 / 导出 `.crt`；信任是**每个浏览器 / profile 各一次**——Chrome 走系统库，Firefox 等自带证书库的浏览器需手动导入导出的证书。
@@ -84,7 +85,8 @@
 
 ## 7. 扩展与通信
 
-- Origin 校验（只接受 `chrome-extension://<本扩展 id>`，服务只绑回环），**无配对码**、扩展零配置。
+- Origin 校验（只接受 `chrome-extension://<本扩展 id>`，服务只绑回环）+ **每次启动轮换的共享令牌**：edt 把随机令牌写进扩展目录的 `bridge-token.json`（0600），扩展重连时读取并放进 `hello`；没有令牌的握手回 `hello-reject { reason: 'bad-token' }`。扩展仍零配置，不需要用户手填配对码。
+- 入站消息先做类型 / 字段 / 长度校验，WS `maxPayload` 限 64 KB；未知消息直接丢弃。
 - 消息（JSON，双向）：
 
   | 方向 | 消息 |
@@ -133,6 +135,6 @@
 | 规则匹配与执行 | `backend/services/rule-engine.ts`、`script-compile.ts`、`body-script.ts` |
 | 证书（生成 / 信任 / 导出） | `backend/services/cert-service.ts`、`ca-trust.ts` |
 | 总调度 / IPC / 存储 | `backend/services/interceptor-service.ts`、`backend/ipc/`、`backend/store/` |
-| WS 桥（协议与扩展握手） | `backend/services/ws-bridge.ts` |
+| WS 桥（协议与扩展握手 / 消息校验） | `backend/services/ws-bridge.ts`、`ws-message.ts` |
 | 管理页视图 | `renderer/pages/InterceptorPage.vue`、`renderer/components/*.vue`、`renderer/stores/interceptorStore.ts` |
 | 扩展 | `extension/`（`manifest.json` / `background.js` / `popup.*`） |

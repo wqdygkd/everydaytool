@@ -38,7 +38,7 @@ function attachGuards(guest: WebContents): void {
 
   guest.on('will-navigate', onWillNavigate)
   guest.setWindowOpenHandler(({ url }) => {
-    if (isLocalPanelUrl(url)) return { action: 'allow' }
+    // 面板不需要新窗口；任意本机端口的 URL 也不能借弹窗绕过导航闸。
     openExternalSafely(url)
     return { action: 'deny' }
   })

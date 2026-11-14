@@ -16,11 +16,11 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { readGlobalLock, writeGlobalLock } from '../locks/global-lock.ts'
 import { readProjectLock, writeProjectLock } from '../locks/project-lock.ts'
-import { readDisabledIndex, writeDisabledIndex } from './disabled-index.ts'
+import { getDisabledIndexPath, readDisabledIndex, writeDisabledIndex } from './disabled-index.ts'
 import { copyTreeSafe, createTrashSession, exists, moveToTrash, writeTextAtomic } from './executor.ts'
 import { hashSkillDirectory } from './hash.ts'
 import { appendSkillManagerHistory } from './history.ts'
-import { readSkillManagerRegistry, upsertGroup, upsertRecord, writeSkillManagerRegistry } from './registry.ts'
+import { emptySkillManagerRegistry, readSkillManagerRegistry, upsertGroup, upsertRecord, writeSkillManagerRegistry } from './registry.ts'
 
 export interface DisabledPaths {
   disabledRoot: string
@@ -208,7 +208,9 @@ export async function setEnabledCore(request: SetEnabledRequest, scope: Scope, p
   if (!lock.ok) throw new Error(lock.message ?? '无法读取锁文件')
   const lockRawBefore = lock.raw
   const previousIndexRaw = `${JSON.stringify(index, null, 2)}\n`
-  const previousRegistryRaw = await readRegistryRaw(paths.registryPath)
+  const indexExisted = await exists(getDisabledIndexPath(paths.disabledRoot, scope.id))
+  const registryExisted = await exists(paths.registryPath)
+  const previousRegistry = structuredClone(readSkillManagerRegistry(paths.registryPath))
   const warnings: string[] = []
   const moved: Array<{ name: string, from: string, to: string, mode: 'copy' | 'symlink', linkTarget?: string }> = []
   const resultEntries: SkillManagerDisabledEntry[] = []
@@ -332,30 +334,45 @@ export async function setEnabledCore(request: SetEnabledRequest, scope: Scope, p
     }
   }
   catch (error) {
-    await rollbackMoved(moved, request.enabled)
-    await writeTextAtomic(scope.lockPath, lockRawBefore).catch(() => {})
-    await writeDisabledIndex(parseIndex(previousIndexRaw, scope.id), paths.disabledRoot).catch(() => {})
-    await writeTextAtomic(paths.registryPath, previousRegistryRaw).catch(() => {})
+    const rollbackFailures = await rollbackMoved(moved, request.enabled)
+    // 原文件不存在时必须删除，而不是写一份空文件（否则下次启动会把“从未有过”当成“空配置”）
+    await restoreRawFile(scope.lockPath, lockRawBefore, lock.exists)
+    await restoreRawFile(getDisabledIndexPath(paths.disabledRoot, scope.id), previousIndexRaw, indexExisted)
+    await restoreRegistry(paths.registryPath, previousRegistry, registryExisted)
+    if (rollbackFailures.length > 0) {
+      const message = error instanceof Error ? error.message : String(error)
+      const wrapped = new Error(`${message}；回滚失败：${rollbackFailures.join('；')}`)
+      wrapped.cause = error
+      throw wrapped
+    }
     throw error
   }
 }
 
-function parseIndex(raw: string, scopeId: string): ReturnType<typeof JSON.parse> {
-  try {
-    const parsed = JSON.parse(raw)
-    return { version: 1, scopeId, entries: parsed.entries ?? {} }
+async function restoreRawFile(path: string, raw: string, existed: boolean): Promise<void> {
+  if (!existed) {
+    await rm(path, { force: true }).catch(() => {})
+    return
   }
-  catch {
-    return { version: 1, scopeId, entries: {} }
-  }
+  await writeTextAtomic(path, raw).catch(() => {})
 }
 
-async function readRegistryRaw(path: string): Promise<string> {
+async function restoreRegistry(
+  path: string,
+  snapshot: ReturnType<typeof readSkillManagerRegistry>,
+  existed: boolean,
+): Promise<void> {
   try {
-    return await (await import('node:fs/promises')).readFile(path, 'utf8')
+    if (existed) {
+      writeSkillManagerRegistry(snapshot, path)
+      return
+    }
+    // 文件原本不存在：让磁盘保持缺失，同时把 json-store 缓存恢复成空登记表
+    writeSkillManagerRegistry(emptySkillManagerRegistry(), path)
+    await rm(path, { force: true })
   }
   catch {
-    return ''
+    // 回滚失败已由调用方汇总；这里不掩盖原始错误
   }
 }
 
@@ -380,18 +397,32 @@ function originFromLock(lockEntry: GlobalLockEntry | ProjectLockEntry | undefine
 async function rollbackMoved(
   moved: Array<{ name: string, from: string, to: string, mode: 'copy' | 'symlink', linkTarget?: string }>,
   enabling: boolean,
-): Promise<void> {
+): Promise<string[]> {
+  const failures: string[] = []
   for (const item of [...moved].reverse()) {
-    if (enabling) {
-      await rm(item.to, { recursive: true, force: true }).catch(() => {})
-      if (item.mode === 'copy' && item.from) await moveDir(item.to, item.from).catch(() => {})
+    try {
+      if (enabling) {
+        // 启用时的 copy 回滚只需把目录移回禁用区；先删再移会把待恢复目录直接删掉。
+        if (item.mode === 'copy' && item.from) {
+          await moveDir(item.to, item.from)
+        }
+        else {
+          await rm(item.to, { recursive: true, force: true })
+        }
+      }
+      else if (item.mode === 'copy') {
+        await moveDir(item.to, item.from)
+      }
+      else if (item.linkTarget) {
+        // 禁用符号链接时只删了链接，回滚要按原 linkTarget 重建。
+        await symlink(item.linkTarget, item.from, 'dir')
+      }
     }
-    else {
-      await rm(item.to, { recursive: true, force: true }).catch(() => {})
-      if (item.mode === 'copy') await moveDir(item.to, item.from).catch(() => {})
-      if (item.mode === 'symlink' && item.linkTarget) await symlink(item.linkTarget, item.from, 'dir').catch(() => {})
+    catch (error) {
+      failures.push(`${item.name}：${error instanceof Error ? error.message : String(error)}`)
     }
   }
+  return failures
 }
 
 async function moveDir(from: string, to: string): Promise<void> {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TrafficEntry } from '../../../../shared/interceptor'
+import type { TrafficEntry, TrafficSummary } from '../../../../shared/interceptor'
 import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { confirm } from '@renderer/shared/feedback'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
@@ -40,9 +40,16 @@ function entryOf(row: unknown): TrafficEntry {
   return row as TrafficEntry
 }
 
-function openDetail(entry: TrafficEntry): void {
-  detail.value = entry
+async function openDetail(entry: TrafficSummary): Promise<void> {
+  // 先用摘要立即打开抽屉，详情（头 / 正文）到了再替换
+  detail.value = entry as TrafficEntry
   detailVisible.value = true
+  try {
+    const full = await store.getTrafficDetail(entry.id)
+    if (full && detail.value?.id === entry.id) detail.value = full
+  } catch {
+    // 详情已被清空（环形缓冲淘汰 / 用户清空）时保持摘要即可
+  }
 }
 
 function createRule(entry: TrafficEntry): void {
@@ -89,6 +96,7 @@ function headersText(headers?: Record<string, string>): string {
       class="traffic-table"
       :data="filteredTraffic"
       height="100%"
+      virtual
       empty-text="暂无流量：只有命中处理名单的请求才会记录（未命中按透传处理）。先确认目标 origin 已在名单里、且浏览器已挂上代理"
       row-clickable
       @row-click="openDetail"

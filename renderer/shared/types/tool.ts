@@ -25,6 +25,10 @@ export interface ToolDefinition {
   createdAt?: string
   isNew: boolean
   disabled?: boolean
+  /** 仅未打包的开发形态可用（依赖仓库内未随安装包发布的资源） */
+  devOnly?: boolean
+  /** 安装包必须内置本地站点才可用（当前只有 tweb-cache）；未内置时安装版隐藏 */
+  requiresBundledSite?: boolean
   route: Omit<RouteRecordRaw, 'children'> & {
     path: string
     name: string

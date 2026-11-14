@@ -1,6 +1,7 @@
 import type { Scope, SetEnabledRequest, SetEnabledResult } from '../../../../shared/skill-manager.ts'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { logger } from '../../../../backend/utils/logger.ts'
 import { readDisabledIndex } from './disabled-index.ts'
 import { setEnabledCore } from './disabled.ts'
 import { exists } from './executor.ts'
@@ -61,8 +62,36 @@ export function disabledSkillPath(scope: Scope, name: string): string {
   return join(scope.skillsDir, name)
 }
 
+const INVENTORY_CACHE_MS = 2_000
+let inventoryCache: { at: number, promise: Promise<Awaited<ReturnType<typeof buildInventoryWithDisabled>>> } | null = null
+
+/** 变更操作后调用：下一次读取必须重新扫描 */
+export function invalidateInventoryCache(): void {
+  inventoryCache = null
+}
+
 /** 在只读扫描结果上合并禁用区；活动目录与禁用索引同时存在时标 disabled-drift。 */
 export async function scanInventoryWithDisabled() {
+  if (inventoryCache && Date.now() - inventoryCache.at < INVENTORY_CACHE_MS) {
+    return inventoryCache.promise
+  }
+  const startedAt = Date.now()
+  const promise = buildInventoryWithDisabled()
+  void promise.then((inventory) => {
+    logger.debug('skill-manager inventory scanned', {
+      elapsedMs: Date.now() - startedAt,
+      scopes: inventory.scopes.length,
+    })
+  }).catch(() => undefined)
+  const entry = { at: Date.now(), promise }
+  inventoryCache = entry
+  promise.catch(() => {
+    if (inventoryCache === entry) inventoryCache = null
+  })
+  return promise
+}
+
+async function buildInventoryWithDisabled() {
   const settings = readSkillManagerSettings(getDefaultSkillManagerSettingsPath())
   if (settings.autoReDisable) {
     const preliminary = await scanInventory()

@@ -19,6 +19,9 @@ const LIB_MIN_WIDTH = 360
 const LIB_MAX_WIDTH = 760
 const LIB_RESIZE_STEP = 24
 const LIB_MIN_GUEST_WIDTH = 320
+/** 首次打开时 tweb 还在登录 / 拉会话，缩略图回填按小批走，别把 guest 页面和主进程一起压住 */
+const THUMBNAIL_BACKFILL_BATCH = 24
+const THUMBNAIL_BACKFILL_DELAY = 4_000
 
 function readLibraryWidth(): number {
   try {
@@ -45,6 +48,7 @@ const libraryFilter = ref('')
 const pausingAll = ref(false)
 const mediaCacheClearing = ref(false)
 const thumbnailBackfillRunning = ref(false)
+let thumbnailBackfillTimer: number | undefined
 const libraryWidth = ref(readLibraryWidth())
 const splitRef = ref<HTMLElement | null>(null)
 const resizingLibrary = ref(false)
@@ -167,7 +171,7 @@ function bindWebview(el: unknown): void {
     loading.value = false
     pageUrl.value = safeCall(() => wv.getURL(), pageUrl.value)
     syncNavigation(wv)
-    void backfillThumbnails()
+    scheduleThumbnailBackfill()
   })
   wv.addEventListener('did-navigate', (event) => {
     pageUrl.value = (event as { url?: string }).url || pageUrl.value
@@ -198,6 +202,24 @@ function reload(): void {
   loadError.value = ''
   loading.value = true
   safeCall(() => webviewRef.value?.reload(), undefined)
+}
+
+/** 缩略图回填按小批、空闲时跑：首批等 tweb 页面稳定，后续批次之间留间隔 */
+function scheduleThumbnailBackfill(delayMs = THUMBNAIL_BACKFILL_DELAY): void {
+  if (thumbnailBackfillTimer !== undefined || thumbnailBackfillRunning.value) return
+  thumbnailBackfillTimer = window.setTimeout(() => {
+    thumbnailBackfillTimer = undefined
+    if (!webviewRef.value) return
+    if (document.hidden) {
+      scheduleThumbnailBackfill(15_000)
+      return
+    }
+    void (async () => {
+      const saved = await backfillThumbnails()
+      const hasMissing = store.library.some(entry => entry.state === 'complete' && !entry.thumbnailUrl)
+      if (saved > 0 && hasMissing) scheduleThumbnailBackfill(8_000)
+    })()
+  }, delayMs)
 }
 
 function toggleDevTools(): void {
@@ -337,12 +359,13 @@ async function clearMediaCache(): Promise<void> {
   }
 }
 
-async function backfillThumbnails(): Promise<void> {
-  if (thumbnailBackfillRunning.value || !isElectron) return
+async function backfillThumbnails(): Promise<number> {
+  if (thumbnailBackfillRunning.value || !isElectron) return 0
   const requests = store.library
     .filter(entry => entry.state === 'complete' && !entry.thumbnailUrl)
+    .slice(0, THUMBNAIL_BACKFILL_BATCH)
     .map(entry => ({ peerId: entry.peerId, messageId: entry.messageId }))
-  if (!requests.length) return
+  if (!requests.length) return 0
 
   thumbnailBackfillRunning.value = true
   try {
@@ -356,6 +379,7 @@ async function backfillThumbnails(): Promise<void> {
       toast.success(`已补齐 ${result.saved} 个缩略图`)
       await store.loadLibrary(true)
     }
+    return result?.saved ?? 0
   } finally {
     thumbnailBackfillRunning.value = false
   }
@@ -543,10 +567,11 @@ async function selectArchiveDir(): Promise<void> {
 
   try {
     await confirm(
-      `把 Telegram 归档切换到：\n${directory}\n\n现有的 messages/ 与 trash/ 会整体迁移；`
-      + '索引留在数据目录，迁移完成后影库立即指向新位置。',
+      `把 Telegram 归档切换到：\n${directory}\n\n`
+      + '目录为空时，现有 messages/ 与 trash/ 会整体迁移过去；目录里已有归档时直接接管，'
+      + '不会合并、也不会删除任何一侧的数据。索引留在数据目录，切换后影库立即指向新位置。',
       '自定义归档目录',
-      { type: 'warning', confirmButtonText: '迁移并切换', cancelButtonText: '取消' },
+      { type: 'warning', confirmButtonText: '切换', cancelButtonText: '取消' },
     )
   } catch {
     return
@@ -554,7 +579,13 @@ async function selectArchiveDir(): Promise<void> {
 
   try {
     const result = await store.changeArchiveDir(directory)
-    toast.success(result.changed ? `归档目录已切换，迁移 ${result.moved.length} 项` : '归档目录未变化')
+    toast.success(
+      !result.changed
+        ? '归档目录未变化'
+        : result.adopted
+          ? '已接管现有归档目录（原目录数据保持原位）'
+          : `归档目录已切换，迁移 ${result.moved.length} 项`,
+    )
   } catch (error) {
     toast.error((error as Error).message || '切换归档目录失败')
   }
@@ -566,7 +597,7 @@ async function resetArchiveDir(): Promise<void> {
   try {
     await confirm(
       `恢复默认归档目录：\n${info.defaultArchiveDir}\n\n`
-      + '当前的 messages/ 与 trash/ 会迁回该目录；目标里已有同名非空目录时不会覆盖。',
+      + '当前的 messages/ 与 trash/ 会迁回该目录；默认目录里已有归档时直接接管，不会覆盖或合并。',
       '恢复默认归档目录',
       { type: 'warning', confirmButtonText: '恢复默认', cancelButtonText: '取消' },
     )
@@ -626,14 +657,18 @@ onMounted(async () => {
   } catch (error) {
     initError.value = (error as Error).message
   }
-  void store.normalizeLibrary().catch(() => undefined)
-  void backfillThumbnails()
+  store.scheduleNormalize()
+  scheduleThumbnailBackfill()
 })
 
 onUnmounted(() => {
   const wv = webviewRef.value
   if (wv && devtoolsOpen.value) safeCall(() => wv.closeDevTools(), undefined)
   webviewRef.value = null
+  if (thumbnailBackfillTimer !== undefined) {
+    window.clearTimeout(thumbnailBackfillTimer)
+    thumbnailBackfillTimer = undefined
+  }
   writeLibraryWidth()
   store.dispose()
 })

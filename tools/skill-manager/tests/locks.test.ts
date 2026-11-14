@@ -1,6 +1,6 @@
 /* eslint-disable test/no-import-node-test -- 使用 Node 内置 test runner，避免新增 Vitest 依赖 */
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -14,19 +14,21 @@ import {
   getProjectLockPath,
   parseProjectLock,
   readProjectLock,
+  writeProjectLock,
 } from '../backend/locks/project-lock.ts'
 
-test('项目锁：真实仓库可读、34 条、规范格式可逐字节还原', async () => {
+test('项目锁：真实仓库可读、版本与条目数保持、规范格式可逐字节还原', async () => {
   const result = await readProjectLock(process.cwd())
   assert.equal(result.ok, true)
   if (!result.ok) return
 
   assert.equal(result.exists, true)
-  assert.equal(result.data.version, 1)
-  assert.equal(Object.keys(result.data.skills).length, 34)
+  const raw = await readFile(getProjectLockPath(process.cwd()), 'utf8')
+  const expected = JSON.parse(raw) as { version: number, skills: Record<string, unknown> }
+  assert.equal(result.data.version, expected.version)
+  assert.equal(Object.keys(result.data.skills).length, Object.keys(expected.skills).length)
   assert.ok(result.data.skills['ask-matt'])
 
-  const raw = await readFile(getProjectLockPath(process.cwd()), 'utf8')
   assert.equal(formatProjectLock(result.data), raw)
 })
 
@@ -60,9 +62,38 @@ test('项目锁：保留未知字段，写回按技能名排序', () => {
   assert.ok(formatted.endsWith('\n'))
 })
 
+test('项目锁：v2 可读并按原版本写回，未知字段不丢', async () => {
+  const raw = `${JSON.stringify({
+    version: 2,
+    extraRoot: { keep: true },
+    skills: {
+      alpha: { source: 'o/r', sourceType: 'github', computedHash: 'h1', mystery: 1 },
+    },
+  }, null, 2)}\n`
+
+  const parsed = parseProjectLock(raw)
+  assert.equal(parsed.ok, true)
+  if (!parsed.ok) return
+  assert.equal(parsed.data.version, 2)
+  assert.equal(formatProjectLock(parsed.data), raw)
+
+  const projectPath = await mkdtemp(join(tmpdir(), 'skill-manager-lock-v2-'))
+  const written = await writeProjectLock(parsed.data, projectPath, {
+    operationId: 'v2',
+    backupRoot: join(projectPath, 'backups'),
+  })
+  const reread = await readProjectLock(projectPath)
+  assert.equal(reread.ok, true)
+  if (!reread.ok) return
+  assert.equal(reread.data.version, 2)
+  assert.equal(reread.data.skills.alpha.mystery, 1)
+  assert.deepEqual(reread.data.extraRoot, { keep: true })
+  assert.match(written.raw, /"version": 2/)
+})
+
 test('项目锁：无效 JSON / 未知版本 / 缺字段都会拒绝', () => {
   assert.equal(parseProjectLock('{').ok, false)
-  assert.equal(parseProjectLock(JSON.stringify({ version: 2, skills: {} })).ok, false)
+  assert.equal(parseProjectLock(JSON.stringify({ version: 3, skills: {} })).ok, false)
   assert.equal(parseProjectLock(JSON.stringify({ version: 1, skills: { a: { source: 'o/r', sourceType: 'github' } } })).ok, false)
 })
 

@@ -3,7 +3,7 @@
 多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Reka UI + Vite**。
 
 采用单体仓库子目录架构：主壳只负责首页导航、页签与设置，各工具独立存放在 `tools/` 下，
-按需加载、互不耦合。内置 8 个工具模块：
+按需加载、互不耦合。内置 9 个工具模块：
 
 | 工具 | 分类 | 说明 |
 | ------ | ------ | ------ |
@@ -13,14 +13,15 @@
 | WXP 增强 | 自动化工具 | 通过 CDP 启动 WXP：缓存登录会话、备份与恢复转发收藏，并注入增强角标 |
 | 身份证号生成器 | 生成器 | 随机生成中国大陆 18 位身份证号 |
 | 技能管理 | 开发工具 | 按仓库对账、更新、禁用与收藏本机与项目技能，并管理 skills-lock.json |
-| Telegram 缓存（tweb） | 浏览器工具 | 以 tweb 为前端的本地归档：右键把消息与媒体写进影库，支持断点续传、离线播放与消息定位 |
+| Telegram 缓存（tweb） | 浏览器工具 | 以 tweb 为前端的本地归档：右键把消息与媒体写进影库，支持断点续传、离线播放与消息定位（仅开发形态可用，安装版隐藏） |
 | WorkBuddy2API | 开发工具 | 托管 workbuddy2api：左侧运行详情管安装 / 启停 / 更新（二进制不进安装包） |
+| 媒体库 | 媒体工具 | 本地影片与套图的只读索引；元信息保存在 edt 中 |
 
 ## 开发指南
 
 ### 环境要求
 
-- Node.js 22+
+- Node.js 22.18+（开发与 CI 使用 `.node-version` 中的 26）
 - pnpm 10+（勿用 npm）
 
 ### 常用命令
@@ -30,10 +31,11 @@ pnpm install        # 安装依赖
 
 pnpm dev            # 开发模式（Vite HMR + Electron）
 EDT_DEVTOOLS=1 pnpm dev   # 同上，启动时自动打开 DevTools
-pnpm web            # 纯浏览器预览（无 preload / IPC，只出现 supportedTargets 含 web 的工具，设置页不可用）
+pnpm web            # 纯浏览器预览（无 preload / IPC，仅身份证号生成器可用，设置页不可用）
 
 pnpm vite build     # 仅构建前端
 pnpm typecheck      # TS 类型检查（前端 + 后端两套 tsconfig）
+pnpm test           # Node 内置 test runner：backend + 各工具测试
 pnpm lint           # ESLint（含 tools 内文件）
 pnpm lint:fix       # ESLint 自动修复
 pnpm build          # 完整构建（Electron 主进程 + 前端）

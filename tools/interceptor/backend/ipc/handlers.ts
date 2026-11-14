@@ -23,6 +23,7 @@ import {
   updateTarget,
 } from '../services/interceptor-service.ts'
 import { loadConfig } from '../store/config-store.ts'
+import { normalizeRuleFilters, normalizeRuleSource } from '../store/rule-validation.ts'
 import { getRulesSnapshot, loadRules } from '../store/rules-store.ts'
 import { CA_EXPORT_FILE_NAME } from '../utils/paths.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from './channels.ts'
@@ -63,6 +64,10 @@ function assertInterceptorRule(value: unknown): InterceptorRule {
   for (const key of ['filters', 'redirect', 'replace', 'queryParam', 'delay', 'headers', 'userAgent', 'request', 'response', 'script'] as const) {
     if (rule[key] !== undefined) requirePlainObject(rule[key], `rule.${key}`)
   }
+  const source = normalizeRuleSource(rule.source)
+  if (!source) throw new Error('参数不合法：rule.source')
+  const filters = normalizeRuleFilters(rule.filters)
+  if (filters === null) throw new Error('参数不合法：rule.filters')
   if (rule.description !== undefined && (typeof rule.description !== 'string' || rule.description.length > MAX_DESCRIPTION_LENGTH)) {
     throw new Error('参数不合法：rule.description')
   }
@@ -74,6 +79,8 @@ function assertInterceptorRule(value: unknown): InterceptorRule {
     name,
     enabled: requireBoolean(rule.enabled, 'rule.enabled'),
     type: type as RuleType,
+    source,
+    ...(filters === undefined ? {} : { filters }),
     updatedAt: typeof rule.updatedAt === 'string' && rule.updatedAt ? rule.updatedAt : new Date().toISOString(),
   } as InterceptorRule
 }
@@ -139,6 +146,10 @@ export function registerInterceptorHandlers(): void {
   })
 
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TRAFFIC_GET, () => interceptorService.getTraffic())
+  safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TRAFFIC_GET_ENTRY, (_event, value: unknown) => {
+    if (typeof value !== 'string' || value.length > 200) return null
+    return interceptorService.getTrafficEntry(value)
+  })
   safeHandle(ipcMain, INTERCEPTOR_IPC_CHANNELS.TRAFFIC_CLEAR, () => {
     interceptorService.clearTraffic()
     return true

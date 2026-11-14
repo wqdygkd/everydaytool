@@ -346,7 +346,7 @@ onUnmounted(() => {
             v{{ state.version }}
           </UiChip>
           <UiChip v-if="state?.orphanLikely" tone="warning">
-            端口被外部进程占用
+            发现本服务残留进程
           </UiChip>
           <template #end>
             <UiIconButton icon="refresh" label="刷新状态" :disabled="loading" @click="refresh" />
@@ -392,7 +392,7 @@ onUnmounted(() => {
                     </UiButton>
                   </template>
                   <UiButton v-if="state?.orphanLikely" size="small" type="warning" :disabled="busy" @click="onKillOrphan">
-                    结束占用
+                    结束残留进程
                   </UiButton>
                 </div>
                 <UiKeyValue label="版本" mono label-width="74px">
@@ -492,7 +492,7 @@ onUnmounted(() => {
                   二进制不随 edt 安装包分发；打开页签不会自动启动，切换工具、返回首页或关闭页签都会停止服务。
                 </UiHint>
                 <UiHint v-if="state?.orphanLikely" block>
-                  端口被其它进程占用。工具可以结束它，但不会接管。
+                  探活确认是本服务的残留进程。可以结束它，但不会接管。
                 </UiHint>
                 <div v-if="state?.lastError" class="wb2api-diagnostic-error">
                   <span>最近错误</span>
@@ -516,8 +516,8 @@ onUnmounted(() => {
             type="warning"
             :closable="false"
             show-icon
-            title="端口被非本工具托管的进程占用"
-            description="可以结束占用进程后重试，工具不会接管外部服务。"
+            title="发现本服务的残留进程"
+            description="端口占用者已通过探活确认；可以结束残留进程后重试，工具不会接管外部服务。"
           />
           <UiAlert
             v-else-if="state?.lastError && !showWebview"

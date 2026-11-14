@@ -8,7 +8,7 @@ import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { REQUEST_METHODS, RESOURCE_TYPE_LABELS, RULE_DELAY_MAX_MS, RULE_TYPE_LABELS } from '../../../../shared/interceptor'
 import { useInterceptorStore } from '../stores/interceptorStore'
-import { RULE_TYPES, ruleTypeFromPath, ruleTypeRouteName } from '../tabs'
+import { INTERCEPTOR_TOOL_ROOT, RULE_TYPES, ruleTypeFromPath, ruleTypeRouteName } from '../tabs'
 
 const router = useRouter()
 const store = useInterceptorStore()
@@ -46,6 +46,7 @@ const selectedIds = ref(new Set<string>())
 
 // 规则类型过滤走路由（/tools/interceptor/rules/<type>）：URL 可深链
 const activeType = computed<RuleType | null>(() => ruleTypeFromPath(toolPath.value))
+const onRulesRoute = computed(() => toolPath.value.startsWith(`${INTERCEPTOR_TOOL_ROOT}/rules`))
 
 const ruleTypeFilterOptions: Array<{ value: RuleType | null, label: string }> = [
   { value: null, label: '全部类型' },
@@ -473,6 +474,7 @@ function createRule(type: RuleType): void {
 
 function handleEditorHotkey(event: KeyboardEvent): void {
   if (!paneActive.value) return
+  if (!onRulesRoute.value) return
   if (view.value !== 'editor') return
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
   event.preventDefault()

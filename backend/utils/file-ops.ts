@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { access, copyFile, cp, link, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { logger } from './logger.ts'
 
 // 损坏 JSON 的备份后缀（保留现场，避免自动覆盖后无法排查）
@@ -109,6 +111,15 @@ export async function readJson<T = unknown>(filePath: string): Promise<T> {
 }
 
 export async function writeJson(filePath: string, data: unknown): Promise<void> {
-  await ensureDir(path.dirname(filePath))
-  await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+  const directory = path.dirname(filePath)
+  await ensureDir(directory)
+  const temp = path.join(directory, `.${path.basename(filePath)}.tmp-${process.pid}-${randomUUID()}`)
+  try {
+    await writeFile(temp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    await rename(temp, filePath)
+  }
+  catch (error) {
+    await rm(temp, { force: true }).catch(() => {})
+    throw error
+  }
 }
