@@ -162,9 +162,16 @@ export async function measureLayers(): Promise<DataLayerUsages> {
   return result
 }
 
+function isSkipConflict(target: string, skip: string): boolean {
+  return target === skip
+    || target.startsWith(`${skip}${path.sep}`)
+    || skip.startsWith(`${target}${path.sep}`)
+}
+
 /**
- * 清缓存：只动 cache 层的直接子项（配置层 / 资产层永不进入这里；session 层的
- * Chromium 缓存目录清理走 data-root-scan 的既有口径）。
+ * 清缓存：**按清单执行**，只删 `DATA_LAYER_ENTRIES` 里 cache 层且 `clean === 'always'` 的条目。
+ * 清单外目录一律原样保留——cache 层不是垃圾桶，整层 rm 会连用户已下载的成品一起删。
+ * 配置层 / 资产层永不进入这里；session 层的 Chromium 缓存目录走 data-root-scan。
  * 不跟随符号链接；被占用（Windows 运行中二进制）按 best-effort 跳过。
  */
 export async function clearCacheLayer(options: { skipPaths?: string[] } = {}): Promise<CacheLayerCleanResult> {
@@ -172,17 +179,16 @@ export async function clearCacheLayer(options: { skipPaths?: string[] } = {}): P
   const skipPaths = (options.skipPaths ?? []).map(item => path.resolve(item))
   const result: CacheLayerCleanResult = { freedBytes: 0, removedItems: 0, skippedItems: 0 }
 
-  let dirents: import('node:fs').Dirent[]
-  try {
-    dirents = await readdir(cacheRoot, { withFileTypes: true })
-  } catch {
-    return result
-  }
+  const registeredTopLevel = new Set<string>()
+  for (const entry of getLayerEntries('cache')) {
+    const topLevel = entry.relativePath.split('/')[0]
+    if (topLevel) registeredTopLevel.add(topLevel)
+    if (entry.clean !== 'always') continue
 
-  for (const dirent of dirents) {
-    const target = path.join(cacheRoot, dirent.name)
+    const target = resolveLayerPath('cache', entry.relativePath)
     const resolved = path.resolve(target)
-    if (skipPaths.some(skip => resolved === skip || resolved.startsWith(`${skip}${path.sep}`))) {
+    if (!existsSync(resolved)) continue
+    if (skipPaths.some(skip => isSkipConflict(resolved, skip))) {
       result.skippedItems++
       continue
     }
@@ -193,8 +199,19 @@ export async function clearCacheLayer(options: { skipPaths?: string[] } = {}): P
       result.freedBytes += bytes
     } catch (error) {
       result.skippedItems++
-      logger.warn('Failed to clear cache layer item', { item: dirent.name, error: (error as Error).message })
+      logger.warn('Failed to clear cache entry', { entry: entry.id, error: (error as Error).message })
     }
+  }
+
+  try {
+    const unregistered = (await readdir(cacheRoot, { withFileTypes: true }))
+      .filter(dirent => !registeredTopLevel.has(dirent.name))
+      .map(dirent => dirent.name)
+    if (unregistered.length > 0) {
+      logger.info('Unregistered cache entries left untouched', { items: unregistered })
+    }
+  } catch {
+    // cache 根不存在：没有可清的内容
   }
 
   if (result.removedItems > 0 || result.skippedItems > 0) {

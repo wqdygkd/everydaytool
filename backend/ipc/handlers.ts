@@ -33,7 +33,7 @@ import {
   requestDataDirectoryChange,
 } from '../utils/data-root.ts'
 import { safeHandle } from '../utils/ipc-safety.ts'
-import { logger } from '../utils/logger.ts'
+import { getLogDirectory, logger } from '../utils/logger.ts'
 import { isSafeDataDirectory, isSamePath } from '../utils/path-guard.ts'
 import { getUiPreferences, setUiPreferences } from '../utils/ui-preferences-store.ts'
 import { getWindowBoundsState } from '../utils/window-bounds-store.ts'
@@ -85,9 +85,12 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     // 否则「用默认位置继续」永远写不下确认标记，首次引导每次进工具都会弹。
     await markDataDirectoryConfigured()
     if (result.changed) {
-      logger.info('Data directory change pending restart', { target: result.pendingDataDirectory })
+      logger.info('Data directory change pending restart', {
+        target: result.pendingDataDirectory,
+        adopted: result.adopted,
+      })
     }
-    return { ...getDataDirectoryInfo(), changed: result.changed }
+    return { ...getDataDirectoryInfo(), changed: result.changed, adopted: result.adopted }
   })
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.DATA_DIRECTORY_OPEN, async () => {
@@ -95,6 +98,17 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     const errorMessage = await shell.openPath(dataDirectory)
     if (errorMessage) {
       logger.warn('Failed to open data directory', { error: errorMessage })
+      throw new Error(errorMessage)
+    }
+    return true
+  })
+
+  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.LOGS_OPEN, async () => {
+    const directory = getLogDirectory()
+    if (!directory) throw new Error('日志目录尚未初始化')
+    const errorMessage = await shell.openPath(directory)
+    if (errorMessage) {
+      logger.warn('Failed to open log directory', { error: errorMessage })
       throw new Error(errorMessage)
     }
     return true

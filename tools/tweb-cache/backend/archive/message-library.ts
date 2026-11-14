@@ -4,7 +4,13 @@
 import type { ArchiveForwardSourceSnapshot, ArchiveLibraryEntry, ArchiveMessageState } from '../../../../shared/media-archive.ts'
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { migrateArchiveAccountLayout, resolveArchivePeerIdFromDir } from './message-store.ts'
+import { logger } from '../../../../backend/utils/logger.ts'
+import {
+  archiveMessageDirName,
+  listArchiveMessageIndex,
+  migrateArchiveAccountLayout,
+  resolveArchivePeerIdFromDir,
+} from './message-store.ts'
 import { getArchiveMessagesRoot, toArchiveRelativePath } from './paths.ts'
 
 const MAX_ENTRIES = 500
@@ -74,69 +80,123 @@ function buildMessageLink(peerId: string, messageId: number, username?: string):
   return `tg://openmessage?user_id=${peerId}&message_id=${messageId}`
 }
 
+interface LibraryCandidate {
+  peerId: string
+  peerDir: string
+  messageId: number
+  sortAt: number
+  manifest?: ManifestLike
+  meta?: MetaLike
+}
+
 export async function listArchiveLibrary(): Promise<ArchiveLibraryEntry[]> {
+  const startedAt = Date.now()
   const root = getArchiveMessagesRoot()
-  const entries: ArchiveLibraryEntry[] = []
   // 目录迁移期间可能同时存在旧目录与规范目录：同一 (peer, message) 只展示一次
   const seenMessages = new Set<string>()
 
   // 旧版 messages/acc-<scope>/ 那一级在这里顺手上移（幂等，每个进程只跑一次）
   await migrateArchiveAccountLayout().catch(() => undefined)
   const peers = await readdir(root, { withFileTypes: true }).catch(() => [])
+  const candidates: LibraryCandidate[] = []
   for (const peer of peers) {
     if (!peer.isDirectory()) continue
     // 群目录名可能是 `<username>-peer-<id>`，也可能是迁移中的旧命名：统一反查真实 peer id
     const resolvedPeerId = await resolveArchivePeerIdFromDir(peer.name)
     if (!resolvedPeerId) continue
     const peerDir = path.join(root, peer.name)
+
+    // 正常路径：从消息索引拿「全部消息 + 时间」，先全局排序再只读前 MAX_ENTRIES 个 manifest
+    const indexed = listArchiveMessageIndex(resolvedPeerId)
+    if (indexed.length) {
+      for (const item of indexed) {
+        candidates.push({
+          peerId: resolvedPeerId,
+          peerDir,
+          messageId: item.messageId,
+          sortAt: item.savedAt ?? item.updatedAt,
+        })
+      }
+      continue
+    }
+
+    // 索引缺失（旧归档 / 索引损坏）：退回目录扫描，顺序由 manifest 时间决定
     const messages = await readdir(peerDir, { withFileTypes: true }).catch(() => [])
     for (const message of messages) {
       if (!message.isDirectory()) continue
+      const messageId = Number(message.name)
+      if (!Number.isSafeInteger(messageId) || messageId <= 0) continue
       const messageDir = path.join(peerDir, message.name)
       const manifest = await readJson<ManifestLike>(path.join(messageDir, 'manifest.json'))
       const meta = manifest ? undefined : await readJson<MetaLike>(path.join(messageDir, 'archive.meta.json'))
-      const source = manifest ?? meta
-      if (!source) continue
-
-      const attachments = source.attachments ?? []
-      const received = attachments.reduce((total, item) => (
-        total + (item.actualSize ?? (item as { received?: number }).received ?? 0)
-      ), 0)
-      const expected = attachments.reduce((total, item) => total + (item.expectedSize ?? 0), 0)
-      const messageId = source.messageId ?? Number(message.name)
-      const peerId = source.peer?.id ?? resolvedPeerId
-      if (!Number.isSafeInteger(messageId) || messageId <= 0 || !peerId) continue
-      const messageKey = `${peerId}:${messageId}`
-      if (seenMessages.has(messageKey)) continue
-      seenMessages.add(messageKey)
-
-      const state = manifest?.status ?? (attachments.length > 0 ? 'partial' : 'queued')
-      entries.push({
-        peerId,
+      if (!manifest && !meta) continue
+      candidates.push({
+        peerId: resolvedPeerId,
+        peerDir,
         messageId,
-        state,
-        peerTitle: source.peer?.titleSnapshot,
-        senderName: (manifest?.senderSnapshot ?? (source as MetaLike).sender)?.name,
-        forwardSource: source.forwardSource,
-        groupedId: source.groupedId,
-        savedAt: manifest?.savedAt ?? meta?.updatedAt,
-        size: received || expected,
-        attachmentCount: attachments.length,
-        // 视频主文件可能很大：只有真正的照片回退用主文件；视频必须等待独立缩略图。
-        thumbnailMediaKey: source.thumbnail?.mediaKey ?? (attachments[0]?.kind === 'photo' ? attachments[0]?.mediaKey : undefined),
-        progress: state === 'complete'
-          ? 1
-          : (expected > 0 ? Math.min(1, received / expected) : 0),
-        textPreview: await readContentPreview(messageDir, manifest?.text?.file),
-        messageLink: buildMessageLink(peerId, messageId, source.peer?.username),
-        localDir: messageDir,
-        relativeDir: toArchiveRelativePath(messageDir),
+        sortAt: manifest?.savedAt ?? meta?.updatedAt ?? 0,
+        manifest,
+        meta,
       })
-      if (entries.length >= MAX_ENTRIES * 2) break
     }
-    if (entries.length >= MAX_ENTRIES * 2) break
   }
 
-  entries.sort((left, right) => (right.savedAt ?? 0) - (left.savedAt ?? 0))
-  return entries.slice(0, MAX_ENTRIES)
+  // 先排序再截断：旧实现先扫到 1000 条就停，超过上限的新消息会被漏掉
+  candidates.sort((left, right) => right.sortAt - left.sortAt)
+
+  const entries: ArchiveLibraryEntry[] = []
+  for (const candidate of candidates) {
+    if (entries.length >= MAX_ENTRIES) break
+    const messageDir = path.join(candidate.peerDir, archiveMessageDirName(candidate.messageId))
+    let manifest = candidate.manifest
+    let meta = candidate.meta
+    if (!manifest && !meta) {
+      manifest = await readJson<ManifestLike>(path.join(messageDir, 'manifest.json'))
+      meta = manifest ? undefined : await readJson<MetaLike>(path.join(messageDir, 'archive.meta.json'))
+    }
+    const source = manifest ?? meta
+    if (!source) continue
+
+    const attachments = source.attachments ?? []
+    const received = attachments.reduce((total, item) => (
+      total + (item.actualSize ?? (item as { received?: number }).received ?? 0)
+    ), 0)
+    const expected = attachments.reduce((total, item) => total + (item.expectedSize ?? 0), 0)
+    const messageId = source.messageId ?? candidate.messageId
+    const peerId = source.peer?.id ?? candidate.peerId
+    if (!Number.isSafeInteger(messageId) || messageId <= 0 || !peerId) continue
+    const messageKey = `${peerId}:${messageId}`
+    if (seenMessages.has(messageKey)) continue
+    seenMessages.add(messageKey)
+
+    const state = manifest?.status ?? (attachments.length > 0 ? 'partial' : 'queued')
+    entries.push({
+      peerId,
+      messageId,
+      state,
+      peerTitle: source.peer?.titleSnapshot,
+      senderName: (manifest?.senderSnapshot ?? (source as MetaLike).sender)?.name,
+      forwardSource: source.forwardSource,
+      groupedId: source.groupedId,
+      savedAt: manifest?.savedAt ?? meta?.updatedAt,
+      size: received || expected,
+      attachmentCount: attachments.length,
+      // 视频主文件可能很大：只有真正的照片回退用主文件；视频必须等待独立缩略图。
+      thumbnailMediaKey: source.thumbnail?.mediaKey ?? (attachments[0]?.kind === 'photo' ? attachments[0]?.mediaKey : undefined),
+      progress: state === 'complete'
+        ? 1
+        : (expected > 0 ? Math.min(1, received / expected) : 0),
+      textPreview: await readContentPreview(messageDir, manifest?.text?.file),
+      messageLink: buildMessageLink(peerId, messageId, source.peer?.username),
+      localDir: messageDir,
+      relativeDir: toArchiveRelativePath(messageDir),
+    })
+  }
+
+  logger.debug('archive library listed', {
+    elapsedMs: Date.now() - startedAt,
+    candidates: candidates.length,
+    entries: entries.length,
+  })
+  return entries
 }

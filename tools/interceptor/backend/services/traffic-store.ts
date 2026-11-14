@@ -1,7 +1,7 @@
 // 流量日志（v1：内存环形缓冲，不落库；请求/响应体按 TRAFFIC_BODY_MAX_CHARS 截断）。
 // 渲染层经 IPC 事件增量订阅；处理名单的"相关域名提示"也从这里回捞。
-import type { TrafficEntry } from '../../../../shared/interceptor.ts'
-import { TRAFFIC_RING_SIZE } from '../../../../shared/interceptor.ts'
+import type { TrafficEntry, TrafficSummary } from '../../../../shared/interceptor.ts'
+import { toTrafficSummary, TRAFFIC_RING_SIZE } from '../../../../shared/interceptor.ts'
 
 const entries: TrafficEntry[] = []
 
@@ -14,6 +14,18 @@ export function addTrafficEntry(entry: TrafficEntry): void {
 
 export function listTrafficEntries(): TrafficEntry[] {
   return [...entries]
+}
+
+export function listTrafficSummaries(): TrafficSummary[] {
+  return entries.map(toTrafficSummary)
+}
+
+export function findTrafficEntry(id: string): TrafficEntry | undefined {
+  if (!id) return undefined
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].id === id) return entries[i]
+  }
+  return undefined
 }
 
 export function clearTrafficEntries(): void {

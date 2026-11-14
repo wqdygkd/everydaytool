@@ -12,7 +12,7 @@ import type {
 import type { TrashEntry } from './executor.ts'
 import { randomBytes } from 'node:crypto'
 import { lstat, mkdir, realpath, rm } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { readProjectLock, writeProjectLock } from '../locks/project-lock.ts'
 import { resolveSource } from '../sources/catalog.ts'
@@ -34,6 +34,7 @@ import {
   stageCatalog,
   validateStagedSkill,
 } from './installer-core.ts'
+import { projectSourceOf } from './project-source.ts'
 import { projectScopeId } from './projects.ts'
 import {
   readSkillManagerRegistry,
@@ -262,7 +263,7 @@ function buildNextProjectLock(
   const skills: Record<string, ProjectLockEntry> = { ...lock.skills }
   for (const item of prepared) {
     const previous = skills[item.name]
-    const source = projectSource(catalog, projectPath)
+    const source = projectSourceOf(catalog, projectPath)
     const entry: ProjectLockEntry = {
       ...previous,
       source,
@@ -277,14 +278,7 @@ function buildNextProjectLock(
     else delete entry.ref
     skills[item.name] = entry
   }
-  return { ...lock, version: 1, skills }
-}
-
-function projectSource(catalog: SourceCatalog, projectPath: string): string {
-  if (catalog.sourceType !== 'local' || !isAbsolute(catalog.source)) return catalog.source
-  const relativePath = relative(projectPath, catalog.source)
-  if (!relativePath || isAbsolute(relativePath)) return catalog.source
-  return relativePath.startsWith('.') ? relativePath : `./${relativePath}`
+  return { ...lock, version: lock.version, skills }
 }
 
 function sameProjectSource(

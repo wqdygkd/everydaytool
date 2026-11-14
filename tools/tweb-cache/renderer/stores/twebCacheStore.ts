@@ -32,6 +32,8 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
   let disposers: Array<() => void> = []
   let libraryRefreshTimer: number | undefined
   let trashRefreshTimer: number | undefined
+  let normalizeTimer: number | undefined
+  let normalizeRunning = false
   /** 正在下载的消息（事件驱动）；重扫影库时用来覆盖扫描结果里的 partial */
   const activeArchives = new Map<string, number>()
   /** 暂停后短暂忽略仍在上报的 downloading 事件（in-flight append 可能晚到） */
@@ -188,6 +190,27 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
     return summary
   }
 
+  /**
+   * 规范化会整盘扫一遍归档（只在首次打开 / 布局版本变化时真正开跑）。
+   * 推迟到首屏与 tweb 页面起来之后再后台做，避免打开工具就卡住；
+   * 页面不可见时继续等，回来后只跑一次。
+   */
+  function scheduleNormalize(delayMs = 2_000): void {
+    if (normalizeTimer !== undefined || normalizeRunning) return
+    normalizeTimer = window.setTimeout(() => {
+      normalizeTimer = undefined
+      if (!initialized) return
+      if (document.hidden) {
+        scheduleNormalize(15_000)
+        return
+      }
+      normalizeRunning = true
+      void normalizeLibrary()
+        .catch(() => undefined)
+        .finally(() => { normalizeRunning = false })
+    }, delayMs)
+  }
+
   async function deleteMessage(peerId: string, messageId: number): Promise<void> {
     await invoke(channels().LIBRARY_DELETE, { peerId, messageId })
     await Promise.all([loadLibrary(), loadTrash()])
@@ -242,6 +265,10 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
       window.clearTimeout(trashRefreshTimer)
       trashRefreshTimer = undefined
     }
+    if (normalizeTimer !== undefined) {
+      window.clearTimeout(normalizeTimer)
+      normalizeTimer = undefined
+    }
     clearActiveArchives()
     initialized = false
     ready.value = false
@@ -275,6 +302,7 @@ export const useTwebCacheStore = defineStore('twebCache/state', () => {
     selectArchiveDir,
     changeArchiveDir,
     normalizeLibrary,
+    scheduleNormalize,
     deleteMessage,
     openMessageDir,
     restoreTrash,

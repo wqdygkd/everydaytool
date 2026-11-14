@@ -60,7 +60,7 @@ utils/history.ts      下载历史增 / 查 / 删 / 清（含可选删文件）
 
 | 内容 | 位置 | 层 | 说明 |
 |---|---|---|---|
-| 下载产物 | `cache/offline-pack/downloads/` | cache | `resolveLayerPath('cache', 'offline-pack', 'downloads')`，可重下，清缓存会删 |
+| 下载产物 | `cache/offline-pack/downloads/` | cache | `resolveLayerPath('cache', 'offline-pack', 'downloads')`，已下载成品，清缓存不删 |
 | 下载历史 | `config/offline-pack/history.json` | config | `resolveLayerPath('config', 'offline-pack', 'history.json')`，不可再生 |
 
 - 读取历史走 `resolveLayerPathWithFallback`，兼容 v1 `<data>/offline-pack/history.json`。
@@ -105,6 +105,7 @@ quay.io/prometheus/node-exporter  → <mirror>/quay.io/prometheus/node-exporter
 
 - 镜像 config 直接取清单 `config.digest` 指向的上游 blob，**原样**写成 `<sha256>.json`，`manifest.json` 的 `Config` 指向它。不要手工拼配置——手写会把 `Cmd` / `Entrypoint` 置成 `null`，加载后 `docker run` 报 `No command specified`。
 - config 里的 `rootfs.diff_ids` 是完整性基准：每层解压后逐层比对，不匹配直接失败并提示更换加速服务，不把损坏层包装成"能加载"的镜像。
+- 每层走「流式下载到临时文件（增量 sha256）→ 流式解压到临时 `layer.tar`（增量 diff_id）→ 流式写入 TAR」，解压后的层不再常驻内存；下载进度按任务 150ms 节流，终态事件不节流。
 - `docker load` 的 TAR 只有 `RepoTags`，没有 `RepoDigests`。加载后 `docker image inspect -f '{{json .RepoDigests}}'` 为空是 Docker 的正常行为（digest 引用只来自 registry pull），不是导出缺字段。
 
 ## 5.1 GitHub Releases / 分支源码 / 单文件（`github-service.ts` + `GitHubDownloader.vue`）
@@ -173,7 +174,7 @@ quay.io/prometheus/node-exporter  → <mirror>/quay.io/prometheus/node-exporter
 |---|---|
 | `VSCODE_QUERY` | url → `{ versions }` |
 | `VSCODE_LINK` | url, version → `{ downloadUrl }` |
-| `CHROME_SEARCH` / `EDGE_SEARCH` | query → `{ results }` |
+| `CHROME_SEARCH` / `EDGE_SEARCH` | query → 搜索结果数组（`OfflinePackChromeSearchItem[]` / `OfflinePackEdgeSearchItem[]`） |
 | `CHROME_DETAIL` / `EDGE_DETAIL` | id / query → detail |
 | `DOCKER_SEARCH` | keyword → 搜索结果 |
 | `DOCKER_TAGS` | registry, namespace, repository, mirror? → tags[] |

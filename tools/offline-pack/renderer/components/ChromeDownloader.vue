@@ -57,8 +57,8 @@ async function search(query: string): Promise<void> {
   if (!api) return
   searching.value = true
   try {
-    const res = await api.invoke(api.channels.CHROME_SEARCH, query.trim()) as { results: OfflinePackChromeSearchItem[] }
-    searchResults.value = res.results ?? []
+    const res = await api.invoke(api.channels.CHROME_SEARCH, query.trim()) as OfflinePackChromeSearchItem[]
+    searchResults.value = Array.isArray(res) ? res : []
   } catch {
     searchResults.value = []
   } finally {

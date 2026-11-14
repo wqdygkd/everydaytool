@@ -11,7 +11,7 @@ const tool = defineTool({
   icon: 'film',
   category: { key: 'media', name: '媒体工具' },
   keywords: ['media-library', '媒体库', '影片', '视频', '套图', '图集', '相册', '艺人', '系列', 'video', 'gallery'],
-  supportedTargets: ['win', 'mac', 'linux'],
+  supportedTargets: ['web', 'win', 'mac'],
   createdAt: '2026-11-14',
   route: {
     path: 'media-library',

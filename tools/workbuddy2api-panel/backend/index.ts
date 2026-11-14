@@ -1,24 +1,12 @@
 import { registerCacheIntegrityHandler } from '../../../backend/utils/data-root-scan.ts'
-import { loadDataDirectoryOverride } from '../../../backend/utils/data-root.ts'
 import { logger } from '../../../backend/utils/logger.ts'
 import { registerWb2apiPanelHandlers } from './ipc/handlers.ts'
 import { installWb2apiGuestGuards } from './services/guest-guards.ts'
 import { stopManagedProcess } from './services/process-service.ts'
 import { publishStateNow, stopStatePublisher } from './services/state-service.ts'
-import { ensureWb2apiDirs } from './utils/paths.ts'
 
 export const workbuddy2apiPanelBackend = {
-  async initialize(): Promise<void> {
-    try {
-      await loadDataDirectoryOverride()
-    } catch (error) {
-      logger.warn('wb2api data directory load failed', { error: (error as Error).message })
-    }
-    try {
-      await ensureWb2apiDirs()
-    } catch (error) {
-      logger.warn('wb2api ensure dirs failed', { error: (error as Error).message })
-    }
+  initialize(): void {
     installWb2apiGuestGuards()
     registerWb2apiPanelHandlers()
 

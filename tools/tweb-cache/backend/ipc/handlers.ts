@@ -14,6 +14,7 @@ import {
   restoreTrash,
   revealMessageDir,
 } from '../archive/index.ts'
+import { readMessageIdValue, readPeerIdValue, readTrashId } from '../archive/params.ts'
 import { getArchiveDir } from '../archive/paths.ts'
 import {
   ensureTwebCacheSiteStarted,
@@ -25,21 +26,13 @@ import { TWEB_CACHE_IPC_CHANNELS } from './channels.ts'
 
 let handlersRegistered = false
 
-function requirePeerId(value: unknown): string {
-  if (typeof value !== 'string' || !/^-?\d{1,20}$/.test(value)) throw new Error('peer id 非法')
-  return value
-}
-
-function requireMessageId(value: unknown): number {
-  const id = Number(value)
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('message id 非法')
-  return id
-}
-
 function parseLibraryTarget(value: unknown): { peerId: string, messageId: number } {
   if (typeof value !== 'object' || value === null) throw new Error('影库参数非法')
   const payload = value as Record<string, unknown>
-  return { peerId: requirePeerId(payload.peerId), messageId: requireMessageId(payload.messageId) }
+  return {
+    peerId: readPeerIdValue(payload.peerId),
+    messageId: readMessageIdValue(payload.messageId, 'messageId'),
+  }
 }
 
 export function registerTwebCacheHandlers(): void {
@@ -72,8 +65,7 @@ export function registerTwebCacheHandlers(): void {
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.LIBRARY_NORMALIZE, () => normalizeLibrary())
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.TRASH_LIST, () => listTrash())
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.TRASH_RESTORE, (_event, value: unknown) => {
-    if (typeof value !== 'string' || !/^[\w-]{1,120}$/.test(value)) throw new Error('回收站条目非法')
-    return restoreTrash(value)
+    return restoreTrash(readTrashId(value))
   })
   safeHandle(ipcMain, TWEB_CACHE_IPC_CHANNELS.TRASH_EMPTY, (_event, value: unknown) => {
     const days = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : undefined

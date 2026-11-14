@@ -6,13 +6,15 @@ import type {
   OfflinePackDownloadResult,
 } from '../../../../shared/offline-pack.ts'
 import type { HttpOptions } from '../utils/http.ts'
-import { rename, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, rename, rm } from 'node:fs/promises'
 // Docker Registry 代理：搜索、标签、鉴权、manifest 解析、镜像层下载与 docker load TAR 打包。
 // 按 registry 分发端点：ghcr.io / docker.io 走 OCI，均支持加速服务镜像代理；空 registry 默认 Docker Hub。
 // 打包在 Node 主进程完成（zlib 解压 + crypto 哈希 + 流式 TAR 写盘），避免浏览器内存/格式限制。
 import path from 'node:path'
+import { downloadToFile } from '../../../../backend/utils/http-download.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { decompressLayer } from '../utils/decompress.ts'
+import { decompressLayerFile } from '../utils/decompress.ts'
 import { emitProgress, ensureOfflinePackDownloadDir, registerActiveDownload, unregisterActiveDownload } from '../utils/downloads.ts'
 import { addHistory } from '../utils/history.ts'
 import { fetchBuffer, fetchJson, fetchRaw } from '../utils/http.ts'
@@ -72,7 +74,17 @@ function normalizeMirrorBase(mirror?: string): string {
   if (!mirror) return ''
   const trimmed = mirror.trim().replace(/\/+$/, '')
   if (!trimmed) return ''
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  if (/^http:\/\//i.test(trimmed)) throw new Error('Docker 加速地址必须使用 https')
+  return /^https:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
+
+function assertDigest(buffer: Buffer, expected: string, label: string): void {
+  const wanted = expected.replace(/^sha256:/i, '').toLowerCase()
+  if (!/^[a-f0-9]{64}$/.test(wanted)) throw new Error(`${label} digest 非法`)
+  const actual = createHash('sha256').update(buffer).digest('hex')
+  if (actual !== wanted) {
+    throw new Error(`${label}校验失败（sha256 不匹配），镜像可能被篡改或加速线路返回了错误内容`)
+  }
 }
 
 /** 仓库路径：加速服务时按约定带前缀（docker.io 无前缀，ghcr.io / gcr.io / quay.io 带 `<registry>/`） */
@@ -80,17 +92,34 @@ function repoPath(cfg: RegistryConfig, namespace: string, repository: string): s
   return `${cfg.pathPrefix ?? ''}${namespace}/${repository}`
 }
 
-/** 按 registry 分发端点；加速服务统一走 registry v2 端点，直连时 ghcr.io 走 OCI、其余默认 Docker Hub */
+/** registry 只接受 host[:port]，避免把 URL 路径拼进 API 基址 */
+function normalizeRegistryHost(registry: string): string {
+  const host = registry.trim().replace(/\/+$/, '').toLowerCase()
+  if (!/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) {
+    throw new Error(`镜像仓库地址非法：${registry}`)
+  }
+  return host === 'index.docker.io' || host === 'registry-1.docker.io' ? 'docker.io' : host
+}
+
+/**
+ * 按 registry 分发端点：
+ * - 加速服务统一走 registry v2 端点；
+ * - 直连 docker.io 走 Hub 专有 tags API；
+ * - ghcr.io 走固定 token 端点；
+ * - quay.io / gcr.io / 其它标准 registry 走 `/v2/` 的 Bearer challenge，
+ *   不再把未知仓库当成 Docker Hub 去请求同名仓库。
+ */
 function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
+  const host = normalizeRegistryHost(registry)
   const mirrorBase = normalizeMirrorBase(mirror)
   if (mirrorBase) {
     return {
       registryBase: mirrorBase,
       tagsMode: 'registry',
-      pathPrefix: registry === 'docker.io' ? '' : `${registry}/`,
+      pathPrefix: host === 'docker.io' ? '' : `${host}/`,
     }
   }
-  if (registry === 'ghcr.io') {
+  if (host === 'ghcr.io') {
     return {
       tokenUrl: 'https://ghcr.io/token',
       tokenService: 'ghcr.io',
@@ -98,12 +127,18 @@ function getRegistryConfig(registry: string, mirror?: string): RegistryConfig {
       tagsMode: 'registry',
     }
   }
+  if (host === 'docker.io') {
+    return {
+      tokenUrl: 'https://auth.docker.io/token',
+      tokenService: 'registry.docker.io',
+      registryBase: 'https://registry-1.docker.io',
+      tagsMode: 'hub',
+      hubBase: 'https://registry.hub.docker.com',
+    }
+  }
   return {
-    tokenUrl: 'https://auth.docker.io/token',
-    tokenService: 'registry.docker.io',
-    registryBase: 'https://registry-1.docker.io',
-    tagsMode: 'hub',
-    hubBase: 'https://registry.hub.docker.com',
+    registryBase: `https://${host}`,
+    tagsMode: 'registry',
   }
 }
 
@@ -368,7 +403,8 @@ export interface DockerDownloadSpec {
 }
 
 interface ProcessedLayer {
-  data: Buffer
+  filePath: string
+  size: number
   diffId: string
   layerId: string
 }
@@ -422,7 +458,7 @@ async function packDockerLoadTar(
   await writer.addFile(configFilename, configBuffer)
 
   for (let i = 0; i < processed.length; i++) {
-    const { data, layerId } = processed[i]
+    const { filePath, size, layerId } = processed[i]
     await writer.addDirectory(`${layerId}/`)
     await writer.addFile(`${layerId}/VERSION`, '1.0')
     await writer.addFile(`${layerId}/json`, JSON.stringify({
@@ -431,7 +467,7 @@ async function packDockerLoadTar(
       created: new Date().toISOString(),
       container_config: { Cmd: ['/bin/sh', '-c', '#(nop) ADD file: in /'] },
     }))
-    await writer.addFile(`${layerId}/layer.tar`, data)
+    await writer.addFileFromPath(`${layerId}/layer.tar`, filePath, size)
   }
 
   await writer.end()
@@ -439,11 +475,13 @@ async function packDockerLoadTar(
 
 /** 下载镜像所有层并打包为 docker load TAR，落盘返回路径 */
 export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<OfflinePackDownloadResult> {
+  const startedAt = Date.now()
   const controller = new AbortController()
   registerActiveDownload(spec.taskId, controller)
   const dir = await ensureOfflinePackDownloadDir()
   const finalPath = path.join(dir, spec.filename)
-  const tmpPath = `${finalPath}.part`
+  const tmpPath = `${finalPath}.${spec.taskId.slice(0, 8)}.part`
+  const layerDir = path.join(dir, `.${spec.taskId.slice(0, 8)}-layers`)
   const registry = spec.registry || 'docker.io'
   const namespace = spec.namespace || 'library'
   const { taskId } = spec
@@ -460,6 +498,7 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
       manifest.config.digest,
       spec.mirror,
     )
+    assertDigest(configBuffer, manifest.config.digest, '镜像配置')
     const expectedDiffIds = config.rootfs?.diff_ids ?? []
     if (expectedDiffIds.length && expectedDiffIds.length !== layers.length) {
       throw new Error(`镜像清单与配置不一致（层数 ${layers.length} / ${expectedDiffIds.length}），请更换加速服务后重试`)
@@ -469,6 +508,7 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
     const configFilename = `${configHash}.json`
 
     const processed: ProcessedLayer[] = []
+    await mkdir(layerDir, { recursive: true })
     for (let i = 0; i < layers.length; i++) {
       const layer = layers[i]
       // 每层下载前刷新 token，避免大层下载期间 token 过期（默认 300s）
@@ -483,9 +523,13 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
         totalLayers: layers.length,
         message: `下载层 ${i + 1}/${layers.length}`,
       })
-      const blob = await fetchBuffer(buildLayerUrl(registry, namespace, spec.repository, layer.digest, spec.mirror), {
+      const downloadPath = path.join(layerDir, `${i}.${layer.digest.replace(/^sha256:/, '').slice(0, 12)}.download`)
+      const layerPath = path.join(layerDir, `${i}.layer.tar`)
+      const layerStartedAt = Date.now()
+      await downloadToFile(buildLayerUrl(registry, namespace, spec.repository, layer.digest, spec.mirror), downloadPath, {
         headers: authHeaders(freshToken),
         signal: controller.signal,
+        expectedSha256: layer.digest,
         onProgress: (downloaded, total) => emitProgress({
           taskId,
           kind: 'docker',
@@ -497,12 +541,18 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
           message: `下载层 ${i + 1}/${layers.length}`,
         }),
       })
-      const { data, diffId } = decompressLayer(blob, layer.mediaType)
+      const { diffId, size } = await decompressLayerFile(downloadPath, layerPath, layer.mediaType)
+      await rm(downloadPath, { force: true })
       const expectedDiffId = expectedDiffIds[i]
       if (expectedDiffId && expectedDiffId !== diffId) {
         throw new Error(`第 ${i + 1} 层校验失败（diff_id 不匹配），镜像可能已损坏，请更换加速服务后重新下载`)
       }
-      processed.push({ data, diffId, layerId: generateLayerId(layer.digest) })
+      logger.debug('docker layer streamed', {
+        layer: i + 1,
+        elapsedMs: Date.now() - layerStartedAt,
+        unpackedBytes: size,
+      })
+      processed.push({ filePath: layerPath, size, diffId, layerId: generateLayerId(layer.digest) })
     }
 
     emitProgress({ taskId, kind: 'docker', status: 'processing', downloadedBytes: 0, totalBytes: 0, message: '正在打包 docker load TAR' })
@@ -511,6 +561,7 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
 
     emitProgress({ taskId, kind: 'docker', status: 'completed', downloadedBytes: 0, totalBytes: 0, message: '打包完成' })
     const result = { taskId, savedPath: finalPath, filename: spec.filename }
+    logger.debug('docker image packed', { elapsedMs: Date.now() - startedAt, layers: layers.length })
     await addHistory({ kind: 'docker', filename: result.filename, savedPath: result.savedPath })
     return result
   } catch (error) {
@@ -526,6 +577,7 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
     })
     throw error
   } finally {
+    await rm(layerDir, { recursive: true, force: true }).catch(() => {})
     unregisterActiveDownload(spec.taskId)
   }
 }

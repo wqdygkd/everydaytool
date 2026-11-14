@@ -133,6 +133,8 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态与收藏备份', backup: 'include', clean: 'never', sensitive: true },
   { id: 'tweb-cache.config', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/config.json', label: '站点端口（tweb 前端）', backup: 'include', clean: 'never' },
   { id: 'tweb-cache.aliases', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/archive-alias.json', label: '等价缓存索引（转发 / 同媒体副本，可由 manifest 重建）', backup: 'optional', clean: 'never' },
+  { id: 'tweb-cache.media-index', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/media-index.json', label: '媒体索引（可由 manifest 重建）', backup: 'include', clean: 'never' },
+  { id: 'tweb-cache.messages-index', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/messages-index', label: '消息状态索引（按 peer 分片，可由 manifest 重建）', backup: 'include', clean: 'never' },
   { id: 'tweb-cache.peer-dirs', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/peer-dirs.json', label: '群目录名登记（username + peer id，可由 manifest 重建）', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.manifest', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/manifest.json', label: '托管二进制清单', backup: 'include', clean: 'never', integrity: 'reinstall-required' },
   { id: 'workbuddy2api-panel.settings', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/app-settings.json', label: '面板设置', backup: 'include', clean: 'never' },
@@ -159,7 +161,9 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   // 备份恢复前自动生成的配置层快照：回滚点。可再生（清缓存即可丢），但**不随清缓存删除**自动快照以外的东西
   { id: 'app.import-rollback', toolId: 'app', layer: 'cache', relativePath: 'import-rollback', label: '备份恢复回滚快照', backup: 'never', clean: 'always' },
   { id: 'interceptor.extension', toolId: 'interceptor', layer: 'cache', relativePath: 'interceptor/extension', label: '运行时扩展（可重建）', backup: 'never', clean: 'always' },
-  { id: 'offline-pack.downloads', toolId: 'offline-pack', layer: 'cache', relativePath: 'offline-pack/downloads', label: '下载的离线包', backup: 'never', clean: 'always' },
+  // 已下载完成的安装包 / 离线包：磁盘占用大，但**不是可再生缓存**，重下要再花一次流量和时间。
+  // 历史记录（offline-pack/history.json）直接指向这里，清缓存删掉就会全部变成「文件已缺失」。
+  { id: 'offline-pack.downloads', toolId: 'offline-pack', layer: 'cache', relativePath: 'offline-pack/downloads', label: '下载的离线包（成品，不随清缓存删除）', backup: 'never', clean: 'never' },
   { id: 'media-library.thumbs', toolId: 'media-library', layer: 'cache', relativePath: 'media-library/thumbs', label: '媒体缩略图（按需重新生成）', backup: 'never', clean: 'always' },
   { id: 'media-library.scans', toolId: 'media-library', layer: 'cache', relativePath: 'media-library/scans', label: '扫描记录', backup: 'never', clean: 'always' },
   { id: 'skill-manager.repos', toolId: 'skill-manager', layer: 'cache', relativePath: 'skill-manager/repos', label: '远端仓库快照与 tarball 缓存', backup: 'never', clean: 'always' },

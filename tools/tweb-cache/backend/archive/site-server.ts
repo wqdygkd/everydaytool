@@ -256,7 +256,7 @@ export class ArchiveSiteServer {
   }
 
   private injectBootstrap(html: string): string {
-    const script = `<script src="${BOOTSTRAP_PATH}"></script>`
+    const script = `<script src="${BOOTSTRAP_PATH}?t=${encodeURIComponent(this.token)}"></script>`
     if (!html.includes('</head>')) return `${script}${html}`
     return html.replace('</head>', `${script}\n</head>`)
   }
@@ -279,6 +279,7 @@ export class ArchiveSiteServer {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Referrer-Policy', 'no-referrer')
 
+    const fetchSite = req.headers['sec-fetch-site']
     if (!this.isAllowedHost(req, info) || !this.isAllowedOrigin(req, info)) {
       this.sendJson(res, 403, { error: 'forbidden' })
       return
@@ -294,7 +295,24 @@ export class ArchiveSiteServer {
       return
     }
 
+    /**
+     * 媒体子资源被应用渲染层直接 `<img src>` 引用（dev 是 `http://localhost:5173`，
+     * 打包后是 `file://`），浏览器一律标成 `Sec-Fetch-Site: cross-site`。
+     * 它只读、且必须携带本进程随机生成的 token，按跨站拒绝只会把影库缩略图全部打成 403；
+     * 其余入口（/api、bootstrap、/events、静态）继续拒绝跨站请求。
+     */
+    const isMediaSubresource = (method === 'GET' || method === 'HEAD')
+      && (pathname.startsWith('/media/') || pathname.startsWith('/thumb/'))
+    if (!isMediaSubresource && (fetchSite === 'cross-site' || fetchSite === 'same-site')) {
+      this.sendJson(res, 403, { error: 'cross-site request is not allowed' })
+      return
+    }
+
     if (pathname === BOOTSTRAP_PATH) {
+      if (!this.hasValidToken(req, url) || (fetchSite !== 'same-origin' && fetchSite !== 'none')) {
+        this.sendJson(res, 401, { error: 'invalid token' })
+        return
+      }
       this.sendText(res, 200, this.buildBootstrapScript(), 'text/javascript; charset=utf-8', 'no-store')
       return
     }

@@ -330,7 +330,13 @@ export const SKILL_MANAGER_CHANNELS = {
 } as const
 
 export const PROJECT_LOCK_VERSION = 1
+/** 上游 skills CLI 已使用 v2；两种版本字段兼容，读入后按原版本写回。 */
+export const SUPPORTED_PROJECT_LOCK_VERSIONS = [1, 2] as const
 export const GLOBAL_LOCK_VERSION = 3
+
+export function isSupportedProjectLockVersion(version: number): version is (typeof SUPPORTED_PROJECT_LOCK_VERSIONS)[number] {
+  return (SUPPORTED_PROJECT_LOCK_VERSIONS as readonly number[]).includes(version)
+}
 
 /** 项目 skills-lock.json 的单条记录；未知字段原样保留，写回时不能丢。 */
 export interface ProjectLockEntry {

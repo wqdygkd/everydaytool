@@ -11,6 +11,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
+import { DATA_LAYER_ENTRIES } from '../../shared/data-layers.ts'
 import { migrateDataDirectory } from './data-migration.ts'
 import { getDataDirectory } from './data-root.ts'
 import { removeIfExists, writeJson } from './file-ops.ts'
@@ -95,6 +96,15 @@ export function getPendingAssetsRoot(): string | null {
   }
 }
 
+function getPendingAssetsRootMode(): 'migrate' | 'adopt' {
+  try {
+    const raw = JSON.parse(readFileSync(getUserDataFile(PENDING_FILE), 'utf8')) as { mode?: unknown }
+    return raw.mode === 'adopt' ? 'adopt' : 'migrate'
+  } catch {
+    return 'migrate'
+  }
+}
+
 export interface AppAssetsRootState {
   assetsRoot: string
   defaultAssetsRoot: string
@@ -113,6 +123,8 @@ export function getAssetsRootState(): AppAssetsRootState {
 
 export interface AssetsDirectoryChangeResult extends AppAssetsRootState {
   changed: boolean
+  /** true = 接管目标目录已有归档（不迁移/不合并）；false = 迁移到空目录 */
+  adopted: boolean
 }
 
 function isDirectoryNotEmpty(directory: string): boolean {
@@ -123,9 +135,26 @@ function isDirectoryNotEmpty(directory: string): boolean {
   }
 }
 
+/** 认得出的资产目录标记：清单里 assets 层的顶层目录（tweb-cache / skill-manager） */
+const ASSETS_DIRECTORY_MARKERS = new Set(DATA_LAYER_ENTRIES
+  .filter(entry => entry.layer === 'assets')
+  .map(entry => entry.relativePath.split('/')[0]))
+
+/** 目标目录非空时，只有认得出来的 everydaytool 归档目录才允许「接管」 */
+function looksLikeAssetsDirectory(directory: string): boolean {
+  try {
+    return readdirSync(directory).some(name => ASSETS_DIRECTORY_MARKERS.has(name))
+  } catch {
+    return false
+  }
+}
+
 /**
- * 请求切换资产根：只写 pending，下次启动迁移后生效。
- * 目标必须为空或不存在（迁移不覆盖用户数据）；不能等于数据根，也不能把数据根套在里面。
+ * 请求切换资产根：只写 pending，下次启动后生效。
+ * - 空目录：迁移过去（mode=migrate）；
+ * - 已有归档的 everydaytool 资产目录：直接接管（mode=adopt），不迁移、不合并，
+ *   用于恢复旧影库 / 换回之前用过的归档目录；
+ * - 不能等于数据根，也不能把数据根套在里面。
  */
 export async function requestAssetsRootChange(nextDirectory: string): Promise<AssetsDirectoryChangeResult> {
   const normalized = normalizeAssetsRoot(nextDirectory)
@@ -137,20 +166,25 @@ export async function requestAssetsRootChange(nextDirectory: string): Promise<As
   const current = getAssetsRoot()
   if (isSamePath(normalized, current)) {
     await removeIfExists(getUserDataFile(PENDING_FILE))
-    return { ...getAssetsRootState(), assetsRoot: current, pendingAssetsRoot: null, changed: false }
+    return { ...getAssetsRootState(), assetsRoot: current, pendingAssetsRoot: null, changed: false, adopted: false }
   }
   const relationError = checkAssetsRootRelation(normalized)
   if (relationError) throw new Error(relationError)
   if (isDirectoryNotEmpty(normalized)) {
-    throw new Error('目标目录非空，请选择一个空目录（迁移不会覆盖已有文件）')
+    if (!looksLikeAssetsDirectory(normalized)) {
+      throw new Error('目标目录非空，且不是 everydaytool 的归档目录；请选择空目录，或选择包含 tweb-cache / skill-manager 的旧归档目录')
+    }
+    await writeJson(getUserDataFile(PENDING_FILE), { assetsRoot: normalized, mode: 'adopt' })
+    logger.info('Assets directory adopt requested; will switch on next launch', { from: current, to: normalized })
+    return { ...getAssetsRootState(), assetsRoot: current, pendingAssetsRoot: normalized, changed: true, adopted: true }
   }
 
-  await writeJson(getUserDataFile(PENDING_FILE), { assetsRoot: normalized })
+  await writeJson(getUserDataFile(PENDING_FILE), { assetsRoot: normalized, mode: 'migrate' })
   logger.info('Assets directory change requested; migration will run on next launch', {
     from: current,
     to: normalized,
   })
-  return { ...getAssetsRootState(), assetsRoot: current, pendingAssetsRoot: normalized, changed: true }
+  return { ...getAssetsRootState(), assetsRoot: current, pendingAssetsRoot: normalized, changed: true, adopted: false }
 }
 
 /**
@@ -200,6 +234,15 @@ export function loadAssetsRootSync(): void {
 
   const pending = getPendingAssetsRoot()
   if (pending && !isSamePath(pending, getAssetsRoot())) {
+    if (getPendingAssetsRootMode() === 'adopt') {
+      const bootstrapTarget = isSamePath(pending, getDefaultAssetsRoot()) ? null : pending
+      saveAssetsRootSync(bootstrapTarget)
+      setAssetsRootOverride(bootstrapTarget)
+      clearPendingSync()
+      ensureAssetsRoot()
+      logger.info('Existing assets directory adopted', { assetsRoot: getAssetsRoot() })
+      return
+    }
     const result = migrateAssetsDirectory(getAssetsRoot(), pending)
     if (!result.ok) {
       logger.warn('Pending assets directory migration failed; keeping current directory', {

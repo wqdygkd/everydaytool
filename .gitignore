@@ -17,3 +17,5 @@ Thumbs.db
 !.env.example
 .tmp-*
 .tmp
+# 每次启动轮换的拦截器 WS 令牌（由主进程写入扩展目录）
+tools/interceptor/extension/bridge-token.json

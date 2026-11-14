@@ -27,13 +27,16 @@ import type {
   ArchiveThumbnailSnapshot,
 } from '../../../../shared/media-archive.ts'
 import { Buffer } from 'node:buffer'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, existsSync, linkSync, statSync } from 'node:fs'
 import { copyFile, mkdir, open, readdir, readFile, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { setImmediate as setImmediatePromise } from 'node:timers/promises'
 import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
+import { withArchiveMessageLock } from './message-lock.ts'
+import { archiveMessageDirName } from './message-path.ts'
 import {
   getArchiveConfigRoot,
   getArchiveMediaIndexPath,
@@ -41,6 +44,7 @@ import {
   getArchiveMessagesRoot,
   getArchiveObjectsDir,
   resolveArchiveRelativePath,
+  resolveMessageRelativePath,
   toArchiveRelativePath,
   toMessageRelativePath,
 } from './paths.ts'
@@ -56,6 +60,8 @@ import {
 /** 旧版多账号占位目录名（`acc-default` 等）：迁移时上移一级后删除 */
 const LEGACY_ACCOUNT_DIR = /^acc-[\w-]{1,40}$/
 const MANIFEST_FILE = 'manifest.json'
+/** 目录布局 / 索引版本：升到新布局时 +1，强制再跑一次全量规范化 */
+const ARCHIVE_LAYOUT_VERSION = 2
 const META_FILE = 'archive.meta.json'
 /** 消息内容快照（群名/发送者/时间/正文/附件清单），进行中也会写 */
 const CONTENT_FILE = 'message.md'
@@ -160,9 +166,7 @@ function assertAttachmentIndex(index: number): number {
   return index
 }
 
-function padMessageId(messageId: number): string {
-  return String(messageId).padStart(15, '0')
-}
+export { archiveMessageDirName } from './message-path.ts'
 
 function padAttachmentIndex(index: number): string {
   return String(index).padStart(3, '0')
@@ -183,7 +187,7 @@ export function archiveMessageDir(peerId: string, messageId: number): string {
   return path.join(
     getArchiveMessagesRoot(),
     getArchivePeerDir(assertPeerId(peerId)),
-    padMessageId(assertMessageId(messageId)),
+    archiveMessageDirName(messageId),
   )
 }
 
@@ -271,7 +275,7 @@ async function mergePeerDirContents(sourceDir: string, targetDir: string): Promi
   await mkdir(target, { recursive: true })
   for (const item of items) {
     const to = path.join(target, item.name)
-    if (existsSync(to)) continue
+    if (await pathExists(to)) continue
     try {
       await rename(path.join(source, item.name), to)
       moved.push(item.name)
@@ -306,15 +310,18 @@ async function runEnsureArchivePeerDir(
   }
 
   // 只差大小写时保留磁盘上的现有写法：Windows 上改不了，Linux 上改了会找不到
-  const caseVariant = [entry?.dir, legacyDir, ...scannedDirs]
-    .find(dir => dir
-      && dir !== targetDir
-      && sameDirName(dir, targetDir)
-      && existsSync(path.join(messagesRoot, dir)))
+  let caseVariant: string | undefined
+  for (const dir of [entry?.dir, legacyDir, ...scannedDirs]) {
+    if (!dir || dir === targetDir || !sameDirName(dir, targetDir)) continue
+    if (await pathExists(path.join(messagesRoot, dir))) {
+      caseVariant = dir
+      break
+    }
+  }
   if (caseVariant) targetDir = caseVariant
 
   // 极端情况：规范目录已存在但内容属于另一个 peer（手工复制 / 冲突）。不要合并，退回裸 peer-<id>
-  if (!sameDirName(targetDir, legacyDir) && existsSync(path.join(messagesRoot, targetDir))) {
+  if (!sameDirName(targetDir, legacyDir) && await pathExists(path.join(messagesRoot, targetDir))) {
     if (!await dirBelongsToPeer(targetDir, peerId)) {
       logger.warn('Archive peer directory is owned by another peer', { peerId, dir: targetDir })
       targetDir = legacyDir
@@ -326,13 +333,13 @@ async function runEnsureArchivePeerDir(
   for (const dir of [entry?.dir, legacyDir, ...scannedDirs]) {
     if (!dir || sameDirName(dir, targetDir)) continue
     const key = dir.toLowerCase()
-    if (seen.has(key) || !existsSync(path.join(messagesRoot, dir))) continue
+    if (seen.has(key) || !await pathExists(path.join(messagesRoot, dir))) continue
     seen.add(key)
     sources.push(dir)
   }
 
   // 目标不存在时，先把第一个来源整体 rename 过去（同卷 O(1)）
-  if (!existsSync(path.join(messagesRoot, targetDir))) {
+  if (!await pathExists(path.join(messagesRoot, targetDir))) {
     const first = sources.shift()
     if (first) {
       try {
@@ -357,7 +364,7 @@ async function runEnsureArchivePeerDir(
     const moved = await mergePeerDirContents(source, targetDir)
     if (moved.length === 0) {
       // 只剩重复消息或被占用：保留原目录（不递归删），下次 normalize 再试
-      if (existsSync(path.join(messagesRoot, source))) {
+      if (await pathExists(path.join(messagesRoot, source))) {
         logger.warn('Archive peer directory not fully merged', { peerId, from: source, to: targetDir })
       }
       continue
@@ -367,7 +374,7 @@ async function runEnsureArchivePeerDir(
   }
 
   // 登记目录已经不在了、但规范目录已存在（用户手工改名 / 上次改名中断）：把索引指向现有目录
-  if (entry?.dir && !sameDirName(entry.dir, targetDir) && !existsSync(path.join(messagesRoot, entry.dir))) {
+  if (entry?.dir && !sameDirName(entry.dir, targetDir) && !await pathExists(path.join(messagesRoot, entry.dir))) {
     rewriteMediaIndexPeerDir(entry.dir, targetDir)
   }
 
@@ -454,16 +461,26 @@ async function readJsonFile<T>(filePath: string): Promise<T | undefined> {
 
 async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true })
-  const tempPath = `${filePath}.${process.pid}.tmp`
-  await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  await rename(tempPath, filePath)
+  const tempPath = `${filePath}.${process.pid}-${randomUUID()}.tmp`
+  try {
+    await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 async function writeTextAtomic(filePath: string, text: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true })
-  const tempPath = `${filePath}.${process.pid}.tmp`
-  await writeFile(tempPath, text.endsWith('\n') ? text : `${text}\n`, 'utf8')
-  await rename(tempPath, filePath)
+  const tempPath = `${filePath}.${process.pid}-${randomUUID()}.tmp`
+  try {
+    await writeFile(tempPath, text.endsWith('\n') ? text : `${text}\n`, 'utf8')
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
 function describePeer(peer: ArchiveMessagePeerSnapshot): string {
@@ -538,6 +555,35 @@ function safeFileSize(filePath: string): number | undefined {
   }
 }
 
+/** 异步版存在性判断：归档可能在网络盘上，同步 stat 会把主进程卡住 */
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await stat(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function safeFileSizeAsync(filePath: string): Promise<number | undefined> {
+  try {
+    const info = await stat(filePath)
+    return info.isFile() ? info.size : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 全库扫描按条让出事件循环，保证窗口 / IPC 不被长任务饿死 */
+function yieldToEventLoop(): Promise<void> {
+  return setImmediatePromise()
+}
+
+function attachmentSize(attachment: ArchiveMessageAttachment | MessageMetaAttachment): number {
+  const received = (attachment as MessageMetaAttachment).received
+  return attachment.actualSize ?? (typeof received === 'number' ? received : 0)
+}
+
 async function sha256File(filePath: string): Promise<string> {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(filePath)) {
@@ -556,6 +602,36 @@ function readMediaIndex(): MediaIndexDocument {
     : { schemaVersion: 1, media: {} }
 }
 
+const MEDIA_INDEX_FLUSH_MS = 500
+let mediaIndexDirty = false
+let mediaIndexTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 媒体索引按 500ms 合并写盘：一次归档会有几十个附件 + 缩略图，逐条全量重写太浪费 */
+function scheduleMediaIndexFlush(): void {
+  mediaIndexDirty = true
+  if (mediaIndexTimer) return
+  mediaIndexTimer = setTimeout(() => {
+    mediaIndexTimer = null
+    flushArchiveMediaIndex()
+  }, MEDIA_INDEX_FLUSH_MS)
+  mediaIndexTimer.unref?.()
+}
+
+/** 立即落盘（退出前 / 需要强一致时调用）；无改动时是空操作 */
+export function flushArchiveMediaIndex(): void {
+  if (!mediaIndexDirty) return
+  writeJsonDocument(getArchiveMediaIndexPath(), readMediaIndex())
+  mediaIndexDirty = false
+}
+
+process.once('exit', () => {
+  try {
+    flushArchiveMediaIndex()
+  } catch {
+    // 退出阶段不能再抛错
+  }
+})
+
 export function recordArchiveMedia(input: {
   mediaKey: string
   relativePath: string
@@ -572,7 +648,7 @@ export function recordArchiveMedia(input: {
     sha256: input.sha256,
     updatedAt: Date.now(),
   }
-  writeJsonDocument(getArchiveMediaIndexPath(), document)
+  scheduleMediaIndexFlush()
 }
 
 export function resolveArchiveMediaRecord(mediaKey: string): ArchiveMediaRecord | undefined {
@@ -597,7 +673,7 @@ export function removeArchiveMedia(mediaKey: string): void {
   const document = readMediaIndex()
   if (!document.media[mediaKey]) return
   delete document.media[mediaKey]
-  writeJsonDocument(getArchiveMediaIndexPath(), document)
+  scheduleMediaIndexFlush()
 }
 
 // ---------------------------------------------------------------------------
@@ -872,6 +948,23 @@ function updateMessageIndex(peerId: string, messageId: number, entry: MessageInd
   writeJsonDocument(filePath, document)
 }
 
+export interface ArchiveMessageIndexEntry extends MessageIndexEntry {
+  messageId: number
+}
+
+/** 读取某个 peer 的消息索引快照（已按时间倒序），影库列表用它先排序再截断 */
+export function listArchiveMessageIndex(peerId: string): ArchiveMessageIndexEntry[] {
+  const messages = indexDocumentFor(peerId).document.messages
+  const entries: ArchiveMessageIndexEntry[] = []
+  for (const [key, value] of Object.entries(messages)) {
+    const messageId = Number(key)
+    if (!Number.isSafeInteger(messageId) || messageId <= 0) continue
+    entries.push({ ...value, messageId })
+  }
+  entries.sort((left, right) => (right.savedAt ?? right.updatedAt) - (left.savedAt ?? left.updatedAt))
+  return entries
+}
+
 export function removeArchiveMessageIndexEntry(peerId: string, messageId: number): void {
   const { filePath, document } = indexDocumentFor(peerId)
   if (!document.messages[String(messageId)]) return
@@ -928,10 +1021,10 @@ function manifestAsMeta(manifest: ArchiveMessageManifest): MessageMetaDocument {
 /** 补 `message.md`：旧 text.md 改写成带抬头的新文件，实在没有就按快照重建（正文为空） */
 async function ensureContentFile(dir: string, toMeta: () => MessageMetaDocument): Promise<number> {
   const contentPath = path.join(dir, CONTENT_FILE)
-  if (existsSync(contentPath)) return 0
+  if (await pathExists(contentPath)) return 0
   const legacyPath = path.join(dir, LEGACY_TEXT_FILE)
   try {
-    if (existsSync(legacyPath)) {
+    if (await pathExists(legacyPath)) {
       const body = await readFile(legacyPath, 'utf8')
       await writeContentSnapshot(dir, toMeta(), body.trim(), false)
       await rm(legacyPath, { force: true })
@@ -954,6 +1047,18 @@ export async function normalizeArchiveMessageNames(
   onManifest?: (manifest: ArchiveMessageManifest) => void,
 ): Promise<number> {
   const dir = archiveMessageDir(peerId, messageId)
+  return withArchiveMessageLock(
+    dir,
+    () => normalizeArchiveMessageNamesUnlocked(peerId, messageId, onManifest),
+  )
+}
+
+async function normalizeArchiveMessageNamesUnlocked(
+  peerId: string,
+  messageId: number,
+  onManifest?: (manifest: ArchiveMessageManifest) => void,
+): Promise<number> {
+  const dir = archiveMessageDir(peerId, messageId)
   let changed = 0
 
   const manifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
@@ -962,7 +1067,7 @@ export async function normalizeArchiveMessageNames(
     for (const attachment of manifest.attachments) {
       const renamed = await migrateLegacyAttachmentFile(dir, attachment)
       const finalPath = attachmentFinalPath(dir, attachment)
-      if (!existsSync(finalPath)) continue
+      if (!await pathExists(finalPath)) continue
       // 顺带把旧的完整相对路径（`messages/<peerDir>/<mid>/…`）改成消息内相对路径
       const expectedPath = toMessageRelativePath(dir, finalPath)
       if (!renamed && attachment.relativePath === expectedPath) continue
@@ -983,7 +1088,7 @@ export async function normalizeArchiveMessageNames(
   for (const attachment of meta.attachments) {
     const renamed = await migrateLegacyAttachmentFile(dir, attachment)
     const finalPath = attachmentFinalPath(dir, attachment)
-    if (!existsSync(finalPath)) continue
+    if (!await pathExists(finalPath)) continue
     const expectedPath = toMessageRelativePath(dir, finalPath)
     if (!renamed && attachment.relativePath === expectedPath) continue
     attachment.relativePath = expectedPath
@@ -1040,7 +1145,7 @@ async function runAccountMigration(): Promise<ArchiveAccountMigrationSummary> {
     for (const file of files) {
       if (!file.isFile()) continue
       const target = path.join(indexRoot, file.name)
-      if (existsSync(target)) continue
+      if (await pathExists(target)) continue
       await rename(path.join(scopeRoot, file.name), target).catch(() => undefined)
     }
     await rmdir(scopeRoot).catch(() => undefined)
@@ -1066,7 +1171,7 @@ async function moveScopeMessagesUp(scopeRoot: string, peerDirMoves: Map<string, 
     peerDirMoves.set(peer.name, targetName)
     const source = path.join(scopeRoot, peer.name)
     const targetPeer = path.join(getArchiveMessagesRoot(), targetName)
-    if (!existsSync(targetPeer)) {
+    if (!await pathExists(targetPeer)) {
       await rename(source, targetPeer).catch(() => undefined)
       const landed = await readdir(targetPeer, { withFileTypes: true }).catch(() => [])
       moved += landed.filter(item => item.isDirectory() && Number(item.name) > 0).length
@@ -1076,7 +1181,7 @@ async function moveScopeMessagesUp(scopeRoot: string, peerDirMoves: Map<string, 
     for (const message of messages) {
       if (!message.isDirectory()) continue
       const targetMessage = path.join(targetPeer, message.name)
-      if (Number(message.name) <= 0 || existsSync(targetMessage)) continue
+      if (Number(message.name) <= 0 || await pathExists(targetMessage)) continue
       await rename(path.join(source, message.name), targetMessage).catch(() => undefined)
       moved += 1
     }
@@ -1144,9 +1249,117 @@ async function probeArchivePeerSnapshot(
   return { id: peerId }
 }
 
+/**
+ * 用磁盘上的 manifest / archive.meta 重建媒体索引与消息状态索引。
+ * 索引是可再生数据：损坏、丢失或旧版本遗漏时，规范化扫描一次即可恢复。
+ */
+async function rebuildArchiveIndexesFromDisk(): Promise<void> {
+  const messagesRoot = getArchiveMessagesRoot()
+  if (!await pathExists(messagesRoot)) return
+
+  const mediaDocument: MediaIndexDocument = { schemaVersion: 1, media: {} }
+  const messageDocuments = new Map<string, MessageIndexDocument>()
+  const peers = await readdir(messagesRoot, { withFileTypes: true }).catch(() => [])
+  for (const peer of peers) {
+    if (!peer.isDirectory()) continue
+    const peerId = await resolveArchivePeerIdFromDir(peer.name)
+    if (!peerId) continue
+    const peerDir = path.join(messagesRoot, peer.name)
+    const messages = await readdir(peerDir, { withFileTypes: true }).catch(() => [])
+    for (const message of messages) {
+      if (!message.isDirectory()) continue
+      const messageId = Number(message.name)
+      if (!Number.isSafeInteger(messageId) || messageId <= 0) continue
+      await yieldToEventLoop()
+      const dir = path.join(peerDir, message.name)
+      const manifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
+      const meta = manifest ? undefined : await readMeta(dir)
+      if (!manifest && !meta) continue
+
+      const attachments = manifest?.attachments ?? meta?.attachments ?? []
+      const updatedAt = manifest?.updatedAt ?? meta?.updatedAt ?? Date.now()
+      let size = 0
+      for (const attachment of attachments) {
+        size += attachmentSize(attachment)
+        if (!attachment.mediaKey || !attachment.relativePath) continue
+        const absolutePath = resolveMessageRelativePath(dir, attachment.relativePath)
+        if (!absolutePath) continue
+        const actualSize = await safeFileSizeAsync(absolutePath)
+        if (actualSize === undefined) continue
+        mediaDocument.media[attachment.mediaKey] = {
+          relativePath: toArchiveRelativePath(absolutePath),
+          size: actualSize,
+          mimeType: attachment.mimeType,
+          sha256: attachment.sha256,
+          updatedAt,
+        }
+      }
+
+      const thumbnail = manifest?.thumbnail ?? meta?.thumbnail
+      if (thumbnail?.mediaKey && thumbnail.relativePath) {
+        const absolutePath = resolveMessageRelativePath(dir, thumbnail.relativePath)
+        const actualSize = absolutePath ? await safeFileSizeAsync(absolutePath) : undefined
+        if (absolutePath && actualSize !== undefined) {
+          mediaDocument.media[thumbnail.mediaKey] = {
+            relativePath: toArchiveRelativePath(absolutePath),
+            size: actualSize,
+            mimeType: thumbnail.mimeType,
+            updatedAt: thumbnail.savedAt ?? updatedAt,
+          }
+        }
+      }
+
+      let document = messageDocuments.get(peerId)
+      if (!document) {
+        document = { schemaVersion: 1, messages: {} }
+        messageDocuments.set(peerId, document)
+      }
+      document.messages[String(messageId)] = manifest
+        ? {
+            state: 'complete',
+            attachments: attachments.length,
+            size,
+            savedAt: manifest.savedAt,
+            updatedAt: manifest.updatedAt,
+          }
+        : {
+            state: meta?.attachments.some(item => item.status !== 'complete') ? 'partial' : 'queued',
+            attachments: attachments.length,
+            size,
+            updatedAt,
+          }
+    }
+  }
+
+  writeJsonDocument(getArchiveMediaIndexPath(), mediaDocument)
+  const indexRoot = getArchiveMessageIndexRoot()
+  await mkdir(indexRoot, { recursive: true })
+  for (const [peerId, document] of messageDocuments) {
+    writeJsonDocument(path.join(indexRoot, `peer-${peerId}.json`), document)
+  }
+  const existing = await readdir(indexRoot, { withFileTypes: true }).catch(() => [])
+  for (const file of existing) {
+    if (!file.isFile() || !/^peer--?\d+\.json$/.test(file.name)) continue
+    const peerId = file.name.slice('peer-'.length, -'.json'.length)
+    if (!messageDocuments.has(peerId)) await rm(path.join(indexRoot, file.name), { force: true })
+  }
+}
+
+function archiveLayoutMarkerPath(): string {
+  return path.join(getArchiveConfigRoot(), 'archive-layout.json')
+}
+
+/** 布局版本已完成过就跳过整盘扫描；新版本升级时把 ARCHIVE_LAYOUT_VERSION +1 */
+async function isArchiveLayoutNormalized(): Promise<boolean> {
+  const marker = await readJsonFile<{ version?: number }>(archiveLayoutMarkerPath())
+  return marker?.version === ARCHIVE_LAYOUT_VERSION
+}
+
 /** 正名整个 messages/ 目录（影库首次加载跑一次；含旧 acc 目录迁移，只改文件名/快照，不动媒体字节） */
 export async function normalizeArchiveLibrary(): Promise<ArchiveNormalizeSummary> {
   const summary: ArchiveNormalizeSummary = { messages: 0, changed: 0, migrated: 0 }
+  if (await isArchiveLayoutNormalized()) return summary
+  const startedAt = Date.now()
   const aliasEntries: ArchiveAliasEntry[] = []
   summary.migrated = (await migrateArchiveAccountLayout()).messages
   const messagesRoot = getArchiveMessagesRoot()
@@ -1157,6 +1370,7 @@ export async function normalizeArchiveLibrary(): Promise<ArchiveNormalizeSummary
   const peerIds = new Set<string>()
   for (const peer of peers) {
     if (!peer.isDirectory()) continue
+    await yieldToEventLoop()
     const peerId = await resolveArchivePeerIdFromDir(peer.name)
     if (!peerId) continue
     const snapshot = await probeArchivePeerSnapshot(peer.name, peerId)
@@ -1175,6 +1389,7 @@ export async function normalizeArchiveLibrary(): Promise<ArchiveNormalizeSummary
   }
 
   for (const peerId of peerIds) {
+    await yieldToEventLoop()
     let messageNames: string[]
     try {
       messageNames = await readdir(path.join(messagesRoot, getArchivePeerDir(peerId)))
@@ -1185,6 +1400,7 @@ export async function normalizeArchiveLibrary(): Promise<ArchiveNormalizeSummary
       const messageId = Number(messageName)
       if (!Number.isSafeInteger(messageId) || messageId <= 0) continue
       summary.messages += 1
+      await yieldToEventLoop()
       try {
         summary.changed += await normalizeArchiveMessageNames(peerId, messageId, (manifest) => {
           aliasEntries.push({
@@ -1202,6 +1418,19 @@ export async function normalizeArchiveLibrary(): Promise<ArchiveNormalizeSummary
   }
   // 旧版本归档没有别名索引：借这次全量扫描一次建好，之后完全增量维护
   replaceArchiveAliases(aliasEntries)
+  await rebuildArchiveIndexesFromDisk().catch((error: unknown) => {
+    logger.warn('Failed to rebuild archive indexes', { error: (error as Error).message })
+  })
+  writeJsonDocument(archiveLayoutMarkerPath(), {
+    version: ARCHIVE_LAYOUT_VERSION,
+    normalizedAt: Date.now(),
+  })
+  logger.debug('archive library normalized', {
+    elapsedMs: Date.now() - startedAt,
+    messages: summary.messages,
+    changed: summary.changed,
+    migrated: summary.migrated,
+  })
   return summary
 }
 
@@ -1279,13 +1508,13 @@ async function migrateLegacyAttachmentFile(
   if (target === legacy) return false
   let migrated = false
   try {
-    if (!existsSync(target) && existsSync(legacy)) {
+    if (!await pathExists(target) && await pathExists(legacy)) {
       await rename(legacy, target)
       migrated = true
     }
     const targetPart = `${target}.part`
     const legacyPart = `${legacy}.part`
-    if (!existsSync(targetPart) && existsSync(legacyPart)) await rename(legacyPart, targetPart)
+    if (!await pathExists(targetPart) && await pathExists(legacyPart)) await rename(legacyPart, targetPart)
   } catch {
     // 改名失败就按新名字重新落盘，不阻断 prepare
   }
@@ -1302,11 +1531,17 @@ export async function prepareArchiveMessage(
   // 首次见到该 peer 时登记 username / 标题目录；旧 peer-<id> 目录在这里迁移
   await ensureArchivePeerDir(request.peer)
   const dir = archiveMessageDir(request.peer.id, request.messageId)
+  return withArchiveMessageLock(dir, () => prepareArchiveMessageUnlocked(request, dir))
+}
 
+async function prepareArchiveMessageUnlocked(
+  request: ArchivePrepareRequest,
+  dir: string,
+): Promise<ArchivePrepareResponse> {
   const existingManifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
   if (existingManifest?.status === 'complete') {
     // 已完成的消息也可能还是旧布局（001.jpg / text.md）：顺手正名，失败不影响返回
-    await normalizeArchiveMessageNames(request.peer.id, request.messageId).catch(() => 0)
+    await normalizeArchiveMessageNamesUnlocked(request.peer.id, request.messageId).catch(() => 0)
     return {
       state: 'complete',
       thumbnailSaved: Boolean(existingManifest.thumbnail),
@@ -1413,42 +1648,49 @@ export async function saveArchiveThumbnail(input: {
   if (input.data.length > 5 * 1024 * 1024) throw new Error('thumbnail 过大')
 
   const dir = archiveMessageDir(input.peerId, input.messageId)
-  const extension = EXTENSION_BY_MIME[input.mimeType] ?? '.jpg'
-  const finalPath = path.join(dir, MEDIA_DIR, `${input.mediaKey}${extension}`)
-  await mkdir(path.dirname(finalPath), { recursive: true })
-  const tempPath = `${finalPath}.tmp-${process.pid}`
-  await writeFile(tempPath, input.data)
-  await rename(tempPath, finalPath)
+  return withArchiveMessageLock(dir, async () => {
+    const extension = EXTENSION_BY_MIME[input.mimeType] ?? '.jpg'
+    const finalPath = path.join(dir, MEDIA_DIR, `${input.mediaKey}${extension}`)
+    await mkdir(path.dirname(finalPath), { recursive: true })
+    const tempPath = `${finalPath}.${process.pid}-${randomUUID()}.tmp`
+    try {
+      await writeFile(tempPath, input.data)
+      await rename(tempPath, finalPath)
+    } catch (error) {
+      await rm(tempPath, { force: true }).catch(() => undefined)
+      throw error
+    }
 
-  const now = Date.now()
-  const snapshot: ArchiveThumbnailSnapshot = {
-    mediaKey: input.mediaKey,
-    mimeType: input.mimeType,
-    size: input.data.length,
-    relativePath: toMessageRelativePath(dir, finalPath),
-    savedAt: now,
-  }
-  recordArchiveMedia({
-    mediaKey: input.mediaKey,
-    relativePath: toArchiveRelativePath(finalPath),
-    size: snapshot.size,
-    mimeType: input.mimeType,
+    const now = Date.now()
+    const snapshot: ArchiveThumbnailSnapshot = {
+      mediaKey: input.mediaKey,
+      mimeType: input.mimeType,
+      size: input.data.length,
+      relativePath: toMessageRelativePath(dir, finalPath),
+      savedAt: now,
+    }
+    recordArchiveMedia({
+      mediaKey: input.mediaKey,
+      relativePath: toArchiveRelativePath(finalPath),
+      size: snapshot.size,
+      mimeType: input.mimeType,
+    })
+
+    const manifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
+    const meta = await readMeta(dir)
+    if (meta) {
+      meta.thumbnail = snapshot
+      meta.updatedAt = now
+      await writeMeta(dir, meta)
+    }
+    if (manifest) {
+      manifest.thumbnail = snapshot
+      manifest.updatedAt = now
+      await writeJsonAtomic(manifestPath(dir), manifest)
+    }
+    if (!meta && !manifest) throw new Error('消息尚未 prepare')
+    return snapshot
   })
-
-  const manifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
-  const meta = await readMeta(dir)
-  if (meta) {
-    meta.thumbnail = snapshot
-    meta.updatedAt = now
-    await writeMeta(dir, meta)
-  }
-  if (manifest) {
-    manifest.thumbnail = snapshot
-    manifest.updatedAt = now
-    await writeJsonAtomic(manifestPath(dir), manifest)
-  }
-  if (!meta && !manifest) throw new Error('消息尚未 prepare')
-  return snapshot
 }
 
 async function linkObjectIntoMessage(finalPath: string, sha256: string): Promise<ArchiveMediaLinkMode> {
@@ -1467,7 +1709,7 @@ async function linkObjectIntoMessage(finalPath: string, sha256: string): Promise
   }
 
   // 对象已存在：用硬链替换消息目录里的副本（同卷零额外空间）；失败则保留副本
-  const tempLink = `${finalPath}.link-${process.pid}`
+  const tempLink = `${finalPath}.${process.pid}-${randomUUID()}.link`
   try {
     await rm(tempLink, { force: true })
     linkSync(objectPath, tempLink)
@@ -1527,62 +1769,64 @@ export async function appendArchiveAttachment(input: {
   if (!Number.isSafeInteger(input.offset) || input.offset < 0) throw new Error('offset 非法')
 
   const dir = archiveMessageDir(input.peerId, input.messageId)
-  const meta = await readMeta(dir)
-  if (!meta) throw new Error('消息尚未 prepare')
-  const attachment = meta.attachments.find(item => item.index === index)
-  if (!attachment) throw new Error('附件不存在')
+  return withArchiveMessageLock(dir, async () => {
+    const meta = await readMeta(dir)
+    if (!meta) throw new Error('消息尚未 prepare')
+    const attachment = meta.attachments.find(item => item.index === index)
+    if (!attachment) throw new Error('附件不存在')
 
-  const finalPath = attachmentFinalPath(dir, attachment)
-  const partPath = `${finalPath}.part`
-  await mkdir(path.dirname(finalPath), { recursive: true })
-  if (!existsSync(partPath)) await writeFile(partPath, Buffer.alloc(0))
+    const finalPath = attachmentFinalPath(dir, attachment)
+    const partPath = `${finalPath}.part`
+    await mkdir(path.dirname(finalPath), { recursive: true })
+    if (!existsSync(partPath)) await writeFile(partPath, Buffer.alloc(0))
 
-  const current = safeFileSize(partPath) ?? 0
-  const expected = attachment.expectedSize ?? 0
-  if (input.offset > current) {
-    return { received: current, expected, complete: false }
-  }
-
-  if (input.data.length > 0) {
-    const handle = await open(partPath, 'r+')
-    try {
-      let written = 0
-      while (written < input.data.length) {
-        const { bytesWritten } = await handle.write(
-          input.data,
-          written,
-          input.data.length - written,
-          input.offset + written,
-        )
-        if (!bytesWritten) throw new Error('写入分片失败')
-        written += bytesWritten
-      }
-    } finally {
-      await handle.close()
+    const current = safeFileSize(partPath) ?? 0
+    const expected = attachment.expectedSize ?? 0
+    if (input.offset > current) {
+      return { received: current, expected, complete: false }
     }
-  }
 
-  const received = safeFileSize(partPath) ?? 0
-  const complete = Boolean(input.complete) || (expected > 0 && received >= expected)
-  if (complete) {
-    await finalizeAttachment(dir, meta, attachment)
-    return { received: attachment.actualSize ?? received, expected: expected || received, complete: true }
-  }
+    if (input.data.length > 0) {
+      const handle = await open(partPath, 'r+')
+      try {
+        let written = 0
+        while (written < input.data.length) {
+          const { bytesWritten } = await handle.write(
+            input.data,
+            written,
+            input.data.length - written,
+            input.offset + written,
+          )
+          if (!bytesWritten) throw new Error('写入分片失败')
+          written += bytesWritten
+        }
+      } finally {
+        await handle.close()
+      }
+    }
 
-  attachment.status = received > 0 ? 'partial' : 'pending'
-  attachment.received = received
-  if (shouldWriteMeta(dir)) {
-    await writeMeta(dir, meta)
-    const { received: totalReceived } = progressOf(meta)
-    updateMessageIndex(meta.peer.id, meta.messageId, {
-      state: 'partial',
-      attachments: meta.attachments.length,
-      size: totalReceived,
-      updatedAt: Date.now(),
-    })
-  }
+    const received = safeFileSize(partPath) ?? 0
+    const complete = Boolean(input.complete) || (expected > 0 && received >= expected)
+    if (complete) {
+      await finalizeAttachment(dir, meta, attachment)
+      return { received: attachment.actualSize ?? received, expected: expected || received, complete: true }
+    }
 
-  return { received, expected, complete: false }
+    attachment.status = received > 0 ? 'partial' : 'pending'
+    attachment.received = received
+    if (shouldWriteMeta(dir)) {
+      await writeMeta(dir, meta)
+      const { received: totalReceived } = progressOf(meta)
+      updateMessageIndex(meta.peer.id, meta.messageId, {
+        state: 'partial',
+        attachments: meta.attachments.length,
+        size: totalReceived,
+        updatedAt: Date.now(),
+      })
+    }
+
+    return { received, expected, complete: false }
+  })
 }
 
 /** 完成归档：所有附件 complete 才写 manifest.json / message.md（完成标记） */
@@ -1595,64 +1839,68 @@ export async function commitArchiveMessage(input: {
   assertPeerId(input.peerId)
   assertMessageId(input.messageId)
   const dir = archiveMessageDir(input.peerId, input.messageId)
-  const meta = await readMeta(dir)
-  if (!meta) throw new Error('消息尚未 prepare')
+  return withArchiveMessageLock(dir, async () => {
+    const meta = await readMeta(dir)
+    if (!meta) throw new Error('消息尚未 prepare')
 
-  const incomplete = meta.attachments.filter(item => item.status !== 'complete')
-  if (incomplete.length > 0) {
-    const { received } = progressOf(meta)
+    const incomplete = meta.attachments.filter(item => item.status !== 'complete')
+    if (incomplete.length > 0) {
+      const { received } = progressOf(meta)
+      updateMessageIndex(meta.peer.id, meta.messageId, {
+        state: 'partial',
+        attachments: meta.attachments.length,
+        size: received,
+        updatedAt: Date.now(),
+      })
+      return { state: 'partial' }
+    }
+
+    const text = input.text ?? ''
+    // 正文与元信息一起落盘：没有正文的消息也留下可读的 message.md
+    await writeContentSnapshot(dir, meta, text, Boolean(input.textTruncated))
+    await rm(path.join(dir, LEGACY_TEXT_FILE), { force: true }).catch(() => undefined)
+
+    const now = Date.now()
+    const manifest: ArchiveMessageManifest = {
+      schemaVersion: 1,
+      messageKey: buildArchiveMessageKey(meta.peer.id, meta.messageId),
+      peer: meta.peer,
+      messageId: meta.messageId,
+      groupedId: meta.groupedId,
+      date: meta.date,
+      editDate: meta.editDate,
+      senderSnapshot: meta.sender,
+      forwardSource: meta.forwardSource,
+      thumbnail: meta.thumbnail,
+      text: { saved: true, chars: text.length, truncated: Boolean(input.textTruncated), file: CONTENT_FILE },
+      status: 'complete',
+      attachments: meta.attachments.map(toAttachment),
+      savedAt: now,
+      updatedAt: now,
+    }
+    await writeJsonAtomic(manifestPath(dir), manifest)
+    await rm(metaPath(dir), { force: true })
+    for (const attachment of meta.attachments) {
+      await rm(`${attachmentFinalPath(dir, attachment)}.part`, { force: true }).catch(() => undefined)
+    }
     updateMessageIndex(meta.peer.id, meta.messageId, {
-      state: 'partial',
+      state: 'complete',
       attachments: meta.attachments.length,
-      size: received,
-      updatedAt: Date.now(),
+      size: meta.attachments.reduce((total, item) => total + (item.actualSize ?? 0), 0),
+      savedAt: now,
+      updatedAt: now,
     })
-    return { state: 'partial' }
-  }
-
-  const text = input.text ?? ''
-  // 正文与元信息一起落盘：没有正文的消息也留下可读的 message.md
-  await writeContentSnapshot(dir, meta, text, Boolean(input.textTruncated))
-  await rm(path.join(dir, LEGACY_TEXT_FILE), { force: true }).catch(() => undefined)
-
-  const now = Date.now()
-  const manifest: ArchiveMessageManifest = {
-    schemaVersion: 1,
-    messageKey: buildArchiveMessageKey(meta.peer.id, meta.messageId),
-    peer: meta.peer,
-    messageId: meta.messageId,
-    groupedId: meta.groupedId,
-    date: meta.date,
-    editDate: meta.editDate,
-    senderSnapshot: meta.sender,
-    forwardSource: meta.forwardSource,
-    thumbnail: meta.thumbnail,
-    text: { saved: true, chars: text.length, truncated: Boolean(input.textTruncated), file: CONTENT_FILE },
-    status: 'complete',
-    attachments: meta.attachments.map(toAttachment),
-    savedAt: now,
-    updatedAt: now,
-  }
-  await writeJsonAtomic(manifestPath(dir), manifest)
-  await rm(metaPath(dir), { force: true })
-  for (const attachment of meta.attachments) {
-    await rm(`${attachmentFinalPath(dir, attachment)}.part`, { force: true }).catch(() => undefined)
-  }
-  updateMessageIndex(meta.peer.id, meta.messageId, {
-    state: 'complete',
-    attachments: meta.attachments.length,
-    size: meta.attachments.reduce((total, item) => total + (item.actualSize ?? 0), 0),
-    savedAt: now,
-    updatedAt: now,
+    registerArchiveAliases({
+      peerId: meta.peer.id,
+      messageId: meta.messageId,
+      forwardSource: manifest.forwardSource,
+      mediaKeys: manifest.attachments.map(attachment => attachment.mediaKey),
+      textChars: text.length,
+    })
+    // 消息完成是持久化边界：把 500ms 合并窗口内的媒体索引立即落盘
+    flushArchiveMediaIndex()
+    return { state: 'complete', manifest }
   })
-  registerArchiveAliases({
-    peerId: meta.peer.id,
-    messageId: meta.messageId,
-    forwardSource: manifest.forwardSource,
-    mediaKeys: manifest.attachments.map(attachment => attachment.mediaKey),
-    textChars: text.length,
-  })
-  return { state: 'complete', manifest }
 }
 
 export async function getArchiveMessageStatuses(
@@ -1664,9 +1912,18 @@ export async function getArchiveMessageStatuses(
   const hintById = new Map((hints ?? []).map(hint => [hint.messageId, hint]))
   // 一次批量查询只解析一份索引：逐条 readAliasDocument 会把整个索引复制 N 次
   const aliasDocument = readAliasDocument()
+  // 先查进程内消息索引：绝大多数未缓存的消息不该再去碰磁盘
+  const index = indexDocumentFor(peerId).document.messages
   for (const messageId of messageIds) {
     const key = String(messageId)
     try {
+      if (!index[key]) {
+        const equivalent = await resolveArchiveEquivalent(peerId, messageId, hintById.get(messageId), aliasDocument)
+        statuses[key] = equivalent
+          ? { state: 'complete', via: equivalent.via, resolved: equivalent.resolved }
+          : { state: 'missing' }
+        continue
+      }
       const dir = archiveMessageDir(peerId, messageId)
       const manifest = await readJsonFile<ArchiveMessageManifest>(manifestPath(dir))
       if (manifest?.status === 'complete') {

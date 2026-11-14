@@ -1,8 +1,13 @@
+import type { WriteStream } from 'node:fs'
 import { Buffer } from 'node:buffer'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { gunzipSync } from 'node:zlib'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { createGunzip, gunzipSync } from 'node:zlib'
+import { logger } from '../../../../backend/utils/logger.ts'
 
 const TAR_BLOCK = 512
 const MAX_TARBALL_BYTES = 64 * 1024 * 1024
@@ -51,23 +56,25 @@ export async function downloadGithubTarball(
   }
   const body = response.body
   if (!body) throw new ArchiveError('download-failed', 'GitHub 返回了空响应')
-  const reader = body.getReader()
-  const chunks: Uint8Array[] = []
   let total = 0
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      total += value.byteLength
-      if (total > MAX_TARBALL_BYTES) throw new ArchiveError('archive-too-large', '压缩包超过大小上限，已中止')
-      chunks.push(value)
-    }
-  }
-  finally {
-    reader.releaseLock()
-  }
+  const limiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      total += chunk.length
+      if (total > MAX_TARBALL_BYTES) {
+        callback(new ArchiveError('archive-too-large', '压缩包超过大小上限，已中止'))
+        return
+      }
+      callback(null, chunk)
+    },
+  })
   await mkdir(dirname(destination), { recursive: true })
-  await writeFile(destination, Buffer.concat(chunks))
+  try {
+    await pipeline(Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]), limiter, createWriteStream(destination))
+  }
+  catch (error) {
+    if (error instanceof ArchiveError) throw error
+    throw new ArchiveError('download-failed', `GitHub 压缩包写入失败：${(error as Error).message}`)
+  }
 }
 
 interface TarEntry {
@@ -113,6 +120,189 @@ export async function extractTarGz(buffer: Buffer, destination: string): Promise
     await writeFile(target, unpacked.subarray(entry.dataStart, entry.dataStart + entry.size), { mode: 0o644 })
   }
   return { entries: entries.length, bytes }
+}
+
+interface FileExtractOptions {
+  /** 只落盘这些相对路径（仓库顶层目录之下的路径；空数组表示全部） */
+  includes?: string[]
+}
+
+type ExtractPhase
+  = | { kind: 'header' }
+    | { kind: 'meta', type: string, size: number, remaining: number, chunks: Buffer[] }
+    | { kind: 'data', size: number, remaining: number, out: WriteStream | null }
+    | { kind: 'padding', remaining: number }
+
+function writeChunk(out: WriteStream, chunk: Buffer): Promise<void> {
+  return new Promise((resolve, reject) => {
+    out.write(chunk, (error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+function closeStream(out: WriteStream): Promise<void> {
+  return new Promise((resolve, reject) => {
+    out.once('error', reject)
+    out.end(() => resolve())
+  })
+}
+
+/**
+ * 文件版流式解包：gunzip 与 tar 解析都在流上完成，只把命中 includes 的条目写盘。
+ * 安装单个技能时不再把整个仓库解压后的内容读进内存。
+ */
+export async function extractTarGzFile(
+  tarballPath: string,
+  destination: string,
+  options: FileExtractOptions = {},
+): Promise<{ entries: number, bytes: number }> {
+  const startedAt = Date.now()
+  const root = resolve(destination)
+  await mkdir(root, { recursive: true })
+  const includes = (options.includes ?? []).filter(Boolean)
+  const includeAll = includes.length === 0 || includes.includes('')
+
+  const matches = (entryPath: string): boolean => {
+    if (includeAll) return true
+    const candidates = [entryPath]
+    const slash = entryPath.indexOf('/')
+    if (slash > 0) candidates.push(entryPath.slice(slash + 1))
+    return candidates.some(candidate => includes.some(
+      include => candidate === include || candidate.startsWith(`${include}/`),
+    ))
+  }
+
+  let pending: Buffer = Buffer.alloc(0)
+  let paxPath: string | undefined
+  let phase: ExtractPhase = { kind: 'header' }
+  let entries = 0
+  let unpackedBytes = 0
+  let finished = false
+
+  const source = createReadStream(tarballPath)
+  const stream = source.pipe(createGunzip())
+
+  const consume = async (): Promise<void> => {
+    while (!finished) {
+      if (phase.kind === 'header') {
+        if (pending.length < TAR_BLOCK) return
+        const header = pending.subarray(0, TAR_BLOCK)
+        if (header.every(byte => byte === 0)) {
+          finished = true
+          pending = Buffer.alloc(0)
+          return
+        }
+        pending = pending.subarray(TAR_BLOCK)
+        const name = readCString(header, 0, 100)
+        const prefix = readCString(header, 345, 155)
+        const size = parseOctal(readCString(header, 124, 12))
+        const type = String.fromCharCode(header[156] ?? 0)
+        if (!Number.isSafeInteger(size) || size < 0) {
+          throw new ArchiveError('archive-invalid', 'tar 条目长度非法')
+        }
+        if (type === 'x' || type === 'g' || type === 'L') {
+          phase = { kind: 'meta', type, size, remaining: size, chunks: [] }
+          continue
+        }
+        if (entries >= MAX_ENTRIES) throw new ArchiveError('archive-too-many-entries', '压缩包条目过多')
+        entries += 1
+        const rawPath = paxPath ?? (prefix ? `${prefix}/${name}` : name)
+        paxPath = undefined
+        const entryPath = normalizeTarPath(rawPath)
+        if (type === '5') {
+          if (entryPath && matches(entryPath)) await mkdir(resolve(root, entryPath), { recursive: true })
+          phase = { kind: 'padding', remaining: align(size) - size }
+          continue
+        }
+        // GitHub tarball 可能带仓库级符号链接：一律跳过，不落盘
+        if (type === '2') {
+          phase = { kind: 'padding', remaining: align(size) - size }
+          continue
+        }
+        if (type !== '0' && type !== '\0' && type !== '7') {
+          throw new ArchiveError('archive-unsafe-entry', `压缩包包含不支持的条目类型：${type} ${entryPath}`)
+        }
+        unpackedBytes += size
+        if (unpackedBytes > MAX_UNPACKED_BYTES) throw new ArchiveError('archive-too-large', '解压后体积超过上限')
+
+        let out: WriteStream | null = null
+        if (entryPath && matches(entryPath)) {
+          const target = resolve(root, entryPath)
+          const rel = relative(root, target)
+          if (!rel || rel.startsWith('..') || rel.includes(`..${process.platform === 'win32' ? '\\' : '/'}`)) {
+            throw new ArchiveError('archive-unsafe-path', `压缩包包含不安全路径：${entryPath}`)
+          }
+          await mkdir(dirname(target), { recursive: true })
+          out = createWriteStream(target, { mode: 0o644 })
+        }
+        phase = { kind: 'data', size, remaining: size, out }
+        continue
+      }
+
+      if (phase.kind === 'meta') {
+        if (phase.remaining > 0) {
+          const take = Math.min(phase.remaining, pending.length)
+          if (take === 0) return
+          phase.chunks.push(pending.subarray(0, take))
+          pending = pending.subarray(take)
+          phase.remaining -= take
+          if (phase.remaining > 0) return
+        }
+        const body = Buffer.concat(phase.chunks).toString('utf8')
+        if (phase.type === 'x') paxPath = parsePaxPath(body) ?? paxPath
+        else if (phase.type === 'L') paxPath = body.trim()
+        phase = { kind: 'padding', remaining: align(phase.size) - phase.size }
+        continue
+      }
+
+      if (phase.kind === 'data') {
+        if (phase.remaining > 0) {
+          const take = Math.min(phase.remaining, pending.length)
+          if (take === 0) return
+          if (phase.out) await writeChunk(phase.out, pending.subarray(0, take))
+          pending = pending.subarray(take)
+          phase.remaining -= take
+          if (phase.remaining > 0) return
+        }
+        if (phase.out) await closeStream(phase.out)
+        phase = { kind: 'padding', remaining: align(phase.size) - phase.size }
+        continue
+      }
+
+      if (phase.remaining > 0) {
+        if (pending.length === 0) return
+        const take = Math.min(phase.remaining, pending.length)
+        pending = pending.subarray(take)
+        phase.remaining -= take
+        if (phase.remaining > 0) return
+      }
+      phase = { kind: 'header' }
+    }
+  }
+
+  try {
+    for await (const chunk of stream) {
+      pending = pending.length ? Buffer.concat([pending, chunk as Buffer]) : chunk as Buffer
+      await consume()
+      if (finished) break
+    }
+    if (!finished && (phase.kind !== 'header' || pending.length > 0)) {
+      throw new ArchiveError('archive-invalid', 'tar 归档提前结束')
+    }
+  } catch (error) {
+    if (error instanceof ArchiveError) throw error
+    throw new ArchiveError('archive-invalid', `压缩包解压失败：${(error as Error).message}`)
+  }
+
+  logger.debug('skill-manager tarball extracted', {
+    elapsedMs: Date.now() - startedAt,
+    entries,
+    unpackedBytes,
+    includes: includes.length,
+  })
+  return { entries, bytes: unpackedBytes }
 }
 
 function parseTar(buffer: Buffer): TarEntry[] {

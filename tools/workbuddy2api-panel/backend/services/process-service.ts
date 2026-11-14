@@ -238,6 +238,14 @@ export async function startManagedProcess(): Promise<{ port: number, pid: number
   throw new Error(peekLastStderr() || `启动超时：${READY_TIMEOUT_MS}ms 内 /healthz 未命中 service=workbuddy2api`)
 }
 
+function isLocalListenAddress(address: string, port: number): boolean {
+  const separator = address.lastIndexOf(':')
+  if (separator <= 0) return false
+  if (Number(address.slice(separator + 1)) !== port) return false
+  const host = address.slice(0, separator).replace(/^\[|\]$/g, '').toLowerCase()
+  return host === '127.0.0.1' || host === '0.0.0.0' || host === '::1' || host === '::' || host === 'localhost'
+}
+
 /** 查找占用端口、且非本工具托管的残留进程 */
 export async function findOrphanPids(port: number): Promise<number[]> {
   const managed = getManagedPid()
@@ -246,11 +254,13 @@ export async function findOrphanPids(port: number): Promise<number[]> {
   try {
     if (process.platform === 'win32') {
       const { stdout } = await execFileAsync('netstat', ['-ano', '-p', 'tcp'], { windowsHide: true })
-      const needle = `127.0.0.1:${port}`
       for (const line of stdout.split(/\r?\n/)) {
-        if (!line.includes(needle) || !line.includes('LISTENING')) continue
         const parts = line.trim().split(/\s+/)
-        const pid = Number(parts[parts.length - 1])
+        if (parts.length < 5) continue
+        const [protocol, localAddress, , state, pidText] = parts
+        if (protocol?.toUpperCase() !== 'TCP' || state !== 'LISTENING') continue
+        if (!isLocalListenAddress(localAddress ?? '', port)) continue
+        const pid = Number(pidText)
         if (Number.isInteger(pid) && pid > 0) pids.add(pid)
       }
     } else {
@@ -275,6 +285,11 @@ export async function findOrphanPids(port: number): Promise<number[]> {
 /** 只结束占用，不接管 */
 export async function killOrphanProcesses(port: number): Promise<number[]> {
   const pids = await findOrphanPids(port)
+  if (pids.length === 0) return []
+  const health = await probeHealthz(port)
+  if (!health.ok) {
+    throw new Error(`端口 ${port} 的占用者不是本服务（service=${health.service ?? 'null'}），拒绝结束`)
+  }
   for (const pid of pids) {
     await killPid(pid, true)
   }

@@ -1,10 +1,10 @@
 // offline-pack 后端：上游 HTTP 请求封装（Node fetch）。
 // 统一 UA、超时、错误归一；提供文本 / JSON / Buffer / 流式落盘四种形态。
-import { Buffer } from 'node:buffer'
-import { createWriteStream } from 'node:fs'
+import type { Buffer } from 'node:buffer'
 // 用 Electron net.fetch 走 Chromium 网络栈（继承系统代理），Node 原生 fetch 不走系统代理，
 // 导致大陆环境挂代理仍无法访问 Docker Hub 等被墙上游。
 import { net } from 'electron'
+import { downloadToFile as downloadFile, readResponseBody } from '../../../../backend/utils/http-download.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { OFFLINE_PACK_USER_AGENT } from '../../../../shared/offline-pack.ts'
 
@@ -172,51 +172,25 @@ export async function fetchBuffer(
 ): Promise<Buffer> {
   const res = await request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   assertOk(res)
-  const total = Number(res.headers.get('content-length') ?? 0)
-  if (!res.body || !options.onProgress) {
-    return Buffer.from(await res.arrayBuffer())
-  }
-  const reader = res.body.getReader()
-  const chunks: Buffer[] = []
-  let downloaded = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(Buffer.from(value))
-    downloaded += value.length
-    options.onProgress(downloaded, total)
-  }
-  return Buffer.concat(chunks)
+  return readResponseBody(res, {
+    signal: options.signal,
+    idleTimeoutMs: options.timeoutMs,
+    onProgress: options.onProgress,
+  })
 }
 
 /** 流式下载到文件（大文件不常驻内存），带背压控制与进度回调 */
 export async function downloadToFile(
   url: string,
   destPath: string,
-  options: HttpOptions & { onProgress?: ProgressCallback, rejectHtml?: boolean } = {},
+  options: HttpOptions & { onProgress?: ProgressCallback, rejectHtml?: boolean, expectedSha256?: string } = {},
 ): Promise<void> {
-  const res = await request(url, { headers: buildHeaders(options), signal: options.signal }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-  assertOk(res)
-  // 反代节点会用 200 + 一段 HTML 说明页冒充文件（下载下来是个打不开的 zip）
-  if (options.rejectHtml && (res.headers.get('content-type') ?? '').toLowerCase().includes('text/html')) {
-    throw new Error('该线路返回的是网页而不是文件，请换一条线路')
-  }
-  if (!res.body) throw new Error('上游未返回文件流')
-  const total = Number(res.headers.get('content-length') ?? 0)
-  const writer = createWriteStream(destPath)
-  const reader = res.body.getReader()
-  let downloaded = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!writer.write(Buffer.from(value))) {
-        await new Promise<void>(resolve => writer.once('drain', () => resolve()))
-      }
-      downloaded += value.length
-      options.onProgress?.(downloaded, total)
-    }
-  } finally {
-    await new Promise<void>(resolve => writer.end(() => resolve()))
-  }
+  await downloadFile(url, destPath, {
+    headers: buildHeaders(options),
+    signal: options.signal,
+    idleTimeoutMs: options.timeoutMs,
+    onProgress: options.onProgress,
+    rejectHtml: options.rejectHtml,
+    expectedSha256: options.expectedSha256,
+  })
 }

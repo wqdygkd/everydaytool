@@ -876,18 +876,29 @@ async function runAutoCheck(): Promise<void> {
   if (Number.isFinite(last) && Date.now() - last < interval * 3_600_000) return
   localStorage.setItem(key, String(Date.now()))
   autoChecking.value = true
-  let pending = 0
+  const tasks: Array<{ scopeId: string, groupKey: string }> = []
   for (const scope of inventory.value?.scopes ?? []) {
     for (const group of scope.groups) {
-      if (group.orphan) continue
+      if (!group.orphan) tasks.push({ scopeId: scope.scope.id, groupKey: group.key })
+    }
+  }
+  let pending = 0
+  let cursor = 0
+  // 有限并发（最多 3 个仓库）：串行会让 20 个仓库的自动检查拖到分钟级
+  const workers = Array.from({ length: Math.min(3, tasks.length) }, async () => {
+    while (true) {
+      const index = cursor++
+      if (index >= tasks.length) return
+      const task = tasks[index]
       try {
-        const plan = await checkSkillManagerUpdates({ scopeId: scope.scope.id, groupKey: group.key })
+        const plan = await checkSkillManagerUpdates({ scopeId: task.scopeId, groupKey: task.groupKey })
         pending += plan.items.filter(item => planExecutable(item) && item.selectedByDefault).length
       } catch {
         // 单个仓库失败不阻断其它仓库，也不把失败当作删除。
       }
     }
-  }
+  })
+  await Promise.all(workers)
   autoChecking.value = false
   if (pending > 0) toast.info(`自动检查发现 ${pending} 项待处理，可在仓库行打开计划。`)
 }

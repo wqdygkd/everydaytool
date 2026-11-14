@@ -4,7 +4,7 @@ import type { UiTableColumnReg } from './uiTableColumns'
 // width / min-width / align / sortable="custom" / show-overflow-tooltip / span-method（行合并）/
 // #default / #header / row-click / sort-change / row-class-name / 树形全展开 /
 // max-height / loading / 空态)。列由 UiTableColumn 注册,行展开与单元格渲染都在这里。
-import { computed, h, provide, reactive, useAttrs } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, provide, reactive, ref, useAttrs } from 'vue'
 import { UI_TABLE_COLUMNS_KEY } from './uiTableColumns'
 
 const props = withDefaults(defineProps<{
@@ -28,11 +28,20 @@ const props = withDefaults(defineProps<{
     rowIndex: number
     columnIndex: number
   }) => [number, number] | undefined
+  /** 虚拟滚动:只渲染可视区行（固定行高表格用；流量表等长列表） */
+  virtual?: boolean
+  /** 虚拟滚动的行高(px)，需与 CSS 的实际行高一致 */
+  rowHeight?: number
+  /** 可视区上下各多渲染几行，减少快速滚动白屏 */
+  overscan?: number
 }>(), {
   loading: false,
   emptyText: '暂无数据',
   mono: false,
   rowClickable: false,
+  virtual: false,
+  rowHeight: 42,
+  overscan: 6,
 })
 
 const emit = defineEmits<{
@@ -61,6 +70,64 @@ const flatRows = computed(() => {
   }
   walk(props.data, 0)
   return out
+})
+
+const wrapRef = ref<HTMLElement | null>(null)
+const scrollTop = ref(0)
+const viewportHeight = ref(0)
+let scrollFrame = 0
+let resizeObserver: ResizeObserver | null = null
+
+const visibleWindow = computed(() => {
+  const total = flatRows.value.length
+  if (!props.virtual) {
+    return {
+      rows: flatRows.value.map((item, index) => ({ item, index })),
+      start: 0,
+      end: total,
+      total,
+    }
+  }
+  const rowHeight = Math.max(1, props.rowHeight)
+  const viewport = viewportHeight.value || 600
+  const overscan = Math.max(0, props.overscan)
+  const start = Math.max(0, Math.floor(scrollTop.value / rowHeight) - overscan)
+  const end = Math.min(total, Math.ceil((scrollTop.value + viewport) / rowHeight) + overscan)
+  return {
+    rows: flatRows.value.slice(start, end).map((item, offset) => ({ item, index: start + offset })),
+    start,
+    end,
+    total,
+  }
+})
+
+function onScroll(): void {
+  if (scrollFrame) return
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0
+    scrollTop.value = wrapRef.value?.scrollTop ?? 0
+  })
+}
+
+onMounted(() => {
+  const el = wrapRef.value
+  if (!el || !props.virtual) return
+  viewportHeight.value = el.clientHeight
+  el.addEventListener('scroll', onScroll, { passive: true })
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => {
+      viewportHeight.value = el.clientHeight
+    })
+    resizeObserver.observe(el)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
+  scrollFrame = 0
+  wrapRef.value?.removeEventListener('scroll', onScroll)
+  resizeObserver?.disconnect()
+  resizeObserver = null
 })
 
 function colStyle(col: UiTableColumnReg) {
@@ -138,7 +205,7 @@ const containerStyle = computed(() => {
 </script>
 
 <template>
-  <div class="ui-table-wrap" :style="containerStyle">
+  <div ref="wrapRef" class="ui-table-wrap" :style="containerStyle">
     <!-- 列收集器:UiTableColumn 在此挂载并注册,自身不渲染任何内容 -->
     <div aria-hidden="true" style="display: none">
       <slot />
@@ -166,15 +233,21 @@ const containerStyle = computed(() => {
         </tr>
       </thead>
       <tbody>
+        <tr v-if="virtual && visibleWindow.start > 0" aria-hidden="true" class="ui-table-spacer">
+          <td :colspan="columns.length" :style="{ height: `${visibleWindow.start * rowHeight}px` }" />
+        </tr>
         <tr
-          v-for="(item, i) in flatRows"
-          :key="rowKey ? String(item.row[rowKey]) : i"
-          :class="rowClass(item, i)"
-          @click="emit('rowClick', item.row, i)"
+          v-for="entry in visibleWindow.rows"
+          :key="rowKey ? String(entry.item.row[rowKey]) : entry.index"
+          :class="rowClass(entry.item, entry.index)"
+          @click="emit('rowClick', entry.item.row, entry.index)"
         >
           <template v-for="(col, j) in columns" :key="j">
-            <component :is="cellComp(col, item, i, j)" />
+            <component :is="cellComp(col, entry.item, entry.index, j)" />
           </template>
+        </tr>
+        <tr v-if="virtual && visibleWindow.end < visibleWindow.total" aria-hidden="true" class="ui-table-spacer">
+          <td :colspan="columns.length" :style="{ height: `${(visibleWindow.total - visibleWindow.end) * rowHeight}px` }" />
         </tr>
       </tbody>
     </table>
@@ -236,6 +309,14 @@ td {
 
 tbody tr:hover td {
   background: var(--color-fill);
+}
+
+/* 虚拟滚动的占位行：只负责撑出滚动高度，不显示任何内容 */
+tr.ui-table-spacer td {
+  height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 tbody tr.is-selected td,

@@ -60,6 +60,11 @@ function emitProgress(event: Wb2apiProgressEvent): void {
   publishStateSoon()
 }
 
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
 async function promoteStagingToCurrent(): Promise<string> {
   const staging = getWb2apiStagingDir()
   const current = getWb2apiCurrentDir()
@@ -87,18 +92,37 @@ async function promoteStagingToCurrent(): Promise<string> {
   await prepareBinaryPermissions(stagingRootBinary)
 
   await rm(previous, { recursive: true, force: true })
+  let previousReady = false
   try {
     await rename(current, previous)
-  } catch {
-    // current 可能为空
-    await rm(current, { recursive: true, force: true })
+    previousReady = true
+  } catch (error) {
+    // current 可能尚未安装；其它错误（占用 / 权限）不能当作空目录直接删掉
+    if (!isMissingPathError(error)) throw error
   }
   await mkdir(path.dirname(current), { recursive: true })
-  await rename(staging, current)
+  try {
+    await rename(staging, current)
+  } catch (error) {
+    // 第二次改名失败：把刚挪走的旧版本放回 current，避免出现「未安装、旧版本躺在 previous」
+    if (previousReady) {
+      await rename(previous, current).catch((rollbackError: unknown) => {
+        logger.error('wb2api promote rollback failed', {
+          error: (rollbackError as Error).message,
+        })
+      })
+    }
+    throw error
+  }
   await mkdir(staging, { recursive: true })
 
   const finalBinary = await resolveCurrentBinaryPath()
-  if (!finalBinary) throw new Error('晋升 current 后找不到二进制')
+  if (!finalBinary) {
+    await rm(staging, { recursive: true, force: true })
+    await rename(current, staging).catch(() => undefined)
+    if (previousReady) await rename(previous, current).catch(() => undefined)
+    throw new Error('晋升 current 后找不到二进制')
+  }
   return finalBinary
 }
 
@@ -114,8 +138,10 @@ async function rollbackPrevious(): Promise<void> {
   await rm(tmp, { recursive: true, force: true })
   try {
     await rename(current, tmp)
-  } catch {
-    await rm(current, { recursive: true, force: true })
+  } catch (error) {
+    // 不能删 current：它是当前唯一落盘的版本，删掉再让 previous → current 失败就两个都没了。
+    // 直接报错，保留现场让用户重试回滚。
+    throw new Error(`回滚失败：无法移走当前版本（${(error as Error).message}）`)
   }
   try {
     await rename(previous, current)

@@ -8,7 +8,7 @@
 //
 // 调用时机：`loadDataDirectoryOverrideSync()` 在 app ready 之前、sessionData 配置之前。
 // 此时 Chromium 尚未打开会话文件，可以安全复制 `session/`。
-import { cpSync, existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, rmdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { logger } from './logger.ts'
 import { isStrictlyWithin } from './path-guard.ts'
@@ -32,6 +32,49 @@ function isEmptyDirectory(directory: string): boolean {
   } catch {
     return false
   }
+}
+
+interface TreeSignature {
+  files: number
+  bytes: number
+}
+
+/**
+ * 递归统计普通文件数与总字节数。
+ * 「复制成功后再删源」必须拿它比对一次：磁盘满 / 杀软拦截 / 网络盘断流时，
+ * cp 可能只留下一部分内容，删源就是真丢数据。
+ */
+function treeSignature(targetPath: string): TreeSignature {
+  let info: import('node:fs').Stats
+  try {
+    info = statSync(targetPath)
+  } catch {
+    return { files: 0, bytes: 0 }
+  }
+  if (info.isFile()) return { files: 1, bytes: info.size }
+  if (!info.isDirectory()) return { files: 0, bytes: 0 }
+
+  let files = 0
+  let bytes = 0
+  const stack = [targetPath]
+  while (stack.length > 0) {
+    const dir = stack.pop() as string
+    for (const dirent of readdirSync(dir, { withFileTypes: true })) {
+      if (dirent.isSymbolicLink()) continue
+      const child = path.join(dir, dirent.name)
+      if (dirent.isDirectory()) {
+        stack.push(child)
+      } else if (dirent.isFile()) {
+        files += 1
+        try {
+          bytes += statSync(child).size
+        } catch {
+          // 读不到就不计入，和复制侧保持同一口径
+        }
+      }
+    }
+  }
+  return { files, bytes }
 }
 
 /**
@@ -75,6 +118,12 @@ export function migrateDataDirectory(
       }
       currentName = entry.name
       cpSync(source, target, { recursive: true, force: false, errorOnExist: true })
+      const expected = treeSignature(source)
+      const actual = treeSignature(target)
+      if (expected.files !== actual.files || expected.bytes !== actual.bytes) {
+        throw new Error(`复制校验失败（${entry.name}）：源 ${expected.files} 个文件 / ${expected.bytes} 字节，`
+          + `目标 ${actual.files} 个文件 / ${actual.bytes} 字节`)
+      }
       copied.push(entry.name)
       currentName = null
     }

@@ -8,6 +8,12 @@ import { chmod, readFile, writeFile } from 'node:fs/promises'
 import forge from 'node-forge'
 import { ensureDir, pathExists } from '../../../../backend/utils/file-ops.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
+import {
+  isSealedSecret,
+  isSecretStorageAvailable,
+  openSecretDetailed,
+  sealSecret,
+} from '../../../../backend/utils/secret-box.ts'
 import { getCaCertPath, getCaKeyPath, getCertsDirectory } from '../utils/paths.ts'
 
 const ROOT_CA_COMMON_NAME = 'edt Interceptor CA'
@@ -84,8 +90,11 @@ function isIpAddress(host: string): boolean {
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':')
 }
 
-function generateLeafCertificate(root: RootCaInfo, host: string): LeafCertificate {
-  const keys = forge.pki.rsa.generateKeyPair(2048)
+function generateLeafCertificate(
+  root: RootCaInfo,
+  host: string,
+  keys: forgeTypes.pki.rsa.KeyPair,
+): LeafCertificate {
   const cert = forge.pki.createCertificate()
   cert.publicKey = keys.publicKey
   cert.serialNumber = makeSerialNumber()
@@ -116,7 +125,35 @@ function generateLeafCertificate(root: RootCaInfo, host: string): LeafCertificat
   }
 }
 
-const leafCache = new Map<string, LeafCertificate>()
+interface LeafCacheEntry {
+  promise: Promise<LeafCertificate>
+  expiresAt: number
+}
+
+const leafCache = new Map<string, LeafCacheEntry>()
+
+/**
+ * 叶证书共用一把密钥：每个新主机都同步生成 2048 位 RSA 会阻塞主进程数百毫秒。
+ * 首次用时异步生成一次（Promise 缓存，并发请求共用同一个生成过程）。
+ */
+let sharedLeafKey: Promise<forgeTypes.pki.rsa.KeyPair> | null = null
+
+function getSharedLeafKey(): Promise<forgeTypes.pki.rsa.KeyPair> {
+  if (sharedLeafKey) return sharedLeafKey
+  sharedLeafKey = new Promise<forgeTypes.pki.rsa.KeyPair>((resolve, reject) => {
+    setImmediate(() => {
+      try {
+        resolve(forge.pki.rsa.generateKeyPair(2048))
+      } catch (error) {
+        reject(error)
+      }
+    })
+  })
+  sharedLeafKey.catch(() => {
+    sharedLeafKey = null
+  })
+  return sharedLeafKey
+}
 
 let rootCa: RootCaInfo | null = null
 let rootCaLoading: Promise<RootCaInfo> | null = null
@@ -130,9 +167,19 @@ async function loadRootCaFromDisk(): Promise<RootCaInfo | null> {
       readFile(keyPath, 'utf8'),
       readFile(certPath, 'utf8'),
     ])
+    const opened = openSecretDetailed(keyPem, 'interceptor-ca-key')
+    if (opened.failed) throw new Error('根 CA 私钥无法解密（系统密钥可能已变化）')
+    // 旧版明文私钥：读取成功后立刻加密回写，避免一直以明文躺在磁盘上
+    if (!isSealedSecret(keyPem) && isSecretStorageAvailable()) {
+      await writeFile(keyPath, sealSecret(opened.value, 'interceptor-ca-key'), { encoding: 'utf8', mode: 0o600 })
+        .then(() => chmod(keyPath, 0o600))
+        .catch((error: unknown) => {
+          logger.warn('Failed to re-seal legacy CA key; kept in plaintext', { error: (error as Error).message })
+        })
+    }
     const cert = forge.pki.certificateFromPem(certPem)
     return {
-      privateKey: forge.pki.privateKeyFromPem(keyPem) as unknown as forgeTypes.pki.rsa.PrivateKey,
+      privateKey: forge.pki.privateKeyFromPem(opened.value) as unknown as forgeTypes.pki.rsa.PrivateKey,
       certPem,
       cert,
       fingerprint: sha1Fingerprint(cert),
@@ -147,8 +194,9 @@ async function loadRootCaFromDisk(): Promise<RootCaInfo | null> {
 
 async function persistRootCa(info: RootCaInfo): Promise<void> {
   await ensureDir(getCertsDirectory())
-  await writeFile(getCaKeyPath(), forge.pki.privateKeyToPem(info.privateKey), 'utf8')
-  await writeFile(getCaCertPath(), info.certPem, 'utf8')
+  const keyPem = sealSecret(forge.pki.privateKeyToPem(info.privateKey), 'interceptor-ca-key')
+  await writeFile(getCaKeyPath(), keyPem, { encoding: 'utf8', mode: 0o600 })
+  await writeFile(getCaCertPath(), info.certPem, { encoding: 'utf8', mode: 0o644 })
   // 私钥收紧权限；Windows 上为 no-op，失败不影响主流程
   await chmod(getCaKeyPath(), 0o600).catch(() => {})
 }
@@ -197,12 +245,23 @@ export async function readRootCa(): Promise<RootCaInfo | null> {
 export async function getLeafCertificate(host: string): Promise<LeafCertificate> {
   const normalized = host.toLowerCase().replace(/^\[|\]$/g, '')
   const cached = leafCache.get(normalized)
-  if (cached && !isExpiringSoon(new Date(cached.expiresAt))) return cached
+  if (cached && (cached.expiresAt === 0 || !isExpiringSoon(new Date(cached.expiresAt)))) {
+    return cached.promise
+  }
 
-  const root = await ensureRootCa()
-  const leaf = generateLeafCertificate(root, normalized)
-  leafCache.set(normalized, leaf)
-  return leaf
+  const entry: LeafCacheEntry = { promise: null as unknown as Promise<LeafCertificate>, expiresAt: 0 }
+  const promise = (async () => {
+    const [root, keys] = await Promise.all([ensureRootCa(), getSharedLeafKey()])
+    const leaf = generateLeafCertificate(root, normalized, keys)
+    entry.expiresAt = leaf.expiresAt
+    return leaf
+  })()
+  entry.promise = promise
+  leafCache.set(normalized, entry)
+  promise.catch(() => {
+    if (leafCache.get(normalized) === entry) leafCache.delete(normalized)
+  })
+  return promise
 }
 
 export function clearLeafCache(): void {

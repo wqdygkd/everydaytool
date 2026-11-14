@@ -8,6 +8,7 @@ import type {
   InterceptorTargetPatch,
   ProxyPortUpdateResult,
   TrafficEntry,
+  TrafficSummary,
 } from '../../../../shared/interceptor'
 import { defineStore } from 'pinia'
 import { getInterceptorApi } from '../ipc'
@@ -36,7 +37,7 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
   const ca = ref<CaStatus | null>(null)
   const targets = ref<InterceptorTarget[]>([])
   const rules = ref<InterceptorRule[]>([])
-  const traffic = ref<TrafficEntry[]>([])
+  const traffic = ref<TrafficSummary[]>([])
   const ready = ref(false)
   const runtimeActive = ref(false)
 
@@ -59,7 +60,12 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
       targets.value = payload as InterceptorTarget[]
     }))
     disposers.push(ipc.on(channels.EVENT_TRAFFIC, (payload) => {
-      traffic.value.push(payload as TrafficEntry)
+      traffic.value.push(payload as TrafficSummary)
+      if (traffic.value.length > 1000) traffic.value.splice(0, traffic.value.length - 1000)
+    }))
+    disposers.push(ipc.on(channels.EVENT_TRAFFIC_BATCH, (payload) => {
+      if (!Array.isArray(payload) || payload.length === 0) return
+      traffic.value.push(...payload as TrafficSummary[])
       if (traffic.value.length > 1000) traffic.value.splice(0, traffic.value.length - 1000)
     }))
 
@@ -82,7 +88,7 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     ca.value = caStatus as CaStatus
     targets.value = targetList as InterceptorTarget[]
     rules.value = ruleList as InterceptorRule[]
-    traffic.value = trafficList as TrafficEntry[]
+    traffic.value = trafficList as TrafficSummary[]
   }
 
   function dispose(): void {
@@ -181,6 +187,12 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     traffic.value = []
   }
 
+  /** 详情按需拉取：列表只持有摘要，正文与头在打开抽屉时才取 */
+  async function getTrafficDetail(id: string): Promise<TrafficEntry | null> {
+    const channels = api().channels
+    return (await api().invoke(channels.TRAFFIC_GET_ENTRY, id)) as TrafficEntry | null
+  }
+
   async function setProxyDesired(enabled: boolean): Promise<boolean> {
     const channels = api().channels
     return (await api().invoke(channels.PROXY_SET_DESIRED, enabled)) as boolean
@@ -238,6 +250,7 @@ export const useInterceptorStore = defineStore('interceptor/state', () => {
     upsertRule,
     deleteRule,
     clearTraffic,
+    getTrafficDetail,
     setProxyDesired,
     setProxyPort,
     openExtensionDir,

@@ -8,8 +8,13 @@ import { createHash } from 'node:crypto'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { emptyProjectLock, PROJECT_LOCK_VERSION } from '../../../../shared/skill-manager.ts'
+import {
+  emptyProjectLock,
+  isSupportedProjectLockVersion,
+  SUPPORTED_PROJECT_LOCK_VERSIONS,
+} from '../../../../shared/skill-manager.ts'
 import { isRecord, readTextIfExists, stripBom } from './lock-file.ts'
+import { isSafeSkillKey } from './skill-name.ts'
 
 export function getProjectLockPath(projectPath: string): string {
   return join(projectPath, 'skills-lock.json')
@@ -52,8 +57,11 @@ export async function writeProjectLock(
   projectPath: string,
   options: ProjectLockWriteOptions,
 ): Promise<ProjectLockWriteResult> {
-  if (lock.version !== PROJECT_LOCK_VERSION) {
-    throw new ProjectLockWriteError('unsupported-version', `只能写项目锁 v${PROJECT_LOCK_VERSION}`)
+  if (!isSupportedProjectLockVersion(lock.version)) {
+    throw new ProjectLockWriteError(
+      'unsupported-version',
+      `只能写项目锁 v${SUPPORTED_PROJECT_LOCK_VERSIONS.join(' / v')}，收到 v${lock.version}`,
+    )
   }
   const path = getProjectLockPath(projectPath)
   const current = await readTextIfExists(path)
@@ -107,7 +115,7 @@ function validateEntry(value: unknown): value is ProjectLockEntry {
     && typeof value.computedHash === 'string'
 }
 
-/** 只解析项目锁 v1；未知字段保留在返回对象里。 */
+/** 解析项目锁 v1 / v2；未知字段保留在返回对象里。 */
 export function parseProjectLock(raw: string, path = '<memory>'): LockReadResult<ProjectLockFile> {
   let parsed: unknown
   try {
@@ -120,11 +128,19 @@ export function parseProjectLock(raw: string, path = '<memory>'): LockReadResult
     return invalid(path, '缺少 version 或 skills 对象', raw)
   }
 
-  if (parsed.version !== PROJECT_LOCK_VERSION) {
-    return unsupported(path, parsed.version, `不支持的 skills-lock.json 版本：${parsed.version}（期望 ${PROJECT_LOCK_VERSION}）`, raw)
+  if (!isSupportedProjectLockVersion(parsed.version)) {
+    return unsupported(
+      path,
+      parsed.version,
+      `不支持的 skills-lock.json 版本：${parsed.version}（期望 v${SUPPORTED_PROJECT_LOCK_VERSIONS.join(' / v')}）`,
+      raw,
+    )
   }
 
   for (const [name, entry] of Object.entries(parsed.skills)) {
+    if (!isSafeSkillKey(name)) {
+      return invalid(path, `技能名不合法：${name}`, raw)
+    }
     if (!validateEntry(entry)) {
       return invalid(path, `技能「${name}」缺少 source / sourceType / computedHash`, raw)
     }

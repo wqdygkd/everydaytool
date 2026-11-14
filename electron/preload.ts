@@ -6,11 +6,16 @@ import { isAllowedIpcChannel, isAllowedIpcEventChannel } from '../shared/ipc-val
 import { ipcNamespaces } from './ipc-namespaces.ts'
 
 // eslint-disable-next-line node/prefer-global/process -- preload 内不能打包成运行时 require
-const _platform = (globalThis as unknown as { process?: { platform?: string } }).process?.platform
-  ?? 'win32'
+const _runtimeProcess = (globalThis as unknown as { process?: { platform?: string, argv?: string[] } }).process
+const _platform = _runtimeProcess?.platform ?? 'win32'
+const _argv = _runtimeProcess?.argv ?? []
+const _isPackaged = _argv.includes('--edt-packaged')
+const _hasTwebSite = !_isPackaged || _argv.includes('--edt-tweb-site')
 const EDT_RUNTIME = {
   target: _platform === 'darwin' ? 'mac' : _platform === 'linux' ? 'linux' : 'win',
   platform: _platform,
+  isPackaged: _isPackaged,
+  hasTwebSite: _hasTwebSite,
   // 外部打开：window.open 已被主进程 deny，外跳统一由主进程校验协议后交给系统浏览器
   openExternal: (url: string) => {
     ipcRenderer.send(EDT_APP_IPC_CHANNELS.OPEN_EXTERNAL, url)

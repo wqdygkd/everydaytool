@@ -11,6 +11,8 @@ export interface AppDataDirectoryInfo {
 }
 
 export interface AppDataDirectoryUpdateResult extends AppDataDirectoryInfo {
+  /** true = 接管目标目录已有数据（不迁移/不合并）；false = 迁移到空目录 */
+  adopted: boolean
   /** 本次是否记录了变更（变更一律在下次启动迁移生效，渲染层据此提示重启） */
   changed: boolean
 }
@@ -72,6 +74,8 @@ export interface AppAssetsDirectoryInfo {
 }
 
 export interface AppAssetsDirectoryUpdateResult extends AppAssetsDirectoryInfo {
+  /** true = 接管目标目录已有归档（不迁移/不合并）；false = 迁移到空目录 */
+  adopted: boolean
   changed: boolean
 }
 

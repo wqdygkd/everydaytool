@@ -27,10 +27,15 @@ export function configureSourceAuthProvider(provider: SourceAuthProvider | undef
   sourceAuthProvider = provider
 }
 
+/** 安装阶段复用同一个凭据提供方：列目录能看到的私有仓库，下载/克隆也必须带同一份令牌。 */
+export async function resolveSourceAuth(parsed: ReturnType<typeof parseSourceInput>): Promise<SourceAuth | undefined> {
+  return await sourceAuthProvider?.(parsed)
+}
+
 /** 统一来源解析入口：GitHub / 通用 git / 本地目录；不下载、不安装。 */
 export async function resolveSource(input: string, ref?: string): Promise<SourceCatalog> {
   const parsed = parseSourceInput(input, ref)
-  const auth = await sourceAuthProvider?.(parsed)
+  const auth = await resolveSourceAuth(parsed)
   const catalog = parsed.sourceType === 'github'
     ? await resolveGithubCatalog(parsed, auth?.token, auth?.timeoutMs)
     : parsed.sourceType === 'git'

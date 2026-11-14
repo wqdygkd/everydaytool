@@ -6,6 +6,7 @@
 //
 // 唯一例外是备份恢复：它会在运行期替换掉 config 层文件，必须丢掉进程内缓存，
 // 所以提供一个显式的 invalidateJsonDocuments()，且只允许恢复流程调用。
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -62,7 +63,7 @@ export function readJsonDocument<T>(filePath: string, createDefault: () => T): T
 /** 写入 JSON 文档并同步内存缓存（先写临时文件再 rename，避免进程中断留下坏文件） */
 export function writeJsonDocument<T>(filePath: string, data: T): void {
   const resolved = path.resolve(filePath)
-  const tempPath = `${resolved}.${process.pid}.tmp`
+  const tempPath = `${resolved}.${process.pid}-${randomUUID()}.tmp`
 
   mkdirSync(path.dirname(resolved), { recursive: true })
   try {

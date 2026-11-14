@@ -1,12 +1,12 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { ArchiveError, extractTarGz } from '../backend/services/archive.ts'
+import { ArchiveError, extractTarGz, extractTarGzFile } from '../backend/services/archive.ts'
 
 interface Entry {
   name: string
@@ -74,6 +74,27 @@ test('拒绝路径穿越条目', async () => {
       extractTarGz(archive, root),
       (error: unknown) => error instanceof ArchiveError && error.code === 'archive-unsafe-path',
     )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('文件版流式解包只落盘选中的技能目录', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'edt-archive-file-'))
+  try {
+    const tarball = join(root, 'source.tar.gz')
+    await writeFile(tarball, makeTar([
+      { name: 'repo-main/', type: '5' },
+      { name: 'repo-main/skills/a/SKILL.md', content: '# a\n' },
+      { name: 'repo-main/skills/b/SKILL.md', content: '# b\n' },
+      { name: 'repo-main/README.md', content: '# repo\n' },
+    ]))
+    const destination = join(root, 'unpacked')
+    const result = await extractTarGzFile(tarball, destination, { includes: ['skills/a'] })
+    assert.equal(await readFile(join(destination, 'repo-main', 'skills', 'a', 'SKILL.md'), 'utf8'), '# a\n')
+    await assert.rejects(stat(join(destination, 'repo-main', 'skills', 'b')))
+    await assert.rejects(stat(join(destination, 'repo-main', 'README.md')))
+    assert.ok(result.entries >= 2)
   } finally {
     await rm(root, { recursive: true, force: true })
   }

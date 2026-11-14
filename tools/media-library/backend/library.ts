@@ -28,8 +28,8 @@ import type {
   SeriesRecord,
   SourceRecord,
 } from '../../../shared/media-library.ts'
-import type { CollectionDocument, IndexDocument } from './store.ts'
 import type { ScannedFile, WalkResult } from './scanner.ts'
+import type { CollectionDocument, IndexDocument } from './store.ts'
 import { randomBytes } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'

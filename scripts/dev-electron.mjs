@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import { createRequire } from 'node:module'
@@ -25,6 +26,49 @@ let stoppingElectron = false
 let rebuildTimer = null
 let rebuilding = false
 let pendingRebuild = false
+let lastSourceSignature = null
+// 收集一次 debounce 窗口内触碰过的路径，仅用于「为什么没重建」的可观测性
+const pendingEvents = new Set()
+
+/**
+ * 被监听目录的内容签名：只看 .ts 源码的内容。
+ * 构建产物在 dist-electron/（不在监听范围内），但工具后端会在自己的目录里写运行期 JSON，
+ * fs.watch 对这些写入同样会触发事件；只按事件重建会让 `pnpm dev` 在没改代码时反复重启。
+ */
+function collectSourceSignature() {
+  const hash = createHash('sha1')
+  const files = []
+
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+        files.push(fullPath)
+      }
+    }
+  }
+
+  for (const root of watchRoots) {
+    if (fs.existsSync(root)) walk(root)
+  }
+
+  files.sort()
+  for (const file of files) {
+    hash.update(path.relative(rootDir, file))
+    hash.update('\0')
+    try {
+      hash.update(fs.readFileSync(file))
+    } catch {
+      hash.update('<unreadable>')
+    }
+    hash.update('\0')
+  }
+
+  return { digest: hash.digest('hex'), count: files.length }
+}
 
 /** 等 Vite 开发服务器就绪：超时返回 false，避免没开 vite 时无限等待 */
 function waitForRenderer(timeoutMs = rendererWaitTimeout) {
@@ -181,16 +225,36 @@ async function rebuildAndRestart() {
   }
 }
 
-function scheduleRebuild() {
+function scheduleRebuild(label) {
+  if (label) pendingEvents.add(label)
   clearTimeout(rebuildTimer)
-  rebuildTimer = setTimeout(rebuildAndRestart, 150)
+  rebuildTimer = setTimeout(() => {
+    const events = [...pendingEvents]
+    pendingEvents.clear()
+
+    const { digest } = collectSourceSignature()
+    if (digest === lastSourceSignature) {
+      if (events.length > 0) {
+        const shown = events.slice(0, 3).join(', ')
+        const rest = events.length > 3 ? ` 等 ${events.length} 项` : ''
+        console.log(`· 忽略空事件（不是 .ts 源码变更）：${shown}${rest}`)
+      }
+      return
+    }
+
+    lastSourceSignature = digest
+    void rebuildAndRestart()
+  }, 150)
 }
 
 function watchDirectory(dir) {
   const watchers = []
   if (!fs.existsSync(dir)) return watchers
 
-  watchers.push(fs.watch(dir, scheduleRebuild))
+  watchers.push(fs.watch(dir, (_eventType, filename) => {
+    const relative = path.relative(rootDir, path.join(dir, filename ? filename.toString() : ''))
+    scheduleRebuild(filename ? relative : path.relative(rootDir, dir))
+  }))
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules') continue
     if (entry.isDirectory()) {
@@ -202,6 +266,7 @@ function watchDirectory(dir) {
 }
 
 await buildElectron({ log: false })
+lastSourceSignature = collectSourceSignature().digest
 
 const rendererReady = await waitForRenderer()
 if (!rendererReady) {

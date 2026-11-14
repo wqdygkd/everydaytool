@@ -551,7 +551,7 @@ function buildNextLock(
   if (context.scope.kind === 'global') {
     return { ...(context.lockData as GlobalLockFile), version: 3, skills: next as Record<string, GlobalLockEntry> }
   }
-  return { ...(context.lockData as ProjectLockFile), version: 1, skills: next as Record<string, ProjectLockEntry> }
+  return { ...(context.lockData as ProjectLockFile), version: (context.lockData as ProjectLockFile).version, skills: next as Record<string, ProjectLockEntry> }
 }
 
 function writeRegistryAfterPlan(

@@ -10,6 +10,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { emptyGlobalLock, GLOBAL_LOCK_VERSION } from '../../../../shared/skill-manager.ts'
 import { isRecord, readTextIfExists, stripBom } from './lock-file.ts'
+import { isSafeSkillKey } from './skill-name.ts'
 
 export function getGlobalLockPath(): string {
   const xdgStateHome = process.env.XDG_STATE_HOME
@@ -60,6 +61,9 @@ export function parseGlobalLock(raw: string, path = '<memory>'): LockReadResult<
   }
 
   for (const [name, entry] of Object.entries(parsed.skills)) {
+    if (!isSafeSkillKey(name)) {
+      return invalid(path, `技能名不合法：${name}`, raw)
+    }
     if (!validateEntry(entry)) {
       return invalid(path, `技能「${name}」缺少 source / sourceType / skillFolderHash`, raw)
     }

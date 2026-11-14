@@ -46,6 +46,8 @@ export const SOURCE_OPERATOR_LABELS: Record<RuleOperator, string> = {
 
 const SOURCE_REGEX_CACHE = new Map<string, RegExp | null>()
 const SOURCE_REGEX_CACHE_MAX = 200
+const WILDCARD_REGEX_CACHE = new Map<string, RegExp>()
+const WILDCARD_REGEX_CACHE_MAX = 200
 
 /** 用户输入驱动的正则编译（非法即 null，带 FIFO 上限防无限增长） */
 export function compileSourceRegex(pattern: string): RegExp | null {
@@ -67,9 +69,18 @@ export function compileSourceRegex(pattern: string): RegExp | null {
 
 /** 通配模式 → 正则：`*` 任意串、`?` 单字符 */
 export function wildcardToRegex(pattern: string, withCaptures = false): RegExp {
+  const cacheKey = `${withCaptures ? '1' : '0'}:${pattern}`
+  const cached = WILDCARD_REGEX_CACHE.get(cacheKey)
+  if (cached) return cached
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   const star = withCaptures ? '(.*)' : '.*'
-  return new RegExp(`^${escaped.replace(/\*/g, star).replace(/\?/g, '.')}$`)
+  const compiled = new RegExp(`^${escaped.replace(/\*/g, star).replace(/\?/g, '.')}$`)
+  if (WILDCARD_REGEX_CACHE.size >= WILDCARD_REGEX_CACHE_MAX) {
+    const oldest = WILDCARD_REGEX_CACHE.keys().next().value
+    if (oldest !== undefined) WILDCARD_REGEX_CACHE.delete(oldest)
+  }
+  WILDCARD_REGEX_CACHE.set(cacheKey, compiled)
+  return compiled
 }
 
 export interface SourceMatchContext {
@@ -498,6 +509,28 @@ export interface TrafficEntry {
   error?: string
 }
 
+/**
+ * 流量摘要：表格与增量推送只带这一份。
+ * 请求/响应头与正文最多各 64KB，随每条流量广播会把 IPC 和渲染层内存撑爆；
+ * 详情在打开抽屉时按 id 单独拉取。
+ */
+export type TrafficSummary = Omit<
+  TrafficEntry,
+  'requestHeaders' | 'requestBody' | 'responseHeaders' | 'responseBody' | 'bodyTruncated'
+>
+
+export function toTrafficSummary(entry: TrafficEntry): TrafficSummary {
+  const {
+    requestHeaders: _requestHeaders,
+    requestBody: _requestBody,
+    responseHeaders: _responseHeaders,
+    responseBody: _responseBody,
+    bodyTruncated: _bodyTruncated,
+    ...summary
+  } = entry
+  return summary
+}
+
 // ---------------------------------------------------------------------------
 // CA 证书状态
 // ---------------------------------------------------------------------------
@@ -556,7 +589,7 @@ export interface ProxyPortUpdateResult {
 // ---------------------------------------------------------------------------
 // WS 协议（扩展 ↔ edt）
 // ---------------------------------------------------------------------------
-// 无配对码：连接只做来源校验（Origin 必须是本扩展），握手即建立会话。
+// 来源校验（Origin 必须是本扩展）+ 每次启动轮换的共享令牌，握手通过后建立会话。
 // 端口分工：控制通道端口由扩展在本机端口段内探测；代理端口由 edt 经 hello-ok /
 // proxy-port 下发，扩展不硬编码。
 
@@ -565,6 +598,8 @@ export interface WsHelloMessage {
   appId: string
   clientId: string
   version: string
+  /** 每次 edt 启动轮换的桥接令牌（扩展从 bridge-token.json 读取） */
+  token: string
 }
 
 export interface WsHelloOkMessage {
@@ -581,7 +616,7 @@ export interface WsHelloOkMessage {
 
 export interface WsHelloRejectMessage {
   type: 'hello-reject'
-  reason: 'bad-origin' | 'busy'
+  reason: 'bad-origin' | 'bad-token' | 'busy'
 }
 
 export interface WsHeartbeatMessage {

@@ -2,6 +2,7 @@ import { execFile, spawn } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { sleep } from '../../../../shared/sleep.ts'
+import { parseWxpExtraArgs } from '../../../../shared/wxp.ts'
 import { resolveExecutablePath } from '../utils/resolve-executable.ts'
 
 const execFileAsync = promisify(execFile)
@@ -11,17 +12,6 @@ const KILL_TIMEOUT_MS = 6000
 const DEBUG_PORT_RE = /--remote-debugging-port(?:=|\s+)\d+/i
 // Chromium 111+ 默认拒绝带 Origin 的调试 WebSocket（前端页会被 403，报 connection was closed）
 const ALLOW_ORIGINS_RE = /--remote-allow-origins(?:=|\s+)\S+/i
-
-function parseArgs(argsString = ''): string[] {
-  const input = argsString.trim()
-  if (!input) return []
-  const tokens: string[] = []
-  const re = /"([^"]*)"|'([^']*)'|(\S+)/g
-  for (const match of input.matchAll(re)) {
-    tokens.push(match[1] ?? match[2] ?? match[3])
-  }
-  return tokens
-}
 
 function ensureDebugPort(args: string[], port: number): string[] {
   const hasPort = args.some(arg => DEBUG_PORT_RE.test(arg))
@@ -115,7 +105,7 @@ export class ProcessLauncher {
     }
 
     const resolvedExecutable = await resolveExecutablePath(executable)
-    const args = ensureAllowOrigins(ensureDebugPort(parseArgs(argsString), debugPort), debugPort)
+    const args = ensureAllowOrigins(ensureDebugPort(parseWxpExtraArgs(argsString), debugPort), debugPort)
     const child = spawn(resolvedExecutable, args, {
       stdio: 'ignore',
       windowsHide: true,

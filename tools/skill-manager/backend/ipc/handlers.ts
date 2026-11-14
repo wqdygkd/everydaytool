@@ -4,7 +4,7 @@ import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { adoptSkill } from '../services/adopt.ts'
 import { deleteSkillManagerToken, getSkillManagerToken, listSkillManagerTokens, saveSkillManagerToken } from '../services/credentials.ts'
 import { deleteSkill } from '../services/delete-skill.ts'
-import { scanInventoryWithDisabled, setSkillEnabled } from '../services/disabled-service.ts'
+import { invalidateInventoryCache, scanInventoryWithDisabled, setSkillEnabled } from '../services/disabled-service.ts'
 import { deleteFavoriteCategory, getFavorites, saveFavoriteCategory, toggleFavorite, updateFavoriteItem } from '../services/favorites-service.ts'
 import { getDefaultProjectRegistryPath, getDefaultSkillManagerSettingsPath, getDefaultTrashRoot, installSkills } from '../services/installer.ts'
 import { applyUpdatePlan, checkUpdates, undoLastPlan } from '../services/planner.ts'
@@ -280,6 +280,11 @@ function parsePresetApply(value: unknown): PresetApplyRequest {
   }
 }
 
+/** 写操作完成后丢弃库存缓存，避免紧随其后的刷新读回旧快照 */
+function invalidating<T>(task: () => Promise<T>): Promise<T> {
+  return task().finally(() => invalidateInventoryCache())
+}
+
 export function registerSkillManagerHandlers(): void {
   if (handlersRegistered) return
   handlersRegistered = true
@@ -333,7 +338,7 @@ export function registerSkillManagerHandlers(): void {
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.INSTALL_SKILLS, async (_event, value: unknown) => {
-    return installSkills(parseInstallPayload(value))
+    return invalidating(() => installSkills(parseInstallPayload(value)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PROJECTS_LIST, async () => {
@@ -343,23 +348,23 @@ export function registerSkillManagerHandlers(): void {
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PROJECTS_ADD, async (_event, value: unknown) => {
     if (typeof value !== 'object' || value === null) throw new Error('项目参数非法')
     const path = requiredString((value as Record<string, unknown>).path, '项目路径', 4096)
-    return registerProject(path, getDefaultProjectRegistryPath())
+    return invalidating(() => registerProject(path, getDefaultProjectRegistryPath()))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PROJECTS_REMOVE, async (_event, value: unknown) => {
     if (typeof value !== 'object' || value === null) throw new Error('项目参数非法')
     const id = requiredString((value as Record<string, unknown>).id, '项目 ID', 200)
-    await unregisterProject(id, getDefaultProjectRegistryPath())
+    await invalidating(() => unregisterProject(id, getDefaultProjectRegistryPath()))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PROJECTS_RESCAN, async (_event, value: unknown) => {
     if (typeof value !== 'object' || value === null) throw new Error('项目参数非法')
     const id = requiredString((value as Record<string, unknown>).id, '项目 ID', 200)
-    return rescanProject(id, getDefaultProjectRegistryPath())
+    return invalidating(() => rescanProject(id, getDefaultProjectRegistryPath()))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.SET_ENABLED, async (_event, value: unknown) => {
-    return setSkillEnabled(parseSetEnabledPayload(value))
+    return invalidating(() => setSkillEnabled(parseSetEnabledPayload(value)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.TRASH_LIST, async () => {
@@ -369,16 +374,16 @@ export function registerSkillManagerHandlers(): void {
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.TRASH_RESTORE, async (_event, value: unknown) => {
     const { operationId, name } = parseTrashPayload(value)
-    return restoreTrashItem(getDefaultTrashRoot(), operationId, name)
+    return invalidating(() => restoreTrashItem(getDefaultTrashRoot(), operationId, name))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.TRASH_DELETE, async (_event, value: unknown) => {
     const { operationId, name } = parseTrashPayload(value)
-    return deleteTrashItem(getDefaultTrashRoot(), operationId, name)
+    return invalidating(() => deleteTrashItem(getDefaultTrashRoot(), operationId, name))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.TRASH_CLEAR, async () => {
-    return clearTrash(getDefaultTrashRoot())
+    return invalidating(() => clearTrash(getDefaultTrashRoot()))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.SETTINGS_GET, async () => {
@@ -392,7 +397,7 @@ export function registerSkillManagerHandlers(): void {
       ...readSkillManagerSettings(path),
       ...(value as Partial<SkillManagerSettings>),
     })
-    return writeSkillManagerSettings(settings, path)
+    return invalidating(() => Promise.resolve(writeSkillManagerSettings(settings, path)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.TOKENS_LIST, async () => {
@@ -418,11 +423,11 @@ export function registerSkillManagerHandlers(): void {
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.APPLY_PLAN, async (_event, value: unknown) => {
-    return applyUpdatePlan(parseApplyPlanPayload(value))
+    return invalidating(() => applyUpdatePlan(parseApplyPlanPayload(value)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.UNDO_PLAN, async (_event, value: unknown) => {
-    return undoLastPlan(parseUndoPlanPayload(value))
+    return invalidating(() => undoLastPlan(parseUndoPlanPayload(value)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.FAVORITES_GET, async () => getFavorites())
@@ -447,10 +452,10 @@ export function registerSkillManagerHandlers(): void {
     return deletePresetEntry(requiredString(value, '预设 ID'))
   })
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PRESET_APPLY, async (_event, value: unknown) => {
-    return applyPreset(parsePresetApply(value))
+    return invalidating(() => applyPreset(parsePresetApply(value)))
   })
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PRESETS_IMPORT, async (_event, value: unknown) => {
-    return importPresetFile(requiredString(value, '预设 JSON', 5_000_000))
+    return invalidating(() => Promise.resolve(importPresetFile(requiredString(value, '预设 JSON', 5_000_000))))
   })
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.PRESETS_EXPORT, async () => exportPresetFile())
 
@@ -460,20 +465,20 @@ export function registerSkillManagerHandlers(): void {
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.REMOVED_REINSTALL, async (_event, value: unknown) => {
     const { scopeId, name } = parseSkillPayload(value)
-    return reinstallRemovedSkill({ scopeId, name })
+    return invalidating(() => reinstallRemovedSkill({ scopeId, name }))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.REMOVED_FORGET, async (_event, value: unknown) => {
     const { scopeId, name } = parseSkillPayload(value)
-    await forgetRemovedSkill({ scopeId, name })
+    await invalidating(() => forgetRemovedSkill({ scopeId, name }))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.ADOPT_SKILL, async (_event, value: unknown) => {
-    return adoptSkill(parseAdoptPayload(value))
+    return invalidating(() => adoptSkill(parseAdoptPayload(value)))
   })
 
   safeHandle(ipcMain, SKILL_MANAGER_IPC_CHANNELS.DELETE_SKILL, async (_event, value: unknown) => {
     const { scopeId, name } = parseSkillPayload(value)
-    return deleteSkill({ scopeId, name })
+    return invalidating(() => deleteSkill({ scopeId, name }))
   })
 }

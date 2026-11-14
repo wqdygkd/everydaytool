@@ -7,6 +7,9 @@ import type { ToolClientTarget } from '../types/tool'
 export interface EdtRuntimeApi {
   target: ToolClientTarget
   platform: string
+  isPackaged: boolean
+  /** 安装包是否内置 tweb 本地站点（打包时由 afterPack 决定） */
+  hasTwebSite: boolean
   openExternal?: (url: string) => void
 }
 

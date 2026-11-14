@@ -13,6 +13,7 @@ export const INTERCEPTOR_IPC_CHANNELS = {
   RULES_UPSERT: 'interceptor:rules:upsert',
   RULES_DELETE: 'interceptor:rules:delete',
   TRAFFIC_GET: 'interceptor:traffic:get',
+  TRAFFIC_GET_ENTRY: 'interceptor:traffic:get-entry',
   TRAFFIC_CLEAR: 'interceptor:traffic:clear',
   RUNTIME_START: 'interceptor:runtime:start',
   RUNTIME_STOP: 'interceptor:runtime:stop',
@@ -23,6 +24,7 @@ export const INTERCEPTOR_IPC_CHANNELS = {
   EVENT_STATUS: 'interceptor:event:status',
   EVENT_TARGETS: 'interceptor:event:targets',
   EVENT_TRAFFIC: 'interceptor:event:traffic',
+  EVENT_TRAFFIC_BATCH: 'interceptor:event:traffic-batch',
 } as const
 
 export type InterceptorIpcChannel = (typeof INTERCEPTOR_IPC_CHANNELS)[keyof typeof INTERCEPTOR_IPC_CHANNELS]

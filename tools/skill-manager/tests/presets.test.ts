@@ -84,7 +84,6 @@ test('preset JSON roundtrip and import validation', async () => {
   })
   writePresets(file, path)
   assert.equal(readPresets(path).presets[preset.id].items.length, 1)
-  assert.throws(() => JSON.parse('{'), SyntaxError)
   await rm(root, { recursive: true, force: true })
 })
 

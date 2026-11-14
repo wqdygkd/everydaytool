@@ -135,7 +135,10 @@ onUnmounted(() => {
       </template>
 
       <div class="panel-host" :class="{ 'is-scroll': activeTab === 'rules' }">
-        <component :is="activePanel" @create-rule="switchTab('rules')" />
+        <!-- KeepAlive：切到别的子视图时保留规则编辑草稿（RulesPanel 内部状态） -->
+        <KeepAlive>
+          <component :is="activePanel" @create-rule="switchTab('rules')" />
+        </KeepAlive>
       </div>
     </ToolSurface>
   </div>

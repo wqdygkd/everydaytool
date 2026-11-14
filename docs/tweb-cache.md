@@ -43,15 +43,22 @@
 
 归档事件由 `tools/tweb-cache/backend/archive/api.ts` 统一推送到 `tweb-cache:event:library`。
 
+- 媒体索引写入按 500ms 合并（消息完成时立即 flush，进程退出前再 flush），不再每存一个附件 / 缩略图就全量重写。
+- 全库规范化（目录正名 / 别名重建 / 索引重建）完成后写 `<config>/tweb-cache/archive-layout.json` 的布局版本号；版本一致时打开工具直接跳过整盘扫描。
+- 首次打开（布局版本不一致）时，规范化等首屏与 tweb 页面起来后才在后台跑：逐条让出事件循环，网络盘上的存在性 / 大小判断全部走异步 `stat`，不再用同步 I/O 把主进程堵到窗口「未响应」。
+- 影库列表从 `messages-index/peer-<id>.json` 取候选并按时间先排序、再只读前 500 条 manifest，不再「先截断后排序」漏掉新消息；批量已缓存状态查询先查内存索引，未命中不再逐条碰文件。
+
 ### 2.1 归档目录单独自定义
 
-- 默认位置仍是 `<assets>/tweb-cache`；概览页「本地归档」可点「更改…」选择任意空目录。
+- 默认位置仍是 `<assets>/tweb-cache`；概览页「本地归档」可点「更改…」选择空目录或旧归档目录。
 - 自定义值存在 `<config>/tweb-cache/config.json` 的 `archiveDir`（绝对路径，`null` = 默认）。
 - 只有 `messages/` 与 `trash/` 跟着走；`media-index.json` / `messages-index/` 仍在配置层，
   `objects/` / `tmp/` / `diagnostics/` 仍在缓存层，索引里的相对路径不变。
-- 切换时整体迁移两个目录（跨盘退化为复制成功后才删源）；任一步失败会回滚已移动条目，
-  配置只在全部成功后才写入。目标必须为空，不会覆盖已有文件。
-- 「恢复默认」把归档迁回 `<assets>/tweb-cache`；目标里有同名非空目录时拒绝合并。
+- 空目录：整体迁移两个目录（跨盘退化为复制成功后才删源）；任一步失败会回滚已移动条目，
+  配置只在全部成功后才写入。
+- 已有归档的目录（含 `messages/` / `trash/`，允许带旧布局的 `objects/` 与系统垃圾文件）：直接接管，
+  只改配置指向它，不迁移、不合并、不删除任何一侧的数据；打开工具页时 normalize 会按磁盘 manifest 重建索引。
+- 「恢复默认」把归档迁回 `<assets>/tweb-cache`；默认目录已有归档时同样走接管，不覆盖、不合并。
 - 自定义目录不再位于资产根下，因此备份包的资产清单不会收录它（清单只遍历 `getAssetsRoot()`）。
 
 ### 2.2 转发 / 同内容副本的已缓存识别
@@ -63,8 +70,9 @@
 - **内容签名**：排序后的媒体 key（`photo_<id>` / `document_<id>`）+ 正文字符数。
   转发不会改变 photo/document id，所以用户之间的转发（协议不提供源消息 id）也能互相命中；
   只有带媒体的消息参与签名，纯文本消息仅靠精确链接，避免同长度文本误判。
-- 索引在 `<config>/tweb-cache/archive-alias.json`，随提交 / 删除 / 回收站恢复增量维护，
-  `normalizeLibrary` 时按完整 manifest 全量重建（旧归档首次打开即可补齐）。
+- 索引在 `<config>/tweb-cache/archive-alias.json`，随提交 / 删除 / 回收站恢复增量维护；
+  `normalizeLibrary` 时还会按 manifest 全量重建 `media-index.json` 与 `messages-index/`，
+  索引损坏或缺失时执行一次规范化扫描即可恢复。
 - 状态接口为 `POST /api/archive/status`，页面附带 `forwardSource` / `mediaKeys` / `textChars`；
   返回的 `via` 为 `direct | source | forward | media`，`resolved` 指向真实缓存目录。
 - 角标文案仍是「已缓存」，悬停提示说明来源；等价命中时右键「在文件夹中显示」打开真实副本，
@@ -76,7 +84,7 @@
 
 - 列顺序固定为 `会话 / 消息 → 消息 ID → 预览 → 大小 → 状态 → 操作`。第一列是合并列（`UiTable` 的 `span-method`）：同一 `groupedId` 只渲染一次群名，多行时副标题为「相册 · N 条」；组内每行仍显示自己的消息 ID，定位 / 删除按行生效。
 - 缩略图优先读 manifest 里保存的 `thumb_<mediaKey>`；旧照片回退到主媒体，视频没有独立缩略图时不回退主文件。
-- 进入影库时自动补齐旧视频缩略图；成功后刷新影库，消息不可达 / 无 thumbnail 的条目跳过。
+- 进入影库时自动补齐旧视频缩略图：等 tweb 页面稳定后，每批最多 24 条、批次之间留间隔，避免首次打开同时 reload 几百条消息把页面压死；成功后刷新影库，消息不可达 / 无 thumbnail 的条目跳过。
 - 完成时间 `savedAt` 与转发来源只存在 manifest / message.md，不在表格里重复展示；表格只保留分组、消息 ID、预览、大小、状态、操作。
 
 右栏宽度与开合：
@@ -158,6 +166,9 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
 - **托管**：`tools/tweb-cache/backend/services/site-service.ts` 起引擎站点（`rootDir=tweb/dist`，
   `extraRootDir=tweb/public`——tweb 的 dist 不含字体/wasm/assets，两个静态根都要挂）。端口落盘在
   `<config>/tweb-cache/config.json`，origin 变化会清空 tweb 登录态，所以端口一旦分配就固定。
+- **安装包内置**：`scripts/after-pack.mjs` 把本机 `tweb/dist|public`（跳过 `*.map`）复制到
+  `<app>/resources/tweb`；打包态 `site-service` 从 `process.resourcesPath/tweb` 取站点。
+  没有内置站点的构建靠工具定义上的 `requiresBundledSite` 在安装版隐藏 `tweb-cache`。
 - **懒启动**：站点不随 app 启动拉起。页签挂载时 store 经 `SITE_ACQUIRE` 触发 `ensureTwebCacheSiteStarted()`
   （引用计数 +1），卸载时 `SITE_RELEASE` 归零后闲置 5 分钟停站点；重开页签会取消闲置停机。端口固定
   策略保证停/启不换 origin，登录态不受影响。app 退出时 `disposeTwebCacheSite()` 兜底停站点。

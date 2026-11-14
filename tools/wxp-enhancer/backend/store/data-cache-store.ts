@@ -1,7 +1,6 @@
 import type { WxpDataCache } from '../../../../shared/wxp.ts'
-import path from 'node:path'
 import { resolveLayerPath, resolveLayerPathWithFallback } from '../../../../backend/utils/data-layers.ts'
-import { ensureDir, pathExists, readJson, writeJson } from '../../../../backend/utils/file-ops.ts'
+import { readJsonDocument, writeJsonDocument } from '../../../../backend/utils/json-store.ts'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { isSealedSecret, openSecret, sealSecret } from '../../../../backend/utils/secret-box.ts'
 
@@ -30,8 +29,7 @@ function getCacheReadPath(): string {
 export const dataCacheStore = {
   async get(): Promise<WxpDataCache | null> {
     const cachePath = getCacheReadPath()
-    if (!(await pathExists(cachePath))) return null
-    const raw = await readJson<WxpDataCache | SealedCacheFile | null>(cachePath)
+    const raw = readJsonDocument<WxpDataCache | SealedCacheFile | null>(cachePath, () => null)
     if (!raw) return null
     if (typeof (raw as SealedCacheFile).sealed === 'string' && isSealedSecret((raw as SealedCacheFile).sealed)) {
       const plain = openSecret((raw as SealedCacheFile).sealed, 'wxp:data-cache')
@@ -47,12 +45,11 @@ export const dataCacheStore = {
   },
 
   async set(cache: WxpDataCache): Promise<void> {
-    await ensureDir(path.dirname(getCachePath()))
     const sealed = sealSecret(JSON.stringify(cache), 'wxp:data-cache')
     // safeStorage 不可用时 sealSecret 返回明文：此时退回旧格式，功能不受影响
     const payload: WxpDataCache | SealedCacheFile = isSealedSecret(sealed)
       ? { schemaVersion: 2, sealed }
       : cache
-    await writeJson(getCachePath(), payload)
+    writeJsonDocument(getCachePath(), payload)
   },
 }

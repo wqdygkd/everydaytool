@@ -17,9 +17,12 @@ export default antfu(
       'data',
       '.impeccable',
       'docs',
-      '*.md',
+      '**/*.md',
+      '**/.tmp*/**',
       'auto-imports.d.ts',
       'components.d.ts',
+      // 运行期生成的 WS 桥令牌（.gitignore 已排除），不是源码
+      'tools/interceptor/extension/bridge-token.json',
       // 子模块各自维护构建产物：tweb 使用 oxlint。
       'tweb',
     ],

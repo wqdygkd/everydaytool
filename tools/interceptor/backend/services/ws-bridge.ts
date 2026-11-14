@@ -5,14 +5,16 @@ import type { IncomingMessage } from 'node:http'
 import type {
   EdtToExtensionMessage,
   ExtensionConnectionInfo,
-  ExtensionToEdtMessage,
   InjectedScript,
   InterceptorRuleSummary,
   InterceptorTarget,
 } from '../../../../shared/interceptor.ts'
+import { Buffer } from 'node:buffer'
+import { timingSafeEqual } from 'node:crypto'
 import { WebSocket, WebSocketServer } from 'ws'
 import { logger } from '../../../../backend/utils/logger.ts'
 import { INTERCEPTOR_EXTENSION_ID } from '../../../../shared/interceptor.ts'
+import { MAX_WS_MESSAGE_BYTES, parseExtensionMessage } from './ws-message.ts'
 
 /** 扩展必须在连接后该毫秒数内完成 hello 握手，否则断开（防空连占位） */
 const HELLO_TIMEOUT_MS = 5_000
@@ -54,7 +56,7 @@ interface Connection {
 }
 
 export interface WsBridge {
-  start: (basePort: number, range: number) => Promise<number>
+  start: (basePort: number, range: number, token: string) => Promise<number>
   stop: () => Promise<void>
   getPort: () => number | null
   getConnections: () => ExtensionConnectionInfo[]
@@ -68,6 +70,7 @@ const ALLOWED_ORIGIN = `chrome-extension://${INTERCEPTOR_EXTENSION_ID}`
 export function createWsBridge(deps: WsBridgeDeps): WsBridge {
   let wss: WebSocketServer | null = null
   let port: number | null = null
+  let bridgeToken = ''
   let heartbeatTimer: NodeJS.Timeout | null = null
   const connections = new Map<string, Connection>()
 
@@ -80,22 +83,25 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
     }
   }
 
+  function tokenMatches(provided: string): boolean {
+    if (!bridgeToken || provided.length !== bridgeToken.length) return false
+    return timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(bridgeToken, 'utf8'))
+  }
+
   function handleMessage(connection: Connection, raw: string): void {
     connection.lastSeenAt = Date.now()
-
-    let message: ExtensionToEdtMessage
-    try {
-      message = JSON.parse(raw) as ExtensionToEdtMessage
-    } catch {
-      return
-    }
-    if (!message || typeof message.type !== 'string') return
-    if (!connection.authed && message.type !== 'hello') return
+    const message = parseExtensionMessage(raw, connection.authed)
+    if (!message) return
 
     switch (message.type) {
       case 'hello': {
         if (connection.authed) return
-        // 无配对码：来源已在 verifyClient 校验（浏览器无法伪造 Origin），握手即建立会话
+        if (!tokenMatches(message.token)) {
+          send(connection.socket, { type: 'hello-reject', reason: 'bad-token' })
+          connection.socket.close(4003, 'bad-token')
+          return
+        }
+        // Origin 只负责挡普通网页；本机进程无法伪造的部分由每次启动轮换的令牌承担。
         if (connection.helloTimeout) {
           clearTimeout(connection.helloTimeout)
           connection.helloTimeout = null
@@ -159,6 +165,9 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
       }
       case 'script-log':
         deps.onScriptLog(connection.clientId, message.scriptId, message.level, message.message)
+        return
+      default:
+        logger.warn('WS message ignored', { type: (message as { type?: string }).type, clientId: connection.clientId })
     }
   }
 
@@ -216,6 +225,7 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
         const server = new WebSocketServer({
           host: '127.0.0.1',
           port: candidate,
+          maxPayload: MAX_WS_MESSAGE_BYTES,
           // 只接受本扩展来源（浏览器无法伪造 Origin；服务只绑回环，不对外网暴露）
           verifyClient: (info: { origin: string, secure: boolean, req: IncomingMessage }) => {
             const origin = info.origin || info.req.headers.origin
@@ -250,8 +260,9 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
   }
 
   return {
-    async start(basePort: number, range: number): Promise<number> {
+    async start(basePort: number, range: number, token: string): Promise<number> {
       if (wss && port) return port
+      bridgeToken = token
       return listenOnFreePort(basePort, range)
     },
 
@@ -265,6 +276,7 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
       const server = wss
       wss = null
       port = null
+      bridgeToken = ''
       if (server) {
         await new Promise<void>(resolve => server.close(() => resolve()))
       }
