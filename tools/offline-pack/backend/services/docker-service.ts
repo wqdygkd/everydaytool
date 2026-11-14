@@ -319,6 +319,21 @@ interface ManifestLayer {
   digest?: string
 }
 
+interface ImageConfigBlob {
+  architecture?: string
+  os?: string
+  config?: {
+    Cmd?: string[] | null
+    Entrypoint?: string[] | null
+    Env?: string[]
+    WorkingDir?: string
+  }
+  rootfs?: {
+    type?: string
+    diff_ids?: string[]
+  }
+}
+
 function normalizeManifest(data: Record<string, unknown>): OfflinePackDockerManifest {
   const rawLayers = Array.isArray(data.layers) ? (data.layers as ManifestLayer[]) : []
   const layers = rawLayers
@@ -362,86 +377,49 @@ function generateLayerId(digest: string): string {
   return digest.replace('sha256:', '').substring(0, 12)
 }
 
-function generateImageId(imageTag: string): string {
-  let hash = 0
-  for (let i = 0; i < imageTag.length; i++) {
-    hash = ((hash << 5) - hash) + imageTag.charCodeAt(i)
-    hash = hash | 0 // 32 位截断，防止左移溢出
+/** 拉取镜像真实 config blob：Cmd / Entrypoint / Env / WorkingDir / diff_ids 的唯一来源 */
+async function fetchImageConfig(
+  registry: string,
+  namespace: string,
+  repository: string,
+  token: string,
+  configDigest: string,
+  mirror?: string,
+): Promise<{ buffer: Buffer, config: ImageConfigBlob }> {
+  if (!configDigest) throw new Error('镜像清单缺少 config digest，无法导出镜像配置')
+  const buffer = await fetchBuffer(buildLayerUrl(registry, namespace, repository, configDigest, mirror), {
+    headers: authHeaders(token),
+  })
+  try {
+    const config = JSON.parse(buffer.toString('utf8')) as ImageConfigBlob
+    return { buffer, config }
+  } catch {
+    throw new Error('镜像配置解析失败，加速服务可能返回了错误页面，请更换加速服务后重试')
   }
-  return Math.abs(hash).toString(16).padStart(12, '0')
 }
 
 async function packDockerLoadTar(
   destPath: string,
-  manifest: OfflinePackDockerManifest,
   processed: ProcessedLayer[],
+  configBuffer: Buffer,
+  configFilename: string,
   namespace: string,
   repository: string,
   tag: string,
-  platform?: string,
 ): Promise<void> {
   const fullImageName = namespace ? `${namespace}/${repository}` : repository
   const imageTag = `${fullImageName}:${tag}`
-  const imageId = generateImageId(imageTag)
   const writer = new TarWriter(destPath)
 
   await writer.addFile('manifest.json', JSON.stringify([{
-    Config: `${imageId}.json`,
+    Config: configFilename,
     RepoTags: [imageTag],
     Layers: processed.map(l => `${l.layerId}/layer.tar`),
   }]))
 
-  const architecture = platform?.split('/')[1] || 'amd64'
-  const configJson = {
-    architecture,
-    config: {
-      Hostname: '',
-      Domainname: '',
-      User: '',
-      AttachStdin: false,
-      AttachStdout: false,
-      AttachStderr: false,
-      Tty: false,
-      OpenStdin: false,
-      StdinOnce: false,
-      Env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-      Cmd: null,
-      Image: '',
-      Volumes: null,
-      WorkingDir: '',
-      Entrypoint: null,
-      OnBuild: null,
-      Labels: null,
-    },
-    container_config: {
-      Hostname: '',
-      Domainname: '',
-      User: '',
-      AttachStdin: false,
-      AttachStdout: false,
-      AttachStderr: false,
-      Tty: false,
-      OpenStdin: false,
-      StdinOnce: false,
-      Env: ['PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'],
-      Cmd: ['/bin/sh', '-c', '#(nop) ADD file: in /'],
-      Image: '',
-      Volumes: null,
-      WorkingDir: '',
-      Entrypoint: null,
-      OnBuild: null,
-      Labels: {},
-    },
-    created: new Date().toISOString(),
-    docker_version: '20.10.0',
-    history: manifest.layers.map(() => ({
-      created: new Date().toISOString(),
-      created_by: '/bin/sh -c #(nop) ADD file: in /',
-    })),
-    os: 'linux',
-    rootfs: { type: 'layers', diff_ids: processed.map(l => l.diffId) },
-  }
-  await writer.addFile(`${imageId}.json`, JSON.stringify(configJson))
+  // 原样写入上游 config blob：手工拼配置会丢 Cmd / Entrypoint / Env / WorkingDir / 端口声明，
+  // 加载后 docker run 报 "No command specified"。
+  await writer.addFile(configFilename, configBuffer)
 
   for (let i = 0; i < processed.length; i++) {
     const { data, layerId } = processed[i]
@@ -474,6 +452,21 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
     const token = await getToken(registry, namespace, spec.repository, spec.mirror)
     const manifest = await getManifest(registry, namespace, spec.repository, spec.tag, token, spec.platform, spec.mirror)
     const layers = manifest.layers
+    const { buffer: configBuffer, config } = await fetchImageConfig(
+      registry,
+      namespace,
+      spec.repository,
+      token,
+      manifest.config.digest,
+      spec.mirror,
+    )
+    const expectedDiffIds = config.rootfs?.diff_ids ?? []
+    if (expectedDiffIds.length && expectedDiffIds.length !== layers.length) {
+      throw new Error(`镜像清单与配置不一致（层数 ${layers.length} / ${expectedDiffIds.length}），请更换加速服务后重试`)
+    }
+    const configHash = manifest.config.digest.replace(/^sha256:/, '').replace(/[^a-f0-9]/gi, '')
+    if (!configHash) throw new Error('镜像清单的 config digest 非法，无法导出镜像配置')
+    const configFilename = `${configHash}.json`
 
     const processed: ProcessedLayer[] = []
     for (let i = 0; i < layers.length; i++) {
@@ -505,11 +498,15 @@ export async function downloadDockerImage(spec: DockerDownloadSpec): Promise<Off
         }),
       })
       const { data, diffId } = decompressLayer(blob, layer.mediaType)
+      const expectedDiffId = expectedDiffIds[i]
+      if (expectedDiffId && expectedDiffId !== diffId) {
+        throw new Error(`第 ${i + 1} 层校验失败（diff_id 不匹配），镜像可能已损坏，请更换加速服务后重新下载`)
+      }
       processed.push({ data, diffId, layerId: generateLayerId(layer.digest) })
     }
 
     emitProgress({ taskId, kind: 'docker', status: 'processing', downloadedBytes: 0, totalBytes: 0, message: '正在打包 docker load TAR' })
-    await packDockerLoadTar(tmpPath, manifest, processed, namespace, spec.repository, spec.tag, spec.platform)
+    await packDockerLoadTar(tmpPath, processed, configBuffer, configFilename, namespace, spec.repository, spec.tag)
     await rename(tmpPath, finalPath)
 
     emitProgress({ taskId, kind: 'docker', status: 'completed', downloadedBytes: 0, totalBytes: 0, message: '打包完成' })
