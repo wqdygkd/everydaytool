@@ -24,8 +24,8 @@
   ],
   "extraResources": [
     {
-      "from": "tools/interceptor/extension",
-      "to": "extension-interceptor"
+      "from": "browser-extension/.output/chrome-mv3",
+      "to": "extension-edt"
     }
   ],
   "win": {

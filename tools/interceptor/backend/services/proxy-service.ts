@@ -76,7 +76,7 @@ const RANDOM_PORT_ATTEMPTS = 20
 /** 直接访问代理端口时的探活页（浏览器地址栏 / 插件探活都常见） */
 function buildReachablePage(currentPort: number | null): string {
   return [
-    'edt 拦截器代理端口正在运行（HTTP 代理）。',
+    'everydaytool 拦截器代理端口正在运行（HTTP 代理）。',
     '',
     `请把浏览器或代理插件的「HTTP 代理」指向 127.0.0.1:${currentPort ?? '?'}，`,
     '不要直接把该地址当网址打开；能用代理访问网站即表示链路正常。',

@@ -21,8 +21,8 @@ export default antfu(
       '**/.tmp*/**',
       'auto-imports.d.ts',
       'components.d.ts',
-      // 运行期生成的 WS 桥令牌（.gitignore 已排除），不是源码
-      'tools/interceptor/extension/bridge-token.json',
+      'browser-extension/.output',
+      'browser-extension/.wxt',
       // 子模块各自维护构建产物：tweb 使用 oxlint。
       'tweb',
     ],
@@ -36,14 +36,16 @@ export default antfu(
   {
     // 样式块统一 SCSS：DESIGN.md 要求「样式只落在页面 scoped SCSS」，
     // 而纯 CSS 块用不了 @use / mixin，还会把 `&` 嵌套降级成运行时特性。
+    // 浏览器插件 popup 不走 DESIGN 令牌，允许独立 CSS。
     files: ['**/*.vue'],
+    ignores: ['browser-extension/**'],
     rules: {
       'vue/block-lang': ['error', { style: { lang: 'scss' } }],
     },
   },
   {
-    // ESLint 10 对未使用导入的 JS 规则会误伤扩展与构建脚本里的环境引用。
-    files: ['tools/**/extension/**/*.js', 'scripts/**/*.mjs', '*.mjs'],
+    // ESLint 10 对未使用导入的 JS 规则会误伤构建脚本里的环境引用。
+    files: ['scripts/**/*.mjs', '*.mjs'],
     rules: {
       'unused-imports/no-unused-vars': 'off',
     },
@@ -85,16 +87,6 @@ export default antfu(
           },
         ],
       }],
-    },
-  },
-  {
-    files: ['tools/interceptor/extension/**/*.js'],
-    languageOptions: {
-      globals: {
-        chrome: 'readonly',
-        crypto: 'readonly',
-        WebSocket: 'readonly',
-      },
     },
   },
 )

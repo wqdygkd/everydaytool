@@ -32,7 +32,7 @@ import {
 import { INTERCEPTOR_IPC_CHANNELS } from '../ipc/channels.ts'
 import { getConfigSnapshot, loadConfig, saveConfig, setProxyPort as setConfigProxyPort, setTargets } from '../store/config-store.ts'
 import { deleteRule, getRulesSnapshot, loadRules, upsertRule } from '../store/rules-store.ts'
-import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getLegacyRuntimeExtensionPath, getRuntimeExtensionPath } from '../utils/paths.ts'
+import { getCaCertPath, getExtensionSourcePath, getInterceptorDataDirectory, getLegacyRuntimeExtensionPath, getLegacyToolCacheExtensionPath, getRuntimeExtensionPath } from '../utils/paths.ts'
 import { getCaTrustState, installCaTrust, uninstallCaTrust } from './ca-trust.ts'
 import { ensureRootCa, isRootCaGenerated, readRootCa } from './cert-service.ts'
 import { createProxyService } from './proxy-service.ts'
@@ -163,16 +163,28 @@ function buildRuntimeStatus(): InterceptorRuntimeStatus {
 /** 打包态把扩展资源复制到数据目录稳定路径（安装目录可变，load unpacked 的路径必须稳） */
 async function prepareExtensionDirectory(): Promise<string> {
   const source = getExtensionSourcePath()
-  if (isDevEnvironment) return source
+  if (isDevEnvironment) {
+    if (!await pathExists(path.join(source, 'manifest.json'))) {
+      logger.warn('Browser extension output missing; run `pnpm extension:dev` or `pnpm extension:build`', { source })
+    }
+    return source
+  }
 
   const target = getRuntimeExtensionPath()
   try {
-    // 早期版本在 userData；先搬到数据目录，避免登录/配置散落在 userData
-    const legacy = getLegacyRuntimeExtensionPath()
-    if (!await pathExists(path.join(target, 'manifest.json')) && await pathExists(path.join(legacy, 'manifest.json'))) {
-      await copyPath(legacy, target)
-      await rm(legacy, { recursive: true, force: true }).catch(() => {})
+    // 早期版本在 userData；先搬到数据目录
+    const legacyUserData = getLegacyRuntimeExtensionPath()
+    if (!await pathExists(path.join(target, 'manifest.json')) && await pathExists(path.join(legacyUserData, 'manifest.json'))) {
+      await copyPath(legacyUserData, target)
+      await rm(legacyUserData, { recursive: true, force: true }).catch(() => {})
       logger.info('Legacy interceptor extension moved to data directory', { target })
+    }
+    // 工具域 cache/interceptor/extension → 平台 cache/app/extension
+    const legacyToolCache = getLegacyToolCacheExtensionPath()
+    if (!await pathExists(path.join(target, 'manifest.json')) && await pathExists(path.join(legacyToolCache, 'manifest.json'))) {
+      await copyPath(legacyToolCache, target)
+      await rm(legacyToolCache, { recursive: true, force: true }).catch(() => {})
+      logger.info('Legacy tool-scoped extension cache moved to app layer', { target })
     }
     const [sourceManifest, targetManifest] = await Promise.all([
       readJson<{ version?: string }>(path.join(source, 'manifest.json')),

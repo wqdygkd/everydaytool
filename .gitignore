@@ -17,5 +17,9 @@ Thumbs.db
 !.env.example
 .tmp-*
 .tmp
-# 每次启动轮换的拦截器 WS 令牌（由主进程写入扩展目录）
-tools/interceptor/extension/bridge-token.json
+# WXT 生成物 / 令牌（由主进程写入扩展 load 目录）
+.wxt/
+browser-extension/.output/
+browser-extension/.wxt/
+browser-extension/bridge-token.json
+browser-extension/.output/**/bridge-token.json

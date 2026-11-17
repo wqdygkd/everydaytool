@@ -58,7 +58,7 @@
     Cache/ Code Cache/ GPUCache/ …     ← 内部可再生子目录，L3 里唯一允许被清的部分
   cache/                               # L4
     app/{logs,crash-dumps}
-    interceptor/extension                        (可从 resources 重建)
+    app/extension                                (浏览器插件，可从 resources 重建)
     offline-pack/downloads/
     tweb-cache/{objects,tmp,diagnostics}
     workbuddy2api-panel/{downloads,runtime/{current,previous,staging}}
@@ -121,7 +121,7 @@ peer 目录改名不影响这些文件。
 | `app/logs`、`app/crash-dumps` | `cache/app/` | cache | never | always | 诊断用 |
 | `interceptor/{config,rules}.json` | `config/interceptor/` | config | include | never | — |
 | `interceptor/certs/` | `config/interceptor/certs/` | config | include | never | `sensitive`（私钥必须进备份） |
-| `interceptor/extension/` | `cache/interceptor/` | cache | never | always | 从 resources 重建 |
+| `app/extension/` | `cache/app/` | cache | never | always | 平台浏览器插件，从 resources 重建 |
 | `offline-pack/history.json` | `config/offline-pack/` | config | include | never | `savedPath` 指向 cache，清后显示「文件已缺失」 |
 | `offline-pack/downloads/` | `cache/offline-pack/downloads` | cache | never | never | 已下载成品（安装包 / 离线包）；重下要再花一次流量，清缓存不删 |
 | `wxp-enhancer/config.json` | `config/wxp-enhancer/` | config | include | never | — |
