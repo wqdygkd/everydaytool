@@ -1,5 +1,6 @@
 import type { ExtensionToEdtMessage } from '../../../../shared/interceptor.ts'
 import { Buffer } from 'node:buffer'
+import { decodeIncomingRaw } from './ws-envelope.ts'
 
 export const MAX_WS_MESSAGE_BYTES = 64 * 1024
 
@@ -22,7 +23,7 @@ function isHttpUrl(value: unknown): value is string {
   }
 }
 
-/** 只接受协议里声明过的消息；未知类型 / 缺字段 / 超长字符串一律丢弃。 */
+/** 只接受协议里声明过的消息；未知类型 / 缺字段 / 超长字符串一律丢弃。入站兼容信封与旧扁平。 */
 export function parseExtensionMessage(raw: string, authed: boolean): ExtensionToEdtMessage | null {
   if (Buffer.byteLength(raw, 'utf8') > MAX_WS_MESSAGE_BYTES) return null
   let value: unknown
@@ -32,6 +33,7 @@ export function parseExtensionMessage(raw: string, authed: boolean): ExtensionTo
   catch {
     return null
   }
+  value = decodeIncomingRaw(value)
   if (!isRecord(value) || typeof value.type !== 'string') return null
   if (!authed && value.type !== 'hello') return null
 

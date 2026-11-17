@@ -132,9 +132,11 @@
 
 ### P0-3 拦截器：浏览器扩展弹窗里的启用 / 禁用 / 移除全部不生效
 
-- **证据（已读码 + 全仓检索）**：`extension/popup.js` 发的是 `toggle-target`、`toggle-rule`、`remove-target-id`、`remove-rule`（141、145、200、204 行）；`extension/background.js:701–715` 原样转发 `message.type`；`backend/services/ws-bridge.ts:138–147` 只认 `target-toggle`、`rule-toggle`、`target-remove-id`、`rule-remove`，`switch` 没有 `default`。
+> **历史 / 已修复**。扩展已迁至 `browser-extension/lib/features/interceptor/`（WXT）；popup → SW 映射与 WS `default` 警告均已落地。下列路径指迁移前的 `tools/interceptor/extension/*`。
+
+- **证据（已读码 + 全仓检索）**：旧 `extension/popup.js` 发的是 `toggle-target`、`toggle-rule`、`remove-target-id`、`remove-rule`；旧 `extension/background.js` 曾原样转发；`ws-bridge.ts` 只认 `target-toggle` 等。
 - **影响**：四个操作被静默丢弃，弹窗照样返回成功，刷新后开关弹回。
-- **做法**：在 `background.js` 里做显式映射，不透传弹窗的 `type`；`ws-bridge.ts` 的 `switch` 加 `default` 分支记一条警告。
+- **做法**：在 SW 里做显式映射，不透传弹窗的 `type`；`ws-bridge.ts` 的 `switch` 加 `default` 分支记一条警告。
 - **验收**：加一个契约测试，断言扩展发出的 `type` 集合是 `shared/interceptor.ts` 里协议类型的子集。手动点一遍四个操作。
 - **工作量**：S
 

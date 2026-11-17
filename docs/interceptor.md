@@ -1,6 +1,6 @@
 # interceptor（拦截器）
 
-> 已实现。模块在 `tools/interceptor/`（backend 代理 / 证书 / 规则 / WS 桥 + MV3 扩展 + Vue 管理页），数据在 `data/interceptor/`（`config.json` 名单与端口、`rules.json` 规则、`certs/` 证书）。
+> 已实现。工具域在 `tools/interceptor/`（backend 代理 / 证书 / 规则 / WS 桥 + Vue 管理页）；浏览器侧在平台扩展 `browser-extension/`（interceptor feature）。配置落在 `config/interceptor/`（`config.json` / `rules.json` / `certs/`）。
 > 一句话：**处理名单决定"进不进处理层"，规则决定"这个请求怎么处理"。**
 
 ## 1. 形态与取舍
@@ -85,14 +85,16 @@
 
 ## 7. 扩展与通信
 
+> 扩展已上提到平台层（`browser-extension/`，WXT）；interceptor 是其中一个 feature。完整约定见 [`docs/browser-extension.md`](./browser-extension.md)。
+
 - Origin 校验（只接受 `chrome-extension://<本扩展 id>`，服务只绑回环）+ **每次启动轮换的共享令牌**：edt 把随机令牌写进扩展目录的 `bridge-token.json`（0600），扩展重连时读取并放进 `hello`；没有令牌的握手回 `hello-reject { reason: 'bad-token' }`。扩展仍零配置，不需要用户手填配对码。
-- 入站消息先做类型 / 字段 / 长度校验，WS `maxPayload` 限 64 KB；未知消息直接丢弃。
-- 消息（JSON，双向）：
+- 线协议为 **v1 信封**（`{ v, module, type, payload?, requestId? }`）：`shell` 负责握手/心跳，`interceptor` 承载业务；入站仍兼容旧扁平消息。校验与 64 KB 上限不变。
+- 业务语义（信封内 type / payload）：
 
   | 方向 | 消息 |
   |---|---|
-  | 扩展 → edt | `hello`、`ping`、`heartbeat`、`proxy-state`、`add-target { url }`、`target-toggle { id, enabled }`、`target-remove-id`、`rule-toggle`、`rule-remove`、`site-info`、`target-suggest`、`script-log` |
-  | edt → 扩展 | `hello-ok`（含代理端口）/ `hello-reject`、`targets-sync`、`rules-sync`、`scripts-sync`、`proxy-port`、`set-proxy`、`heartbeat`，以及 `site-info-result` / `target-suggest-result` |
+  | 扩展 → edt | `hello`、`ping`、`proxy-state`、`add-target { url }`、`target-toggle { id, enabled }`、`target-remove-id`、`rule-toggle`、`rule-remove`、`site-info`、`target-suggest`、`script-log` |
+  | edt → 扩展 | `hello-ok`（含 `modules` + interceptor bootstrap）/ `hello-reject`、`targets-sync`、`rules-sync`、`scripts-sync`、`proxy-port`、`set-proxy`、`heartbeat`，以及 `site-info-result` / `target-suggest-result` |
 
 - **fail-open**：WS 断开自动撤销代理（避免"全浏览器断网"假象），并通知 popup；SW 靠心跳 + alarms 保活 / 自动重连（Chrome 116 起 WS 收发会重置 SW 空闲计时，心跳顺带续命）。
 - **弹窗的 site-info 语义**：edt 回 `targets`（origin 命中的条目）+ `rules`（**按域筛出的可用规则**：同域标 `site` 排在前、不绑定域的标 `global` 排在后），**不是**拿当前页 URL 跑流量级匹配——路径 / 方法 / 资源类型属于流量级，弹窗不用它过滤。
@@ -108,7 +110,7 @@
 
 ## 9. 视图与路由
 
-四个视图：**状态 / 处理名单 / 规则 / 流量**，页面上用 `UiMenuHorizontal`（横向分段菜单：药丸选中态 + 滑动指示条 + 横向滚动，样式复刻 Telegram Web K 的 `.menu-horizontal-div`）切换，路由仍可深链（hash）：
+四个视图：**状态 / 处理名单 / 规则 / 流量**，子视图用贴主表面左缘的竖脊 `WorkspaceSpine` 切换，路由仍可深链：
 
 | 路由 | 视图 |
 |---|---|
@@ -117,7 +119,7 @@
 | `/tools/interceptor/rules` | 规则列表（全部类型） |
 | `/tools/interceptor/rules/<type>` | 按类型过滤（10 种类型各一条） |
 
-实现：`index.ts` 的 `subRoutes` 由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；菜单驱动 `router.push`，视图经 `<KeepAlive>` 缓存（切走再回来草稿 / 筛选不丢）；映射集中在 `renderer/tabs.ts`。规则编辑器是组件内视图、不进路由。
+实现：`index.ts` 的 `subRoutes` 由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；竖脊驱动 `router.push`；映射集中在 `renderer/tabs.ts`。规则编辑器是组件内视图、不进路由。工具页常驻由平台 `ToolPane` 保持挂载。
 
 ## 10. 未做 / 二期
 
@@ -135,6 +137,6 @@
 | 规则匹配与执行 | `backend/services/rule-engine.ts`、`script-compile.ts`、`body-script.ts` |
 | 证书（生成 / 信任 / 导出） | `backend/services/cert-service.ts`、`ca-trust.ts` |
 | 总调度 / IPC / 存储 | `backend/services/interceptor-service.ts`、`backend/ipc/`、`backend/store/` |
-| WS 桥（协议与扩展握手 / 消息校验） | `backend/services/ws-bridge.ts`、`ws-message.ts` |
+| WS 桥（协议与扩展握手 / 信封编解码 / 消息校验） | `backend/services/ws-bridge.ts`、`ws-envelope.ts`、`ws-message.ts` |
 | 管理页视图 | `renderer/pages/InterceptorPage.vue`、`renderer/components/*.vue`、`renderer/stores/interceptorStore.ts` |
-| 扩展 | `extension/`（`manifest.json` / `background.js` / `popup.*`） |
+| 扩展（平台） | `browser-extension/`（WXT；interceptor feature 在 `lib/features/interceptor/`，见 `docs/browser-extension.md`） |

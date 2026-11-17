@@ -160,7 +160,7 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'app.crash-dumps', toolId: 'app', layer: 'cache', relativePath: 'app/crash-dumps', label: '崩溃转储', backup: 'never', clean: 'always' },
   // 备份恢复前自动生成的配置层快照：回滚点。可再生（清缓存即可丢），但**不随清缓存删除**自动快照以外的东西
   { id: 'app.import-rollback', toolId: 'app', layer: 'cache', relativePath: 'import-rollback', label: '备份恢复回滚快照', backup: 'never', clean: 'always' },
-  { id: 'interceptor.extension', toolId: 'interceptor', layer: 'cache', relativePath: 'interceptor/extension', label: '运行时扩展（可重建）', backup: 'never', clean: 'always' },
+  { id: 'app.extension', toolId: 'app', layer: 'cache', relativePath: 'app/extension', label: '浏览器插件运行时（可重建）', backup: 'never', clean: 'always' },
   // 已下载完成的安装包 / 离线包：磁盘占用大，但**不是可再生缓存**，重下要再花一次流量和时间。
   // 历史记录（offline-pack/history.json）直接指向这里，清缓存删掉就会全部变成「文件已缺失」。
   { id: 'offline-pack.downloads', toolId: 'offline-pack', layer: 'cache', relativePath: 'offline-pack/downloads', label: '下载的离线包（成品，不随清缓存删除）', backup: 'never', clean: 'never' },
@@ -241,7 +241,7 @@ export const DATA_LAYOUT_V1_TO_V2: readonly DataLayoutMigrationRule[] = [
   { id: 'interceptor.config-json', layer: 'config', from: 'interceptor/config.json', to: 'interceptor/config.json', kind: 'file' },
   { id: 'interceptor.rules-json', layer: 'config', from: 'interceptor/rules.json', to: 'interceptor/rules.json', kind: 'file' },
   { id: 'interceptor.certs', layer: 'config', from: 'interceptor/certs', to: 'interceptor/certs', kind: 'dir', note: '敏感：根 CA 私钥' },
-  { id: 'interceptor.extension', layer: 'cache', from: 'interceptor/extension', to: 'interceptor/extension', kind: 'dir', note: '可从 resources 重建' },
+  { id: 'app.extension', layer: 'cache', from: 'interceptor/extension', to: 'app/extension', kind: 'dir', note: '平台浏览器插件；可从 resources 重建' },
 
   // offline-pack
   { id: 'offline-pack.history-json', layer: 'config', from: 'offline-pack/history.json', to: 'offline-pack/history.json', kind: 'file' },

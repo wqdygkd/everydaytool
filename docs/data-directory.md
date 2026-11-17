@@ -58,7 +58,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
     Cache/  Code Cache/  GPUCache/  …   # 内部可再生缓存，唯一允许在会话层被清的部分
   cache/                           # 缓存层：删了自动重建
     app/{logs,crash-dumps}
-    interceptor/extension
+    app/extension
     offline-pack/downloads/
     tweb-cache/{objects,tmp,diagnostics}
     workbuddy2api-panel/{downloads,runtime/{current,previous,staging}}
@@ -113,7 +113,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 
 | 工具 | 配置层 | 会话层 | 缓存层 | 资产层 |
 | --- | --- | --- | --- | --- |
-| interceptor | `config/interceptor/{config,rules}.json`、`certs/` | —（系统 CA 信任在外部） | `cache/interceptor/extension/` | — |
+| interceptor | `config/interceptor/{config,rules}.json`、`certs/` | —（系统 CA 信任在外部） | —（浏览器插件已归平台 `cache/app/extension/`） | — |
 | offline-pack | `config/offline-pack/history.json` | — | `cache/offline-pack/downloads/` | 用户另存位置（外部） |
 | tweb-cache | `config/tweb-cache/config.json`、`media-index.json`、`messages-index/`、`archive-alias.json`、`peer-dirs.json` | `session/Partitions/tweb-cache/` | `cache/tweb-cache/{objects,tmp,diagnostics}` | 默认 `<assets>/tweb-cache/{messages,trash}`，可在工具内单独自定义 |
 | treease-editor | `config/treease-editor/rules.json` | `session/Partitions/treease-editor/` | — | — |

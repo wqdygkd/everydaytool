@@ -1,0 +1,14 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@shared/*": ["../shared/*"],
+      "@ext/*": ["./lib/*"]
+    },
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": [".", "../shared/extension.ts", "../shared/interceptor.ts"]
+}

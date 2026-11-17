@@ -1,6 +1,6 @@
-// 控制通道（WS 服务端）：扩展 MV3 service worker 连入，承载
-// 握手（Origin 校验，无配对码）、心跳保活、名单 / 规则 / 脚本下发、代理端口下发、代理状态回传。
-// 协议与端口策略见 docs/interceptor.md §7。
+// 控制通道（WS 服务端）：平台浏览器插件（browser-extension）连入，承载
+// 握手（Origin + 轮换令牌）、心跳保活、interceptor 业务下发 / 回传。
+// 线协议为 v1 信封（ws-envelope.ts）；业务语义见 docs/interceptor.md §7 / docs/browser-extension.md。
 import type { IncomingMessage } from 'node:http'
 import type {
   EdtToExtensionMessage,
@@ -13,7 +13,8 @@ import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
 import { WebSocket, WebSocketServer } from 'ws'
 import { logger } from '../../../../backend/utils/logger.ts'
-import { INTERCEPTOR_EXTENSION_ID } from '../../../../shared/interceptor.ts'
+import { EDT_EXTENSION_ID } from '../../../../shared/extension.ts'
+import { encodeEdtMessage } from './ws-envelope.ts'
 import { MAX_WS_MESSAGE_BYTES, parseExtensionMessage } from './ws-message.ts'
 
 /** 扩展必须在连接后该毫秒数内完成 hello 握手，否则断开（防空连占位） */
@@ -65,7 +66,7 @@ export interface WsBridge {
   sendTo: (clientId: string, message: EdtToExtensionMessage) => void
 }
 
-const ALLOWED_ORIGIN = `chrome-extension://${INTERCEPTOR_EXTENSION_ID}`
+const ALLOWED_ORIGIN = `chrome-extension://${EDT_EXTENSION_ID}`
 
 export function createWsBridge(deps: WsBridgeDeps): WsBridge {
   let wss: WebSocketServer | null = null
@@ -77,7 +78,7 @@ export function createWsBridge(deps: WsBridgeDeps): WsBridge {
   function send(socket: WebSocket, message: EdtToExtensionMessage): void {
     if (socket.readyState !== WebSocket.OPEN) return
     try {
-      socket.send(JSON.stringify(message))
+      socket.send(JSON.stringify(encodeEdtMessage(message)))
     } catch (error) {
       logger.warn('WS send failed', { error: (error as Error).message })
     }

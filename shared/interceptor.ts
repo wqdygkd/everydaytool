@@ -1,13 +1,12 @@
 // interceptor（拦截器）共享类型：规则模型 / 处理名单 / 扩展 WS 协议 / 流量条目。
-// 纯类型与常量（前端、Electron 主进程共用）；扩展为纯 JS，按同一 JSON 协议通信。
-// 设计定稿见 docs/interceptor.md。
+// 纯类型与常量（前端、Electron 主进程共用）；浏览器侧经平台信封（shared/extension.ts）承载。
+// 设计定稿见 docs/interceptor.md、docs/browser-extension.md。
 
-/** 捆绑扩展的固定 ID：由 manifest.key（公钥）推导，两侧硬编码用于 Origin 校验 */
-export const INTERCEPTOR_EXTENSION_ID = 'hlinfcmdeamelkpdemppomgncenalong'
-
-/** 控制通道（WS）端口：基准 + 扫描范围（edt 占首个空闲端口，扩展按同段探测） */
-export const INTERCEPTOR_WS_PORT_BASE = 59763
-export const INTERCEPTOR_WS_PORT_RANGE = 5
+export {
+  EDT_EXTENSION_ID as INTERCEPTOR_EXTENSION_ID,
+  EDT_EXTENSION_WS_PORT_BASE as INTERCEPTOR_WS_PORT_BASE,
+  EDT_EXTENSION_WS_PORT_RANGE as INTERCEPTOR_WS_PORT_RANGE,
+} from './extension.ts'
 
 /**
  * 代理端口：首次启动在该段内随机取一个空闲端口并落盘（之后固定），
@@ -587,7 +586,7 @@ export interface ProxyPortUpdateResult {
 }
 
 // ---------------------------------------------------------------------------
-// WS 协议（扩展 ↔ edt）
+// WS 业务消息（解码后的内部形状；线协议是 shared/extension.ts 的 v1 信封）
 // ---------------------------------------------------------------------------
 // 来源校验（Origin 必须是本扩展）+ 每次启动轮换的共享令牌，握手通过后建立会话。
 // 端口分工：控制通道端口由扩展在本机端口段内探测；代理端口由 edt 经 hello-ok /

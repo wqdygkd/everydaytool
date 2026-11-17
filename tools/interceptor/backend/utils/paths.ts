@@ -27,14 +27,14 @@ export function getCaCertPath(): string {
 export const CA_EXPORT_FILE_NAME = 'edt-interceptor-ca.crt'
 
 /**
- * 扩展源码目录：
- * - dev：仓库源码目录（load unpacked 直接指这里，改前端代码不用重装）；
- * - 打包：extraResources 附带 resources/extension-interceptor。
+ * 扩展构建产物目录（平台 browser-extension）：
+ * - dev：WXT 产出 `browser-extension/.output/chrome-mv3`（需 `pnpm extension:dev|build`）；
+ * - 打包：extraResources 附带 resources/extension-edt。
  */
 export function getExtensionSourcePath(): string {
   return isDevEnvironment
-    ? path.join(APP_ROOT_DEV, 'tools', 'interceptor', 'extension')
-    : path.join(process.resourcesPath, 'extension-interceptor')
+    ? path.join(APP_ROOT_DEV, 'browser-extension', '.output', 'chrome-mv3')
+    : path.join(process.resourcesPath, 'extension-edt')
 }
 
 /**
@@ -42,12 +42,17 @@ export function getExtensionSourcePath(): string {
  * 原因：安装目录可被用户更改/升级，load unpacked 的路径一旦失效扩展就消失；
  * 数据目录跨版本稳定（扩展 ID 由 manifest.key 固定，不随路径变化）。
  */
-/** 缓存层：运行时扩展（每次启动可从 resources 重新准备，删了无害） */
+/** 缓存层：平台运行时扩展（每次启动可从 resources 重新准备，删了无害） */
 export function getRuntimeExtensionPath(): string {
-  return resolveLayerPath('cache', 'interceptor', 'extension')
+  return resolveLayerPath('cache', 'app', 'extension')
 }
 
 /** 早期版本把扩展放在 userData；首次准备时迁移 */
 export function getLegacyRuntimeExtensionPath(): string {
   return path.join(app.getPath('userData'), 'interceptor-extension')
+}
+
+/** 工具域时期的 cache 落点；首次准备时迁到 `cache/app/extension` */
+export function getLegacyToolCacheExtensionPath(): string {
+  return resolveLayerPath('cache', 'interceptor', 'extension')
 }

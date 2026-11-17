@@ -184,8 +184,8 @@ function formatTime(at: number): string {
         </div>
         <ol class="steps">
           <li>打开 <span class="mono">chrome://extensions</span> 并启用开发者模式。</li>
-          <li>加载已解压的扩展程序，选择下方目录。</li>
-          <li>打开扩展图标，启用「挂载代理」。</li>
+          <li>加载已解压的扩展（everydaytool），选择下方目录；开发态需先有 <span class="mono">pnpm extension:dev</span> 产物。</li>
+          <li>打开扩展图标，在「拦截器」页启用「挂载代理」。</li>
         </ol>
         <div class="path-row">
           <span class="mono path">{{ store.status?.extensionDir ?? '—' }}</span>

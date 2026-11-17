@@ -153,6 +153,15 @@ export default defineTool({
 | **UI 组件库（面板/分组/键值/表格/进度/对话框/分裂按钮等）** | `renderer/shared/components/ui/` |
 | UI 设计规范（令牌 / 组件 / 布局 / 动效） | `DESIGN.md` |
 
+### 浏览器插件（平台层）
+
+| 查找内容 | 位置 |
+| ---------- | ------ |
+| **平台浏览器插件方案** | `docs/browser-extension.md` |
+| WXT 工程 / 产物 | `browser-extension/`（产物 `.output/chrome-mv3`） |
+| 信封协议 / 扩展 ID / 控制端口 | `shared/extension.ts` |
+| Feature 注册（interceptor 等） | `browser-extension/lib/features/` |
+
 ### 外壳与页面
 
 | 查找内容 | 位置 |
