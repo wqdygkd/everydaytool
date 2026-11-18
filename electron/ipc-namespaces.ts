@@ -4,7 +4,6 @@ import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/chann
 import { MEDIA_LIBRARY_IPC_CHANNELS } from '../tools/media-library/backend/ipc/channels.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
 import { SKILL_MANAGER_IPC_CHANNELS } from '../tools/skill-manager/backend/ipc/channels.ts'
-import { TREEASE_EDITOR_IPC_CHANNELS } from '../tools/treease-editor/backend/ipc/channels.ts'
 import { TWEB_CACHE_IPC_CHANNELS } from '../tools/tweb-cache/backend/ipc/channels.ts'
 import { WB2API_PANEL_IPC_CHANNELS } from '../tools/workbuddy2api-panel/backend/ipc/channels.ts'
 import { WXP_ENHANCER_IPC_CHANNELS } from '../tools/wxp-enhancer/backend/ipc/channels.ts'
@@ -21,7 +20,6 @@ export interface IpcNamespace {
 export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'edtApp', channels: EDT_APP_IPC_CHANNELS },
   { preloadNamespace: 'interceptor', channels: INTERCEPTOR_IPC_CHANNELS },
-  { preloadNamespace: 'treeaseEditor', channels: TREEASE_EDITOR_IPC_CHANNELS },
   { preloadNamespace: 'wxpEnhancer', channels: WXP_ENHANCER_IPC_CHANNELS },
   { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },
   { preloadNamespace: 'skillManager', channels: SKILL_MANAGER_IPC_CHANNELS },
