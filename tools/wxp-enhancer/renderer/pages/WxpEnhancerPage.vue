@@ -3,8 +3,8 @@ import type { WxpRunningStatus } from '../../../../shared/wxp'
 import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
+import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
@@ -29,15 +29,21 @@ const STATUS_LABELS: Record<WxpRunningStatus, string> = {
 const settingsForm = reactive({
   ...DEFAULT_WXP_SETTINGS,
 })
-const settingsDirty = ref(false)
 const loading = ref(true)
 const launching = ref(false)
 const stopping = ref(false)
-const saving = ref(false)
 const clearing = ref(false)
-const settingsOpen = ref(true)
 
 let syncingForm = false
+let settingsRevision = 0
+let savedRevision = 0
+let saveQueue: Promise<void> = Promise.resolve()
+
+function normalizeDebugPort(value: unknown): number {
+  const port = Math.round(Number(value))
+  if (!Number.isFinite(port)) return DEFAULT_WXP_SETTINGS.debugPort
+  return Math.min(65535, Math.max(1024, port))
+}
 
 function syncSettingsForm(): void {
   syncingForm = true
@@ -47,28 +53,60 @@ function syncSettingsForm(): void {
   })
 }
 
-watch(settingsForm, () => {
-  if (!syncingForm) settingsDirty.value = true
-})
+/** 表单变更后自动保存；400ms 防抖，保存请求串行执行，避免快速改值时乱序覆盖 */
+async function persistSettings(): Promise<void> {
+  const revision = settingsRevision
+  const snapshot = {
+    ...settingsForm,
+    debugPort: normalizeDebugPort(settingsForm.debugPort),
+  }
+  const run = saveQueue
+    .then(() => store.saveSettings(snapshot))
+    .then(() => {
+      savedRevision = Math.max(savedRevision, revision)
+    })
+  saveQueue = run.catch(() => undefined)
+  return run
+}
+
+const autoSave = useDebounceFn(() => {
+  void persistSettings().catch((error) => {
+    toast.error((error as Error).message || '保存设置失败')
+  })
+}, 400)
 
 const isRunning = computed(() => Boolean(store.running && ACTIVE_STATUSES.includes(store.running.status)))
 /** 已连上 CDP 并完成首轮注入：数据采集 / 清除登录缓存只在这个状态下真正作用到页面 */
 const isConnected = computed(() => store.running?.status === 'running')
-/** 启动设置区（字段 + 浏览 / 自动检测 / 保存）的锁定判据：点下启动起、到停止完成为止全程只读，
+/** 启动设置区（字段 + 浏览 / 自动检测）的锁定判据：点下启动起、到停止完成为止全程只读，
  *  回到「已停止」才放开。错误态不锁——那正是要改路径 / 端口再重试的时候，锁住就无路可走。 */
 const settingsLocked = computed(() => isRunning.value || launching.value || stopping.value)
-const statusLabel = computed(() => {
-  if (loading.value && !store.running) return '读取中…'
-  if (!store.running) return '未运行'
-  return STATUS_LABELS[store.running.status] ?? store.running.status
+
+watch(settingsForm, () => {
+  if (syncingForm) return
+  settingsRevision += 1
+  if (!isElectron || settingsLocked.value) return
+  void autoSave()
 })
-/** 状态行尾的过程 / 错误说明：运行中恒为空，状态卡在「启动 → 运行中」全程只有一行，高度不跳 */
+
+const statusLabel = computed(() => {
+  const status = store.running?.status
+  return status ? STATUS_LABELS[status] ?? status : ''
+})
+/** 未运行 / 已停止不占标题栏状态位，只有启动过程、运行中与错误才显示状态点 */
+const showTopbarStatus = computed(() => Boolean(store.running && store.running.status !== 'stopped'))
+/** 运行信息压成一个 chip，避免标题行右侧被多枚 chip 挤换行 */
+const runtimeSummary = computed(() => {
+  const running = store.running
+  return `PID ${running?.pid ?? '-'} · 端口 ${running?.port ?? '-'} · ${running?.targetCount ?? 0} 页`
+})
+/** 缓存标题行的过程 / 错误说明：运行中恒为空，状态卡在「启动 → 运行中」全程只有一行 */
 const statusDetail = computed(() => {
   const running = store.running
   if (!running || running.status === 'running') return ''
   return running.message ?? ''
 })
-/** 状态点色板：运行绿 / 过渡态黄 / 失败红 / 未运行与已停止灰（UiStatusTag 没有 info 档，用 neutral） */
+/** 状态点色板：运行绿 / 过渡态黄 / 失败红 / 其余中性 */
 const statusTone = computed<'success' | 'warning' | 'danger' | 'neutral'>(() => {
   switch (store.running?.status) {
     case 'running': return 'success'
@@ -87,8 +125,8 @@ async function handleLaunch(): Promise<void> {
   }
   launching.value = true
   try {
-    await store.saveSettings({ ...settingsForm })
-    settingsDirty.value = false
+    autoSave.cancel()
+    await persistSettings()
     await store.launch()
     toast.success('WXP 已启动，增强脚本已注入')
   } catch (error) {
@@ -232,23 +270,6 @@ async function detectExecutable(): Promise<void> {
   }
 }
 
-async function saveSettings(): Promise<void> {
-  if (!settingsForm.executablePath.trim()) {
-    toast.warning('请先选择 WXP 可执行文件')
-    return
-  }
-  saving.value = true
-  try {
-    await store.saveSettings({ ...settingsForm })
-    settingsDirty.value = false
-    toast.success('设置已保存')
-  } catch (error) {
-    toast.error((error as Error).message || '保存失败')
-  } finally {
-    saving.value = false
-  }
-}
-
 let unsubscribeStatus: (() => void) | null = null
 
 onMounted(async () => {
@@ -269,6 +290,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  autoSave.cancel()
+  if (isElectron && savedRevision < settingsRevision) {
+    void persistSettings().catch(() => undefined)
+  }
   unsubscribeStatus?.()
   if (isRunning.value) void store.stop().catch(() => undefined)
 })
@@ -276,111 +301,22 @@ onUnmounted(() => {
 
 <template>
   <div class="wxp-enhancer-page tool-page">
-    <Teleport v-if="paneActive" defer to="#app-topbar-state">
+    <Teleport v-if="paneActive && showTopbarStatus" defer to="#app-topbar-state">
       <span class="tb-state" :class="`is-${statusTone}`">
         <i class="tb-dot" />
         {{ statusLabel }}
       </span>
     </Teleport>
 
-    <Teleport v-if="paneActive" defer to="#app-topbar-actions">
-      <UiButton size="small" @click="settingsOpen = !settingsOpen">
-        {{ settingsOpen ? '收起设置' : '启动设置' }}
-      </UiButton>
-      <span
-        v-if="!isRunning"
-        class="launch-warn"
-        tabindex="0"
-        aria-label="启动前请先退出已打开的 WXP"
-        title="启动前请先退出已打开的 WXP"
-      >
-        <UiIcon name="alert" :size="16" />
-      </span>
-      <UiButton
-        v-if="!isRunning"
-        type="primary"
-        :loading="launching"
-        :disabled="loading"
-        @click="handleLaunch"
-      >
-        启动
-      </UiButton>
-      <UiButton
-        v-else
-        type="warning"
-        plain
-        :loading="stopping"
-        @click="handleStop"
-      >
-        停止
-      </UiButton>
-    </Teleport>
-
     <ToolSurface class="wxp-surface">
-      <template #toolbar>
-        <UiToolbar gap="sm" flush>
-          <UiGroup v-if="isConnected" gap="xs" wrap>
-            <UiChip mono>
-              PID {{ store.running?.pid ?? '-' }}
-            </UiChip>
-            <UiChip mono>
-              端口 {{ store.running?.port }}
-            </UiChip>
-            <UiChip mono>
-              页面 {{ store.running?.targetCount ?? 0 }}
-            </UiChip>
-          </UiGroup>
-          <UiChip v-else-if="store.loginCacheClearPending" tone="warning">
-            登录缓存待清除
-          </UiChip>
-          <span v-if="statusDetail" class="status-detail">{{ statusDetail }}</span>
-          <template #end>
-            <UiButton
-              size="small"
-              type="primary"
-              plain
-              :loading="collecting"
-              :disabled="!isConnected"
-              @click="handleCollect"
-            >
-              从 WXP 读取
-            </UiButton>
-            <UiButton
-              size="small"
-              type="danger"
-              plain
-              :loading="clearing"
-              @click="handleClearLoginCache"
-            >
-              清除登录缓存
-            </UiButton>
-          </template>
-        </UiToolbar>
-      </template>
+      <div class="form-studio">
+        <aside class="config-pane">
+          <div class="pane-title">
+            启动设置
+          </div>
 
-      <div class="wxp-studio">
-        <ToolSideInspector
-          :open="settingsOpen"
-          title="启动设置"
-          :width="320"
-          side="left"
-          body-padding="14px"
-          @close="settingsOpen = false"
-        >
-          <template #actions>
-            <UiButton
-              size="small"
-              type="primary"
-              plain
-              :loading="saving"
-              :disabled="settingsLocked || !settingsDirty || saving"
-              @click="saveSettings"
-            >
-              保存
-            </UiButton>
-          </template>
           <div class="config-form">
-            <UiFormField label-width="82px" label="WXP 路径" required>
+            <UiFormField label-width="72px" label="WXP 路径" required>
               <UiPathField
                 v-model="settingsForm.executablePath"
                 placeholder="选择 WxP Client 可执行文件"
@@ -398,7 +334,7 @@ onUnmounted(() => {
                 </template>
               </UiPathField>
             </UiFormField>
-            <UiFormField label-width="82px" label="调试端口">
+            <UiFormField label-width="72px" label="调试端口">
               <input
                 v-model="settingsForm.debugPort"
                 type="number"
@@ -406,10 +342,10 @@ onUnmounted(() => {
                 :max="65535"
                 :disabled="settingsLocked"
                 class="ui-port-input"
-                @change="settingsForm.debugPort = Math.min(65535, Math.max(1024, Math.round(Number(settingsForm.debugPort) || 1024)))"
+                @change="settingsForm.debugPort = normalizeDebugPort(settingsForm.debugPort)"
               >
             </UiFormField>
-            <UiFormField label-width="82px" label="状态角标">
+            <UiFormField label-width="72px" label="状态角标">
               <UiSwitchField
                 v-model="settingsForm.showStatusBadge"
                 align="start"
@@ -418,7 +354,7 @@ onUnmounted(() => {
                 WXP 顶栏显示「增强中」呼吸灯
               </UiSwitchField>
             </UiFormField>
-            <UiFormField label-width="82px" label="缓存登录">
+            <UiFormField label-width="72px" label="缓存登录">
               <UiSwitchField
                 v-model="settingsForm.cacheLogin"
                 align="start"
@@ -427,7 +363,7 @@ onUnmounted(() => {
                 登录一次后缓存会话
               </UiSwitchField>
             </UiFormField>
-            <UiFormField label-width="82px" label="额外参数" class="form-item--last">
+            <UiFormField label-width="72px" label="额外参数" class="form-item--last">
               <UiInput
                 v-model="settingsForm.extraArgs"
                 placeholder="如 --lang=zh-CN；端口会自动附加"
@@ -436,22 +372,85 @@ onUnmounted(() => {
                 spellcheck="false"
               />
             </UiFormField>
-            <UiHint block>
-              启动前请先退出已打开的 WXP；关闭本工具会停止由 edt 托管的会话。
-            </UiHint>
           </div>
-        </ToolSideInspector>
 
-        <section class="wxp-main">
-          <header class="cache-head">
+          <section class="pane-section">
+            <header class="pane-section-head">
+              <div>
+                <strong>缓存维护</strong>
+                <span>读取需要 WXP 已连接；未运行时清除会在下次启动生效。</span>
+              </div>
+            </header>
+            <div class="pane-actions">
+              <UiButton
+                size="small"
+                type="primary"
+                plain
+                :loading="collecting"
+                :disabled="!isConnected"
+                @click="handleCollect"
+              >
+                从 WXP 读取
+              </UiButton>
+              <UiButton
+                size="small"
+                type="danger"
+                plain
+                :loading="clearing"
+                @click="handleClearLoginCache"
+              >
+                清除登录缓存
+              </UiButton>
+            </div>
+          </section>
+
+          <div class="config-actions">
+            <UiButton
+              v-if="!isRunning"
+              type="primary"
+              :loading="launching"
+              :disabled="loading"
+              @click="handleLaunch"
+            >
+              启动
+            </UiButton>
+            <UiButton
+              v-else
+              type="warning"
+              plain
+              :loading="stopping"
+              @click="handleStop"
+            >
+              停止
+            </UiButton>
+          </div>
+
+          <UiHint size="xs" align="start" class="legal-hint">
+            启动前请先退出已打开的 WXP；关闭本工具会停止由 edt 托管的会话。
+          </UiHint>
+        </aside>
+
+        <section class="result-pane">
+          <header class="result-head">
             <div>
               <strong>WXP 数据缓存</strong>
-              <span v-if="store.dataCache">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
-              <span v-else>登录后自动采集，也可手动读取</span>
+              <span v-if="statusDetail" class="status-detail" :title="statusDetail">
+                {{ statusDetail }}
+              </span>
+              <span v-else-if="store.dataCache">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
+              <span v-else>登录后自动采集，也可在左侧手动读取</span>
             </div>
-            <UiChip :tone="dataLogin ? 'success' : 'neutral'">
-              {{ dataLogin ? '已有缓存' : '暂无缓存' }}
-            </UiChip>
+            <div class="result-actions">
+              <UiChip v-if="isConnected" mono>
+                {{ runtimeSummary }}
+              </UiChip>
+              <UiChip v-else-if="store.loginCacheClearPending" tone="warning">
+                登录缓存待清除
+              </UiChip>
+              <UiChip :tone="dataLogin ? 'success' : 'neutral'">
+                {{ dataLogin ? '已有缓存' : '暂无缓存' }}
+              </UiChip>
+            </div>
           </header>
 
           <div class="cache-scroll">
@@ -541,7 +540,7 @@ onUnmounted(() => {
               v-else
               class="cache-empty"
               title="还没有 WXP 缓存"
-              text="启动 WXP 并登录后自动采集，也可以点击「从 WXP 读取」手动刷新。"
+              text="启动 WXP 并登录后自动采集，也可在左侧启动设置里手动读取。"
               center
               icon="layers"
             />
@@ -607,53 +606,50 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.surface-label {
+.form-studio {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.config-pane {
+  display: flex;
+  flex: 0 0 360px;
+  flex-direction: column;
+  width: 360px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border-light);
+}
+
+.pane-title {
+  margin-bottom: 15px;
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
-.status-detail {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wxp-studio {
-  display: flex;
-  flex: 1;
-  gap: 12px;
-  min-height: 0;
-  padding: 12px;
-}
-
-.wxp-main {
+.result-pane {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: var(--color-well);
 }
 
-.cache-head {
+.result-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
-  flex: 0 0 50px;
-  min-height: 50px;
+  flex: 0 0 48px;
+  min-height: 48px;
   padding: 0 14px;
   border-bottom: 1px solid var(--color-border-light);
 
-  > div {
+  > div:first-child {
     display: grid;
     min-width: 0;
     gap: 1px;
@@ -670,6 +666,23 @@ onUnmounted(() => {
   }
 }
 
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.status-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cache-scroll {
   flex: 1;
   min-width: 0;
@@ -681,7 +694,7 @@ onUnmounted(() => {
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 17px;
 }
 
 .form-item--last {
@@ -706,23 +719,60 @@ onUnmounted(() => {
   }
 }
 
-.launch-warn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-warning);
-  cursor: help;
-  border-radius: 50%;
-  transition: color var(--transition-fast);
+.pane-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
 }
 
-.launch-warn:hover {
-  color: var(--color-text-primary);
+.pane-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+
+  > div {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+  }
 }
 
-.launch-warn:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
+.pane-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.config-actions {
+  display: flex;
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border-light);
+
+  .ui-button {
+    width: 100%;
+  }
+}
+
+.legal-hint {
+  margin-top: auto;
+  padding-top: 22px;
 }
 
 .kv-list {
@@ -764,5 +814,12 @@ onUnmounted(() => {
 
 .cache-empty {
   min-height: 240px;
+}
+
+@media (max-width: 1180px) {
+  .config-pane {
+    flex-basis: 320px;
+    width: 320px;
+  }
 }
 </style>
