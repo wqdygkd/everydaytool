@@ -130,7 +130,7 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'media-library.series', toolId: 'media-library', layer: 'config', relativePath: 'media-library/series.json', label: '系列（合集的有序分组）', backup: 'include', clean: 'never' },
   { id: 'media-library.collections', toolId: 'media-library', layer: 'config', relativePath: 'media-library/collections', label: '合集条目、卡片根与排除规则', backup: 'include', clean: 'never' },
   { id: 'wxp-enhancer.config', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/config.json', label: '注入设置', backup: 'include', clean: 'never' },
-  { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态与收藏备份', backup: 'include', clean: 'never', sensitive: true },
+  { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态（密文）与链接收藏（明文）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'tweb-cache.config', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/config.json', label: '站点端口（tweb 前端）', backup: 'include', clean: 'never' },
   { id: 'tweb-cache.aliases', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/archive-alias.json', label: '等价缓存索引（转发 / 同媒体副本，可由 manifest 重建）', backup: 'optional', clean: 'never' },
   { id: 'tweb-cache.media-index', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/media-index.json', label: '媒体索引（可由 manifest 重建）', backup: 'include', clean: 'never' },

@@ -47,6 +47,14 @@ export function injectionMain(): void {
   if (window.addEventListener) {
     window.addEventListener('pagehide', disposeAll, { once: true });
   }
+  // —— 同文档重注入（rev 变更后 CDP 会在原文档重跑脚本）——
+  // 上一版脚本的观察者 / 定时器 / 点击监听还挂在页面上，而且带着旧的收藏匹配规则：
+  // 两套 refreshStars 会互相覆盖（星标闪烁），旧点击分发还会按旧口径重复写入收藏。
+  // 开跑前先把上一版注册的入口整体摘掉，再按当前 rev 重新装配。
+  if (typeof window.__wxpEnhancerTeardown === 'function') {
+    try { window.__wxpEnhancerTeardown(); } catch (e) {}
+  }
+  window.__wxpEnhancerTeardown = disposeAll;
 
   var CACHE_LOGIN = env.cacheLogin
   var USER_CACHE_KEY = env.keys.userCache
@@ -63,6 +71,8 @@ export function injectionMain(): void {
   var CLEAR_PENDING = env.clearPending
   var SHOW_BADGE = env.showBadge
   var BADGE_STYLE = env.badgeStyle
+  /** 脚本版本：既给 CDP 存活探针比对，也给实例上的「已按哪一版装配」标记（rev 变了要重装） */
+  var REV = env.rev
   // —— 待清除登录缓存（WXP 未运行时登记的标记）：先于还原执行，本轮注入完成后换回常规脚本；
   // 清除键列表与 buildClearLoginCacheSnippet 同源（键值都来自 env.keys 单一来源）——
   if (CLEAR_PENDING) {
@@ -423,9 +433,28 @@ export function injectionMain(): void {
       code: '',
     };
   };
+  // —— 本地转发主机名归一 ——
+  // 应用 3.1.28 起 `middle_ip` 返回 `localhost`（旧版是 `127.0.0.1`），同一台机器上的转发
+  // 因此可能出现 localhost / 127.0.0.1 / [::1] 三种写法。收藏记录与接口记录按字面比会永远
+  // 对不上（表现为：星标不亮、收藏不置顶、收藏页「打开 / 复制」提示找不到转发），
+  // 所以比较前先把主机名归一；拼 URL 时按「是不是本地主机」判断，而不是字面替换 127.0.0.1。
+  var isLocalProxyHost = function (host: any) {
+    var h = String(host || '').trim();
+    if (!h) return false;
+    return /^(?:127\.\d+\.\d+\.\d+|localhost|0\.0\.0\.0|\[::1\]|::1)$/i.test(h);
+  };
+  var normalizeAccessPoint = function (value: any) {
+    var s = String(value || '').trim();
+    var at = s.lastIndexOf(':');
+    if (at === -1) return s;
+    var host = s.slice(0, at);
+    var port = s.slice(at + 1);
+    if (!port || !isLocalProxyHost(host)) return s;
+    return '127.0.0.1:' + port;
+  };
   // 转发四字段相同才是同一条。两边都有租户 id 时还必须是同一家医院，避免医院改名后串到别的租户
   var sameFav = function (a: any, b: any) {
-    if (!a || !b || a.sceneformal !== b.sceneformal || a.simpleName !== b.simpleName || a.accessPoint !== b.accessPoint || a.targetPoint !== b.targetPoint) return false;
+    if (!a || !b || a.sceneformal !== b.sceneformal || a.simpleName !== b.simpleName || normalizeAccessPoint(a.accessPoint) !== normalizeAccessPoint(b.accessPoint) || a.targetPoint !== b.targetPoint) return false;
     if (a.tenantId && b.tenantId && a.tenantId !== b.tenantId) return false;
     return true;
   };
@@ -619,8 +648,18 @@ export function injectionMain(): void {
     }
     return null;
   };
+  // 把 URL 里的本地转发主机换成医院域名主机（端口 / 路径 / 自定义后缀 / hash 全部保留）。
+  // 主机可能是 localhost、127.0.0.1 或 [::1]，按主机类别判断，不做字面替换——
+  // 字面替换在 localhost 数据下会静默不动，表现为「打开后前缀没了」。
+  var withHospitalHost = function (url: any, host: any) {
+    var s = String(url || '');
+    if (!s || !host) return s;
+    return s.replace(/^([a-z][a-z0-9+.-]*:\/\/)(\[[^\]]*\]|[^/?#:]+)/i, function (matched: any, scheme: any, urlHost: any) {
+      return isLocalProxyHost(urlHost) ? scheme + host : matched;
+    });
+  };
   // 「医院域名打开」：复用应用通路——openChannel 保障本地代理通道（接入点非本地时应用
-  // 自行提示并中止），取 link.url 把 127.0.0.1 换成 医院名.localhost，走 AppShellOpen
+  // 自行提示并中止），取 link.url 把本地转发主机换成 医院名.localhost，走 AppShellOpen
   // （主进程 shell.openExternal，即应用「默认浏览器打开」的同一通路）
   var openHospitalLink = function (lc: any, link: any) {
     try {
@@ -628,7 +667,7 @@ export function injectionMain(): void {
       var host = hospitalHostOf(lc);
       setTimeout(function () {
         try {
-          var url = String(link.url || '').replace('127.0.0.1', host || '127.0.0.1');
+          var url = withHospitalHost(link.url, host);
           if (url) lc.AppShellOpen({ path: url, isFolder: false });
         } catch (e) {}
       }, 100);
@@ -676,40 +715,55 @@ export function injectionMain(): void {
     });
   }
   // 数据层接线：包装接口响应入口（getCurrentHospitalLinks），每次拉取后标记+置顶；
-  // row-class 给收藏行加高亮（isFav 随每次排序触发的重渲染而刷新到行 class 上）
+  // row-class 给收藏行加高亮（isFav 随每次排序触发的重渲染而刷新到行 class 上）。
+  // 幂等标记按 rev 记：同一文档重注入（rev 变更）时旧包装要重装；关闭再打开「链接中心」
+  // 会重建组件实例、旧包装随之丢失，所以除了启动扫描，ensureFavView 每秒的定时器也要补挂。
+  // 原始方法存实例上（__wxpEnhancerOrigLoad），重装时从原始方法包起，不串成多层包装。
+  var patchFavData = function (lc: any) {
+    if (!lc || typeof lc.getCurrentHospitalLinks !== 'function') return false;
+    if (lc.__wxpEnhancerFavDataPatched === REV) return false;
+    try {
+      if (typeof lc.__wxpEnhancerOrigLoad !== 'function') lc.__wxpEnhancerOrigLoad = lc.getCurrentHospitalLinks;
+      var origLoad = lc.__wxpEnhancerOrigLoad;
+      lc.getCurrentHospitalLinks = function () {
+        var self = this;
+        var result = origLoad.apply(this, arguments);
+        try {
+          // 跟随接口完成再标记+置顶；再留一拍余量等 Vue 渲染出去
+          Promise.resolve(result).then(function () {
+            [0, 300].forEach(function (delay) {
+              setTimeout(function () { applyMarkSort(self); refreshStars(); }, delay);
+            });
+          }).catch(function () {});
+        } catch {}
+        return result;
+      };
+      if (typeof lc.tableRowClassName === 'function' && typeof lc.__wxpEnhancerOrigRowClassName !== 'function') {
+        lc.__wxpEnhancerOrigRowClassName = lc.tableRowClassName;
+      }
+      if (typeof lc.__wxpEnhancerOrigRowClassName === 'function') {
+        var origRowClass = lc.__wxpEnhancerOrigRowClassName;
+        lc.tableRowClassName = function (params: any) {
+          var base = '';
+          try { base = origRowClass.call(this, params) || ''; } catch (e) {}
+          try { if (params && params.row && params.row.isFav) return base + ' wxp-fav-row'; } catch (e) {}
+          return base;
+        };
+      }
+      lc.__wxpEnhancerFavDataPatched = REV;
+      applyMarkSort(lc);
+      refreshStars();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
   if (!window.__wxpEnhancerFavDataScan) {
     var favDataTries = 0;
     var favDataScan = setInterval(function () {
       favDataTries++;
       try {
-        var lc = findLinkCenterVm(readRootVm());
-        if (lc && !lc.__wxpEnhancerFavDataPatched && typeof lc.getCurrentHospitalLinks === 'function') {
-          lc.__wxpEnhancerFavDataPatched = true;
-          var origLoad = lc.getCurrentHospitalLinks;
-          lc.getCurrentHospitalLinks = function () {
-            var self = this;
-            var result = origLoad.apply(this, arguments);
-            try {
-              // 跟随接口完成再标记+置顶；再留一拍余量等 Vue 渲染出去
-              Promise.resolve(result).then(function () {
-                [0, 300].forEach(function (delay) {
-                  setTimeout(function () { applyMarkSort(self); refreshStars(); }, delay);
-                });
-              }).catch(function () {});
-            } catch {}
-            return result;
-          };
-          if (typeof lc.tableRowClassName === 'function') {
-            var origRowClass = lc.tableRowClassName;
-            lc.tableRowClassName = function (params: any) {
-              var base = '';
-              try { base = origRowClass.call(this, params) || ''; } catch (e) {}
-              try { if (params && params.row && params.row.isFav) return base + ' wxp-fav-row'; } catch (e) {}
-              return base;
-            };
-          }
-          applyMarkSort(lc);
-          refreshStars();
+        if (patchFavData(findLinkCenterVm(readRootVm()))) {
           clearInterval(favDataScan);
           window.__wxpEnhancerFavDataDone = true;
           return;
@@ -878,8 +932,7 @@ export function injectionMain(): void {
   var favoriteUrlOf = function (lc: any, link: any) {
     var url = String((link && link.url) || '');
     if (!url || isInnerWxpLink(link)) return url;
-    var host = hospitalHostOf(lc);
-    return host ? url.replace('127.0.0.1', host) : url;
+    return withHospitalHost(url, hospitalHostOf(lc));
   };
   var copyText = function (lc: any, text: any, done: any) {
     var ok = function () { done(true); };
@@ -1108,7 +1161,7 @@ export function injectionMain(): void {
     findAppMain(root);
     // 全局 Vue.component 加在另一份 components 表上，AppMain 解析不到，页签会渲成空标签。
     // 脚本按 rev 重注时旧组件还在，对不上就换掉并卸下页签，让后面重新挂上新渲染函数
-    var favUiRev = env && env.rev;
+    var favUiRev = REV;
     var FavCtor = Vue.options.components.WxpFavLinks;
     if (!FavCtor || !FavCtor.options || FavCtor.options.wxpRev !== favUiRev) {
       Vue.component('WxpFavLinks', {
@@ -1165,7 +1218,12 @@ export function injectionMain(): void {
     if (favAt >= 0 && favAt < linkAt) linkAt -= 1;
     views.splice(linkAt + 1, 0, view);
   };
-  var favViewTimer = setInterval(ensureFavView, 1000);
+  var favViewTimer = setInterval(function () {
+    ensureFavView();
+    // 链接中心实例重建（关闭页签再打开）后旧的数据层包装已随实例消失，这里补挂；
+    // patchFavData 自带实例级幂等标记，常驻实例上不会重复包装
+    patchFavData(findLinkCenterVm(readRootVm()));
+  }, 1000);
   addDisposer(function () { clearInterval(favViewTimer); });
   if (document.body) ensureFavView();
   else document.addEventListener('DOMContentLoaded', ensureFavView, { once: true });

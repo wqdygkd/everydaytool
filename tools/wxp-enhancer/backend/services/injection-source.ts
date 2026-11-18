@@ -65,7 +65,7 @@ const SNAPSHOT_TTL_MS = 14 * 24 * 60 * 60 * 1000
  * 注入脚本版本：写入 window.__wxpEnv.rev，供 CDP 存活探针判断页面里的脚本是否
  * 存活/过期（无 rev 的旧脚本一律视为过期）。改动注入行为时 bump 此值。
  */
-export const WXP_INJECTION_REV = 15
+export const WXP_INJECTION_REV = 16
 
 /**
  * 装配注入脚本：脚本本体在 injection-script.ts（真实函数序列化），本文件只负责
