@@ -1,4 +1,11 @@
+import { defineComponent, h } from 'vue'
 import { defineTool } from '../../renderer/shared/tool/defineTool'
+
+// 实现已清空，重构完成前只保留工具定义与占位页。
+const PlaceholderPage = defineComponent({
+  name: 'TreeaseEditorPlaceholder',
+  setup: () => () => h('div', { style: 'padding: var(--spacing-xl); color: var(--text-muted)' }, 'Treease 编辑器重构中'),
+})
 
 const tool = defineTool({
   id: 'treease-editor',
@@ -13,7 +20,7 @@ const tool = defineTool({
   route: {
     path: 'treease-editor',
     name: 'tool-treease-editor',
-    component: () => import('./renderer/pages/TreeaseEditorPage.vue'),
+    component: PlaceholderPage,
     meta: { toolId: 'treease-editor', title: 'Treease 编辑器' },
   },
 })

@@ -24,7 +24,6 @@ declare global {
     edtRuntime?: EdtRuntimeApi
     edtApp?: IpcInvokeApi
     interceptor?: IpcInvokeApi
-    treeaseEditor?: IpcInvokeApi
     wxpEnhancer?: IpcInvokeApi
     offlinePack?: IpcInvokeApi
     skillManager?: IpcInvokeApi

@@ -252,7 +252,7 @@
 - **影响**：写到一半崩溃会留下半截 JSON。按约定这些数据本该走 `json-store.ts`。
 - **做法**：分两步。
   1. 先把 `writeJson` 本身改成"写临时文件再改名"，临时文件名带随机后缀。一处改动覆盖 13 个调用点。
-  2. 再逐个把工具的存储迁到 `json-store.ts`，顺带获得进程内缓存和损坏备份。拦截器的两个存储优先，可参照 `tools/treease-editor/backend/store/rules-store.ts`。
+  2. 再逐个把工具的存储迁到 `json-store.ts`，顺带获得进程内缓存和损坏备份。拦截器的两个存储优先，可参照 `tools/interceptor/backend/store/rules-store.ts`。
 - **工作量**：第一步 S，第二步 M
 
 ### PLAT-3 启动路径：去掉多余的等待，先量再优化

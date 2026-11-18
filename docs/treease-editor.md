@@ -1,5 +1,7 @@
 # treease-editor 模块记忆
 
+> 状态：实现已清空，仅保留 `tools/treease-editor/index.ts` 占位；以下为重构前记录。
+
 ## 会话 / 缓存位置（sessionData 物理落盘）
 
 - webview 分区：`persist:treease-editor`（`shared/webview.ts` 的 `TREEASE_WEBVIEW_PARTITION`）。
