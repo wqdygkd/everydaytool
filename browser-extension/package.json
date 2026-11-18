@@ -1,0 +1,25 @@
+{
+  "name": "everydaytool-extension",
+  "type": "module",
+  "version": "2.0.0",
+  "private": true,
+  "description": "everydaytool（edt）浏览器插件（WXT / MV3）",
+  "scripts": {
+    "prepare": "wxt prepare",
+    "dev": "wxt",
+    "build": "wxt build",
+    "typecheck": "wxt prepare && vue-tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "@wxt-dev/module-vue": "^1.0.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5",
+    "vue-tsc": "^3.3.14",
+    "wxt": "^0.21.5"
+  }
+}

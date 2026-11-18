@@ -12,7 +12,7 @@ const repoRoot = path.resolve(rootDir, '..')
  * - manifest.key 固定，保证扩展 ID 与历史 interceptor 扩展一致。
  */
 export default defineConfig({
-  // 从仓库根执行 `wxt -c browser-extension/wxt.config.ts` 时必须显式指定
+  // 作为 workspace 包运行时 cwd 是 browser-extension，仍显式指定避免受调用位置影响
   root: rootDir,
   modules: ['@wxt-dev/module-vue'],
   srcDir: rootDir,

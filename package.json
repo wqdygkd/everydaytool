@@ -22,7 +22,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit && pnpm --filter everydaytool-extension typecheck",
     "test": "node --experimental-strip-types --test tools/*/tests/*.test.ts backend/tests/*.test.ts",
     "test:skill-manager": "node --experimental-strip-types --test tools/skill-manager/tests/*.test.ts",
     "create:tool": "node scripts/create-tool.mjs",
@@ -32,9 +32,9 @@
     "tweb:build": "node scripts/build-tweb.mjs",
     "build:electron": "node scripts/build-electron.mjs",
     "web": "vite",
-    "extension:prepare": "wxt prepare -c browser-extension/wxt.config.ts",
-    "extension:dev": "wxt -c browser-extension/wxt.config.ts",
-    "extension:build": "wxt build -c browser-extension/wxt.config.ts",
+    "extension:prepare": "pnpm --filter everydaytool-extension prepare",
+    "extension:dev": "pnpm --filter everydaytool-extension dev",
+    "extension:build": "pnpm --filter everydaytool-extension build",
     "dev": "concurrently -k \"vite\" \"node scripts/dev-electron.mjs\" \"pnpm extension:dev\"",
     "build": "pnpm run extension:build && pnpm run build:electron && vite build",
     "start": "electron .",
@@ -56,7 +56,6 @@
     "@videojs/html": "10.4.0",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vueuse/core": "^15.0.0",
-    "@wxt-dev/module-vue": "^1.0.3",
     "cn": "^0.5.2",
     "concurrently": "^10.0.6",
     "electron": "^44.6.0",
@@ -75,7 +74,6 @@
     "vue": "^3.5.44",
     "vue-router": "^5.4.0",
     "vue-sonner": "^2.0.9",
-    "vue-tsc": "^3.3.14",
-    "wxt": "^0.21.5"
+    "vue-tsc": "^3.3.14"
   }
 }

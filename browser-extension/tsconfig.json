@@ -5,10 +5,11 @@
       "@shared/*": ["../shared/*"],
       "@ext/*": ["./lib/*"]
     },
+    "types": ["chrome", "node"],
     "allowImportingTsExtensions": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": [".", "../shared/extension.ts", "../shared/interceptor.ts"]
+  "include": [".", "./.wxt/wxt.d.ts", "../shared/extension.ts", "../shared/interceptor.ts"]
 }

@@ -1,9 +1,15 @@
 minimumReleaseAgeExcludePrune: true
 trustPolicy: no-downgrade
+# WXT 用 import.meta.resolve 从 wxt 自身路径解析 modules；子包隔离后
+# @wxt-dev/module-vue 必须公开提升到根 node_modules 才能被找到。
+publicHoistPattern:
+  - '@wxt-dev/module-vue'
+
 shellEmulator: true
 
 packages:
   - .
+  - browser-extension
   - '!data/**'
   - '!release/**'
   - '!dist/**'

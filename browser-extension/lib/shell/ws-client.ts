@@ -189,7 +189,7 @@ export class ExtensionShell {
   }
 
   private async ensureClientId(): Promise<void> {
-    const data = await chrome.storage.local.get({ clientId: '' })
+    const data = await chrome.storage.local.get({ clientId: '' }) as { clientId: string }
     if (!data.clientId) {
       data.clientId = crypto.randomUUID()
       await chrome.storage.local.set({ clientId: data.clientId })
