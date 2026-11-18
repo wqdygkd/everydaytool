@@ -28,6 +28,7 @@
 
 ```text
 browser-extension/           # WXT 工程根（产物 .output/chrome-mv3）
+  package.json               # workspace 包（pnpm --filter everydaytool-extension）
   entrypoints/               # background + popup
   lib/shell/                 # WS 客户端、连接态
   lib/features/              # 业务模块（勿用顶层 modules/，以免与 WXT modules 冲突）
@@ -35,6 +36,10 @@ browser-extension/           # WXT 工程根（产物 .output/chrome-mv3）
 shared/extension.ts          # 扩展 ID、端口段、信封协议、shell 消息
 shared/interceptor.ts        # interceptor 业务类型（解码后的内部形状）
 ```
+
+构建仍从仓库根走既有入口：`pnpm extension:prepare` / `pnpm extension:dev` / `pnpm extension:build`，
+它们现在是 `pnpm --filter everydaytool-extension <script>` 的包装；只做类型检查用
+`pnpm --filter everydaytool-extension typecheck`。
 
 ## 硬约束
 
