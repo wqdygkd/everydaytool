@@ -194,19 +194,6 @@ async function handleToolClose(toolId: string) {
 function openSettings() {
   if (settingsTab) router.push({ name: settingsTab.routeName })
 }
-
-const topbarMenuItems = [
-  { command: 'switch', label: '切换工具', icon: 'search' as const },
-  { command: 'close', label: '关闭当前工具', icon: 'close' as const, danger: true },
-]
-
-function onTopbarCommand(command: string) {
-  if (command === 'switch') {
-    openPalette()
-    return
-  }
-  if (command === 'close' && activeTool.value) void handleToolClose(activeTool.value.id)
-}
 </script>
 
 <template>
@@ -243,11 +230,6 @@ function onTopbarCommand(command: string) {
         <span class="topbar-grow" aria-hidden="true" />
         <div id="app-topbar-state" class="topbar-state-slot" />
         <div id="app-topbar-actions" class="topbar-actions-slot" />
-        <UiDropdown class="topbar-more" :items="topbarMenuItems" @command="onTopbarCommand">
-          <template #trigger>
-            <UiIconButton icon="more" :size="28" label="更多" />
-          </template>
-        </UiDropdown>
       </template>
 
       <template v-else-if="activeAppTab">
@@ -471,11 +453,6 @@ function onTopbarCommand(command: string) {
   height: 30px;
   padding: 0 12px;
   font-size: var(--font-size-sm);
-}
-
-.topbar-more {
-  flex: none;
-  -webkit-app-region: no-drag;
 }
 
 /* 首页字标与 UiIconTile（sm）同尺寸，保证三种状态的图标位对齐 */
