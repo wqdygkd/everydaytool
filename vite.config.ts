@@ -50,4 +50,14 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  optimizeDeps: {
+    /**
+     * Vite 8.3.5 冷启动时，模块里给出的 `deps/*.js?v=<hash>` 与磁盘上 `_metadata.json`
+     * 记录的 browserHash 可能不一致（优化器在 crawl 结束后又跑了一轮，但 metadata 没跟上），
+     * 于是每条依赖请求都被判成 `Outdated Optimize Dep` → 504 → main.ts 模块图整体失败 →
+     * 窗口白屏且不报错。预构建产物本身可用，这里关掉「哈希对不上就拒绝」的判定。
+     * 仅影响 dev server，不改变构建产物；改了依赖后 `rm -rf node_modules/.vite` 可强制重建。
+     */
+    ignoreOutdatedRequests: true,
+  },
 })

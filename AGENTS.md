@@ -100,6 +100,8 @@ pnpm start        # 运行已构建产物
 pnpm dist         # 打包安装程序
 ```
 
+> **开发窗口白屏**（DevTools 控制台一串 `504 (Outdated Optimize Dep)`）＝ 依赖预构建缓存被搅乱，不是业务代码问题。两个来源都已处理：① `pnpm dev` 同时起 Renderer Vite 与 WXT，两者原本共用仓库根 `node_modules/.vite`，WXT 的优化会覆盖渲染层的 metadata 并删掉 dep 文件 → `browser-extension/wxt.config.ts` 已给它独立 `cacheDir`；② Vite 8 冷启动时 `?v=` 与 metadata 的 browserHash 可能不同步 → 渲染层 `vite.config.ts` 设了 `optimizeDeps.ignoreOutdatedRequests`（仅 dev 生效）。仍白屏时再「停 dev → 删 `node_modules/.vite` → 重跑」；`scripts/dev-electron.mjs` 会等 `/main.ts` 的 dep 哈希连续两次一致后才拉窗口。
+
 ## 新增工具
 
 优先用脚手架，它会建好目录骨架并完成注册：
