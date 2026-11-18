@@ -256,7 +256,7 @@ async function handleDownload(): Promise<void> {
 
     <!-- 加速服务：高级选项，放在主输入框之前（切换后会自动重新解析已输入的镜像） -->
     <template #before>
-      <UiPanel variant="outlined" title="加速服务">
+      <UiPanel variant="outlined" title="加速服务" class="mirror-panel">
         <UiGroup direction="column" gap="md" align="stretch" block>
           <UiSelect v-model="mirror" class="full-width" placeholder="直连（不使用加速）" :options="MIRRORS.map(m => ({ label: m.label, value: m.value }))" @update:model-value="onMirrorChange" />
 
@@ -427,6 +427,12 @@ async function handleDownload(): Promise<void> {
 .platform-field :deep(.ui-select-trigger) {
   flex: 1;
   min-width: 0;
+}
+
+/* 加速服务只是下载参数的一部分：保留描边分区，不铺第二层底色 */
+.mirror-panel {
+  background: transparent;
+  backdrop-filter: none;
 }
 
 /* 镜像层是结果清单，行高比默认 42px 紧凑一档 */
