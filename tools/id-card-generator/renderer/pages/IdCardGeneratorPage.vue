@@ -291,7 +291,6 @@ onMounted(handleGenerate)
   padding: 16px;
   overflow-y: auto;
   border-right: 1px solid var(--color-border-light);
-  background: var(--color-well);
 }
 
 .pane-title {
