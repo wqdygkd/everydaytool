@@ -138,6 +138,34 @@ function resolveElectronBinary() {
   return binary
 }
 
+/**
+ * 预热渲染层依赖预构建后再拉窗口。
+ *
+ * Vite 的 HTTP 服务先就绪、依赖预构建（optimizeDeps）后完成：`/` 已经能响应，但 `/main.ts`
+ * 里引用的 dep 文件还在写、`?v=` 哈希还会变。此时 Electron 立刻加载，拿到的就是
+ * `504 (Outdated Optimize Dep)` → main.ts 模块图解不出来 → **窗口空白、无样式、无报错弹窗**。
+ * 这里轮询 `/main.ts` 直到 `?v=` 哈希连续两次一致（预构建稳定），再启动 Electron。
+ */
+async function warmRendererDeps(timeoutMs = 20000) {
+  const entry = 'http://localhost:5173/main.ts'
+  const deadline = Date.now() + timeoutMs
+  let lastHash = null
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(entry, { signal: AbortSignal.timeout(2000) })
+      const body = await response.text()
+      const hash = /v=([0-9a-f]+)/.exec(body)?.[1] ?? null
+      if (hash && hash === lastHash) return true
+      lastHash = hash
+    } catch {
+      // 服务还在起 / 被打断：下一轮再试
+    }
+    await new Promise(resolve => setTimeout(resolve, 400))
+  }
+  return false
+}
+
 function startElectron() {
   const electronBinary = resolveElectronBinary()
   stoppingElectron = false
@@ -272,6 +300,9 @@ const rendererReady = await waitForRenderer()
 if (!rendererReady) {
   console.warn(`⚠ ${Math.round(rendererWaitTimeout / 1000)}s 内未等到 Vite 开发服务器（http://localhost:5173）`)
   console.warn('  窗口会加载失败：请在另一个终端执行 pnpm web，或直接用 pnpm dev 同时启动两者')
+} else if (!(await warmRendererDeps())) {
+  console.warn('⚠ Vite 依赖预构建 20s 内未稳定，窗口可能是空白（控制台 504 Outdated Optimize Dep）')
+  console.warn('  处理：停掉 dev，删掉 node_modules/.vite 后重跑 pnpm dev（只删缓存，可重新生成）')
 }
 
 startElectron()

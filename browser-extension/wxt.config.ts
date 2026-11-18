@@ -32,6 +32,13 @@ export default defineConfig({
         '@ext': path.join(rootDir, 'lib'),
       },
     },
+    /**
+     * 依赖预构建缓存必须跟渲染层 dev server 分开。
+     * 两者默认都用「最近的 node_modules/.vite」→ 仓库根的同一个目录：`pnpm dev` 同时起
+     * Renderer Vite 与 WXT 时，WXT 的优化结果会覆盖渲染层那份 metadata 并删掉它的 dep 文件，
+     * 渲染层页面随后对每个依赖都拿到 `504 (Outdated Optimize Dep)` → 窗口白屏。
+     */
+    cacheDir: path.join(rootDir, '.wxt/vite-dep-cache'),
   }),
   manifest: {
     name: 'everydaytool',
