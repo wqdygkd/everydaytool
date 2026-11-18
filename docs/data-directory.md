@@ -47,7 +47,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
     app/                window-appearance.json, window-bounds.json, ui-preferences.json（收藏 / 首页排序）
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [敏感]
     offline-pack/       history.json
-    wxp-enhancer/       config.json, data-cache.json  [敏感：token / 用户对象]
+    wxp-enhancer/       config.json, data-cache.json  [敏感：登录态密文；收藏明文]
     tweb-cache/         config.json, peer-dirs.json（群目录名登记）
     treease-editor/     rules.json（拦截规则 + 总开关；LocalStorage 只是镜像）
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}  [敏感]

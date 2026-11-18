@@ -338,7 +338,9 @@ P2（备份导出/恢复）追加验证：
 
 - **凭据静态加密**（`backend/utils/secret-box.ts`）：统一信封 `edt-secret:<base64(safeStorage)>`；
   `openSecret()` 对非信封值原样返回，因此旧明文文件照旧可读、第一次写入自动升级。
-  - `wxp-enhancer/data-cache.json` 整份封为 `{ schemaVersion: 2, sealed }`（token / 用户对象 / 收藏备份）；
+  - `wxp-enhancer/data-cache.json`（v3）**只封登录态**：`{ schemaVersion: 3, favorites, favoritesUpdatedAt, sealed }`，
+    `sealed` 里仅有 token / 用户对象 / NameNode 参数；收藏（医院 + 转发链接清单，不含凭据）走明文，
+    这样换机 / keychain 重置后仍能从备份把链接中心收藏恢复回来（旧 v2 整份密文、v1 整份明文都能读，首次写入升级成 v3）；
   - safeStorage 不可用时退化为明文并 warn——**加密是增强，不是功能前提**。
   - 解不开的密文（换机器 / 系统密钥变化）**原样保留**：`openSecretDetailed()` 报 `failed`，store 写盘时把
     原密文写回，不把空串当新密码落盘（否则一轮「读 → 升级写回」就静默删掉用户密码）。

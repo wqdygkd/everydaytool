@@ -151,13 +151,23 @@ export function closeCdpConnections(): void {
   connections.clear()
 }
 
+/**
+ * 带 `window.__wxpEnhancerTeardown` 钩子的最小脚本版本：从这一版起，同一文档里的重注入
+ * 会先摘掉上一版注册的监听 / 观察者。更早的版本没有这个钩子，重注入只能在旁边再叠一套，
+ * 两套 refreshStars 会互相覆盖（星标闪烁）——那种页面必须整页刷新一次。
+ */
+const TEARDOWN_MIN_REV = 16
+
 async function injectTarget(
   wsUrl: string,
   scriptSource: string,
+  scriptRev: number,
   previousIdentifier: string | null = null,
 ): Promise<string> {
   const { call } = await getConnection(wsUrl)
   await call('Page.enable')
+  // 注入会覆盖 window.__wxpEnv，旧版本号必须在写入新脚本之前读
+  const previousRev = await readScriptRev(call).catch(() => 0)
   if (previousIdentifier) {
     try {
       await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: previousIdentifier })
@@ -168,7 +178,22 @@ async function injectTarget(
   const result = await call('Page.addScriptToEvaluateOnNewDocument', { source: scriptSource })
   const identifier = result.identifier as string
   await call('Runtime.evaluate', { expression: scriptSource, returnByValue: true })
+  if (previousRev > 0 && previousRev < scriptRev && previousRev < TEARDOWN_MIN_REV) {
+    // 残留的无钩子旧脚本会和新版抢着写 DOM：刷新一次，新文档只会跑新版脚本
+    logger.info('wxp injection: legacy script found, reloading page', { previousRev, scriptRev })
+    await call('Page.reload').catch(() => undefined)
+  }
   return identifier
+}
+
+/** 读当前文档里的注入脚本版本（0 = 没有本工具的脚本：刚刷新 / 从未注入） */
+async function readScriptRev(call: CdpCaller): Promise<number> {
+  const result = await call('Runtime.evaluate', {
+    expression: 'Number((window.__wxpEnv && window.__wxpEnv.rev) || 0)',
+    returnByValue: true,
+  })
+  const value = (result as { result?: { value?: unknown } }).result?.value
+  return typeof value === 'number' ? value : 0
 }
 
 /**
@@ -179,11 +204,7 @@ async function injectTarget(
  */
 async function probeInjectionAlive(wsUrl: string, rev: number): Promise<boolean> {
   const { call } = await getConnection(wsUrl)
-  const result = await call('Runtime.evaluate', {
-    expression: `!!(window.__wxpEnv&&window.__wxpEnv.rev===${rev})`,
-    returnByValue: true,
-  })
-  return (result as { result?: { value?: unknown } }).result?.value === true
+  return (await readScriptRev(call)) === rev
 }
 
 /**
@@ -332,6 +353,7 @@ export class CdpInjectionSession {
     const scriptIdentifier = await injectTarget(
       target.webSocketDebuggerUrl as string,
       this.scriptSource,
+      this.scriptRev,
       prev?.scriptIdentifier ?? null,
     )
     this.targetState.set(target.id, { url, scriptIdentifier })
