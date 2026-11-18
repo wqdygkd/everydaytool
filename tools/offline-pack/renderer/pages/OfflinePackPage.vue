@@ -3,7 +3,6 @@ import type { Component } from 'vue'
 import type { OfflinePackTabKey } from '../tabs'
 import { useToolPath } from '@renderer/shared/composables/useToolPath'
 import { storeToRefs } from 'pinia'
-import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import ChromeDownloader from '../components/ChromeDownloader.vue'
 import DockerDownloader from '../components/DockerDownloader.vue'
@@ -51,61 +50,56 @@ function switchTab(key: string): void {
 <template>
   <div class="tool-page offline-pack-page">
     <ToolSurface class="offline-surface">
-      <div class="offline-studio">
-        <ToolSideInspector
-          :open="true"
-          title="下载来源"
-          :width="268"
-          side="left"
-          :closable="false"
-          body-padding="8px"
-        >
-          <div class="source-panel">
-            <nav class="source-list" aria-label="下载来源">
-              <button
-                v-for="tab in OFFLINE_PACK_TABS"
-                :key="tab.key"
-                type="button"
-                class="source-row"
-                :class="{ 'is-active': tab.key === activeTab }"
-                :aria-current="tab.key === activeTab ? 'page' : undefined"
-                @click="switchTab(tab.key)"
-              >
-                <span class="source-icon">
-                  <img :src="tab.icon" alt="">
-                </span>
-                <span class="source-name">{{ tab.label }}</span>
-                <UiIcon name="arrowRight" :size="14" class="source-arrow" />
-              </button>
-            </nav>
-
-            <div class="source-footer">
-              <button
-                type="button"
-                class="history-entry"
-                :class="{ 'is-active': historyOpen }"
-                :aria-expanded="historyOpen"
-                :aria-controls="historyOpen ? 'offline-pack-history' : undefined"
-                @click="historyOpen = !historyOpen"
-              >
-                <UiIcon name="history" :size="16" class="history-icon" />
-                <span class="history-label">下载历史</span>
-                <span v-if="activeCount" class="history-live" :aria-label="`${activeCount} 个任务下载中`">
-                  <span class="history-live-dot" aria-hidden="true" />
-                  {{ activePercent }}%
-                </span>
-                <UiIcon
-                  name="chevronDown"
-                  :size="14"
-                  class="history-chevron"
-                  :class="{ 'is-open': historyOpen }"
-                />
-              </button>
-            </div>
+      <div class="form-studio">
+        <aside class="config-pane">
+          <div class="pane-title">
+            下载来源
           </div>
-        </ToolSideInspector>
 
-        <section class="offline-main">
+          <nav class="source-list" aria-label="下载来源">
+            <button
+              v-for="tab in OFFLINE_PACK_TABS"
+              :key="tab.key"
+              type="button"
+              class="source-row"
+              :class="{ 'is-active': tab.key === activeTab }"
+              :aria-current="tab.key === activeTab ? 'page' : undefined"
+              @click="switchTab(tab.key)"
+            >
+              <span class="source-icon">
+                <img :src="tab.icon" alt="">
+              </span>
+              <span class="source-name">{{ tab.label }}</span>
+              <UiIcon name="arrowRight" :size="14" class="source-arrow" />
+            </button>
+          </nav>
+
+          <div class="source-footer">
+            <button
+              type="button"
+              class="history-entry"
+              :class="{ 'is-active': historyOpen }"
+              :aria-expanded="historyOpen"
+              :aria-controls="historyOpen ? 'offline-pack-history' : undefined"
+              @click="historyOpen = !historyOpen"
+            >
+              <UiIcon name="history" :size="16" class="history-icon" />
+              <span class="history-label">下载历史</span>
+              <span v-if="activeCount" class="history-live" :aria-label="`${activeCount} 个任务下载中`">
+                <span class="history-live-dot" aria-hidden="true" />
+                {{ activePercent }}%
+              </span>
+              <UiIcon
+                name="chevronDown"
+                :size="14"
+                class="history-chevron"
+                :class="{ 'is-open': historyOpen }"
+              />
+            </button>
+          </div>
+        </aside>
+
+        <section class="result-pane">
           <div class="downloader-stage">
             <KeepAlive>
               <component :is="activeComponent" />
@@ -151,20 +145,29 @@ function switchTab(key: string): void {
   min-height: 0;
 }
 
-.offline-studio {
+.form-studio {
   display: flex;
   flex: 1;
-  gap: 12px;
   min-height: 0;
-  padding: 12px;
 }
 
-.source-panel {
+.config-pane {
   display: flex;
+  flex: 0 0 360px;
   flex-direction: column;
-  gap: 8px;
-  height: 100%;
+  width: 360px;
+  min-width: 0;
   min-height: 0;
+  padding: 16px;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-light);
+}
+
+.pane-title {
+  margin-bottom: 15px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .source-list {
@@ -339,16 +342,13 @@ function switchTab(key: string): void {
   }
 }
 
-.offline-main {
+.result-pane {
   position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  background: var(--color-well);
 }
 
 .downloader-stage {
@@ -435,6 +435,13 @@ function switchTab(key: string): void {
   .history-drawer-leave-active {
     transition-duration: 0.01ms;
     animation: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .config-pane {
+    flex-basis: 320px;
+    width: 320px;
   }
 }
 </style>

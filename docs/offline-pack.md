@@ -11,9 +11,10 @@
 - 工具 id `offline-pack`；来源页签 `vscode` / `github` / `chrome` / `edge` / `docker` / `msstore`，由子路由 `/tools/offline-pack/<tab>` 驱动。
 - `supportedTargets: ['win', 'mac']`（落盘依赖主进程；web 预览没有 IPC）。
 - 页面只有一块 `ToolSurface`，且**只使用主体区**（无 `surface-toolbar` / `statusline`）：
-  - 左：268px `ToolSideInspector`，6 个来源纵向切换，底部固定「下载历史」入口；
+  - 左：360px 来源栏（窄屏 320px），6 个来源纵向切换，底部固定「下载历史」入口；
   - 右：当前下载器（`KeepAlive`，切换来源保留表单与解析结果）；
   - 底部抽屉：`DownloadTasks`（进行中 / 刚结束的任务）+ `HistorySection`（落盘历史）。
+- 左右两栏共用 `ToolSurface` 表面：左栏只保留右缘 1px 分隔线，不加底色，不套第二层卡片。
 - 工具页**没有** `WorkspaceHeader` / 顶部工具标题栏；工具上下文（图标 / 名称 / 说明）由全局标题栏提供。
 
 ## 2. 后端（`tools/offline-pack/backend/`）
