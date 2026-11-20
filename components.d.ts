@@ -28,6 +28,8 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     RulesPanel: typeof import('./tools/interceptor/renderer/components/RulesPanel.vue')['default']
     TargetsPanel: typeof import('./tools/interceptor/renderer/components/TargetsPanel.vue')['default']
+    ToolFormPane: typeof import('./renderer/shared/components/workspace/ToolFormPane.vue')['default']
+    ToolFormSection: typeof import('./renderer/shared/components/workspace/ToolFormSection.vue')['default']
     ToolPane: typeof import('./renderer/shared/components/ToolPane.vue')['default']
     ToolSideInspector: typeof import('./renderer/shared/components/workspace/ToolSideInspector.vue')['default']
     ToolSurface: typeof import('./renderer/shared/components/workspace/ToolSurface.vue')['default']

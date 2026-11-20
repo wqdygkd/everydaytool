@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IdCardResult } from '../shared/generator'
+import ToolFormPane from '../../../../renderer/shared/components/workspace/ToolFormPane.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { AREA_TREE, areaPrefixFromPath } from '../shared/area-hierarchy'
@@ -131,11 +132,7 @@ onMounted(handleGenerate)
   <div class="id-card-page tool-page">
     <ToolSurface class="generator-surface">
       <div class="form-studio">
-        <aside class="config-pane">
-          <div class="pane-title">
-            生成参数
-          </div>
-
+        <ToolFormPane title="生成参数">
           <div class="config-form">
             <UiFormField label="出生方式" label-width="72px">
               <UiRadioGroup v-model="birthMode">
@@ -213,7 +210,7 @@ onMounted(handleGenerate)
           <UiHint size="xs" align="start" class="legal-hint">
             仅供测试与开发用途。生成号码为虚构数据，不代表真实身份。
           </UiHint>
-        </aside>
+        </ToolFormPane>
 
         <section class="result-pane">
           <header class="result-head">
@@ -282,28 +279,14 @@ onMounted(handleGenerate)
   min-height: 0;
 }
 
-.config-pane {
-  display: flex;
-  flex: 0 0 360px;
-  flex-direction: column;
-  width: 360px;
-  min-height: 0;
-  padding: 16px;
-  overflow-y: auto;
-  border-right: 1px solid var(--color-border-light);
-}
-
-.pane-title {
-  margin-bottom: 15px;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
 .config-form {
   display: flex;
   flex-direction: column;
   gap: 17px;
+
+  :deep(.ui-radio-text) {
+    font-size: var(--font-size-sm);
+  }
 }
 
 .config-actions {
@@ -417,7 +400,7 @@ onMounted(handleGenerate)
   gap: var(--spacing-md);
   flex: 0 0 48px;
   height: 48px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--color-border-light);
 
   > div {
@@ -454,12 +437,5 @@ onMounted(handleGenerate)
 
 .id-cell {
   color: var(--color-text-primary);
-}
-
-@media (max-width: 1180px) {
-  .config-pane {
-    flex-basis: 320px;
-    width: 320px;
-  }
 }
 </style>

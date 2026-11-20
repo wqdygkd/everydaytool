@@ -8,6 +8,8 @@ import { registerTabCloseGuard } from '@renderer/shared/composables/useTabCloseG
 import { confirm } from '@renderer/shared/feedback'
 import { openExternal } from '@renderer/shared/ipc/openExternal'
 import { toast } from 'vue-sonner'
+import ToolFormPane from '../../../../renderer/shared/components/workspace/ToolFormPane.vue'
+import ToolFormSection from '../../../../renderer/shared/components/workspace/ToolFormSection.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import { WB2API_WEBVIEW_PARTITION } from '../../../../shared/webview'
 import {
@@ -326,152 +328,141 @@ onUnmounted(() => {
   <div class="tool-page wb2api-page">
     <ToolSurface class="wb2api-surface">
       <div class="wb2api-body">
-        <aside class="wb2api-detail" aria-label="运行详情">
-          <div class="wb2api-detail-scroll">
-            <div class="inspector-sections">
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>服务状态</strong>
-                    <span>{{ statusLabel }}</span>
-                  </div>
-                  <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
-                </header>
-                <div class="inspector-actions">
-                  <UiButton
-                    v-if="!isRunning"
-                    size="small"
-                    type="primary"
-                    :disabled="busy || !installed || state?.orphanLikely"
-                    @click="onStart"
-                  >
-                    启动
-                  </UiButton>
-                  <template v-else>
-                    <UiButton size="small" :disabled="busy" @click="onStop">
-                      停止
-                    </UiButton>
-                    <UiButton size="small" :disabled="busy || !installed" @click="onRestart">
-                      重启
-                    </UiButton>
-                  </template>
-                  <UiButton v-if="state?.orphanLikely" size="small" type="warning" :disabled="busy" @click="onKillOrphan">
-                    结束残留进程
-                  </UiButton>
-                </div>
-                <UiKeyValue label="版本" mono label-width="74px">
-                  {{ state?.version ?? '—' }}
-                </UiKeyValue>
-                <UiKeyValue class="wb2api-kv-inline" label="面板" mono label-width="74px">
-                  <span class="wb2api-endpoint" :title="panelUrl">{{ panelUrl }}</span>
-                  <template #actions>
-                    <UiCopyButton :text="panelUrl" label="面板地址" />
-                  </template>
-                </UiKeyValue>
-                <UiKeyValue class="wb2api-kv-inline" label="OpenAI" mono label-width="74px">
-                  <span class="wb2api-endpoint" :title="openAiBaseUrl">{{ openAiBaseUrl }}</span>
-                  <template #actions>
-                    <UiCopyButton :text="openAiBaseUrl" label="OpenAI Base URL" />
-                  </template>
-                </UiKeyValue>
-                <UiKeyValue class="wb2api-kv-inline" label="Anthropic" mono label-width="74px">
-                  <span class="wb2api-endpoint" :title="anthropicBaseUrl">{{ anthropicBaseUrl }}</span>
-                  <template #actions>
-                    <UiCopyButton :text="anthropicBaseUrl" label="Anthropic Base URL" />
-                  </template>
-                </UiKeyValue>
-                <UiKeyValue class="wb2api-kv-inline" label="API Key" mono label-width="74px">
-                  <span class="wb2api-api-key" :title="apiKeyVisible ? (state?.apiKey ?? '') : ''">{{ apiKeyDisplay }}</span>
-                  <template v-if="state?.apiKey" #actions>
-                    <UiButton size="small" text @click="apiKeyVisible = !apiKeyVisible">
-                      {{ apiKeyVisible ? '隐藏' : '显示' }}
-                    </UiButton>
-                    <UiCopyButton :text="state.apiKey" label="API Key" />
-                  </template>
-                </UiKeyValue>
-              </section>
-
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>安装 / 更新</strong>
-                    <span>{{ state?.version ? `当前 v${state.version}` : '尚未安装' }}</span>
-                  </div>
-                </header>
-                <div class="inspector-actions">
-                  <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
-                    GitHub 安装
-                  </UiButton>
-                  <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
-                    本地 ZIP
-                  </UiButton>
-                </div>
-                <div class="inspector-actions">
-                  <UiButton size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
-                    检查更新
-                  </UiButton>
-                  <UiButton
-                    size="small"
-                    type="primary"
-                    plain
-                    :disabled="busy || !installed || !updateInfo?.hasUpdate || state?.orphanLikely"
-                    @click="onApplyUpdate"
-                  >
-                    应用更新
-                  </UiButton>
-                  <UiButton
-                    v-if="canCancelDownload"
-                    size="small"
-                    :loading="cancelling"
-                    @click="onCancelDownload"
-                  >
-                    取消下载
-                  </UiButton>
-                </div>
-                <UiProgress
-                  v-if="progressPercent !== null"
-                  :percentage="progressPercent"
-                />
-                <UiHint v-if="updateInfo" block>
-                  最新 {{ updateInfo.latestTag }}
-                  <span v-if="updateInfo.hasUpdate">（可更新）</span>
-                  <span v-else>（已最新）</span>
-                </UiHint>
-                <UiHint v-if="progressText" block>
-                  {{ progressText }}
-                </UiHint>
-                <UiButton size="small" text @click="onOpenDataDir">
-                  打开数据目录
+        <ToolFormPane title="运行详情">
+          <div class="inspector-sections">
+            <ToolFormSection title="服务状态" :description="statusLabel">
+              <template #actions>
+                <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
+              </template>
+              <div class="inspector-actions">
+                <UiButton
+                  v-if="!isRunning"
+                  size="small"
+                  type="primary"
+                  :disabled="busy || !installed || state?.orphanLikely"
+                  @click="onStart"
+                >
+                  启动
                 </UiButton>
-              </section>
-
-              <section class="inspector-section">
-                <header class="inspector-section-head">
-                  <div>
-                    <strong>诊断</strong>
-                    <span>本机托管进程与最近错误</span>
-                  </div>
-                </header>
-                <UiHint block>
-                  二进制不随 edt 安装包分发；打开页签不会自动启动，切换工具、返回首页或关闭页签都会停止服务。
-                </UiHint>
-                <UiHint v-if="state?.orphanLikely" block>
-                  探活确认是本服务的残留进程。可以结束它，但不会接管。
-                </UiHint>
-                <div v-if="state?.lastError" class="wb2api-diagnostic-error">
-                  <span>最近错误</span>
-                  <pre class="mono">{{ state.lastError }}</pre>
-                </div>
-                <UiHint v-else block>
-                  暂无错误记录。
-                </UiHint>
-                <UiButton size="small" text @click="openUpstreamRepo">
-                  打开上游仓库
+                <template v-else>
+                  <UiButton size="small" :disabled="busy" @click="onStop">
+                    停止
+                  </UiButton>
+                  <UiButton size="small" :disabled="busy || !installed" @click="onRestart">
+                    重启
+                  </UiButton>
+                </template>
+                <UiButton v-if="state?.orphanLikely" size="small" type="warning" :disabled="busy" @click="onKillOrphan">
+                  结束残留进程
                 </UiButton>
-              </section>
-            </div>
+              </div>
+              <UiKeyValue label="版本" mono label-width="72px">
+                {{ state?.version ?? '—' }}
+              </UiKeyValue>
+              <UiKeyValue class="wb2api-kv-inline" label="面板" mono label-width="72px">
+                <span class="wb2api-endpoint" :title="panelUrl">{{ panelUrl }}</span>
+                <template #actions>
+                  <UiCopyButton :text="panelUrl" label="面板地址" />
+                </template>
+              </UiKeyValue>
+              <UiKeyValue class="wb2api-kv-inline" label="OpenAI" mono label-width="72px">
+                <span class="wb2api-endpoint" :title="openAiBaseUrl">{{ openAiBaseUrl }}</span>
+                <template #actions>
+                  <UiCopyButton :text="openAiBaseUrl" label="OpenAI Base URL" />
+                </template>
+              </UiKeyValue>
+              <UiKeyValue class="wb2api-kv-inline" label="Anthropic" mono label-width="72px">
+                <span class="wb2api-endpoint" :title="anthropicBaseUrl">{{ anthropicBaseUrl }}</span>
+                <template #actions>
+                  <UiCopyButton :text="anthropicBaseUrl" label="Anthropic Base URL" />
+                </template>
+              </UiKeyValue>
+              <UiKeyValue class="wb2api-kv-inline" label="API Key" mono label-width="72px">
+                <span class="wb2api-api-key" :title="apiKeyVisible ? (state?.apiKey ?? '') : ''">{{ apiKeyDisplay }}</span>
+                <template v-if="state?.apiKey" #actions>
+                  <UiButton size="small" text @click="apiKeyVisible = !apiKeyVisible">
+                    {{ apiKeyVisible ? '隐藏' : '显示' }}
+                  </UiButton>
+                  <UiCopyButton :text="state.apiKey" label="API Key" />
+                </template>
+              </UiKeyValue>
+            </ToolFormSection>
+
+            <ToolFormSection
+              title="安装 / 更新"
+              :description="state?.version ? `当前 v${state.version}` : '尚未安装'"
+            >
+              <div class="inspector-actions">
+                <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallGithub">
+                  GitHub 安装
+                </UiButton>
+                <UiButton :disabled="busy || isRunning || state?.orphanLikely" @click="onInstallZip">
+                  本地 ZIP
+                </UiButton>
+              </div>
+              <div class="inspector-actions">
+                <UiButton size="small" :disabled="busy || !installed || isRunning" @click="onCheckUpdate">
+                  检查更新
+                </UiButton>
+                <UiButton
+                  size="small"
+                  type="primary"
+                  plain
+                  :disabled="busy || !installed || !updateInfo?.hasUpdate || state?.orphanLikely"
+                  @click="onApplyUpdate"
+                >
+                  应用更新
+                </UiButton>
+                <UiButton
+                  v-if="canCancelDownload"
+                  size="small"
+                  :loading="cancelling"
+                  @click="onCancelDownload"
+                >
+                  取消下载
+                </UiButton>
+              </div>
+              <UiProgress
+                v-if="progressPercent !== null"
+                :percentage="progressPercent"
+              />
+              <UiHint v-if="updateInfo" block>
+                最新 {{ updateInfo.latestTag }}
+                <span v-if="updateInfo.hasUpdate">（可更新）</span>
+                <span v-else>（已最新）</span>
+              </UiHint>
+              <UiHint v-if="progressText" block>
+                {{ progressText }}
+              </UiHint>
+              <UiButton size="small" text @click="onOpenDataDir">
+                打开数据目录
+              </UiButton>
+            </ToolFormSection>
+
+            <ToolFormSection
+              title="诊断"
+              description="本机托管进程与最近错误"
+              :divider="false"
+            >
+              <UiHint block>
+                二进制不随 edt 安装包分发；打开页签不会自动启动，切换工具、返回首页或关闭页签都会停止服务。
+              </UiHint>
+              <UiHint v-if="state?.orphanLikely" block>
+                探活确认是本服务的残留进程。可以结束它，但不会接管。
+              </UiHint>
+              <div v-if="state?.lastError" class="wb2api-diagnostic-error">
+                <span>最近错误</span>
+                <pre class="mono">{{ state.lastError }}</pre>
+              </div>
+              <UiHint v-else block>
+                暂无错误记录。
+              </UiHint>
+              <UiButton size="small" text @click="openUpstreamRepo">
+                打开上游仓库
+              </UiButton>
+            </ToolFormSection>
           </div>
-        </aside>
+        </ToolFormPane>
 
         <div class="wb2api-stage">
           <UiAlert
@@ -529,22 +520,6 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.wb2api-detail {
-  display: flex;
-  flex: 0 0 360px;
-  flex-direction: column;
-  width: 360px;
-  min-height: 0;
-  border-right: 1px solid var(--color-border-light);
-}
-
-.wb2api-detail-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 14px;
-}
-
 .wb2api-surface {
   min-width: 0;
   min-height: 0;
@@ -582,43 +557,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
 
-.inspector-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--color-border-light);
-
-  &:last-child {
-    padding-bottom: 0;
-    border-bottom: 0;
-  }
-}
-
-.inspector-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-
-  > div {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
-  }
-
-  strong {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
-  span {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-    line-height: 1.45;
+  :deep(.ui-kv) {
+    align-items: center;
+    min-height: var(--control-height);
   }
 }
 

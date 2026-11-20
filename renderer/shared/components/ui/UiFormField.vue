@@ -24,11 +24,13 @@ withDefaults(defineProps<{
   gap: var(--spacing-md);
   align-items: center;
   min-width: 0;
+  min-height: var(--control-height);
 }
 
 .ui-form-label {
   color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   line-height: var(--line-height-control);
 }
 

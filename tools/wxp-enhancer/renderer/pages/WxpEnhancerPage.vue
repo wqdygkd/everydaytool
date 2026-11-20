@@ -5,6 +5,8 @@ import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
 import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
+import ToolFormPane from '../../../../renderer/shared/components/workspace/ToolFormPane.vue'
+import ToolFormSection from '../../../../renderer/shared/components/workspace/ToolFormSection.vue'
 import ToolSurface from '../../../../renderer/shared/components/workspace/ToolSurface.vue'
 import { useCopy } from '../../../../renderer/shared/composables/useClipboard'
 import { DEFAULT_WXP_SETTINGS } from '../../../../shared/wxp'
@@ -310,18 +312,13 @@ onUnmounted(() => {
 
     <ToolSurface class="wxp-surface">
       <div class="form-studio">
-        <aside class="config-pane">
-          <div class="pane-title">
-            启动设置
-          </div>
-
+        <ToolFormPane title="启动设置">
           <div class="config-form">
             <UiFormField label-width="72px" label="WXP 路径" required>
               <UiPathField
                 v-model="settingsForm.executablePath"
                 placeholder="选择 WxP Client 可执行文件"
                 :disabled="settingsLocked"
-                class="path-row"
                 mono
               >
                 <template #actions>
@@ -363,7 +360,7 @@ onUnmounted(() => {
                 登录一次后缓存会话
               </UiSwitchField>
             </UiFormField>
-            <UiFormField label-width="72px" label="额外参数" class="form-item--last">
+            <UiFormField label-width="72px" label="额外参数">
               <UiInput
                 v-model="settingsForm.extraArgs"
                 placeholder="如 --lang=zh-CN；端口会自动附加"
@@ -374,13 +371,11 @@ onUnmounted(() => {
             </UiFormField>
           </div>
 
-          <section class="pane-section">
-            <header class="pane-section-head">
-              <div>
-                <strong>缓存维护</strong>
-                <span>读取需要 WXP 已连接；未运行时清除会在下次启动生效。</span>
-              </div>
-            </header>
+          <ToolFormSection
+            class="maintenance-section"
+            title="缓存维护"
+            description="读取需要 WXP 已连接；未运行时清除会在下次启动生效。"
+          >
             <div class="pane-actions">
               <UiButton
                 size="small"
@@ -402,7 +397,7 @@ onUnmounted(() => {
                 清除登录缓存
               </UiButton>
             </div>
-          </section>
+          </ToolFormSection>
 
           <div class="config-actions">
             <UiButton
@@ -416,8 +411,6 @@ onUnmounted(() => {
             </UiButton>
             <UiButton
               v-else
-              type="warning"
-              plain
               :loading="stopping"
               @click="handleStop"
             >
@@ -428,7 +421,7 @@ onUnmounted(() => {
           <UiHint size="xs" align="start" class="legal-hint">
             启动前请先退出已打开的 WXP；关闭本工具会停止由 edt 托管的会话。
           </UiHint>
-        </aside>
+        </ToolFormPane>
 
         <section class="result-pane">
           <header class="result-head">
@@ -612,25 +605,6 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.config-pane {
-  display: flex;
-  flex: 0 0 360px;
-  flex-direction: column;
-  width: 360px;
-  min-width: 0;
-  min-height: 0;
-  padding: 16px;
-  overflow-y: auto;
-  border-right: 1px solid var(--color-border-light);
-}
-
-.pane-title {
-  margin-bottom: 15px;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
 .result-pane {
   display: flex;
   flex: 1;
@@ -646,7 +620,7 @@ onUnmounted(() => {
   gap: var(--spacing-md);
   flex: 0 0 48px;
   min-height: 48px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--color-border-light);
 
   > div:first-child {
@@ -687,7 +661,7 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 14px;
+  padding: 16px;
   overflow: auto;
 }
 
@@ -695,10 +669,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 17px;
-}
-
-.form-item--last {
-  margin-bottom: 0;
 }
 
 .ui-port-input {
@@ -719,38 +689,10 @@ onUnmounted(() => {
   }
 }
 
-.pane-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
+.maintenance-section {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border-light);
-}
-
-.pane-section-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-
-  > div {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
-  }
-
-  strong {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
-  span {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
-    line-height: 1.45;
-  }
 }
 
 .pane-actions {
@@ -761,9 +703,7 @@ onUnmounted(() => {
 
 .config-actions {
   display: flex;
-  margin-top: var(--spacing-md);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
+  margin-top: var(--spacing-lg);
 
   .ui-button {
     width: 100%;
@@ -814,12 +754,5 @@ onUnmounted(() => {
 
 .cache-empty {
   min-height: 240px;
-}
-
-@media (max-width: 1180px) {
-  .config-pane {
-    flex-basis: 320px;
-    width: 320px;
-  }
 }
 </style>

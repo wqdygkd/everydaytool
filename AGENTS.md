@@ -52,6 +52,7 @@ Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 8 个�
 - **`stores/toolTabs.ts`** 的职责是「已打开的工具 + 最近使用顺序」：`openIds` 与 `openedAt`（每个工具最近一次打开时间）持久化到 localStorage（key 为 `toolTabs`），`recentIds` 只存在内存里，启动时用「打开顺序」播种（后打开的更新）。首页「正在运行 / 最近打开」的相对时间读 `openedAtById`。关闭当前工具时必须**先取 `recentFallback(toolId)` 再 `close()`**——close 会把该工具从两个列表里摘掉，顺序反了就永远只能回首页。
 - 工具子路由：工具定义可声明 `subRoutes`（`ToolSubRoute`，`shared/types/tool.ts`），由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；子路由继承主路由组件与 `meta.toolId`（标题栏上下文与活动组件解析依赖它），主路由是纯 redirect 记录（无 component）落到第一个子路由。工具内多视图（页签 / 列表分类）优先走子路由 + 路由驱动状态，不用纯本地 ref；入口统一按 `tool-<id>` / 子路由 name 跳转。范例：interceptor（4 页签 + 10 规则类型），映射集中在 `tools/interceptor/renderer/tabs.ts`。**子视图渲染为贴在主表面左缘的竖脊（`WorkspaceSpine`，98px），不使用横排 `UiMenuHorizontal`**；只有一个子视图或单页工具不渲染竖脊。**工具页内解析子路由必须用 `useToolPath()`（`renderer/shared/composables/useToolPath.ts`），不要直接读 `useRoute().path`**：隐藏面板仍在挂载态，全局路由已经切到别的工具，直接读会把子页签重置。
 - 工具页**没有第二条 header**：身份、说明、状态、主操作都在标题栏，工具条只放筛选与低频动作；statusline（31px）默认不渲染，只有确实承载低频数据时由工具自己保留。工具页表面外边距为 `0`（表面铺满主区域）；`ToolSurface` 铺 92% 纯白薄层（`--color-sheet`）、不画高光、不用外阴影（外加 1px 外缘），工具页容器不得再补底色。
+- **左右布局工具的左栏表单统一用 `ToolFormPane`**（360px / 窄屏 320px，48px 标题头，内边距 16px，独立滚动，右缘 1px 分隔）；栏内分节用 `ToolFormSection`，字段用 `UiFormField` 直排。表单类工具不再自写 `config-pane` / `pane-title` / `pane-section` 一类骨架与栏目样式。
 - 主壳标题栏、左轨、首页索引、工具页布局与动效的视觉规范见 [DESIGN.md](./DESIGN.md) §5.2、§5.3、§6、§8、§13（动效尊重 `prefers-reduced-motion`）；验收清单与命令见 DESIGN §13.2 / §13.4。
 
 ## 窗口外观（固定磨砂 · 工程侧）
@@ -178,6 +179,8 @@ export default defineTool({
 | 左轨（首页 / 已打开工具 / 拖拽排序 / 关闭 / 运行圆点） | `renderer/shared/components/AppRail.vue` |
 | 工具页常驻容器（打开即挂载、切换只切可见性） | `renderer/shared/components/ToolPane.vue` |
 | 工具页主表面（92% 纯白 `--color-sheet` + 1px 外缘，无高光 / 无外阴影） | `renderer/shared/components/workspace/ToolSurface.vue` |
+| 左右布局工具的左栏骨架（48px 标题头 + 独立滚动，360px / 窄屏 320px） | `renderer/shared/components/workspace/ToolFormPane.vue` |
+| 左栏分节（标题 + 说明 + 动作，默认底部分隔线） | `renderer/shared/components/workspace/ToolFormSection.vue` |
 | 工具子视图竖脊（98px） | `renderer/shared/components/workspace/WorkspaceSpine.vue` |
 | 已打开工具列表 + 最近使用（`openIds` / `recentIds`） | `renderer/stores/toolTabs.ts` |
 | 悬停提示（portal，rail 等 overflow 容器内唯一可用方案） | `renderer/shared/components/ui/UiTooltip.vue` |
