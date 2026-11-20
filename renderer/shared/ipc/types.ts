@@ -28,7 +28,6 @@ declare global {
     offlinePack?: IpcInvokeApi
     skillManager?: IpcInvokeApi
     workbuddy2apiPanel?: IpcInvokeApi
-    mediaLibrary?: IpcInvokeApi
   }
 }
 

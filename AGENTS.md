@@ -6,7 +6,7 @@ everydaytool（`edt`，包名 `everydaytool`）多功能工具平台的**工程�
 
 ## 项目概览
 
-Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 9 个工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / skill-manager / tweb-cache / workbuddy2api-panel / media-library）。
+Electron + Vue 3 + Pinia + Reka UI + Vite + SCSS 多工具平台，内置 8 个工具模块（interceptor / offline-pack / treease-editor / wxp-enhancer / id-card-generator / skill-manager / tweb-cache / workbuddy2api-panel）。
 
 ## 文档结构
 
@@ -226,4 +226,3 @@ export default defineTool({
 | **tweb-cache 模块记忆（tweb 页面侧归档客户端 / 触点重放 / SW 与 PeerId 坑；安装包内置 tweb 站点，未内置时安装版隐藏）** | `docs/tweb-cache.md` |
 | **skill-manager 模块记忆（skills-lock 兼容 / 安装与更新事务 / 禁用与回收站 / 预设）** | `docs/skill-manager.md` |
 | **interceptor 模块记忆（MITM / 证书 / 规则 / 流量与扩展桥）** | `docs/interceptor.md` |
-| **media-library 模块记忆（合集索引 / 扫描 / 缩略图 / 来源）** | `docs/media-library.md` |

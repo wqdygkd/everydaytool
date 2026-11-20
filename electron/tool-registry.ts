@@ -1,5 +1,4 @@
 import { interceptorBackend } from '../tools/interceptor/backend/index.ts'
-import { mediaLibraryBackend } from '../tools/media-library/backend/index.ts'
 import { offlinePackBackend } from '../tools/offline-pack/backend/index.ts'
 import { skillManagerBackend } from '../tools/skill-manager/backend/index.ts'
 import { twebCacheBackend } from '../tools/tweb-cache/backend/index.ts'
@@ -11,4 +10,4 @@ export interface ToolBackend {
   dispose?: () => Promise<void> | void
 }
 
-export const toolBackends: ToolBackend[] = [interceptorBackend, wxpEnhancerBackend, offlinePackBackend, skillManagerBackend, twebCacheBackend, workbuddy2apiPanelBackend, mediaLibraryBackend]
+export const toolBackends: ToolBackend[] = [interceptorBackend, wxpEnhancerBackend, offlinePackBackend, skillManagerBackend, twebCacheBackend, workbuddy2apiPanelBackend]

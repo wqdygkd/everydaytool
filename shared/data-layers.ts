@@ -124,10 +124,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'skill-manager.credentials', toolId: 'skill-manager', layer: 'config', relativePath: 'skill-manager/credentials.json', label: '按 host 保存的 PAT（safeStorage 信封）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'skill-manager.history', toolId: 'skill-manager', layer: 'config', relativePath: 'skill-manager/history.json', label: '技能操作历史', backup: 'optional', clean: 'never' },
   { id: 'skill-manager.lock-backups', toolId: 'skill-manager', layer: 'config', relativePath: 'skill-manager/lock-backups', label: '写锁前快照', backup: 'include', clean: 'never' },
-  { id: 'media-library.index', toolId: 'media-library', layer: 'config', relativePath: 'media-library/index.json', label: '合集索引、标签、来源与界面偏好', backup: 'include', clean: 'never' },
-  { id: 'media-library.artists', toolId: 'media-library', layer: 'config', relativePath: 'media-library/artists.json', label: '艺人资料（名字 / 别名 / 简介）', backup: 'include', clean: 'never' },
-  { id: 'media-library.series', toolId: 'media-library', layer: 'config', relativePath: 'media-library/series.json', label: '系列（合集的有序分组）', backup: 'include', clean: 'never' },
-  { id: 'media-library.collections', toolId: 'media-library', layer: 'config', relativePath: 'media-library/collections', label: '合集条目、卡片根与排除规则', backup: 'include', clean: 'never' },
   { id: 'wxp-enhancer.config', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/config.json', label: '注入设置', backup: 'include', clean: 'never' },
   { id: 'wxp-enhancer.data-cache', toolId: 'wxp-enhancer', layer: 'config', relativePath: 'wxp-enhancer/data-cache.json', label: '采集的登录态（密文）与链接收藏（明文）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'tweb-cache.config', toolId: 'tweb-cache', layer: 'config', relativePath: 'tweb-cache/config.json', label: '站点端口（tweb 前端）', backup: 'include', clean: 'never' },
@@ -163,8 +159,6 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   // 已下载完成的安装包 / 离线包：磁盘占用大，但**不是可再生缓存**，重下要再花一次流量和时间。
   // 历史记录（offline-pack/history.json）直接指向这里，清缓存删掉就会全部变成「文件已缺失」。
   { id: 'offline-pack.downloads', toolId: 'offline-pack', layer: 'cache', relativePath: 'offline-pack/downloads', label: '下载的离线包（成品，不随清缓存删除）', backup: 'never', clean: 'never' },
-  { id: 'media-library.thumbs', toolId: 'media-library', layer: 'cache', relativePath: 'media-library/thumbs', label: '媒体缩略图（按需重新生成）', backup: 'never', clean: 'always' },
-  { id: 'media-library.scans', toolId: 'media-library', layer: 'cache', relativePath: 'media-library/scans', label: '扫描记录', backup: 'never', clean: 'always' },
   { id: 'skill-manager.repos', toolId: 'skill-manager', layer: 'cache', relativePath: 'skill-manager/repos', label: '远端仓库快照与 tarball 缓存', backup: 'never', clean: 'always' },
   { id: 'skill-manager.staging', toolId: 'skill-manager', layer: 'cache', relativePath: 'skill-manager/staging', label: '安装暂存区', backup: 'never', clean: 'always' },
   { id: 'skill-manager.tmp', toolId: 'skill-manager', layer: 'cache', relativePath: 'skill-manager/tmp', label: '安装临时目录', backup: 'never', clean: 'always' },

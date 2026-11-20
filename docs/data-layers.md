@@ -48,7 +48,6 @@
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
     skill-manager/      settings.json, registry.json, history.json, projects.json,
                         favorites.json, presets.json, credentials.json [sensitive], lock-backups/
-    media-library/      index.json, artists.json, series.json, collections/
   session/                             # 会话层 == Electron sessionData
     Cookies/  Local Storage/  IndexedDB/  Preferences
     Partitions/{tweb-cache,treease-editor,workbuddy2api-panel}
@@ -60,7 +59,6 @@
     tweb-cache/{objects,tmp,diagnostics}
     workbuddy2api-panel/{downloads,runtime/{current,previous,staging}}
     skill-manager/{repos,staging,tmp}
-    media-library/{thumbs,scans}
     import-rollback/<ts>/              # 备份恢复前的配置层快照，可随时清
 
 <assets>/                              # 资产层，默认 <data>/assets，可设到任意盘
@@ -93,7 +91,6 @@
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |
 | skill-manager | `config/skill-manager/{settings,registry,history,projects,favorites,presets,credentials}.json`、`lock-backups/` | — | `cache/skill-manager/{repos,staging,tmp}` | `<assets>/skill-manager/{disabled,trash}` |
-| media-library | `config/media-library/{index,artists,series}.json`、`collections/` | — | `cache/media-library/{thumbs,scans}` | — |
 | id-card-generator | 无持久化 | — | — | — |
 | 应用壳 | `config/app/{window-bounds,ui-preferences}.json` | `session/Local Storage`（页签、镜像） | `cache/app/`、`cache/import-rollback/` | — |
 

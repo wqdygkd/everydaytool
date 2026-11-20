@@ -122,13 +122,6 @@ export const icons = {
     paths: ['M4 14.5 10 4.5l6 10', 'M6.5 14.5h7', 'M8.2 11.2h3.6'],
     sw: 1.6,
   },
-  // 胶片：媒体库（本地影片 / 套图）
-  'film': {
-    vb: 20,
-    rects: [[3, 3.5, 14, 13, 2]],
-    paths: ['M6.5 3.5v13M13.5 3.5v13', 'M3 7.5h3.5M3 12.5h3.5M13.5 7.5H17M13.5 12.5H17'],
-    sw: 1.5,
-  },
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof icons
