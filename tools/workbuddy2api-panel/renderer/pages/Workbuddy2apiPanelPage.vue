@@ -34,7 +34,6 @@ const cancelling = ref(false)
 const cancelRequested = ref(false)
 const progress = ref<Wb2apiProgressEvent | null>(null)
 const apiKeyVisible = ref(false)
-const inspectorOpen = ref(false)
 
 // 检查更新的结果缓存在主进程（state.update）：重开页签 / 刷新都在，渲染层不再自留一份副本。
 // 已安装版本来自 manifest（state.version），与检查结果里的 currentVersion 同源现算。
@@ -264,18 +263,6 @@ const canCancelDownload = computed(() =>
   state.value?.updating === true && progress.value?.phase === 'download',
 )
 
-function openInspector() {
-  inspectorOpen.value = true
-}
-
-function toggleInspector() {
-  inspectorOpen.value = !inspectorOpen.value
-}
-
-function openPanelInBrowser() {
-  if (panelSrc.value) openExternal(panelSrc.value)
-}
-
 let offState: (() => void) | null = null
 let offProgress: (() => void) | null = null
 let unguard: (() => void) | null = null
@@ -338,31 +325,8 @@ onUnmounted(() => {
 <template>
   <div class="tool-page wb2api-page">
     <ToolSurface class="wb2api-surface">
-      <template #toolbar>
-        <UiToolbar gap="sm" flush>
-          <UiStatusTag :tone="statusTone" :pulsing="status === 'running'" />
-          <span class="wb2api-status-label">{{ statusLabel }}</span>
-          <UiChip v-if="state?.version" mono>
-            v{{ state.version }}
-          </UiChip>
-          <UiChip v-if="state?.orphanLikely" tone="warning">
-            发现本服务残留进程
-          </UiChip>
-          <template #end>
-            <UiIconButton icon="refresh" label="刷新状态" :disabled="loading" @click="refresh" />
-            <UiIconButton icon="external" label="在浏览器打开面板" :disabled="!panelSrc" @click="openPanelInBrowser" />
-            <UiIconButton
-              icon="info"
-              :active="inspectorOpen"
-              :label="inspectorOpen ? '收起运行详情' : '运行详情'"
-              @click="toggleInspector"
-            />
-          </template>
-        </UiToolbar>
-      </template>
-
       <div class="wb2api-body">
-        <aside v-if="inspectorOpen" class="wb2api-detail" aria-label="运行详情">
+        <aside class="wb2api-detail" aria-label="运行详情">
           <div class="wb2api-detail-scroll">
             <div class="inspector-sections">
               <section class="inspector-section">
@@ -542,13 +506,7 @@ onUnmounted(() => {
             center
             icon="wb2api"
             :text="emptyText"
-          >
-            <template #actions>
-              <UiButton size="small" @click="openInspector()">
-                {{ installed ? '查看运行详情' : '安装上游二进制' }}
-              </UiButton>
-            </template>
-          </UiEmpty>
+          />
         </div>
       </div>
     </ToolSurface>
@@ -599,7 +557,6 @@ onUnmounted(() => {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-well);
 }
 
 .wb2api-alert {
@@ -619,11 +576,6 @@ onUnmounted(() => {
   flex: 1;
   justify-content: center;
   padding: 28px;
-}
-
-.wb2api-status-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
 }
 
 .inspector-sections {
