@@ -28,9 +28,12 @@
   /* 主区域无内边距，右下角正好压在窗口外缘：不画内圆角，交给窗口自身裁切。
      这样窗口圆角 / 最大化直角 / 无圆角平台都能自然贴合，不会露出透明楔形。 */
   border-bottom-right-radius: 0;
-  background: var(--color-raised);
+  /* 毛玻璃表面：60% 白纸压在被系统糊过的壁纸上（macOS vibrancy / Windows acrylic），
+     透出的 8% 是柔光而不是清晰的壁纸边缘——「生硬」正是从清晰边缘来的。
+     不加顶部高光线、不画外阴影：玻璃的层次由模糊 + 半透明白给出，不靠亮边。
+     透度由 --alpha-sheet 单点调档。 */
+  background: var(--color-sheet);
   backdrop-filter: var(--glass-raised);
-  box-shadow: inset 0 1px 0 var(--color-highlight);
 }
 
 .tool-surface.has-spine {

@@ -110,7 +110,6 @@ export interface DataLayerEntry {
  */
 export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   // ── 配置层 ──
-  { id: 'app.window-appearance', toolId: 'app', layer: 'config', relativePath: 'app/window-appearance.json', label: '窗口外观', backup: 'include', clean: 'never' },
   { id: 'app.window-bounds', toolId: 'app', layer: 'config', relativePath: 'app/window-bounds.json', label: '窗口大小与位置', backup: 'include', clean: 'never' },
   { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '收藏的工具与首页排序', backup: 'include', clean: 'never' },
   { id: 'interceptor.config', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/config.json', label: '拦截配置', backup: 'include', clean: 'never' },
@@ -232,7 +231,6 @@ export interface DataLayoutMigrationRule {
  */
 export const DATA_LAYOUT_V1_TO_V2: readonly DataLayoutMigrationRule[] = [
   // 应用壳
-  { id: 'app.window-appearance', layer: 'config', from: 'app/window-appearance.json', to: 'app/window-appearance.json', kind: 'file' },
   { id: 'app.window-bounds', layer: 'config', from: 'app/window-bounds.json', to: 'app/window-bounds.json', kind: 'file' },
   { id: 'app.logs', layer: 'cache', from: 'app/logs', to: 'app/logs', kind: 'dir' },
   { id: 'app.crash-dumps', layer: 'cache', from: 'app/crash-dumps', to: 'app/crash-dumps', kind: 'dir' },

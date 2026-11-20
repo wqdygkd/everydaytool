@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import type { AppAssetsDirectoryInfo, AppAssetsDirectoryUpdateResult, AppDataDirectoryInfo, AppDataDirectoryUpdateResult, CacheCleanResult, DataUsage } from '../../shared/app'
-import type { MacVibrancy, WindowMaterial } from '../../shared/appearance'
 import type { BackupExportResult, BackupInspectResult, BackupRestoreReport } from '../../shared/backup'
 import type { WindowBoundsState } from '../../shared/window-bounds'
 import { alert, confirm, prompt } from '@renderer/shared/feedback'
 import { useEventListener } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { getSensitiveEntries } from '../../shared/data-layers'
-import { useAppearance } from '../shared/composables/useAppearance'
 import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
 
 // 应用设置页：作为应用页签打开（见 config/app-tabs.ts），不再是模态对话框——
 // 设置项里有数据目录、空间占用这类需要边看边操作的内容，占满一屏比弹窗更好用。
-const { appearance, capabilities, load: loadAppearance, update: updateAppearance } = useAppearance()
 
 const info = ref<AppDataDirectoryInfo | null>(null)
 // 资产根：与数据目录同构的「只写 pending、重启迁移生效」流程，但它是**独立根**（可指到另一块盘）。
@@ -55,7 +52,6 @@ const SETTINGS_NAV: SettingsNavGroup[] = [
   {
     group: '窗口',
     items: [
-      { id: 'appearance', label: '窗口外观' },
       { id: 'bounds', label: '大小与位置' },
     ],
   },
@@ -70,8 +66,8 @@ const SETTINGS_ITEMS = SETTINGS_NAV.flatMap(group => group.items)
 
 const pageRef = ref<HTMLElement | null>(null)
 const activeSetting = ref(SETTINGS_ITEMS[0].id)
-// 索引跳转期间锁住滚动位置回写：目标分区被夹在滚动末端时（例如「窗口外观」
-// 下方只剩两屏内容），落点会停在最大滚动位置，滚动监听会把高亮翻成末项「调试」。
+// 索引跳转期间锁住滚动位置回写：目标分区被夹在滚动末端时（例如「大小与位置」
+// 下方只剩一屏内容），落点会停在最大滚动位置，滚动监听会把高亮翻成末项「调试」。
 let spyLocked = false
 let spyUnlockTimer: number | undefined
 
@@ -109,72 +105,8 @@ function scrollToSetting(id: string) {
 useEventListener(window, 'resize', updateActiveSetting)
 
 // ── 窗口外观 ──
-// 平台能力由主进程给出：不支持半透明的平台直接禁用整组，而不是给一个点了没反应的开关。
-const isTransparentEnabled = computed(() => capabilities.value?.supportsTransparent === true)
-const isMaterialEnabled = computed(() => capabilities.value?.supportsMaterial === true)
-const isVibrancyEnabled = computed(() => (capabilities.value?.vibrancies.length ?? 0) > 0)
-
-// 开关状态：appearance 允许为 null（尚未加载完成），故收敛成 boolean 后由模板用
-// :model-value + @update 显式提交 IPC——不对 appearance 本身做 v-model 双向绑定。
-const transparentOn = computed(() => appearance.value?.enabled === true)
-const nightOn = computed(() => appearance.value?.night === true)
-
-interface MaterialChoice {
-  /** 材质标识：Windows 落在 material 字段，macOS 落在 vibrancy 字段，值域互不重叠 */
-  value: WindowMaterial | MacVibrancy
-  label: string
-  description: string
-}
-
-// 两套平台的材质字段不同（Windows 走 DWM material，macOS 走 vibrancy），
-// 但交互完全一致——一张卡片单选。故统一成同一份选项结构，由平台能力挑一路渲染。
-const MATERIAL_CHOICES: MaterialChoice[] = [
-  { value: 'mica', label: 'Mica', description: '壁纸取色的长驻窗口背景' },
-  { value: 'acrylic', label: '亚克力', description: '更强的模糊与透光，偏向临时浮层' },
-  { value: 'tabbed', label: 'Tabbed', description: '带页签标题栏的弱化材质' },
-]
-const VIBRANCY_CHOICES: MaterialChoice[] = [
-  { value: 'sidebar', label: '侧栏', description: '接近系统侧栏的浅色模糊' },
-  { value: 'hud', label: 'HUD', description: '高对比深色浮动面板' },
-  { value: 'under-window', label: '窗下', description: '窗口背后的柔和模糊' },
-  { value: 'fullscreen-ui', label: '全屏 UI', description: '全屏界面用的轻模糊' },
-]
-
-const materialChoices = computed<MaterialChoice[]>(() => {
-  if (isMaterialEnabled.value) return MATERIAL_CHOICES
-  if (isVibrancyEnabled.value) return VIBRANCY_CHOICES
-  return []
-})
-
-// 当前选中的材质：与 materialChoices 同源，两路字段互斥，取生效的那一路即当前值
-const selectedMaterial = computed(() =>
-  (isMaterialEnabled.value ? appearance.value?.material : appearance.value?.vibrancy) ?? 'none',
-)
-
-const appearanceHint = computed(() => {
-  if (!capabilities.value) return ''
-  if (!capabilities.value.supportsTransparent) {
-    return '当前系统不支持半透明窗口（Linux 需合成器支持），该选项已禁用。'
-  }
-  if (appearance.value?.enabled) {
-    return '各表面按当前材质的 alpha + 玻璃档位透出桌面。'
-  }
-  return '开启后窗口画布透出桌面壁纸，可再选择系统背景材质。'
-})
-
-async function toggleTransparent(value: boolean) {
-  await updateAppearance({ enabled: value })
-}
-
-async function chooseMaterial(value: WindowMaterial | MacVibrancy) {
-  // 选项值来自上面两路的并集，这里按当前生效的那一路收回各自字段
-  if (isMaterialEnabled.value) await updateAppearance({ material: value as WindowMaterial })
-  else await updateAppearance({ vibrancy: value as MacVibrancy })
-}
-
-async function toggleNight(value: boolean) {
-  await updateAppearance({ night: value })
-}
+// 外观不再可配：窗口恒为 CSS 透明（外壳 80% + 主表面 84%），没有材质 / vibrancy / 夜色开关，
+// 所以设置页没有对应分区——透明度只由 tokens.scss 的 --alpha-shell / --alpha-sheet 决定。
 
 // ── 窗口大小与位置 ──
 // 与外观同理：唯一事实来源是主进程（<data>/app/window-bounds.json），这里只读当前记录、
@@ -506,7 +438,6 @@ onMounted(() => {
   void loadInfo()
   void loadAssetsInfo()
   void loadUsage()
-  void loadAppearance()
   void loadBounds()
   void nextTick(updateActiveSetting)
 })
@@ -685,63 +616,10 @@ onMounted(() => {
             <h2 id="settings-window-title">
               窗口
             </h2>
-            <p>外观材质、半透明与窗口几何。</p>
+            <p>窗口透明度固定（外壳 80% + 主体叠加 20%），不可切换；这里只调窗口几何。</p>
           </header>
 
           <UiPanel class="settings-group" variant="outlined" padding="0">
-            <div class="setting-row" data-setting="appearance">
-              <div class="row-head">
-                <div class="row-copy">
-                  <h3>窗口外观</h3>
-                  <p>{{ appearanceHint || '调整窗口透明度与系统背景材质。' }}</p>
-                </div>
-                <UiSwitchField
-                  aria-label="半透明窗口"
-                  :model-value="transparentOn"
-                  :disabled="!isTransparentEnabled"
-                  @update:model-value="toggleTransparent"
-                />
-              </div>
-
-              <div v-if="isTransparentEnabled && appearance?.enabled" class="material-block">
-                <div class="block-label">
-                  系统材质
-                </div>
-                <div v-if="materialChoices.length > 0" class="material-options">
-                  <button
-                    v-for="option in materialChoices"
-                    :key="option.value"
-                    type="button"
-                    class="material-option"
-                    :class="{ 'is-active': selectedMaterial === option.value }"
-                    :aria-pressed="selectedMaterial === option.value"
-                    @click="chooseMaterial(option.value)"
-                  >
-                    <span class="material-mark" aria-hidden="true" />
-                    <span class="material-text">
-                      <span class="material-name">{{ option.label }}</span>
-                      <span class="material-desc">{{ option.description }}</span>
-                    </span>
-                  </button>
-                </div>
-                <UiHint v-else block>
-                  当前系统没有可用的系统背景材质，仅窗口画布会透出桌面。
-                </UiHint>
-              </div>
-
-              <div class="sub-row">
-                <div class="row-copy">
-                  <h3>夜色玻璃</h3>
-                  <p>暗色表面基调 + 亮蓝强调，可与任意半透明 / 材质模式组合；跟随系统「降低透明度」自动退回不透明。</p>
-                </div>
-                <UiSwitchField
-                  aria-label="夜色玻璃"
-                  :model-value="nightOn"
-                  @update:model-value="toggleNight"
-                />
-              </div>
-            </div>
-
             <div class="setting-row" data-setting="bounds">
               <div class="row-head">
                 <div class="row-copy">
@@ -1019,89 +897,6 @@ onMounted(() => {
   font-size: var(--font-size-sm);
 }
 
-.material-block {
-  margin-top: 16px;
-}
-
-.block-label {
-  margin-bottom: 8px;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-.material-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-}
-
-/* 材质是单选而不是卡片：整行可点，选中只改底色与圆点，不再套一层边框。 */
-.material-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-
-  &:hover {
-    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-  }
-
-  &.is-active {
-    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-    color: var(--color-text-primary);
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
-  }
-}
-
-.material-mark {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 50%;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast);
-
-  .material-option.is-active & {
-    border-color: var(--color-primary);
-    background: var(--color-primary);
-    box-shadow: inset 0 0 0 3px var(--color-raised);
-  }
-}
-
-.material-text {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.material-name {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.material-desc {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
-}
-
 .usage-block {
   margin-top: 12px;
 }
@@ -1279,10 +1074,6 @@ onMounted(() => {
   .row-foot {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .material-options {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

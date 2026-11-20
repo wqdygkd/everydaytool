@@ -24,11 +24,6 @@ export const EDT_APP_IPC_CHANNELS = {
   DEVTOOLS_OPEN: 'edt-app:devtools:open',
   // 主进程 → 渲染层推送：窗口进/出全屏（EVENT_ 开头，preload on() 白名单要求）
   EVENT_FULLSCREEN_CHANGED: 'edt-app:event:fullscreen-changed',
-  // 窗口外观（半透明 / 系统材质）：跨进程生效，主进程推送最新值保持渲染层同步
-  APPEARANCE_GET: 'edt-app:appearance:get',
-  APPEARANCE_SET: 'edt-app:appearance:set',
-  // 主进程 → 渲染层推送：外观已变更（含平台降级后的最终值）
-  EVENT_APPEARANCE_CHANGED: 'edt-app:event:appearance-changed',
   // 窗口大小 / 位置：读取当前记录、开关「记住窗口大小与位置」、重置回默认尺寸居中
   WINDOW_BOUNDS_GET: 'edt-app:window-bounds:get',
   WINDOW_BOUNDS_SET: 'edt-app:window-bounds:set',

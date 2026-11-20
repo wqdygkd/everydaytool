@@ -1,14 +1,12 @@
-import type { WindowAppearance } from '../shared/appearance.ts'
 import type { ShellMenuAction } from '../shared/menu.ts'
 import type { WindowBoundsState } from '../shared/window-bounds.ts'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron'
 import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { registerAppIpcHandlers } from '../backend/ipc/handlers.ts'
 import { configureInstanceIdentity } from '../backend/utils/app-instance.ts'
-import { getWindowAppearance, loadWindowAppearance } from '../backend/utils/appearance-store.ts'
 import { getAssetsRoot, loadAssetsRootSync } from '../backend/utils/assets-root.ts'
 import { resolveLayerPath } from '../backend/utils/data-layers.ts'
 import { upgradeDataLayout } from '../backend/utils/data-layout-upgrade.ts'
@@ -18,7 +16,7 @@ import { isTrustedIpcSenderUrl } from '../backend/utils/ipc-sender.ts'
 import { configureFileLogging, logger } from '../backend/utils/logger.ts'
 import { configureSessionDataDirectory } from '../backend/utils/session-data.ts'
 import { clearWindowBoundsGeometry, getWindowBoundsState, loadWindowBounds, recordWindowBounds, setWindowBoundsEnabled } from '../backend/utils/window-bounds-store.ts'
-import { parseWindowsBuild, resolveAppearanceCapabilities, resolveWindowAppearance, sanitizeWindowAppearance } from '../shared/appearance.ts'
+import { OPAQUE_WINDOW_BG, parseWindowsBuild, resolveWindowBlur, TRANSPARENT_WINDOW_BG } from '../shared/appearance.ts'
 import { SHELL_MENUS } from '../shared/menu.ts'
 import { DEFAULT_WINDOW_SIZE, MIN_WINDOW_SIZE, resolveWindowPlacement } from '../shared/window-bounds.ts'
 import { applyDevDockIcon, resolveDevWindowIconPath } from './dev-icon.ts'
@@ -96,25 +94,10 @@ const ACTION_ROLES: Record<ShellMenuAction, NonNullable<Electron.MenuItemConstru
 
 const TITLEBAR_COLORS = { color: '#00000000', symbolColor: '#000000' } as const
 
-// 窗口原生底色：恒透明——外壳与各页面自理底色
-// （工具页 .tool-page 自带 app-bg，首页透出桌面），窗口层不兜实色。
-const TRANSPARENT_WINDOW_BG = '#00000000'
-/* 夜色玻璃的原生窗口底色:半透明关闭时画布后面就是这块实底,
-   不跟随的话透明画布会透出 Chromium 默认白底(Aurora Glass 重设计) */
-const NIGHT_WINDOW_BG = '#0d1017'
-
 // ── 窗口大小 / 位置 ──
 // 记录用 debounce：拖动 / 缩放会连续触发 resize / move，攒到 400ms 才落一次盘；
 // 关窗时立即同步写入——退出流程没有等异步写的余量。
 const WINDOW_BOUNDS_SAVE_DELAY = 400
-
-// ── 窗口外观（半透明 / 系统材质） ──
-// 平台能力在进程启动时解析一次：Windows 要读系统版本判断是否 22H2+（否则 DWM 会忽略材质），
-// 之后所有窗口创建 / IPC 设置都复用同一份结论，避免各处重复探测。
-const APPEARANCE_CAPABILITIES = resolveAppearanceCapabilities(
-  process.platform,
-  process.platform === 'win32' ? parseWindowsBuild(process.getSystemVersion()) : null,
-)
 
 /**
  * 启动期把数据布局从 v1（平铺 `<data>/<工具>/…`）升级到 v2（`config` / `session` / `cache` 三层）。
@@ -185,48 +168,40 @@ function buildApplicationMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
 }
 
+// 平台磨砂方案：进程启动时解析一次（Windows 要读系统版本判断是否 22H2+，DWM 会忽略低版本的
+// backgroundMaterial）。外观不可切换，所以这份结论就是唯一形态，没有运行期重算。
+const WINDOW_BLUR = resolveWindowBlur(
+  process.platform,
+  process.platform === 'win32' ? parseWindowsBuild(process.getSystemVersion()) : null,
+)
+
 /**
- * 把外观配置映射成 BrowserWindow 的构造参数。
- * 生效形态（是否透明 / 材质 / vibrancy）由 shared/appearance.ts 的 resolveWindowAppearance 判定，
- * 这里只补 BrowserWindow 专有的几何参数：Windows 保留 thickFrame（缩放边框/阴影）并开圆角。
+ * 窗口构造参数里的「形态」部分：**恒为系统磨砂玻璃**（外观不可切换）。
+ * 桌面模糊只能由系统给（macOS vibrancy / Windows acrylic）：CSS backdrop-filter 糊不到桌面，
+ * 所以窗口必须承载磨砂，CSS 只在它上面叠白纸。没有磨砂的平台退回逐像素 alpha（Win10）或实底。
+ * 所有分支都写全透明底色：磨砂窗口上的不透明 backgroundColor 会直接把玻璃糊死。
  */
-function buildAppearanceWindowOptions(appearance: WindowAppearance): Partial<Electron.BrowserWindowConstructorOptions> {
-  const plan = resolveWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
-  // 不透明形态补实底:夜色 = 深色,否则白底。透明 / 材质形态不设 backgroundColor
-  // （透明窗口上的不透明底色会破坏 alpha 形态）
-  if (!plan.enabled) return { backgroundColor: appearance.night ? NIGHT_WINDOW_BG : '#ffffff' }
-
-  if (plan.vibrancy !== 'none') return { vibrancy: plan.vibrancy }
-  if (plan.transparent) return { transparent: true, thickFrame: true, roundedCorners: true }
-  if (plan.material !== 'none') return { backgroundMaterial: plan.material, thickFrame: true, roundedCorners: true }
-  return {}
-}
-
-/** 运行时切换外观：透明类开关只能改 CSS，材质 / vibrancy 走原生 setter */
-function applyWindowAppearance(appearance: WindowAppearance): void {
-  const win = mainWindow
-  if (!win || win.isDestroyed()) return
-  const plan = resolveWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
-
-  // 夜色玻璃的原生侧:themeSource=dark 让 mica / acrylic / tabbed 材质背板走系统深色变体
-  // （浅色系统下材质背板是白的，CSS 夜色盖不住它），标题栏原生按钮符号色同步反转
-  nativeTheme.themeSource = appearance.night ? 'dark' : 'system'
-  if (process.platform === 'win32' && win.setTitleBarOverlay) {
-    win.setTitleBarOverlay({ color: TITLEBAR_COLORS.color, symbolColor: appearance.night ? '#ffffff' : '#000000', height: 44 })
+function buildWindowBackdropOptions(): Partial<Electron.BrowserWindowConstructorOptions> {
+  if (WINDOW_BLUR.vibrancy !== 'none') {
+    return { vibrancy: WINDOW_BLUR.vibrancy, backgroundColor: TRANSPARENT_WINDOW_BG }
   }
-
-  if (process.platform === 'darwin') {
-    win.setVibrancy(plan.vibrancy === 'none' ? null : plan.vibrancy)
-  } else if (process.platform === 'win32') {
-    win.setBackgroundMaterial(plan.material)
+  if (WINDOW_BLUR.material !== 'none') {
+    return {
+      backgroundMaterial: WINDOW_BLUR.material,
+      backgroundColor: TRANSPARENT_WINDOW_BG,
+      thickFrame: true,
+      roundedCorners: true,
+    }
   }
-  // 透明开关随 CSS 类切换（见 App.vue 的 is-transparent）；原生底色只在半透明开启时
-  // 恒全透明，关闭时同步为实底（夜色 = 深色，否则透出默认白底）
-  win.setBackgroundColor(plan.enabled ? TRANSPARENT_WINDOW_BG : (appearance.night ? NIGHT_WINDOW_BG : '#ffffff'))
-
-  const safe = sanitizeWindowAppearance(appearance, APPEARANCE_CAPABILITIES)
-  win.webContents.send(EDT_APP_IPC_CHANNELS.EVENT_APPEARANCE_CHANGED, safe)
-  logger.info('Window appearance updated', { appearance: safe })
+  if (WINDOW_BLUR.transparent) {
+    return {
+      transparent: true,
+      backgroundColor: TRANSPARENT_WINDOW_BG,
+      thickFrame: true,
+      roundedCorners: true,
+    }
+  }
+  return { backgroundColor: OPAQUE_WINDOW_BG }
 }
 
 /**
@@ -379,15 +354,13 @@ function registerWebviewGuards(): void {
   })
 }
 
-// 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理 / 窗口外观（preload 命名空间 edtApp）。
+// 平台级（应用壳）IPC：数据根目录管理 / 磁盘用量 / 缓存清理 / 窗口大小与位置（preload 命名空间 edtApp）。
 // 必须在任何 safeHandle 注册之前注入 IPC 来源白名单根路径：不注就会导致打包后（file:// 协议）
 // 所有 IPC 调用被误判为不可信（白名单规则见 backend/utils/ipc-sender.ts）。
 function registerAppIpc(): void {
   initIpcSafety({ appPath: app.getAppPath(), allowLoopbackHttp: isDevServer, devServerPort: 5173 })
 
   registerAppIpcHandlers({
-    applyWindowAppearance,
-    getAppearanceCapabilities: () => APPEARANCE_CAPABILITIES,
     setWindowBoundsEnabled: setWindowBoundsEnabledFromUi,
     resetWindowBounds,
   })
@@ -435,8 +408,6 @@ async function createWindow(): Promise<void> {
   // 开发态图标（带 DEV 标识）；安装版恒为 undefined，窗口沿用系统默认图标
   const devWindowIcon = resolveDevWindowIconPath()
 
-  // 材质背板深浅在窗口构造时由 themeSource 决定（夜色 → 系统深色变体）
-  nativeTheme.themeSource = getWindowAppearance().night ? 'dark' : 'system'
   mainWindow = new BrowserWindow({
     ...savedBounds.options,
     // 开发态图标（带 DEV 标识）：Windows / Linux 只能通过窗口 icon 指定；macOS 该选项无效，
@@ -456,12 +427,12 @@ async function createWindow(): Promise<void> {
       : {
           titleBarOverlay: {
             color: TITLEBAR_COLORS.color,
-            symbolColor: getWindowAppearance().night ? '#ffffff' : TITLEBAR_COLORS.symbolColor,
+            symbolColor: TITLEBAR_COLORS.symbolColor,
             height: 44,
           },
         }),
-    // 半透明 / 系统材质按持久化配置决定窗口形态（默认关闭，外观与旧版一致）
-    ...buildAppearanceWindowOptions(getWindowAppearance()),
+    // 形态恒为 CSS 透明窗口（外观不可切换，见 shared/appearance.ts）
+    ...buildWindowBackdropOptions(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -603,10 +574,7 @@ async function bootstrap(): Promise<void> {
 
   initializeBackend()
   traceStartup('backend-ready')
-  // 外观必须先于 createWindow 读盘：窗口构造参数（transparent / vibrancy / backgroundMaterial）
-  // 只在创建时生效，之后再改只能部分切换，读不到就等于这次启动丢了用户选择。
-  await loadWindowAppearance()
-  // 窗口几何同样必须在 createWindow 之前读盘：恢复位置只能通过构造参数传入
+  // 窗口几何必须在 createWindow 之前读盘：恢复位置只能通过构造参数传入
   loadWindowBounds()
   traceStartup('create-window:start')
   await createWindow()

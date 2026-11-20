@@ -33,10 +33,10 @@ pnpm vite build
 
 ## 4. 透明与材质边界
 
-- 表面 alpha 由 CSS（`--alpha-*` + `color-mix`）合成；桌面模糊由 Windows DWM 材质或 macOS vibrancy 提供。
-- Windows `transparent: true` 只提供逐像素 alpha，不模糊桌面。
-- `acrylic` / `mica` / `tabbed` 失焦时由 DWM 退化为实色，不是 CSS 失效；需要失焦保持透明只能 `material: none`，并接受无桌面模糊。
-- 左轨与标题栏不铺背景、不加 `backdrop-filter`、不画边线；`ToolSurface` 不用外阴影。
+- 外观只有一种形态：系统磨砂窗口（macOS vibrancy / Windows acrylic；低版本 Windows 退回逐像素 alpha）。没有可选项、没有夜色轴，设置页也没有外观开关。
+- 表面 alpha 由 CSS（`--alpha-*` + `color-mix`）合成，固定档：外壳底板 `--alpha-shell: .8`、工具页主表面 `--alpha-sheet: .92`（叠起来 ≈ 98% 白）。
+- 桌面模糊由窗口材质提供；CSS `backdrop-filter` 糊不到窗口背后的桌面，因此玻璃只留给页面内浮层。
+- 左轨与标题栏不铺背景、不加 `backdrop-filter`、不画边线（它们透出外壳底板）；`ToolSurface` 不用外阴影。
 
 ## 5. 回滚
 

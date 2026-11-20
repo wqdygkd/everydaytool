@@ -1,5 +1,5 @@
 // 平台级（应用壳）IPC 处理器：数据根目录的查看 / 更改 / 打开、分层用量、缓存清理、
-// 窗口外观（半透明 / 系统材质）的读取与切换、UI 偏好、备份与恢复、打开调试控制台。
+// 窗口大小与位置记忆、UI 偏好、备份与恢复、打开调试控制台。
 // 数据目录 / 资产目录的切换都只写 pending，实际迁移与生效在下次启动的 ready 之前完成。
 import type {
   AppAssetsDirectoryInfo,
@@ -10,7 +10,6 @@ import type {
   DataUsage,
   UiPreferences,
 } from '../../shared/app.ts'
-import type { WindowAppearance, WindowAppearanceCapabilities, WindowAppearanceUpdate } from '../../shared/appearance.ts'
 import type {
   BackupExportOptions,
   BackupExportResult,
@@ -21,7 +20,6 @@ import type { WindowBoundsState } from '../../shared/window-bounds.ts'
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import { formatBackupFileName } from '../../shared/backup.ts'
-import { getWindowAppearance, updateWindowAppearance } from '../utils/appearance-store.ts'
 import { getAssetsRootState, requestAssetsRootChange } from '../utils/assets-root.ts'
 import { createBackup, inspectBackup, restoreBackup } from '../utils/backup-service.ts'
 import { clearDataLayerCaches, scanDataLayers } from '../utils/data-root-scan.ts'
@@ -40,10 +38,6 @@ import { getWindowBoundsState } from '../utils/window-bounds-store.ts'
 import { EDT_APP_IPC_CHANNELS } from './channels.ts'
 
 export interface AppIpcOptions {
-  /** 外观变更后由 main.ts 应用到真实窗口，并回推最新值给渲染层 */
-  applyWindowAppearance: (appearance: WindowAppearance) => void
-  /** 平台能力由 main.ts 注入（需要读 process.platform / Windows build） */
-  getAppearanceCapabilities: () => WindowAppearanceCapabilities
   /** 记忆开关由 main.ts 落地：开启瞬间补记一次当前几何，否则会恢复成关闭前的老位置 */
   setWindowBoundsEnabled: (enabled: boolean) => WindowBoundsState
   /** 重置记录并把当前窗口收回默认尺寸并居中（要操作真实窗口，故由 main.ts 注入） */
@@ -188,18 +182,6 @@ export function registerAppIpcHandlers(options: AppIpcOptions): void {
     // cacheDirs 是清理用的内部字段，不进 IPC 载荷
     const { cacheDirs: _cacheDirs, ...usage } = await scanDataLayers()
     return usage
-  })
-
-  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.APPEARANCE_GET, () => ({
-    appearance: getWindowAppearance(),
-    capabilities: options.getAppearanceCapabilities(),
-  }))
-
-  safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.APPEARANCE_SET, async (_event, patch: WindowAppearanceUpdate): Promise<WindowAppearance> => {
-    const next = await updateWindowAppearance(patch, options.getAppearanceCapabilities())
-    // 先应用到真实窗口，再回推：渲染层收到的就是最终生效值（含平台降级）
-    options.applyWindowAppearance(next)
-    return next
   })
 
   safeHandle(ipcMain, EDT_APP_IPC_CHANNELS.WINDOW_BOUNDS_GET, (): WindowBoundsState => getWindowBoundsState())
