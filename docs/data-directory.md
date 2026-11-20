@@ -44,7 +44,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 <data>/
   .edt-layout.json                 布局版本标记（缺失视为 v1，启动时自动升级并写入）
   config/                          # 配置层：小而可读，可人工校验
-    app/                window-appearance.json, window-bounds.json, ui-preferences.json（收藏 / 首页排序）
+    app/                window-bounds.json, ui-preferences.json（收藏 / 首页排序）
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [敏感]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [敏感：登录态密文；收藏明文]
@@ -120,7 +120,7 @@ Chromium 的目录级单实例锁以 userData 为命名空间，共用同一份�
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |
 | id-card-generator | 无持久化 | — | — | — |
-| 应用壳 | `config/app/`（外观 / 窗口几何 / **收藏与首页排序**） | `session/Local Storage`（页签、镜像） | `cache/app/`、`cache/import-rollback/`、`config/quarantine/` | — |
+| 应用壳 | `config/app/`（窗口几何 / **收藏与首页排序**） | `session/Local Storage`（页签、镜像） | `cache/app/`、`cache/import-rollback/`、`config/quarantine/` | — |
 
 渲染层的 Local Storage 里仍有（物理位于 `session/Local Storage`，属会话层）：打开的页签（会话性）、
 offline-pack 镜像地址，以及 treease 规则 / 收藏与首页排序的**镜像副本**

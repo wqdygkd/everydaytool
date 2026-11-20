@@ -43,7 +43,7 @@
 ```text
 <data>/
   config/                              # L1 权威：小而可读，可人工校验
-    app/                window-appearance.json, window-bounds.json, ui-preferences.json
+    app/                window-bounds.json, ui-preferences.json
     interceptor/        config.json, rules.json, certs/{ca.key,ca.crt}   [sensitive]
     offline-pack/       history.json
     wxp-enhancer/       config.json, data-cache.json  [sensitive]
@@ -281,7 +281,7 @@ payload        gzip(条目表)；条目表 = u32 条目数 + 重复(u16 名长 |
 | `shared/backup.ts`、`backend/utils/backup-format.ts`、`backend/utils/backup-service.ts` | 备份包格式 / 容器编解码（gzip + 可选 AES-256-GCM）/ 导出·预检·恢复（P2） |
 | `backend/utils/json-store.ts` | 新增 `invalidateJsonDocuments()`：**只允许备份恢复调用**（运行期替换了盘上文件） |
 | `backend/utils/session-data.ts` | sessionData 指向会话层；Electron 日志 / 崩溃转储指向缓存层 |
-| `backend/utils/appearance-store.ts`、`window-bounds-store.ts` | 应用壳配置落 `config/app/`（读取带回查 v1 与 userData 旧位置） |
+| `backend/utils/window-bounds-store.ts` | 应用壳配置落 `config/app/`（读取带回查 v1 与 userData 旧位置） |
 | `electron/main.ts` | 启动串 `upgradeDataLayout()`（在 sessionData 重定向之前、幂等、失败不阻断启动） |
 | `backend/ipc/handlers.ts`、`shared/app.ts`、`renderer/pages/SettingsPage.vue` | IPC 载荷改为 `DataUsage`（四层 + 条目明细），设置页改为「数据分层」卡片 |
 

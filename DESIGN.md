@@ -122,7 +122,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 2. 首页首屏能在 3 秒内读完 8 个工具及其用途；无滚动才能读完的信息不属于首页。
 3. 工具首屏 70% 以上面积用于当前任务内容，而不是状态卡与说明。
 4. 关闭工具后，DOM、轮询、IPC 订阅、webview 与工具级后台任务均被释放；需要保护的任务在关闭前统一确认。
-5. 半透明在 acrylic / mica / tabbed / vibrancy / transparent-only 与夜色玻璃下均保持文字可读。
+5. 固定磨砂档（外壳 80% + 主表面 92%）下，深色与浅色壁纸上的正文 / 小字仍 ≥ 4.5:1；系统「降低透明度」开启时表面退回实色。
 
 ## 2. 主题与色彩
 
@@ -153,28 +153,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 语义色只有一档，同时满足文字、图标、实底与自身 10% 浅底上的可读性。
 - 三级文本在玻璃表面上的实际对比必须 ≥ 4.5:1；`#5f6f80` 是下限，不允许再调浅。
 
-### 2.2 夜色玻璃
-
-夜色玻璃是独立主题轴，与材质轴正交。开启后主进程同步 `nativeTheme.themeSource = 'dark'`；只覆写颜色与前景，不改变透明 alpha 与模糊半径。
-
-| 角色 | 夜色值 |
-| --- | --- |
-| 画布兜底 | `#0d1017` |
-| rail / surface 基准 | `#111c28` |
-| header / pop 基准 | `#0e1721` |
-| fill 基准 | `#172330` |
-| 控件基准 | `#1a2837` |
-| 主文本 | `#eef4fb` |
-| 次级文本 | `#aab9c8` |
-| 三级文本 | `#75879a` |
-| 细边线 | `#253647` |
-| 输入边线 | `#30465b` |
-| 品牌图形蓝 | `#67a9ff` |
-| 品牌文字蓝 | `#a9ccff` |
-
-**禁止**：夜色模式使用纯黑 `#000` 作为文字、纯白作为大面积底、或把语义色直接反相。
-
-### 2.3 品牌蓝使用边界
+### 2.2 品牌蓝使用边界
 
 **The One Signal Rule.** 一个界面里只有品牌蓝承担“动作 / 当前 / 焦点”，其余强调交给字号、间距和中性色阶。品牌蓝覆盖面积目标 ≤ 画面 8%。
 
@@ -184,7 +163,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 ### 3.1 颜色与透明表面
 
-以下为 `renderer/shared/styles/tokens.scss` 的当前值。`rail` / `header` 不是表面角色，外壳恒透明。
+以下为 `renderer/shared/styles/tokens.scss` 的当前值。外观**只有一种形态**（系统磨砂窗口：macOS vibrancy / Windows acrylic），各表面 alpha 是固定档，没有可选项、没有夜色，也没有运行期开关。`rail` / `header` 不是表面角色，外壳恒透明。
 
 ```scss
 :root {
@@ -205,14 +184,13 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
   --color-border-light: #dfe8ef;
   --color-border: #cbd8e3;
 
-  --color-rail-base: #f7fbff; /* 遗留令牌：外壳恒透明，不消费 */
   --color-raised-base: #fbfdff;
+  --color-sheet-base: #ffffff; /* 主表面：纯白，避免压在壁纸上显灰 */
   --color-input-base: #ffffff;
   --color-field-base: #ffffff;
   --color-table-base: #fbfdff;
   --color-button-base: #ffffff;
   --color-fill-base: #edf3f8;
-  --color-header-base: #f9fcff; /* 遗留令牌：外壳恒透明，不消费 */
   --color-pop-base: #fbfdff;
   --color-overlay-base: #fbfdff;
 
@@ -225,9 +203,11 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 | 角色 | 用途 | 变量 |
 | --- | --- | --- |
-| `raised` | 主工作区、抽屉、浮层 | `--color-raised`、`--alpha-raised`、`--glass-raised` |
+| `shell` | 外壳底板：整窗 80% 白纸（`App.vue` 的 `.app-shell`） | `--color-shell`、`--alpha-shell` |
+| `sheet` | 工具页主表面（`ToolSurface`）：纯白 92%，正文区几乎实色 | `--color-sheet`、`--alpha-sheet` |
+| `raised` | 抽屉、浮层、井内卡片 | `--color-raised`、`--alpha-raised`、`--glass-raised` |
 | `input` | 浮在画布上的搜索框 / 导航控件 | `--color-input`、`--alpha-input`、`--glass-input` |
-| `field` | 表面内的输入框 | `--color-field`、`--alpha-field` |
+| `field` | 表面内的输入框（白底 × 50%，靠边框成形） | `--color-field`、`--alpha-field` |
 | `table` | 表格行底 | `--color-table`、`--alpha-table` |
 | `button` | 普通玻璃按钮 | `--color-button`、`--alpha-button` |
 | `fill` | 表头、hover 行、分段控件槽 | `--color-fill`、`--alpha-fill` |
@@ -236,40 +216,22 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | `overlay` | dialog / toast / 模态 | `--color-overlay`、`--alpha-overlay`、`--glass-overlay` |
 | `canvas` | 页面画布 | 恒 `transparent` |
 
-**外壳透明层.** `AppRail.vue` 与 `.app-topbar` 在 acrylic / mica / tabbed / vibrancy / transparent-only 下都只写 `background: transparent`：不铺半透明白底、不加 `backdrop-filter`、不画右缘 / 底边线。左侧导航、标题栏和工具页容器因此共享同一层画布，不能靠“给外壳补一层底”制造层次——那会让这三处看起来透明度不一致。
+**外壳底板与主表面（唯一一档透明度 · 毛玻璃）**
 
+窗口**恒为系统磨砂玻璃**：macOS `vibrancy: under-window`、Windows 11 22H2+ `backgroundMaterial: acrylic`。桌面模糊只能由窗口材质提供——CSS `backdrop-filter` 糊不到窗口背后的桌面，所以「毛玻璃」靠的是窗口形态，外观不可切换。两层白纸叠在磨砂之上：
+
+| 层 | alpha | 落点 | 观感 |
+| --- | --- | --- | --- |
+| 外壳底板 `shell` | `.80` | `.app-shell`（左轨 / 标题栏 / 画布留白都透出它） | 磨砂壁纸透 20%——霜感集中在这一层 |
+| 主表面 `sheet` | `.92` | `ToolSurface`（纯白 `#ffffff` 为基准） | 叠在底板上 ≈ 98% 白，正文区几乎纯白 |
+
+- **霜感与可读性分开落点**：能看到磨砂壁纸的是外壳（80%），正文区几乎纯白（92%）。不要把 `--alpha-sheet` 压回 0.6–0.8：系统糊过的壁纸本身带灰调，透进正文区就是「蒙一层灰」，而且 `--color-sheet-base` 必须是纯白（`#fbfdff` 偏蓝，压在壁纸上更显灰）。
+- `.app-rail` 与 `.app-topbar` 仍写 `background: transparent`：它们透出的是**外壳底板**，不是桌面。不得给它们补底色、加 `backdrop-filter` 或画边线。
 - 外壳上的交互态只用低 alpha 品牌色：hover `color-mix(in srgb, var(--color-primary) 7%, transparent)`；激活仍是 `--color-primary-soft`（10%）。不得用白色 / 近白实底做 hover 块，也不加边框。
-- 层次只由内容表面承担：`ToolSurface`、首页搜索框与右侧小面板、浮层。外壳本身不是 surface。
-
-**不透明默认模式**
-
-所有 alpha = `1`，所有 glass = `none`。不透明窗口不产生 `backdrop-filter` 合成开销。
-
-**acrylic 模式**
-
-| raised | input | field | table | button | fill | pop | overlay |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| .78 | .88 | .30 | .88 | .88 | .80 | .94 | .92 |
-
-对应玻璃：
-
-| 角色 | 值 |
-| --- | --- |
-| raised | `blur(18px) saturate(135%)` |
-| input | `blur(14px) saturate(135%)` |
-| pop | `blur(24px) saturate(135%)` |
-| overlay | `blur(28px) saturate(135%)` |
-
-**mica / tabbed / vibrancy / transparent-only**
-
-| 模式 | raised | raised glass |
-| --- | --- | --- |
-| mica | .96 | 10px |
-| tabbed | .98 | 8px |
-| vibrancy | .96 | 12px |
-| transparent-only | .88 | 20px |
-
-其余角色继续沿用现行 `translucency.scss` 的 mica / tabbed / vibrancy / transparent-only 数值。新增模式时必须同时更新 `tokens.scss`、`translucency.scss` 的模式覆写、夜色重算与 `prefers-reduced-transparency` 降级。
+- 其余角色是固定档：`raised .90` / `input .88` / `field .50` / `table .88` / `button .88` / `fill .80` / `pop .94` / `overlay .92`。卡片、表格、hover 一律在这套档位上取色，不再按材质分档。
+- **玻璃只在浮层**：桌面模糊已由系统提供；`--glass-*` 只给压在页面内容上的浮层（`pop` 18px / `overlay` 24px / `input` 12px），`raised` / 底板 / 主表面一律 `none`（背后是已磨砂的底板，再糊一次没有意义）。
+- **低版本 Windows** 没有 acrylic，退回 Chromium 逐像素 alpha：仍半透明，但壁纸是清晰的——这是平台能力差异，不作为第二套设计。
+- 系统「降低透明度」时全部 alpha 归 `1`、玻璃归 `none`（`translucency.scss` 的 `prefers-reduced-transparency` 块）。
 
 **The Glass Boundary Rule.** 玻璃只做“表面 ↔ 背景”一层。`field`、`table`、`button`、`fill` 永不加 `backdrop-filter`；抽屉压工作区时用 `overlay`，不要玻璃叠玻璃。
 
@@ -365,10 +327,9 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 --shadow-md: 0 18px 48px rgba(29, 62, 94, 0.10);
 --shadow-lg: 0 24px 70px rgba(22, 50, 78, 0.16);
 --shadow-focus: 0 0 0 1px var(--color-on-solid), 0 0 0 3px var(--color-primary-strong);
---shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28);
 ```
 
-静止的主工作区**只用 1px 外缘 + 顶部内侧高光，不再使用外阴影**：外阴影会溢出表面边缘，让外壳与画布看起来不同层。只有浮层使用 `--shadow-md/lg`。hover 不靠大幅位移，最多 `translateY(-1px)`。
+静止的主工作区**= 92% 白色薄层（`--color-sheet`）+ 1px 外缘，不画顶部内侧高光、不使用外阴影**：外阴影会溢出表面边缘，让外壳与画布看起来不同层；白纸已经给出层次，再加高光就是在一层薄面上叠两层亮边。只有浮层使用 `--shadow-md/lg`。hover 不靠大幅位移，最多 `translateY(-1px)`。
 
 ### 3.5 动效
 
@@ -415,7 +376,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | --- | --- | --- |
 | `AppRail.vue` | 48px 左侧导航；首页、置顶工具、已打开工具、搜索、设置 | 不读工具业务状态；置顶 id 来自 `UiPreferences`，已打开列表来自 `toolTabs` store |
 | `CommandPalette.vue` | `Ctrl/Cmd+K` 工具检索与打开 | 只读工具注册表；键盘完整；无状态面板 |
-| `ToolSurface.vue` | 主工作区玻璃表面、toolbar、body、statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel` |
+| `ToolSurface.vue` | 主工作区白色薄层（`--color-sheet`）、1px 外缘、toolbar / body / statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel`；不画高光、不加外阴影，也不自己在组件里写百分比透度 |
 | `WorkspaceSpine.vue` | 工具子视图竖脊（98px） | 只承载子视图切换；单视图工具不渲染；计数徽章 10px |
 | `ToolSideInspector.vue` | 可收起检查器 | 与主内容同表面分隔；默认宽度 268 / 320 / 360，声明 `resizable` 后可拖拽边缘调宽，范围由 `min-width` / `max-width` 约束，并须为主工作区保留 `min-main-width`；宽度持久化由使用方负责 |
 
@@ -626,7 +587,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 ### 8.4 主工作区表面
 
-- 外边距 **`0`**：表面铺满主区域，圆角 16px，1px 边框 + 顶部内侧高光；**不使用外阴影**（外阴影会溢出表面边缘，破坏与 rail / 标题栏一致的透明观感）。
+- 外边距 **`0`**：表面铺满主区域，圆角 16px，92% 白色薄层 + 1px 边框（无顶部内侧高光）；**不使用外阴影**（外阴影会溢出表面边缘，破坏与 rail / 标题栏一致的透明观感）。透度只在 `--alpha-sheet` 调档，不要在页面里覆盖 `.tool-surface` 的 background。
 - **右下角不画内圆角**：`border-bottom-right-radius: 0`，其余三角保持 16px。铺满后右下角与窗口外缘重合，交给窗口自身裁切；画 16px 内圆会在角落露出一条透明楔形，写死 8/11px 又会在最大化时留下缺口。
 - 顶部工具条 **48px**：搜索、筛选、计数、次要动作。
 - **statusline 默认不渲染**。只有确实承载低频数据（记录数 / 进程 / 路径）时才由工具自己保留一行 31px，不得为凑满底部而加。
@@ -715,7 +676,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 
 **表面与状态**
 
-- 只使用一个玻璃 `ToolSurface`；参数列、结果标题、表格都是实色内容面，不再叠加 backdrop-filter。
+- 只使用一个 `ToolSurface`（92% 白色薄层 `--color-sheet`，无高光、无外阴影）；参数列、结果标题、表格都是实色内容面，不再叠加 backdrop-filter。
 - 年龄 / 日期切换、地区级联和数量变化不得使生成按钮离开首屏；1280 / 1440 / 1600 宽均不得出现页面级横向溢出。
 - 行 hover 使用 `--color-fill`，选中行使用品牌蓝 `7.5%` 与 `--color-table` 混合；焦点、disabled、空态与滚动条沿用全局组件令牌。
 
@@ -749,8 +710,8 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 - 作为应用自带页面挂载（不是页签、不进左轨已打开列表），入口固定在 rail 底部；标题栏显示齿轮 + “设置” + 一句话职责（`AppTab.description`）。
 - 布局是**左侧分区索引 + 右侧文档列**的工作台：shell 宽 `1004px`（`196px` 索引 + `48px` 间距 + `760px` 文档），整体居中；索引 `position: sticky` 于页面滚动容器顶部。
 - 索引按「数据与存储 / 窗口 / 高级」分组，条目与右侧设置行一一对应；滚动时高亮当前行，点击平滑跳转（`prefers-reduced-motion` 下直接跳转）。
-- 右侧用三张分组面板承载七行设置：数据目录、数据分层、清理缓存、备份与恢复 / 窗口外观、大小与位置 / 调试。面板内用 1px 分隔线分行，**不再每个设置一张卡片**；材质选择是行内单选，不套独立卡片。
-- 窗口外观提供半透明开关、系统材质（Mica / 亚克力 / Tabbed）与夜色玻璃；Windows 材质由 DWM 绘制，失焦退化行为见 §13.3。
+- 右侧用三张分组面板承载六行设置：数据目录、数据分层、清理缓存、备份与恢复 / 大小与位置 / 调试。面板内用 1px 分隔线分行，**不再每个设置一张卡片**。
+- **窗口外观没有设置项**：透明度固定（外壳 80% 透磨砂壁纸、主表面 92% 近纯白），没有半透明开关、没有系统材质、没有夜色；「窗口」分组只剩大小与位置，分组的说明文字直接写明这一点。
 - 设置项仍使用 `UiFormField` / `UiSwitchField` / `UiButton`；无可见文案的开关必须传 `ariaLabel`。
 - 响应式：`< 980px` 索引改为顶部横向胶囊列表并取消 sticky；`< 640px` 行头改为纵向堆叠。
 
@@ -791,7 +752,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 | 层 | 文件 | 权威范围 |
 | --- | --- | --- |
 | 设计令牌 | `renderer/shared/styles/tokens.scss` | 颜色、字号、圆角、间距 |
-| 玻璃与夜色 | `renderer/shared/styles/translucency.scss` | 按材质覆写 alpha / glass、夜色与降级 |
+| 玻璃与透明档 | `renderer/shared/styles/translucency.scss` | 合成 `--color-*`、固定 alpha / glass 与「降低透明度」降级 |
 | 全局样式 | `renderer/shared/styles/base.scss` | 排版、滚动条、选区、focus-visible |
 | 平台组件 | `renderer/shared/components/ui/` | `Ui*` 基础组件 |
 | 组合型工作区 | `renderer/shared/components/workspace/` | `ToolSurface` / `ToolSideInspector` / `WorkspaceSpine` |
@@ -818,7 +779,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 - **Do** 让首页工具行只保留图标、名称、一句描述、运行状态与置顶。
 - **Do** 使用 `Ctrl/Cmd+K` 和左轨保证任意位置快速打开工具。
 - **Do** 使用品牌蓝表达“当前、可操作、聚焦”，并让选中文字保持中性主文本。
-- **Do** 在所有材质和夜色下检查玻璃上的文字对比。
+- **Do** 在固定透明档下检查玻璃上的文字对比（深色与浅色壁纸各看一遍）。
 - **Do** 在关闭前只对真实的未完成任务弹确认，完成后直接释放。
 
 ### Don't
@@ -855,15 +816,16 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 1. 八个工具 + 首页在 1440×900 下的横带/工作区必须落在 §8.7 的表格数值上（±2px）。
 2. 任何工具页都不得出现第二条横带、横排子导航或默认 statusline。
 3. 顶栏在 mac 与 Win 两种平台下都不得与窗口控件重叠（mac 84px 左内边距 / Win 148px 右预留）。
-4. 文字对比度：实底、半透明、玻璃三档在深色与浅色壁纸上均 ≥ 4.5:1（正文/小字）与 ≥ 3:1（大字号）。
+4. 文字对比度：磨砂壁纸透 20% 的外壳区与 ≈98% 的主表面，在深色与浅色壁纸上均 ≥ 4.5:1（正文/小字）与 ≥ 3:1（大字号）；深色壁纸下靠系统「降低透明度」兜底。
 5. 首页 `1`–`8` 直启、`⌘K` 搜索、tweb 分隔条可拖且受 360–760px 约束。
 
 ### 13.3 透明层次
 
-- **三层透明**：`canvas`（页面画布）、`rail`、`topbar` 全部 `transparent`；只有内容表面（`ToolSurface`、首页搜索框 / 右侧小面板、浮层）带 alpha。不要让外壳再铺一层半透明底，否则左轨、标题栏与工具页 padding 会出现三档不同的“透明度”。
-- **透明来源**：所有表面 alpha 由 CSS 令牌（`--alpha-*` + `color-mix`）合成；桌面模糊来自 Windows DWM 材质或 macOS vibrancy。Windows `transparent: true` 只提供 Chromium 逐像素 alpha，不会模糊桌面。
+- **两层纸，一层磨砂桌面**：窗口恒为系统磨砂玻璃（macOS vibrancy / Windows acrylic）。`canvas`（页面画布）、`rail`、`topbar` 都是 `transparent`，透出外壳底板 `--color-shell`（80%）；工具页主表面 `--color-sheet`（60%）叠在底板上，综合约 92% 白 + 8% 磨砂壁纸。壁纸只以**模糊**形态出现，这就是「毛玻璃」的全部来源。
+- **透明来源**：表面 alpha 由 CSS 令牌（`--alpha-*` + `color-mix`）合成，取值见 §3.1；**桌面模糊来自窗口材质**（vibrancy / acrylic），CSS `backdrop-filter` 糊不到桌面，所以 `--glass-*` 只服务浮层。
+- **不做运行期切换**：外观没有开关、不落盘（`shared/appearance.ts` 的 `resolveWindowBlur(platform, windowsBuild)` 是唯一判定）。改软硬程度只改 `tokens.scss` 的 `--alpha-shell` / `--alpha-sheet`。
 - **外壳无边界**：标题栏不画底边线，rail 不画右缘线；分隔只靠内容表面的 1px 外缘。
 - **右下角交给窗口裁切**：`ToolSurface` 的 `border-bottom-right-radius` 为 0，其余三角保持 16px；窗口圆角、最大化直角与无圆角平台都由窗口自身决定，内圆不会与窗缘错位。
-- **hover 不用白**：外壳图标 / 工具切换器 / 首页工具行统一 7% 品牌蓝透明底；星标 6%。白色 hover 块在透明窗口上会变成一块发白的实体。
-- **不做外阴影**：`ToolSurface` 的外阴影会溢出表面边缘，让外壳与画布看起来不同层；主表面只用 1px 外缘 + 顶部内侧高光。
-- **Windows 系统材质的失焦行为**：`acrylic` / `mica` / `tabbed` 由 DWM 绘制，窗口失去激活时系统会把材质背板退化为实色，半透明表面因此看起来“透明度消失”。这不是 CSS 失效，项目没有在 `blur` / `focus` 时改 alpha。若要求失焦也保持透明，只能把 `material` 设为 `none`，让 Windows 走 `transparent: true` 的 Chromium 逐像素 alpha；代价是没有桌面模糊（CSS `backdrop-filter` 只能模糊页面内内容），且材质是构造参数，切换后必须重启窗口。工程约束见 AGENTS.md「窗口外观」。
+- **hover 不用白**：外壳图标 / 工具切换器 / 首页工具行统一 7% 品牌蓝透明底；星标 6%。白色 hover 块会变成一块发白的实体。
+- **不做外阴影**：`ToolSurface` 的外阴影会溢出表面边缘，让外壳与画布看起来不同层；主表面只用 60% 白色薄层 + 1px 外缘，也不加顶部内侧高光（模糊 + 半透明白已经给出层次）。窗口投影由系统提供（磨砂窗口是常规窗口），不要再给 `.app-shell` 补 `box-shadow`，否则窗内会多一道暗边。
+- **失焦由系统管**：Windows acrylic 在窗口失去激活时会退化为实色背板，这是 DWM 行为，不是 CSS 失效；禁止监听 `blur` / `focus` 去补透明度（代价是失去桌面模糊，且材质是构造参数，运行期改必须重启窗口）。

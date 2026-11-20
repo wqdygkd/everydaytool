@@ -8,7 +8,6 @@ import AppRail from './shared/components/AppRail.vue'
 import CommandPalette from './shared/components/CommandPalette.vue'
 import ToolPane from './shared/components/ToolPane.vue'
 import UiToaster from './shared/components/ui/UiToaster.vue'
-import { useAppearance } from './shared/composables/useAppearance'
 import { useCommandPalette } from './shared/composables/useCommandPalette'
 import { useRailMode } from './shared/composables/useRailMode'
 import { runTabCloseGuard } from './shared/composables/useTabCloseGuard'
@@ -19,7 +18,6 @@ const route = useRoute()
 const router = useRouter()
 const toolsStore = useToolTabsStore()
 
-const { appearance, load: loadAppearance, subscribe: subscribeAppearance } = useAppearance()
 const { mode: railMode, label: railToggleLabel, cycle: cycleRailMode } = useRailMode()
 const RAIL_TOGGLE_ICONS = {
   compact: 'sidebar',
@@ -27,18 +25,6 @@ const RAIL_TOGGLE_ICONS = {
   collapsed: 'sidebarCollapsed',
 } as const
 const railToggleIcon = computed(() => RAIL_TOGGLE_ICONS[railMode.value])
-const isTransparent = computed(() => appearance.value?.enabled === true)
-const materialClass = computed(() => {
-  const value = appearance.value
-  if (!value?.enabled) return null
-  if (value.vibrancy !== 'none') return 'is-vibrancy'
-  return value.material !== 'none' ? `is-${value.material}` : 'is-transparent-only'
-})
-
-onMounted(() => {
-  void loadAppearance()
-  subscribeAppearance()
-})
 
 function platformFromUA(): string | null {
   const ua = navigator.userAgent ?? ''
@@ -96,13 +82,9 @@ const activeToolId = computed(() => activeTool.value?.id ?? null)
 
 const settingsTab = findAppTab('settings')
 const isFullscreen = ref(false)
-const hasNight = computed(() => appearance.value?.night === true)
 const modeClasses = computed<string[]>(() => {
   const classes: string[] = []
   if (isFullscreen.value) classes.push('is-fullscreen')
-  if (isTransparent.value) classes.push('is-transparent')
-  if (hasNight.value) classes.push('is-night')
-  if (materialClass.value) classes.push(materialClass.value)
   return classes
 })
 
@@ -315,6 +297,11 @@ function openSettings() {
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
+  /* 外壳底板：整窗 80% 不透明的白纸（--alpha-shell），透出 20% **已被系统磨砂的**壁纸
+     （窗口形态是 vibrancy / acrylic，见 shared/appearance.ts）。
+     左轨与标题栏仍恒透明，直接透出这层底板；工具页主表面在它之上再叠一档（--color-sheet）。
+     不要在 .app-shell 上补外阴影：磨砂窗口自带系统投影，再画一圈会在窗内多出一道暗边。 */
+  background: var(--color-shell);
 }
 
 .app-body {

@@ -33,16 +33,14 @@
 
   /* ── 半透明窗口的 alpha 体系（基准色） ──
      每个表面角色拆成「基准色(*-base) × alpha(--alpha-*)」两层：
-     本文件定义基准色，translucency.scss 按窗口模式覆写 alpha，
-     消费端用 --color-<role> 合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
-  --color-rail-base: #f7fbff; /* 角色 rail：左侧 48px 导航轨 */
-  --color-raised-base: #fbfdff; /* 角色 raised：主工作区 / launcher / 抽屉 */
+     本文件定义基准色，translucency.scss 合成为可直接消费的 --color-<role>，
+     消费端用合成变量取用。新增角色需同时加三处（base / alpha / 合成）。 */
+  --color-raised-base: #fbfdff; /* 角色 raised：卡片 / 抽屉 / 浮层，也是外壳底板与主表面的取色 */
   --color-input-base: #ffffff; /* 角色 input：浮在画布上的搜索框 / 导航控件 */
   --color-field-base: #ffffff; /* 角色 field：表面内的通用表单输入框 */
   --color-table-base: #fbfdff; /* 角色 table：表格行底 */
   --color-button-base: #ffffff; /* 角色 button：普通玻璃按钮 */
   --color-fill-base: #edf3f8; /* 角色 fill：表头 / hover 行 / 分段控件槽 */
-  --color-header-base: #f9fcff; /* 角色 header：顶部工作区栏 */
   --color-pop-base: #fbfdff; /* 角色 pop：下拉 / 菜单 / 命令面板候选层 */
   --color-overlay-base: #fbfdff; /* 角色 overlay：dialog / toast / 模态 */
 
@@ -50,46 +48,48 @@
      侧栏 / 影库 / 井内卡片）。固定由 fill 合成，禁止各工具再写自己的百分比。 */
   --color-well: color-mix(in oklab, var(--color-fill) 34%, transparent);
 
-  /* 默认（不透明窗口）：全部实色，与旧版一致；各角色 1 = 完全不透明 */
-  --alpha-rail: 1; /* 左侧导航轨 */
-  --alpha-raised: 1; /* 卡片 / 面板 / 浮岛 */
-  --alpha-input: 1; /* 其余非弹出层控件 */
-  --alpha-field: 1; /* 通用表单输入框（UiInput / textarea / UiSelect） */
-  --alpha-table: 1; /* 表格行 */
-  --alpha-button: 1; /* 普通按钮 */
-  --alpha-fill: 1; /* 灰调填充（表头 / hover） */
-  --alpha-header: 1; /* 标题栏 */
-  --alpha-pop: 1; /* 下拉类浮层 */
-  --alpha-overlay: 1; /* 其它弹层 */
+  /* ── 唯一一档 alpha：窗口恒为系统磨砂玻璃，外观不可切换 ──
+     （每个平台只有一种形态，没有材质选项 / 夜色开关，「关闭半透明」也不存在。）
+     桌面**已经由系统糊过**（macOS vibrancy / Windows acrylic），这里叠的是两层白纸：
+       shell  外壳底板 80%：左轨 / 标题栏 / 画布留白都透这层，磨砂壁纸透 20% ← 霜感在这里
+       sheet  工具页主表面 92%：叠在底板上 ≈ 98% 白，正文区几乎纯白 ← 可读性在这里
+     两张纸分工明确：看得到磨砂的是外壳，不是正文区。想把霜感再往主体挪，
+     只降 --alpha-sheet；但系统糊过的壁纸本身带灰调，降多了正文区就会「蒙一层灰」。 */
+  --color-sheet-base: #ffffff; /* 主表面用纯白：--color-raised-base 偏蓝，压在壁纸上会显灰 */
+  --alpha-shell: 0.8; /* 外壳底板 */
+  --alpha-sheet: 0.92; /* 工具页主表面（ToolSurface） */
+  --alpha-raised: 0.9; /* 卡片 / 面板 / 抽屉 / 浮岛 */
+  --alpha-input: 0.88; /* 浮在画布上的控件 */
+  --alpha-field: 0.5; /* 表面内的输入框 */
+  --alpha-table: 0.88; /* 表格行 */
+  --alpha-button: 0.88; /* 普通按钮 */
+  --alpha-fill: 0.8; /* 灰调填充（表头 / hover） */
+  --alpha-pop: 0.94; /* 下拉类浮层 */
+  --alpha-overlay: 0.92; /* 其它弹层 */
 
-  /* ── 玻璃细节旋钮（不参与表面角色，按模式单独覆写） ──
-     与上面九档「表面 alpha」分开，因为它们不是表面，而是玻璃的**高光与着色**：
-       highlight  镜面高光：卡片 / 滑块的 1px 内描边与顶部高光，0 = 不出现（不透明模式）
+  /* ── 玻璃细节旋钮（不参与表面角色） ──
+     它们不是表面，而是玻璃的**高光与着色**：
+       highlight  镜面高光：卡片 / 滑块的 1px 内描边与顶部高光
        switch-track  开关轨道：品牌色 / 关态灰的着色强度（轨道本身可透）
-       switch-knob   开关滑块：小体积「透镜」，独立于 input / field 调档；
-                     但它是前景件，各模式都保持 ≥ .9——透明只给轨道，不给滑块
+       switch-knob   开关滑块：小体积「透镜」，前景件必须近实——透明只给轨道，不给滑块
      三档都以现有基准色取色（--color-primary / --color-border / --color-on-solid），
-     因此不新增 *-base，只在各模式块里覆写这三个 alpha。 */
-  --alpha-highlight: 0; /* 镜面高光 / 内描边 */
-  --alpha-switch-track: 1; /* 开关轨道（品牌色 / 关态灰） */
-  --alpha-switch-knob: 1; /* 开关滑块 */
+     因此不新增 *-base。窗口恒为透明形态，所以这里给的是固定值，没有模式覆写。 */
+  --alpha-highlight: 0.6; /* 镜面高光 / 内描边 */
+  --alpha-switch-track: 0.82; /* 开关轨道（品牌色 / 关态灰） */
+  --alpha-switch-knob: 0.94; /* 开关滑块 */
 
-  /* ── 玻璃质感（backdrop-filter）体系 ──
-     与 alpha 同一套「表面角色」，但决定的是「多糊」而不是「多透」：
-     alpha 小 = 看得见背后，--glass-* 大 = 背后被磨平，两者配合才成玻璃。
-     默认 none：不透明窗口背后没有内容可糊，且 backdrop-filter 会为每个元素
-     创建 backdrop root（有合成开销），不开就是零成本。
-     各窗口模式在 translucency.scss 按角色独立覆写；消费端一律写
-     backdrop-filter: var(--glass-<role>)，禁止在组件里写死 blur(Npx)。 */
-  --glass-saturate: 100%; /* 玻璃饱和度增益：模式级旋钮，各角色共享 */
-  --glass-rail: none; /* 左侧导航轨 */
-  --glass-raised: none; /* 卡片 / 面板 / 浮岛 */
-  --glass-input: none; /* 非弹出层控件（UiSearchInput 等浮在画布上的控件） */
-  --glass-header: none; /* 标题栏 */
-  --glass-fill: none; /* fill 不承担背景模糊 */
-  --glass-pop: none; /* 下拉类浮层 */
-  --glass-overlay: none; /* 其它弹层：dialog / message */
-  --glass-veil: blur(2px); /* 遮罩 / 骨架屏：恒有轻微磨砂，与窗口模式无关 */
+  /* ── 玻璃质感（backdrop-filter）──
+     桌面模糊**不在这里**：它由窗口形态提供（macOS vibrancy / Windows acrylic），
+     CSS backdrop-filter 糊不到窗口背后的桌面。所以这里的 --glass-* 只负责
+     「页面内压在内容上的浮层」——下拉、dialog、搜索框。
+     主表面 / 底板 / 卡片背后是已被系统糊过的底板，再糊一次没有意义，一律 none。
+     消费端一律写 backdrop-filter: var(--glass-<role>)，禁止在组件里写死 blur(Npx)。 */
+  --glass-saturate: 130%; /* 玻璃饱和度增益，各角色共享 */
+  --glass-raised: none; /* 主表面 / 卡片：背后是已磨砂的底板，没有可糊的内容 */
+  --glass-input: blur(12px) saturate(var(--glass-saturate)); /* 浮在画布上的控件（UiSearchInput） */
+  --glass-pop: blur(18px) saturate(var(--glass-saturate)); /* 下拉类浮层 */
+  --glass-overlay: blur(24px) saturate(var(--glass-saturate)); /* 其它弹层：dialog / message */
+  --glass-veil: blur(2px); /* 遮罩 / 骨架屏 */
 
   /* ── lines ── */
   --color-border-light: #dfe8ef; /* 细分隔线 / 表面描边 */
@@ -117,7 +117,6 @@
   --shadow-md: 0 18px 48px rgba(29, 62, 94, 0.10); /* 菜单 / 命令面板 */
   --shadow-lg: 0 24px 70px rgba(22, 50, 78, 0.16); /* 对话框 / 批量操作栏 */
   --shadow-focus: 0 0 0 1px var(--color-on-solid), 0 0 0 3px var(--color-primary-strong); /* 键盘焦点环：1px 白隔断 + 3px 墨档蓝实环（对任意底色都 ≥3:1） */
-  --shadow-window-frame: 0 12px 48px rgba(0, 0, 0, 0.28); /* 半透明窗口的外阴影：补偿丢失的系统投影 */
 
   --duration-fast: 140ms;
   --duration-base: 190ms;

@@ -226,7 +226,7 @@ function notify(message: string) {
               1.0.0
             </UiDetailItem>
             <UiDetailItem label="长路径" mono wrap>
-              D:\project\everydaytool\data\config\app\window-appearance.json
+              D:\project\everydaytool\data\config\app\window-bounds.json
             </UiDetailItem>
             <UiDetailItem label="尺寸" size="xs">
               xs 档
