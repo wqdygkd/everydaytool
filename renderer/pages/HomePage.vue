@@ -19,8 +19,6 @@ const { openPalette } = useCommandPalette()
 const toolsStore = useToolTabsStore()
 const {
   orderedTools,
-  isFavorite,
-  toggleFavorite,
   commitToolOrder,
   syncPreferencesWithConfigLayer,
 } = useToolLauncher()
@@ -312,17 +310,6 @@ onBeforeUnmount(() => {
                 <i class="dot" aria-hidden="true" />
                 {{ isRunning(tool.id) ? '运行中' : '未运行' }}
               </span>
-            </button>
-            <button
-              type="button"
-              class="idx-pin"
-              :class="{ 'is-on': isFavorite(tool.id) }"
-              :aria-pressed="isFavorite(tool.id)"
-              :aria-label="isFavorite(tool.id) ? `取消置顶 ${tool.name}` : `置顶 ${tool.name}`"
-              :title="isFavorite(tool.id) ? `取消置顶 ${tool.name}` : `置顶 ${tool.name}`"
-              @click="toggleFavorite(tool.id)"
-            >
-              <UiIcon name="star" :size="14" />
             </button>
           </div>
         </section>
@@ -647,44 +634,6 @@ onBeforeUnmount(() => {
   }
 }
 
-.idx-pin {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--color-text-tertiary);
-  opacity: 0;
-  cursor: pointer;
-  transition:
-    opacity var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-
-  &:hover {
-    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-    color: var(--color-primary-strong);
-  }
-
-  &.is-on {
-    color: var(--color-primary-strong);
-    opacity: 1;
-
-    :deep(svg) {
-      fill: currentColor;
-    }
-  }
-}
-
-.idx-row:hover .idx-pin,
-.idx-pin:focus-visible {
-  opacity: 1;
-}
-
 .tool-cell.is-dragging {
   z-index: 1;
 
@@ -824,7 +773,6 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .search-btn,
   .idx-row,
-  .idx-pin,
   .idx-num,
   .idx-grip,
   .tool-cell {

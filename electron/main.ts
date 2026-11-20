@@ -39,7 +39,7 @@ const userDataDirectory = configureInstanceIdentity()
 // 1. 数据目录地址（含 pending 迁移）——其它根的位置都以它为基准；
 // 2. 资产根（独立根，含 pending 迁移）——升级器要读它才知道归档搬到哪；
 // 3. v1 平铺布局 → v2 分层布局的升级——必须在 Chromium 打开会话文件之前完成；
-// 4. 重定向 Chromium 会话目录到 session 层（见 docs/data-layers.md §9）。
+// 4. 重定向 Chromium 会话目录到 session 层（见 docs/data-layers.md §2）。
 loadDataDirectoryOverrideSync()
 loadAssetsRootSync()
 upgradeDataLayoutAtStartup()

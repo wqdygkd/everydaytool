@@ -173,6 +173,10 @@ async function handleToolClose(toolId: string) {
   else goHome()
 }
 
+function handleRailReorderOpen(ids: string[]) {
+  toolsStore.setOpenOrder(ids)
+}
+
 function openSettings() {
   if (settingsTab) router.push({ name: settingsTab.routeName })
 }
@@ -238,6 +242,7 @@ function openSettings() {
         @settings="openSettings"
         @select-tool="openTool"
         @close="handleToolClose"
+        @reorder-open="handleRailReorderOpen"
       />
 
       <main class="app-main">

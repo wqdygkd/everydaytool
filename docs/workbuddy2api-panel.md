@@ -1,7 +1,7 @@
 # workbuddy2api-panel 模块记忆
 
 > 主进程托管上游 [workbuddy2api-panel](https://github.com/misakano7545/workbuddy2api-panel) 二进制；左侧「运行详情」管安装 / 启停 / 更新 / 诊断，右侧主区 webview 嵌 `/panel/`。
-> 取证 tag：`v2026.10.26.1001`（安装实际拉 GitHub `latest`，此 tag 仅对照）
+> 对照版本：`v2026.10.26.1001`；安装实际拉 GitHub `latest`。
 
 ## 1. 硬约束（不要违反）
 
@@ -62,7 +62,7 @@
 | 取消下载 | `progress.phase === 'download'` | 不看 loading（下载期 INSTALL 调用未返回） |
 
 状态只用**禁用态**表达：运行中禁用安装与「检查更新」，未安装时更新相关按钮保持禁用。
-不再加「请先停止 / 尚未安装」这类随状态出现的提示文案，避免文案与进度互相打架。
+不加「请先停止 / 尚未安装」这类随状态出现的提示文案，避免文案与进度互相打架。
 
 首次安装进行中（`updating && !installed`）文案进入「安装中」口径：状态标签显示「安装中」、
 左栏空态改说「正在安装上游二进制」，避免与进度打架。
@@ -70,7 +70,7 @@
 
 > **检查更新结果缓存在主进程**（`Wb2apiPanelState.update`）：只缓存上游 release 快照
 > （`Wb2apiReleaseSnapshot`：latest tag / 资产 / digest / 检查时间），已安装版本每次按 manifest 现算
-> ——本地 ZIP 换版本后 `hasUpdate` 立即跟着变，不会拿旧结论误报。缓存只在进程内，
+> ——本地 ZIP 换版本后 `hasUpdate` 立即跟着变，更新结论与本地 ZIP 保持一致。缓存只在进程内，
 > 重启后点一次「检查更新」即可；`CHECK_UPDATE` 会顺带 `publishStateNow()`，重开页签 / 其它窗口同源。
 
 ## 4. 文件地图

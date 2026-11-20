@@ -84,9 +84,9 @@ components:
 
 # everydaytool UI 设计文档
 
-> 本文件是 everydaytool（`edt`）当前 UI 的唯一视觉权威。设计世界是 **Command Deck（工具指挥台）**：窄轨导航、单一当前工作区、透明外壳与内容表面分层。实现令牌位于 [`renderer/shared/styles/`](renderer/shared/styles/)，平台组件位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)，可交互预览位于 [`docs/preview/tool-workspace-layout.html`](docs/preview/tool-workspace-layout.html)，验收基线见 [`docs/workspace-redesign-spec.md`](docs/workspace-redesign-spec.md)，机器可读侧车见 [`.impeccable/design.json`](.impeccable/design.json)。
+> 本文件是 everydaytool（`edt`）当前 UI 的唯一视觉权威。设计世界是 **Command Deck（工具指挥台）**：窄轨导航、单一当前工作区、透明外壳与内容表面分层。实现令牌位于 [`renderer/shared/styles/`](renderer/shared/styles/)，平台组件位于 [`renderer/shared/components/ui/`](renderer/shared/components/ui/)，可交互预览位于 [`docs/preview/tool-workspace-layout.html`](docs/preview/tool-workspace-layout.html)，验收基线与命令见本文 §13.2 / §13.4，机器可读侧车见 [`.impeccable/design.json`](.impeccable/design.json)。
 >
-> 迁移要求：**先令牌与外壳，再首页，再工具页**。不得跳过基础组件直接给单页堆局部样式。新增页面先复用 §4，再读 §8 选择工作区骨架。
+> 落地顺序：**先令牌与外壳，再首页，再工具页**。不得跳过基础组件直接给单页堆局部样式。新增页面先复用 §4，再读 §8 选择工作区骨架。
 
 ## 1. 设计方向与非协商项
 
@@ -141,7 +141,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 细边线 | `#dfe8ef` | 表面边线、分隔线 |
 | 输入边线 | `#cbd8e3` | 输入框、可交互控件 |
 | 成功 | `#007b54` | 完成、健康、在线 |
-| 警告 | `#975f00` | 待处理、风险、置顶星 |
+| 警告 | `#975f00` | 待处理、风险 |
 | 错误 | `#cf1c28` | 失败、危险动作 |
 | 实底前景 | `#ffffff` | 主按钮与实底徽章上的文字 |
 
@@ -228,7 +228,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - **霜感与可读性分开落点**：能看到磨砂壁纸的是外壳（80%），正文区几乎纯白（92%）。不要把 `--alpha-sheet` 压回 0.6–0.8：系统糊过的壁纸本身带灰调，透进正文区就是「蒙一层灰」，而且 `--color-sheet-base` 必须是纯白（`#fbfdff` 偏蓝，压在壁纸上更显灰）。
 - `.app-rail` 与 `.app-topbar` 仍写 `background: transparent`：它们透出的是**外壳底板**，不是桌面。不得给它们补底色、加 `backdrop-filter` 或画边线。
 - 外壳上的交互态只用低 alpha 品牌色：hover `color-mix(in srgb, var(--color-primary) 7%, transparent)`；激活仍是 `--color-primary-soft`（10%）。不得用白色 / 近白实底做 hover 块，也不加边框。
-- 其余角色是固定档：`raised .90` / `input .88` / `field .50` / `table .88` / `button .88` / `fill .80` / `pop .94` / `overlay .92`。卡片、表格、hover 一律在这套档位上取色，不再按材质分档。
+- 其余角色是固定档：`raised .90` / `input .88` / `field .50` / `table .88` / `button .88` / `fill .80` / `pop .94` / `overlay .92`。卡片、表格、hover 一律在这套档位上取色，所有材质共用同一档位。
 - **玻璃只在浮层**：桌面模糊已由系统提供；`--glass-*` 只给压在页面内容上的浮层（`pop` 18px / `overlay` 24px / `input` 12px），`raised` / 底板 / 主表面一律 `none`（背后是已磨砂的底板，再糊一次没有意义）。
 - **低版本 Windows** 没有 acrylic，退回 Chromium 逐像素 alpha：仍半透明，但壁纸是清晰的——这是平台能力差异，不作为第二套设计。
 - 系统「降低透明度」时全部 alpha 归 `1`、玻璃归 `none`（`translucency.scss` 的 `prefers-reduced-transparency` 块）。
@@ -374,9 +374,9 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 | 组件 | 职责 | 约束 |
 | --- | --- | --- |
-| `AppRail.vue` | 48px 左侧导航；首页、置顶工具、已打开工具、搜索、设置 | 不读工具业务状态；置顶 id 来自 `UiPreferences`，已打开列表来自 `toolTabs` store |
+| `AppRail.vue` | 48px 左侧导航；首页、已打开工具、搜索、设置 | 不读工具业务状态；已打开列表来自 `toolTabs` store，拖拽直接重排 `openIds` |
 | `CommandPalette.vue` | `Ctrl/Cmd+K` 工具检索与打开 | 只读工具注册表；键盘完整；无状态面板 |
-| `ToolSurface.vue` | 主工作区白色薄层（`--color-sheet`）、1px 外缘、toolbar / body / statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不再套 `UiPanel`；不画高光、不加外阴影，也不自己在组件里写百分比透度 |
+| `ToolSurface.vue` | 主工作区白色薄层（`--color-sheet`）、1px 外缘、toolbar / body / statusline 槽位 | 不嵌套第二个 `ToolSurface`；内部不套 `UiPanel`；不画高光、不加外阴影，也不自己在组件里写百分比透度 |
 | `WorkspaceSpine.vue` | 工具子视图竖脊（98px） | 只承载子视图切换；单视图工具不渲染；计数徽章 10px |
 | `ToolSideInspector.vue` | 可收起检查器 | 与主内容同表面分隔；默认宽度 268 / 320 / 360，声明 `resizable` 后可拖拽边缘调宽，范围由 `min-width` / `max-width` 约束，并须为主工作区保留 `min-main-width`；宽度持久化由使用方负责 |
 
@@ -400,7 +400,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 ### 4.5 表格
 
-- 表格只放在主工作区表面内，容器的圆角由 `ToolSurface` 提供，内部不再套一层圆角卡片。
+- 表格只放在主工作区表面内，容器的圆角由 `ToolSurface` 提供，内部不套一层圆角卡片。
 - 表头 11px / 500 / 中性三级；表体 12px；行高 39–44px。
 - 表头底 `--color-fill`；行 hover 白色 36%；选中行品牌蓝 7.5%。
 - 数字、ID、URL、状态码使用 `.mono`；数字列右对齐或按扫描需要对齐。
@@ -419,7 +419,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 命令面板 `CommandPalette`：宽 `min(650px, calc(100vw - 48px))`，圆角 22px，`--color-overlay` + `--glass-overlay`，上方 13vh。
 - 下拉用 Reka / `UiSelect`，必须 teleport；不得被父级 `overflow:hidden` 裁剪。**Reka 的 `SelectContent` 会被传送到 `body`，其表面 / viewport 样式必须使用 `:global(.ui-select-content)` / `:global(.ui-select-viewport)`，否则 scoped 样式不会命中，浮层会退化为透明裸列表。**
 - 下拉表面：`pop` 表面 + `--glass-pop`，圆角 16px，5px 内边距，阴影 `--shadow-md`；宽度取 `max(触发器宽, 220px)` 并封顶 360px / 可用宽度，最大高度 320px。
-- 选项：最小高度 34px，圆角 7px，字号 12px；hover / 键盘高亮用 `--color-fill`，选中用品牌 10% 浅底 + 中性主文本 + 左侧 13px 勾选图标。选项获得键盘焦点时不再叠加按钮式 `--shadow-focus` 外环，避免出现第二个输入框轮廓。
+- 选项：最小高度 34px，圆角 7px，字号 12px；hover / 键盘高亮用 `--color-fill`，选中用品牌 10% 浅底 + 中性主文本 + 左侧 13px 勾选图标。选项获得键盘焦点时不叠加按钮式 `--shadow-focus` 外环，避免出现第二个输入框轮廓。
 - 设置抽屉宽 360–420px；展示为右侧 inspector，避免把所有配置堆进主区域。
 - 关闭 dialog 后必须销毁内部状态（`destroyOnClose`），除非该工具仍处于打开状态且用户正在编辑草稿。
 
@@ -435,8 +435,8 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 │ 48px   │ ┌ 竖脊 ┬──────────────────────────────────────────────┐ │
 │ Rail   │ │ 状态 │ 48px 工具条：筛选 / 计数 / 低频动作           │ │
 │ home   │ │ 名单 │──────────────────────────────────────────────│ │
-│ pinned │ │ 规则 │                                              │ │
-│ opened │ │ 流量 │        工具主体（表格 / webview / 表单）       │ │
+│ opened │ │ 规则 │                                              │ │
+│  ...   │ │ 流量 │        工具主体（表格 / webview / 表单）       │ │
 │ search │ │      │                                              │ │
 │ setting│ └──────┴──────────────────────────────────────────────┘ │
 └────────┴─────────────────────────────────────────────────────────┘
@@ -447,21 +447,21 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 ### 5.2 左侧导航轨
 
 - 三态：**图标栏 48px**（默认）/ **宽栏 208px**（图标 + 名称，名称单行省略）/ **收起 0px**。三态由标题栏最左侧的侧栏按钮按「图标栏 → 宽栏 → 收起」循环切换，状态写入配置层 `app/ui-preferences.json`（LocalStorage 的 `edt:rail-mode` 仅作网页预览镜像）；收起态用 `inert` 移出焦点顺序，内容区自然铺满。宽度过渡 190ms，`prefers-reduced-motion` 下直接切换。
-- 图标栏与标题栏的 48px 高度一致，整列**透明**：`background: transparent`，不铺玻璃底、不做 `backdrop-filter`、**右缘不画分隔线 / 高光**（border、伪元素、inset 阴影都不用）。rail 与内容区靠图标间距与内容表面的边界区分，不再靠底色明度差制造分栏。
+- 图标栏与标题栏的 48px 高度一致，整列**透明**：`background: transparent`，不铺玻璃底、不做 `backdrop-filter`、**右缘不画分隔线 / 高光**（border、伪元素、inset 阴影都不用）。rail 与内容区靠图标间距与内容表面的边界区分，不用底色明度差制造分栏。
 - 宽栏下每行 34px：图标 16px + 10px 间距 + 名称；行内左对齐，关闭钮固定在行右端，运行中圆点跟在名称之后。宽栏不改变左轨的透明外壳。
-- 自上而下：**首页 → 置顶工具 → 已打开的非置顶工具 →（底部固定）搜索工具 / 设置**。首页下方 1px 分隔线。
-- 置顶工具 = **常驻启动器**（Dock 语义）：用户可在首页星标，最多 4 个；关闭只停止运行，图标留在原位、位置不因开关而移动；顺序跟随首页收藏顺序。
-- 已打开的非置顶工具：打开时按打开顺序追加到置顶段之后；关闭即从列表移除。
-- 同一个工具只出现一次，永远取置顶那一位（置顶 + 已打开不重复）。
+- 自上而下：**首页 → 已打开的工具 →（底部固定）搜索工具 / 设置**。首页下方 1px 分隔线。
+- 已打开的工具：按打开顺序追加；关闭即从列表移除。左轨没有置顶 / 收藏概念。
+- 工具图标支持**拖拽排序**（mousedown + window 级 mousemove / mouseup）：移动超过 4px 才进入拖拽，被拖项只按纵向 `translate3d` 跟手、夹在首末槽之间，其余项以 160ms 过渡让位；松手才落盘，结束 220ms 内屏蔽 click。拖拽只重排 `openIds`，任何已打开的工具都可换位。
+- 同一个工具只出现一次。
 - 图标钮 **36×36**（圆角 11px，图标 16px），激活态品牌 10% 浅底 + 蓝色图标 + 左侧 3×18px 指示条。
 - 图标钮 hover 为 **7% 品牌蓝透明底、无边框**；激活态才用 10% 品牌浅底。不得把 hover 做成白色块。
 - 指示条贴窗口左缘：`left: -6px`（= 按钮左内边距），收窄轨道时必须同步改这个偏移，否则指示条会被窗口圆角裁掉。
-- **运行中标识**：已打开但未激活 → 图标右下角 4px 品牌色圆点；激活态已有浅底 + 指示条，不再重复标记。该圆点位置专用于「运行中」，短任务提示不得复用它。
-- **关闭钮**：15px 圆形，位于图标右上角，hover / 键盘聚焦才显现。置顶项的 tooltip / `aria-label` 写“关闭 X（保留置顶）”，非置顶项写“关闭 X”。关闭钮必须是图标按钮的**兄弟节点**——HTML 不允许按钮嵌套按钮。
+- **运行中标识**：已打开但未激活 → 图标右下角 4px 品牌色圆点；激活态已有浅底 + 指示条，不重复标记。该圆点位置专用于「运行中」，短任务提示不得复用它。
+- **关闭钮**：15px 圆形，位于图标右上角，hover / 键盘聚焦才显现，tooltip / `aria-label` 写“关闭 X”。关闭钮必须是图标按钮的**兄弟节点**——HTML 不允许按钮嵌套按钮。
 - 运行列表区独立滚动（`overflow-y: auto`，隐藏滚动条）：工具多到一列放不下时只滚这一段，首页与底部两个入口始终可见。
 - tooltip 悬停 180ms 后显示名称，深色玻璃、不阻挡指针。运行列表是 overflow 容器，伪元素提示会被裁掉，**必须用 `UiTooltip`（portal 到 body）**，不得回到 `::after` 方案。
 - 图标必须来自统一 SVG 图标集，线宽 1.6–1.8px；不得用 emoji 或临时文字代替。
-- 所有控件 `-webkit-app-region: no-drag`；rail 空白区域可拖动窗口。
+- rail 不声明 `-webkit-app-region: drag`（窗口拖拽区会截获排序所需的鼠标事件），窗口拖动统一走标题栏；控件仍保持 `no-drag`。
 - **rail 从标题栏下沿开始**，不用顶部 padding 给红绿灯让位：macOS 红绿灯由**整宽标题栏**承载（`electron/main.ts` 的 `trafficLightPosition`，y=18 让 12px 灯组在 48px 栏内居中），标题栏内容左内边距 84px（`.platform-darwin .app-topbar`，见 §5.3）。给 rail 加 `padding-top` 会把灯组压回 rail 上方，破坏「整宽标题栏 + 下方 rail / 内容两列」的结构。
 
 ### 5.3 标题栏（整宽顶栏）
@@ -529,11 +529,8 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 
 数据来源：`toolTabs.openIds` 提供运行集合，最近使用由 `recentIds` + `openedAt` 时间戳提供。
 
-### 6.4 置顶与排序
+### 6.4 排序
 
-- 置顶语义不变：写入 `UiPreferences.favoriteToolIds`，最多取前 4 个显示在左轨；LocalStorage 仍只做镜像。
-- **首页星标只在行 hover 时出现**：位于状态右侧的 28px 图标按钮（hover 前不可见），点击置顶 / 取消置顶。
-- 星标按钮自身 hover 为 **6% 品牌蓝透明底、无边框**，不能做成白色块。
 - 拖拽排序保留与 `tool-order.ts` 的纯函数；拖拽手柄是行左侧序号区（hover 时显示 grip），不新增独立拖拽卡片。
 
 ### 6.5 空态
@@ -564,7 +561,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | --- | --- | --- | --- |
 | 列表工作台 | 持续扫读表格 / 流量 | 竖脊 + 48px 工具条 + 单一大表格表面 | 拦截器 |
 | 分栏工作区 | 页面与本地归档需要**同时可见** | 左 webview（flex）+ 可拖分隔条 + 右表格面板 | Telegram 缓存（tweb） |
-| 内嵌工作区 | 主体是 webview / 浏览器页面 | 48px 工具条 + 全幅 webview | Treease 编辑器 |
+| 内嵌工作区 | 主体是 webview / 浏览器页面 | 48px 工具条 + 全幅 webview | WorkBuddy2API |
 | 表单工作室 | 左侧参数，右侧结果 | 左 360px 表单 / 右侧结果表 | 身份证号生成器 |
 | 处理控制台 | 启动 / 下载 / 同步 + 检查结果 | 左侧来源 / 设置栏 + 主任务表面 | 离线包下载、WXP 增强、WorkBuddy2API |
 
@@ -613,7 +610,7 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 - 影库**保留原有六列表格**：`会话 / 消息 | 消息 ID | 预览 | 大小 | 状态 | 操作`；消息 ID 与大小右对齐、等宽数字。低于最小宽度时表格横向滚动，不得挤压列宽。
 - 表格下方保留「回收站」区块（`会话 / 消息 | 操作`）与原计数行。
 - 面板工具条：搜索 + 全部暂停 + 刷新。
-- 概览的统计（索引条数 / 媒体体积）压缩进面板标题行右侧的 `312 条 · 4.2 GB`，不再单占一屏。
+- 概览的统计（索引条数 / 媒体体积）压缩进面板标题行右侧的 `N 条 · X GB`。
 
 ### 8.7 实测预算（1440×900 窗口内容区）
 
@@ -623,7 +620,6 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 拦截器 | 96 | 790 |
 | WXP 增强 | 96 | 790 |
 | Telegram 缓存 | 48 | 838 |
-| Treease 编辑器 | 96 | 790 |
 | 离线包下载 / 身份证号生成器 | 48 | 838 |
 | 首页 | 48 | 852 |
 
@@ -634,9 +630,8 @@ everydaytool 不是监控台，也不是把每个工具变成一页“状态卡�
 | 工具 | 骨架 | 首屏必须突出 | 必须移出首屏 | 交互与状态 |
 | --- | --- | --- | --- | --- |
 | 拦截器 | 流式工作台 | 启动 / 停止、当前流量表、规则命中 | 设置说明、CA 证书长文、诊断卡 | 状态在标题栏内联一行；4 个子路由不变；规则编辑器用右侧抽屉；表格始终占满剩余高度 |
-| Telegram 缓存（tweb） | 内嵌工作区 | tweb 页面、影库入口、缓存操作 | 站点 / 归档 / 媒体缓存的概览卡 | 侧栏页签保留，但不再堆三张概览面板 |
-| Treease 编辑器 | 内嵌工作区 | 全幅编辑器页面、拦截状态 | 页面内标题 / 说明块、statusline、重复状态文案 | 无第二条 header / statusline；`ToolSurface` 工具栏左侧来源与状态 chip，右侧末尾“拦截设置 / 刷新”；规则编辑继续用 dialog |
-| 离线包下载 | 处理控制台 | 来源选择、下载参数、进行中任务 | 大段说明、历史列表 | 无工具页内 header；左 360px 来源栏（窄屏 320px）切 6 个来源，与主表面共用表面、无底色；主表面单一下载器；左栏底部「下载历史」打开底部抽屉（任务 + 历史）；GitHub 解析结果按「仓库卡 → 三段切换（Releases / 分支源码 / 单文件）→ 产物卡」垂直铺开，每张产物卡下每条加速线路一个 split 按钮（左下载 / 右复制链接），不再有全局线路下拉，也不做批量勾选 |
+| Telegram 缓存（tweb） | 内嵌工作区 | tweb 页面、影库入口、缓存操作 | 站点 / 归档 / 媒体缓存的概览卡 | 侧栏页签保留，概览集中到一张面板 |
+| 离线包下载 | 处理控制台 | 来源选择、下载参数、进行中任务 | 大段说明、历史列表 | 无工具页内 header；左 360px 来源栏（窄屏 320px）切 6 个来源，与主表面共用表面、无底色；主表面单一下载器；左栏底部「下载历史」打开底部抽屉（任务 + 历史）；GitHub 解析结果按「仓库卡 → 三段切换（Releases / 分支源码 / 单文件）→ 产物卡」垂直铺开，每张产物卡下每条加速线路一个 split 按钮（左下载 / 右复制链接），没有全局线路下拉，也不做批量勾选 |
 | WXP 增强 | 处理控制台 | 启动 / 停止、路径与端口、缓存结果 | 三块并列面板、长说明 | 标题栏内联状态；左侧 360px 启动设置栏（窄屏 320px）常驻且无底色，启动 / 停止与缓存维护都在栏内；主区放缓存 / 收藏表 |
 | WorkBuddy2API | 内嵌工作区 | 上游面板 webview、启动 / 停止 | 安装、更新、说明、错误四块并列 | 标题栏只留工具身份与说明（状态 / 运行详情 / 启停都不进标题栏）；状态在工具条，左侧 360px「运行详情」分栏并入主表面（无独立卡片），单列滚动合并服务状态 / 安装更新 / 诊断，不设页签；关闭工具停止服务 |
 | 身份证号生成器 | 表单工作室 | 参数、生成动作与生成结果同时可见 | 外层面板、重复标题、说明卡、页面内标题操作 | 左 360px 表单；主按钮紧贴参数并显示“生成 N 条”；右结果表按内容收缩、最高 320px，超出时表内滚动；复制全部位于结果标题；生成后自动选中首行 |
@@ -676,7 +671,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 
 **表面与状态**
 
-- 只使用一个 `ToolSurface`（92% 白色薄层 `--color-sheet`，无高光、无外阴影）；参数列、结果标题、表格都是实色内容面，不再叠加 backdrop-filter。
+- 只使用一个 `ToolSurface`（92% 白色薄层 `--color-sheet`，无高光、无外阴影）；参数列、结果标题、表格都是实色内容面，不叠加 backdrop-filter。
 - 年龄 / 日期切换、地区级联和数量变化不得使生成按钮离开首屏；1280 / 1440 / 1600 宽均不得出现页面级横向溢出。
 - 行 hover 使用 `--color-fill`，选中行使用品牌蓝 `7.5%` 与 `--color-table` 混合；焦点、disabled、空态与滚动条沿用全局组件令牌。
 
@@ -686,31 +681,12 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 - 不改生成算法、JSON 配置恢复、选中首行、行点击复制与 IPC；不新增工具级 store 或独立设计令牌。
 - 样式只落在页面 scoped SCSS；公共 `UiButton` / `UiChip` / `UiTable` 的视觉内核不改。
 
-### 9.2 Treease 编辑器
-
-**结构**
-
-```text
-ToolSurface（无第二条 header / statusline，直接占满工作区）
-   ├─ 48px toolbar
-   │  ├─ 左：来源地址（可省略）+ 离线 / 缓存模式 chip
-   │  └─ 右（末尾）：拦截设置、刷新
-   └─ 全幅 webview / iframe
-```
-
-**布局与约束**
-
-- 工具名与用途由全局标题栏提供，页面不再重复工具身份；页面外边距统一 `0`。
-- 拦截状态只保留在“接口响应拦截”dialog 内；statusline 默认不渲染，也不要补一条重复的 ONLINE / RULES / HITS 文案。
-- “拦截设置 / 刷新”固定在 `UiToolbar` 的 `#end` 槽位。`UiToolbar` 必须撑满 `ToolSurface` 工具栏（`flex: 1; min-width: 0`），否则 `#end` 的 `margin-left: auto` 没有可推空间，按钮会贴在来源地址后面而不是行末。
-- 工具栏左侧只放来源与必要的状态 chip，不放大段说明；规则恢复 / 页面关闭释放等实现细节不进 UI。
-
-### 9.3 设置页
+### 9.2 设置页
 
 - 作为应用自带页面挂载（不是页签、不进左轨已打开列表），入口固定在 rail 底部；标题栏显示齿轮 + “设置” + 一句话职责（`AppTab.description`）。
 - 布局是**左侧分区索引 + 右侧文档列**的工作台：shell 宽 `1004px`（`196px` 索引 + `48px` 间距 + `760px` 文档），整体居中；索引 `position: sticky` 于页面滚动容器顶部。
 - 索引按「数据与存储 / 窗口 / 高级」分组，条目与右侧设置行一一对应；滚动时高亮当前行，点击平滑跳转（`prefers-reduced-motion` 下直接跳转）。
-- 右侧用三张分组面板承载六行设置：数据目录、数据分层、清理缓存、备份与恢复 / 大小与位置 / 调试。面板内用 1px 分隔线分行，**不再每个设置一张卡片**。
+- 右侧用三张分组面板承载六行设置：数据目录、数据分层、清理缓存、备份与恢复 / 大小与位置 / 调试。面板内用 1px 分隔线分行，**不逐项建卡**。
 - **窗口外观没有设置项**：透明度固定（外壳 80% 透磨砂壁纸、主表面 92% 近纯白），没有半透明开关、没有系统材质、没有夜色；「窗口」分组只剩大小与位置，分组的说明文字直接写明这一点。
 - 设置项仍使用 `UiFormField` / `UiSwitchField` / `UiButton`；无可见文案的开关必须传 `ariaLabel`。
 - 响应式：`< 980px` 索引改为顶部横向胶囊列表并取消 sticky；`< 640px` 行头改为纵向堆叠。
@@ -736,7 +712,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 - `Enter`：打开高亮工具 / 确认当前主操作。
 - `↑/↓`：命令面板与列表导航。
 - `Tab/Shift+Tab`：焦点顺序保持“rail → topbar → 工具条 → 竖脊 → content → statusline（若存在）”。
-- 首页工具行使用真实按钮语义；打开与置顶必须是两个并列按钮，不得把置顶按钮嵌套进工具行按钮。
+- 首页工具行使用真实按钮语义。
 
 ### 10.3 无障碍
 
@@ -760,7 +736,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 | 首页 | `renderer/pages/HomePage.vue` | 索引、运行 / 最近侧栏 |
 | 机器可读侧车 | `.impeccable/design.json` | 颜色、字体、圆角、核心组件快照 |
 | 预览 | `docs/preview/tool-workspace-layout.html` | 视觉方向确认 |
-| 验收基线 | `docs/workspace-redesign-spec.md` | 当前结构数值、验收清单与边界 |
+| 验收基线 | 本文 §13.2 / §13.4 | 结构数值、验收清单与命令 |
 
 **维护顺序**
 
@@ -776,7 +752,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 
 - **Do** 让一个工具页只有一个主工作区表面。
 - **Do** 把设置、诊断、说明和安装收进 inspector / 抽屉 / 子路由。
-- **Do** 让首页工具行只保留图标、名称、一句描述、运行状态与置顶。
+- **Do** 让首页工具行只保留图标、名称、一句描述与运行状态。
 - **Do** 使用 `Ctrl/Cmd+K` 和左轨保证任意位置快速打开工具。
 - **Do** 使用品牌蓝表达“当前、可操作、聚焦”，并让选中文字保持中性主文本。
 - **Do** 在固定透明档下检查玻璃上的文字对比（深色与浅色壁纸各看一遍）。
@@ -794,7 +770,7 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 
 ## 13. 布局基线（工具页与首页）
 
-竖向空间稀缺，横向空间充足。工具页只有一条 48px 标题栏；子视图导航是 98px 竖脊，不占纵向；statusline 默认不渲染。预览见 [`docs/preview/tool-workspace-layout.html`](docs/preview/tool-workspace-layout.html)，实施规格见 [`docs/workspace-redesign-spec.md`](docs/workspace-redesign-spec.md)。
+竖向空间稀缺，横向空间充足。工具页只有一条 48px 标题栏；子视图导航是 98px 竖脊，不占纵向；statusline 默认不渲染。预览见 [`docs/preview/tool-workspace-layout.html`](docs/preview/tool-workspace-layout.html)。
 
 ### 13.1 结构数值
 
@@ -811,21 +787,43 @@ ToolSurface（无第二条 header / statusline，直接占满工作区）
 
 ### 13.2 验收锚点
 
-完整清单（含常驻、透明与 hover）见 [`docs/workspace-redesign-spec.md`](docs/workspace-redesign-spec.md)；以下是视觉不可退让项。
+验收清单（含常驻、透明与 hover）：
 
 1. 八个工具 + 首页在 1440×900 下的横带/工作区必须落在 §8.7 的表格数值上（±2px）。
 2. 任何工具页都不得出现第二条横带、横排子导航或默认 statusline。
 3. 顶栏在 mac 与 Win 两种平台下都不得与窗口控件重叠（mac 84px 左内边距 / Win 148px 右预留）。
 4. 文字对比度：磨砂壁纸透 20% 的外壳区与 ≈98% 的主表面，在深色与浅色壁纸上均 ≥ 4.5:1（正文/小字）与 ≥ 3:1（大字号）；深色壁纸下靠系统「降低透明度」兜底。
 5. 首页 `1`–`8` 直启、`⌘K` 搜索、tweb 分隔条可拖且受 360–760px 约束。
+6. `ToolPane` 常驻：切换工具不卸载，关闭工具必须卸载；未打开过的工具不挂载。
+7. 透明外壳：左轨、标题栏、工具页容器的计算背景均为 `rgba(0, 0, 0, 0)`；工具页外边距为 `0`；标题栏 `border-bottom-width: 0`。
+8. hover：外壳图标 / 工具切换器 / 首页工具行 7% 品牌蓝；不得出现白色 hover 块。
+9. 控制台除既有 Vue `defineAsyncComponent` 与 `<webview>` 自定义元素提示外无新增错误。
 
 ### 13.3 透明层次
 
-- **两层纸，一层磨砂桌面**：窗口恒为系统磨砂玻璃（macOS vibrancy / Windows acrylic）。`canvas`（页面画布）、`rail`、`topbar` 都是 `transparent`，透出外壳底板 `--color-shell`（80%）；工具页主表面 `--color-sheet`（60%）叠在底板上，综合约 92% 白 + 8% 磨砂壁纸。壁纸只以**模糊**形态出现，这就是「毛玻璃」的全部来源。
+- **两层纸，一层磨砂桌面**：窗口恒为系统磨砂玻璃（macOS vibrancy / Windows acrylic）。`canvas`（页面画布）、`rail`、`topbar` 都是 `transparent`，透出外壳底板 `--color-shell`（80%）；工具页主表面 `--color-sheet`（92%）叠在底板上，综合约 98% 白 + 2% 磨砂壁纸。壁纸只以**模糊**形态出现，这就是「毛玻璃」的全部来源。
 - **透明来源**：表面 alpha 由 CSS 令牌（`--alpha-*` + `color-mix`）合成，取值见 §3.1；**桌面模糊来自窗口材质**（vibrancy / acrylic），CSS `backdrop-filter` 糊不到桌面，所以 `--glass-*` 只服务浮层。
 - **不做运行期切换**：外观没有开关、不落盘（`shared/appearance.ts` 的 `resolveWindowBlur(platform, windowsBuild)` 是唯一判定）。改软硬程度只改 `tokens.scss` 的 `--alpha-shell` / `--alpha-sheet`。
 - **外壳无边界**：标题栏不画底边线，rail 不画右缘线；分隔只靠内容表面的 1px 外缘。
 - **右下角交给窗口裁切**：`ToolSurface` 的 `border-bottom-right-radius` 为 0，其余三角保持 16px；窗口圆角、最大化直角与无圆角平台都由窗口自身决定，内圆不会与窗缘错位。
-- **hover 不用白**：外壳图标 / 工具切换器 / 首页工具行统一 7% 品牌蓝透明底；星标 6%。白色 hover 块会变成一块发白的实体。
+- **hover 不用白**：外壳图标 / 工具切换器 / 首页工具行统一 7% 品牌蓝透明底。白色 hover 块会变成一块发白的实体。
 - **不做外阴影**：`ToolSurface` 的外阴影会溢出表面边缘，让外壳与画布看起来不同层；主表面只用 60% 白色薄层 + 1px 外缘，也不加顶部内侧高光（模糊 + 半透明白已经给出层次）。窗口投影由系统提供（磨砂窗口是常规窗口），不要再给 `.app-shell` 补 `box-shadow`，否则窗内会多一道暗边。
 - **失焦由系统管**：Windows acrylic 在窗口失去激活时会退化为实色背板，这是 DWM 行为，不是 CSS 失效；禁止监听 `blur` / `focus` 去补透明度（代价是失去桌面模糊，且材质是构造参数，运行期改必须重启窗口）。
+
+### 13.4 验收命令
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm data-layers:check
+pnpm vite build
+```
+
+行为检查：
+
+- 打开工具 A 再打开 B：DOM 中存在两个 `ToolPane`，只有 B 可见；切回 A 保留表单、滚动与 webview 状态。
+- 回首页：已打开工具保持挂载；关闭工具后对应根节点、webview guest、IPC 订阅与定时器全部消失。
+- 工具内浮层经 `ui/overlay-target` 注入所属面板；切换工具时随面板隐藏并关闭。
+- 设置页作为应用自带页面进入，不写 `toolTabs.openIds`，不出现在左轨运行列表。
+- 标题栏最左侧的侧栏按钮按「图标栏 48px → 宽栏 208px → 收起 0px」循环；收起时 rail 不在焦点顺序，状态写入配置层，重启后保持上次状态。
+- 左轨工具图标可拖拽排序：只重排已打开工具的 `openIds`，没有置顶 / 收藏段；重启后顺序保持。

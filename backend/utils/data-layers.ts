@@ -6,7 +6,7 @@
 // - backend/utils/data-layout-upgrade.ts：v1→v2 一次性布局升级。
 //
 // 硬约束：工具不得再自己 `path.join(getDataDirectory(), '工具', …)`，一律走 resolveLayerPath，
-// 否则「可再生 / 不可再生」的边界会在半年后重新糊掉（docs/data-layers.md §5.2）。
+// 否则「可再生 / 不可再生」的边界会在半年后重新糊掉（docs/data-layers.md §5）。
 import type { DataLayer, DataLayerEntry } from '../../shared/data-layers.ts'
 import { existsSync } from 'node:fs'
 import { readdir, rm, stat } from 'node:fs/promises'

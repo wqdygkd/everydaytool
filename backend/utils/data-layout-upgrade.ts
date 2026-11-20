@@ -4,7 +4,7 @@
 // 与 `loadDataDirectoryOverrideSync()` 同一段启动流程；本文件不依赖 Electron，
 // 根目录由调用方传入（便于用脚本对真实/临时目录做 dry-run 验证）。
 //
-// 语义（docs/data-layers.md §9）：
+// 语义：
 // - 逐条目搬迁，优先 rename（同卷秒级），跨卷回落 copy + delete；
 // - 单条失败不中断整体：记 errors，文件留在旧位置，后续读取方用 resolveLegacyPath 容错回查；
 // - 两边同名 → 冲突，跳过且**绝不覆盖**；

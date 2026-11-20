@@ -139,7 +139,7 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'workbuddy2api-panel.settings', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/app-settings.json', label: '面板设置', backup: 'include', clean: 'never' },
   { id: 'workbuddy2api-panel.run', toolId: 'workbuddy2api-panel', layer: 'config', relativePath: 'workbuddy2api-panel/run', label: '上游运行目录（api_key / auths / data）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'treease-editor.rules', toolId: 'treease-editor', layer: 'config', relativePath: 'treease-editor/rules.json', label: '页面拦截规则与开关', backup: 'include', clean: 'never' },
-  // 隔离区在**配置层**而不是缓存层：进缓存层等于「清缓存顺手销毁不可再生数据」（docs/data-layers.md §9）。
+  // 隔离区在**配置层**而不是缓存层：进缓存层等于「清缓存顺手销毁不可再生数据」。
   // 它不备份（不知归属的遗留物进包只会污染备份）、也不自动清理（避免二次误删），由用户看过体积后自行处理。
   { id: 'app.quarantine', toolId: 'app', layer: 'config', relativePath: 'quarantine', label: '旧布局隔离区（未登记遗留项）', backup: 'never', clean: 'never' },
 

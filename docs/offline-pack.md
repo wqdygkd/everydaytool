@@ -40,7 +40,7 @@ utils/history.ts      下载历史增 / 查 / 删 / 清（含可选删文件）
 
 **硬约束**：
 - 前端不 import backend，经 preload 命名空间 `offlinePack` 调 IPC：统一入口 `renderer/ipc.ts`（`getOfflinePackApi()`，网页预览返回 null）；store / 组件不得自行创建 helper；外链统一走 `@renderer/shared/ipc/openExternal`。
-- 工具后端入口由 `scripts/build-electron.mjs` 动态扫描 `tools/*/backend/**/*.ts` 产出，新增工具无需在构建脚本登记（曾因手工清单漏加导致运行时 `Cannot find module`）。
+- 工具后端入口由 `scripts/build-electron.mjs` 动态扫描 `tools/*/backend/**/*.ts` 产出，新增工具无需在构建脚本登记。
 - 下载文件名走 `sanitizeFilename`（去路径分隔符 + 引号），URL 强制 http(s)。
 
 ## 3. 渲染层下载任务（`renderer/stores/downloads.ts`）
@@ -49,7 +49,7 @@ utils/history.ts      下载历史增 / 查 / 删 / 清（含可选删文件）
 
 - `start(request, title)`：store 生成 `taskId`、插入任务并调用 `DOWNLOAD`；`title` 是展示名（镜像名 / 文件名）。
 - `tasks` / `activeTasks` / `activeCount` / `activePercent` / `finishedCount`；`activePercent` 取最新进行中任务，供左栏入口显示。
-- 单个 `EVENT_PROGRESS` 监听（`ensureListener`），`applyProgress` 负责状态迁移、成功 / 失败 toast。后端 error 事件与 invoke reject 可能先后到达，store 用任务状态去重，避免同一错误弹两次。
+- 单个 `EVENT_PROGRESS` 监听（`ensureListener`），`applyProgress` 负责状态流转、成功 / 失败 toast。后端 error 事件与 invoke reject 可能先后到达，store 用任务状态去重，避免同一错误弹两次。
 - 支持并发：可同时解析并下载多个来源；换镜像 / 切来源不会清空任务。
 - 已结束任务最多保留 `MAX_FINISHED_TASKS = 5` 条（历史里有完整记录），`clearFinished()` 手动清；`dismiss(taskId)` 单条移除。
 - 关闭工具时 `OfflinePackPage` 的 `onUnmounted` 调 `reset()`：清空任务并取消所有进行中下载，避免后台继续写盘。
@@ -64,7 +64,6 @@ utils/history.ts      下载历史增 / 查 / 删 / 清（含可选删文件）
 | 下载产物 | `cache/offline-pack/downloads/` | cache | `resolveLayerPath('cache', 'offline-pack', 'downloads')`，已下载成品，清缓存不删 |
 | 下载历史 | `config/offline-pack/history.json` | config | `resolveLayerPath('config', 'offline-pack', 'history.json')`，不可再生 |
 
-- 读取历史走 `resolveLayerPathWithFallback`，兼容 v1 `<data>/offline-pack/history.json`。
 - `listHistory()` 按磁盘实况现算 `exists` / `size`：清缓存后历史保留，但前端显示「文件已缺失」。
 - 最多保留 `MAX_HISTORY = 200` 条；`HISTORY_DELETE` 可选 `deleteFile`，`HISTORY_CLEAR` 可选 `deleteFiles`。
 - 下载完成由主进程 `addHistory()` 落盘，前端不写历史文件。
@@ -106,7 +105,7 @@ quay.io/prometheus/node-exporter  → <mirror>/quay.io/prometheus/node-exporter
 
 - 镜像 config 直接取清单 `config.digest` 指向的上游 blob，**原样**写成 `<sha256>.json`，`manifest.json` 的 `Config` 指向它。不要手工拼配置——手写会把 `Cmd` / `Entrypoint` 置成 `null`，加载后 `docker run` 报 `No command specified`。
 - config 里的 `rootfs.diff_ids` 是完整性基准：每层解压后逐层比对，不匹配直接失败并提示更换加速服务，不把损坏层包装成"能加载"的镜像。
-- 每层走「流式下载到临时文件（增量 sha256）→ 流式解压到临时 `layer.tar`（增量 diff_id）→ 流式写入 TAR」，解压后的层不再常驻内存；下载进度按任务 150ms 节流，终态事件不节流。
+- 每层走「流式下载到临时文件（增量 sha256）→ 流式解压到临时 `layer.tar`（增量 diff_id）→ 流式写入 TAR」，解压后的层不常驻内存；下载进度按任务 150ms 节流，终态事件不节流。
 - `docker load` 的 TAR 只有 `RepoTags`，没有 `RepoDigests`。加载后 `docker image inspect -f '{{json .RepoDigests}}'` 为空是 Docker 的正常行为（digest 引用只来自 registry pull），不是导出缺字段。
 
 ## 5.1 GitHub Releases / 分支源码 / 单文件（`github-service.ts` + `GitHubDownloader.vue`）
@@ -138,7 +137,7 @@ quay.io/prometheus/node-exporter  → <mirror>/quay.io/prometheus/node-exporter
 | 直连 | `''` | 不走代理，复制给的是官方原始链接 |
 
 - 线路顺序即按钮顺序，`githubDownloadVariants(officialUrl)` 一次展开成全部变体（`url` / `mirror` / `host` / `recommended`），按钮文案与 tooltip 都从这里来，不在组件里另写一份表。
-- 不再有 localStorage 偏好：每次点哪个按钮就是哪条线路（`推荐` 只是视觉标记，不改变行为）。
+- 没有 localStorage 偏好：每次点哪个按钮就是哪条线路（`推荐` 只是视觉标记，不改变行为）。
 - **API 永远直连**，只有下载 URL 拼前缀：GitHub 的 API 走代理既受制于对方的 Token 池，也拿不到准确的配额信息。
 - **下载侧的三个护栏**：① 校验与下载用同一个「剥离代理前缀后」的官方地址（`unwrapGithubDownloadUrl`），避免 `https://evil/https://github.com/...` 借白名单把请求打到第三方；② 临时文件带 taskId（`<name>.<task8>.part`），同文件被两条线路同时下载不会互相截断，UI 也会在上一个任务未完成时禁用该产物的线路按钮；③ `rejectHtml`：节点用 200 + HTML 错误页冒充文件时直接报「该线路返回的是网页而不是文件」。
 - **降级**：分支列表拉取失败时用「默认分支」继续（codeload / contents 都接受普通分支名），源码与单文件区不会整段不可用，并给一个「重试」按钮。

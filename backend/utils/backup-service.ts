@@ -10,7 +10,7 @@ import type {
 } from '../../shared/backup.ts'
 // 备份与恢复（配置 / 资产清单 / 可选会话）——业务层，容器编解码见 backup-format.ts。
 //
-// 规则（docs/data-layers.md §8）：
+// 规则（docs/data-layers.md §7）：
 // - **缓存层永不进入备份**；配置层默认必含；资产层**只出清单**（内容不打包：GB~TB 级且恢复不写 assets）；
 //   会话层可选出（默认不含）；
 // - 导出前把敏感条目（账号密码 / CA 私钥 / token / api_key）逐项列给用户，可跳过或加口令；

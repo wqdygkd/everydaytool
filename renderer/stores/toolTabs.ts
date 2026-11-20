@@ -149,6 +149,17 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     if (activeId.value === toolId) activeId.value = null
   }
 
+  /**
+   * 左轨运行段的拖拽排序：只接受「同一批 id 的置换」，长度或成员对不上就丢弃，
+   * 避免脏数据把 openIds 换成别的集合。
+   */
+  function setOpenOrder(ids: string[]) {
+    if (ids.length !== openIds.value.length) return
+    const current = new Set(openIds.value)
+    if (ids.some(id => !current.has(id))) return
+    openIds.value = ids
+  }
+
   function rememberRoute(toolId: string, fullPath: string) {
     if (!fullPath.startsWith('/tools/')) return
     if (lastRouteById.value[toolId] === fullPath) return
@@ -209,6 +220,7 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
     runningTools,
     recentTools,
     close,
+    setOpenOrder,
     recentFallback,
     rememberRoute,
     lastRoute,

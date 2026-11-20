@@ -2,14 +2,14 @@
 
 多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Reka UI + Vite**。
 
-采用单体仓库子目录架构：主壳只负责首页导航、页签与设置，各工具独立存放在 `tools/` 下，
+采用单体仓库子目录架构：主壳只负责首页导航、左轨、标题栏与设置，各工具独立存放在 `tools/` 下，
 按需加载、互不耦合。内置 9 个工具模块：
 
 | 工具 | 分类 | 说明 |
 | ------ | ------ | ------ |
 | 拦截器 | 浏览器工具 | 本地 MITM 代理：改包 / mock / 流量日志，配合浏览器扩展接管流量与脚本注入 |
 | 离线包下载 | 开发工具 | 下载 VSCode 插件、Chrome/Edge 扩展、Docker 镜像、Microsoft Store 应用离线安装包 |
-| Treease 编辑器 | 开发工具 | 在线树形结构编辑器（treease.com/editor） |
+| Treease 编辑器 | 开发工具 | 仅保留工具入口占位，暂未实现 |
 | WXP 增强 | 自动化工具 | 通过 CDP 启动 WXP：缓存登录会话、备份与恢复转发收藏，并注入增强角标 |
 | 身份证号生成器 | 生成器 | 随机生成中国大陆 18 位身份证号 |
 | 技能管理 | 开发工具 | 按仓库对账、更新、禁用与收藏本机与项目技能，并管理 skills-lock.json |
@@ -67,11 +67,23 @@ pnpm create:tool <tool-id>    # 生成目录骨架并自动注册
 
 ## 关联文档
 
+平台整体方案只维护在 `AGENTS.md` / `DESIGN.md`；每个工具的设计细节与模块记忆在 `docs/<tool>.md`。`docs/` 只写当前方案。
+
 | 文档 | 内容 |
 | ------ | ------ |
-| [AGENTS.md](./AGENTS.md) | **开发约定**：目录边界、IPC 规范、编码规范、设计系统硬性要求 |
-| [DESIGN.md](./DESIGN.md) | **UI 设计**：设计令牌、半透明窗口透明度体系、UI 组件库、布局与动效 |
+| [AGENTS.md](./AGENTS.md) | **平台整体方案**：目录边界、IPC、编码规范、左轨 / 标题栏 / 路由、窗口与数据约定 |
+| [DESIGN.md](./DESIGN.md) | **UI 设计**：设计令牌、组件库、布局、动效与验收基线 |
 | [CLAUDE.md](./CLAUDE.md) | 入口指引（指向上述两份权威文档） |
-| [docs/wxp-enhancer.md](./docs/wxp-enhancer.md) | WXP 增强模块记忆：目标应用逆向、注入脚本约束、验证手法 |
-| [docs/interceptor.md](./docs/interceptor.md) | 拦截器模块说明 |
-| [docs/offline-pack.md](./docs/offline-pack.md) | 离线包下载模块说明 |
+| [docs/data-layers.md](./docs/data-layers.md) | 数据目录、分层与备份 |
+| [docs/browser-extension.md](./docs/browser-extension.md) | 平台浏览器插件方案 |
+| [docs/interceptor.md](./docs/interceptor.md) | 拦截器：MITM、证书、规则、流量与扩展桥 |
+| [docs/offline-pack.md](./docs/offline-pack.md) | 离线包下载：任务 store、镜像改写、历史与落点 |
+| [docs/treease-editor.md](./docs/treease-editor.md) | Treease 编辑器：当前占位状态 |
+| [docs/wxp-enhancer.md](./docs/wxp-enhancer.md) | WXP 增强：目标应用逆向、注入约束与验证 |
+| [docs/skill-manager.md](./docs/skill-manager.md) | 技能管理：锁兼容、安装 / 更新事务、禁用与预设 |
+| [docs/tweb-cache.md](./docs/tweb-cache.md) | Telegram 缓存：页面侧归档、触点重放与 SW 坑 |
+| [docs/workbuddy2api-panel.md](./docs/workbuddy2api-panel.md) | WorkBuddy2API：托管二进制、探活与更新回滚 |
+| [docs/media-library.md](./docs/media-library.md) | 媒体库：索引、扫描、缩略图与来源 |
+| [docs/preview/tool-workspace-layout.html](./docs/preview/tool-workspace-layout.html) | 工具工作区交互预览（视觉参考） |
+
+身份证号生成器是纯前端工具，没有后端与持久化，设计见 [DESIGN.md](./DESIGN.md) §9.1。

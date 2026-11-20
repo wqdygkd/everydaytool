@@ -43,10 +43,10 @@
 
 归档事件由 `tools/tweb-cache/backend/archive/api.ts` 统一推送到 `tweb-cache:event:library`。
 
-- 媒体索引写入按 500ms 合并（消息完成时立即 flush，进程退出前再 flush），不再每存一个附件 / 缩略图就全量重写。
+- 媒体索引写入按 500ms 合并（消息完成时立即 flush，进程退出前再 flush），避免每存一个附件 / 缩略图就全量重写。
 - 全库规范化（目录正名 / 别名重建 / 索引重建）完成后写 `<config>/tweb-cache/archive-layout.json` 的布局版本号；版本一致时打开工具直接跳过整盘扫描。
-- 首次打开（布局版本不一致）时，规范化等首屏与 tweb 页面起来后才在后台跑：逐条让出事件循环，网络盘上的存在性 / 大小判断全部走异步 `stat`，不再用同步 I/O 把主进程堵到窗口「未响应」。
-- 影库列表从 `messages-index/peer-<id>.json` 取候选并按时间先排序、再只读前 500 条 manifest，不再「先截断后排序」漏掉新消息；批量已缓存状态查询先查内存索引，未命中不再逐条碰文件。
+- 首次打开（布局版本不一致）时，规范化等首屏与 tweb 页面起来后才在后台跑：逐条让出事件循环，网络盘上的存在性 / 大小判断全部走异步 `stat`，避免同步 I/O 把主进程堵到窗口「未响应」。
+- 影库列表从 `messages-index/peer-<id>.json` 取候选并按时间先排序、再只读前 500 条 manifest，避免「先截断后排序」漏掉新消息；批量已缓存状态查询先查内存索引，未命中才读文件。
 
 ### 2.1 归档目录单独自定义
 
@@ -54,12 +54,11 @@
 - 自定义值存在 `<config>/tweb-cache/config.json` 的 `archiveDir`（绝对路径，`null` = 默认）。
 - 只有 `messages/` 与 `trash/` 跟着走；`media-index.json` / `messages-index/` 仍在配置层，
   `objects/` / `tmp/` / `diagnostics/` 仍在缓存层，索引里的相对路径不变。
-- 空目录：整体迁移两个目录（跨盘退化为复制成功后才删源）；任一步失败会回滚已移动条目，
-  配置只在全部成功后才写入。
-- 已有归档的目录（含 `messages/` / `trash/`，允许带旧布局的 `objects/` 与系统垃圾文件）：直接接管，
-  只改配置指向它，不迁移、不合并、不删除任何一侧的数据；打开工具页时 normalize 会按磁盘 manifest 重建索引。
-- 「恢复默认」把归档迁回 `<assets>/tweb-cache`；默认目录已有归档时同样走接管，不覆盖、不合并。
-- 自定义目录不再位于资产根下，因此备份包的资产清单不会收录它（清单只遍历 `getAssetsRoot()`）。
+- 空目录：`messages/` 与 `trash/` 直接写入新位置；配置在目录可用后更新。
+- 已有归档的目录（含 `messages/` / `trash/` / `objects/` 与系统垃圾文件）：直接接管，
+  只改配置指向它，两侧已有数据都保留、不删除；打开工具页时 normalize 会按磁盘 manifest 重建索引。
+- 「恢复默认」把归档目录移回 `<assets>/tweb-cache`；默认目录已有归档时同样走接管，不覆盖。
+- 自定义目录位于资产根之外，备份包的资产清单不会收录它（清单只遍历 `getAssetsRoot()`）。
 
 ### 2.2 转发 / 同内容副本的已缓存识别
 
@@ -83,8 +82,8 @@
 影库展示：
 
 - 列顺序固定为 `会话 / 消息 → 消息 ID → 预览 → 大小 → 状态 → 操作`。第一列是合并列（`UiTable` 的 `span-method`）：同一 `groupedId` 只渲染一次群名，多行时副标题为「相册 · N 条」；组内每行仍显示自己的消息 ID，定位 / 删除按行生效。
-- 缩略图优先读 manifest 里保存的 `thumb_<mediaKey>`；旧照片回退到主媒体，视频没有独立缩略图时不回退主文件。
-- 进入影库时自动补齐旧视频缩略图：等 tweb 页面稳定后，每批最多 24 条、批次之间留间隔，避免首次打开同时 reload 几百条消息把页面压死；成功后刷新影库，消息不可达 / 无 thumbnail 的条目跳过。
+- 缩略图优先读 manifest 里保存的 `thumb_<mediaKey>`；没有缩略图的照片回退到主媒体，视频没有独立缩略图时不回退主文件。
+- 进入影库时自动补齐缺少缩略图的视频：等 tweb 页面稳定后，每批最多 24 条、批次之间留间隔，避免首次打开同时 reload 几百条消息把页面压死；成功后刷新影库，消息不可达 / 无 thumbnail 的条目跳过。
 - 完成时间 `savedAt` 与转发来源只存在 manifest / message.md，不在表格里重复展示；表格只保留分组、消息 ID、预览、大小、状态、操作。
 
 右栏宽度与开合：
@@ -128,16 +127,16 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
   （`{ schemaVersion, peers: { [peerId]: { dir, username, title } } }`）；
   状态查询、删除、回收站恢复只拿得到 peer id，必须靠这张表离线定位目录。
 - **username 变化会跟着改名**（`old-peer--123` → `new-peer--123`）。因为名字里带 peer id，
-  改名不会撞到别的会话；改名只做一次目录 `rename` + 重写 `media-index.json`，**不再逐条改写 manifest**。
+  改名不会撞到别的会话；改名只做一次目录 `rename` + 重写 `media-index.json`，manifest 内的附件路径本身相对消息目录，无需改写。
 - manifest / `archive.meta.json` 里的附件路径是**相对消息目录**的 `media/<file>`；
-  旧归档里的完整 `messages/<peerDir>/<mid>/media/<file>` 仍可解析，`normalizeLibrary` 会顺手改成短路径。
-- 目录名不再加 `-2` / `-n<id>` 之类后缀：不同 peer 的目录名不可能相同。
-- **旧归档自动迁移**：`peer-<id>`、早期 username-only（`wqdyasmr/`）、标题 slug、手工改名目录，
+  归档目录里的完整 `messages/<peerDir>/<mid>/media/<file>` 可解析，`normalizeLibrary` 会顺手改成短路径。
+- 目录名只由 peer 名构成，不追加 `-2` / `-n<id>` 之类后缀：不同 peer 的目录名不可能相同。
+- **目录名规范化**：`peer-<id>`、username-only、标题 slug、手工改名目录，
   首次 `prepare` / `normalizeLibrary` 时收敛到规范名；多个目录并存则逐消息合并，
   同名消息保留规范目录那份，空目录删除。`acc-<scope>/` 上移时也直接落到已登记的目录名。
 - 极端情况：规范目录已存在但内容属于另一个 peer（手工复制 / 冲突）时不合并，退回裸 `peer-<id>`
   并写 warn 日志。
-- 影库扫描不再只认 `peer-*`：目录名先经登记表 / `peer-` 前缀 / manifest 反查得到 peer id。
+- 影库扫描按登记表 / `peer-` 前缀 / manifest 反查得到 peer id，不依赖固定的目录名。
 - 回收站目录名仍是 `<时间>_peer-<id>_<mid>`（内部标识，按 peer id 去重恢复，与可读目录名无关）。
 
 ## 3. tweb 源码触点（升级时的重放清单）
@@ -161,7 +160,7 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
 ## 4. 构建与托管
 
 - **构建**：`pnpm tweb:build`（`scripts/build-tweb.mjs`）。engines `^22.18 || >=24.11`——脚本自动在
-  fnm 目录里找可用 Node（本机 v24.15.0），用 Node 自带的 `corepack.js` 起 pnpm 11.16（`packageManager`
+  fnm 目录里找可用 Node，用 Node 自带的 `corepack.js` 起 pnpm 11.16（`packageManager`
   钉死，系统 pnpm 10 会被拒）。`--check` 只查状态与 dist 是否落后于 src 的 mtime。
 - **托管**：`tools/tweb-cache/backend/services/site-service.ts` 起引擎站点（`rootDir=tweb/dist`，
   `extraRootDir=tweb/public`——tweb 的 dist 不含字体/wasm/assets，两个静态根都要挂）。端口落盘在
@@ -175,7 +174,7 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
 - **bootstrap 注入**：站点服务往 HTML 的 `</head>` 前插 `<script src="/edt-bootstrap.js">`（no-store），
   内容是 `window.__EDT__ = {token, api, media}`。SW 对它 cache-first 是已知坑 → env.ts 的 401 重取兜底。
 
-## 5. 已知的边界与坑（源码勘察结论，行号以 2026-10-31 的 tweb 为准）
+## 5. 已知的边界与坑（源码勘察结论）
 
 - **PeerId 空间**：tweb 的 `PeerId = number`（`global.d.ts:128`），频道/群是负数（没有 `-100` 前缀），
   用户是正数。归档目录名里的 `peer-<id>` 用这套 PeerId；跳转桥 `Number(peerId)` 直接当 PeerId 用。
@@ -188,15 +187,12 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
 - **菜单 verify 静默过滤**：右键项消失先怀疑 verify 返回了假值。
 - **oxlint 的 keyword-spacing 覆写**：tweb 要求 `} catch{`（catch 后不留空格）、`if(`（if 后不留空格），
   见 `.oxlintrc.json` 的 `style/keyword-spacing` overrides。
-- **存量 typecheck 错误**：tweb HEAD 上 `src/tests/prepareRichMediaUpload.test.ts` 有一处
+- **typecheck 错误**：tweb HEAD 上 `src/tests/prepareRichMediaUpload.test.ts` 有一处
   `createElement`/`WebviewTag` 的报错（与 edt 无关，上游问题）。
-- **仓库里遗留的 `.graphify_*` / `graphify-out/`**：用户对 tweb 跑过 graphify 代码分析（27852 节点图），
-  属于分析工件，不参与构建。
 
-## 6. 媒体缓存策略（2026-10-31 定稿：不用自建 tmp-media）
+## 6. 媒体缓存策略
 
-曾评估在 `<cache>/` 下自建一层「实时临时缓存」（tee 页面媒体字节、归档时 seed/mirror、LRU 可配），
-**最终取消**，理由：tweb 浏览器侧已原生具备同等能力——
+媒体临时缓存由 tweb 浏览器侧提供，不在 `<cache>/` 再建一层。页面侧能力：
 
 - `cachedStreamChunks`（Cache Storage，SW `stream.ts`）：流式视频分块持久缓存，键 `账号-文档id?offset=…&limit=…` 跨会话稳定；回源分块经 `saveChunkToCache` 自动沉淀，播放与归档的 stream 路径都先查它；**归档原文件命中本地 `/media` 时不写这层**，避免同一份字节重复占盘；
 - `cachedFiles`（Cache Storage，≤20 MiB 整文件，`MAX_FILE_SAVE_SIZE` 门控）：`downloadMedia` 自动命中；
@@ -210,13 +206,13 @@ username 只用于浏览时辨认，**真实身份永远是 peer id**：
 - **清理**：逐条 `cache.delete(key)`——**不要整桶 `caches.delete`**（`CacheStorageController` 缓存了 `openDbPromise`，桶被删后旧 handle 会失效）；
 - **TTL**：edt 启动时一次性把 `settings.cacheTTL` 置 0（tweb 默认 86400×7 秒自动清），清理节奏由用户手动控制。
 
-## 7. 验收对应关系（与 plan §8 的差异）
+## 7. 验收
 
 - 影库数据固定落在 `<assets>/tweb-cache/`，右栏只读本工具的库。
-- 新增验收项：**已归档的消息断网后仍能在 tweb 页面直接查看 / 播放**。视频归档后必须禁用 HLS、请求原始 document 的普通 `stream/`；播放期间 `upload.getFile` 为 0，`cachedStreamChunks` 不因本地命中而增长。
+- **已归档的消息断网后仍能在 tweb 页面直接查看 / 播放**。视频归档后必须禁用 HLS、请求原始 document 的普通 `stream/`；播放期间 `upload.getFile` 为 0，`cachedStreamChunks` 不因本地命中而增长。
 - 归档成功后原媒体的浏览器整文件 / stream 分块缓存会被清理；HLS 转码缓存保留（内容不同，不能替代归档）。
 - 影库删除进行中的条目会先取消归档任务；取消后不会继续 append。
 - 影库自动更新：归档 API 的 `ArchiveLibraryEvent` 统一推送到 `tweb-cache:event:library`；tweb store 已有条目就地更新状态、大小、
   进度，新条目 400ms 防抖后重扫一次列表。影库行点击消息号或「定位」都会换算 mid 后跳到左侧消息。
 - `tweb 媒体缓存` 用量每 5 秒静默统计一次（页面不可见时暂停）；手动清理后立即重算。
-- 其余 12 条验收通用；`pnpm tweb:check` 对应 plan Step 0 的完成判据。
+- `pnpm tweb:check` 是状态与产物的验收命令。

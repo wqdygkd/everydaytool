@@ -1,6 +1,6 @@
 # interceptor（拦截器）
 
-> 已实现。工具域在 `tools/interceptor/`（backend 代理 / 证书 / 规则 / WS 桥 + Vue 管理页）；浏览器侧在平台扩展 `browser-extension/`（interceptor feature）。配置落在 `config/interceptor/`（`config.json` / `rules.json` / `certs/`）。
+> 工具域在 `tools/interceptor/`（backend 代理 / 证书 / 规则 / WS 桥 + Vue 管理页）；浏览器侧在平台扩展 `browser-extension/`（interceptor feature）。配置落在 `config/interceptor/`（`config.json` / `rules.json` / `certs/`）。
 > 一句话：**处理名单决定"进不进处理层"，规则决定"这个请求怎么处理"。**
 
 ## 1. 形态与取舍
@@ -9,7 +9,7 @@
 - **扩展保持瘦**：只放原语——`chrome.proxy` 一键挂 / 摘代理、与控制端口的 WS 桥、`chrome.userScripts` 脚本注入、事件回传。
 - **为什么代理必须在 edt**：MV3 扩展没有 raw socket，跑不了 TCP 代理；规则编辑器、body 日志、多浏览器统一管理也只能在 edt。
 - **扩展零更新原则**：加规则 / 改匹配 / 加面板 → 不动扩展；只有新增原语（如 cookie 操作）或改 manifest 权限才需要更新（解包自托管，覆盖目录后 `chrome://extensions` 重新加载即可）。
-- 已确认边界：浏览器由用户自己开（不接管启动）、**不碰系统代理**（只走扩展的 `chrome.proxy`）；否决过 `chrome.debugger`（横幅 + 与 F12 冲突）与页面 hook + DNR（body 覆盖不全）。
+- 边界：浏览器由用户自己开（不接管启动）、**不碰系统代理**（只走扩展的 `chrome.proxy`）。
 - 固有代价：edt 不开时代理全停；HTTPS 要装一次根 CA（每个浏览器 / profile 各一次）。
 
 ## 2. 代理接入（B 模式：全量固定代理）
@@ -36,8 +36,6 @@
   不开的话浏览器命中缓存就**不产生请求**，流量页会莫名空白；关掉 = 尊重上游缓存。开关生效前已缓存的资源仍需强刷一次。
 - **生效时机**：名单增删改后**断开所有透传隧道**，下一次请求重新 CONNECT 并按新名单分流（浏览器会长期复用旧连接，不断开新条目对它无效）。
 - **相关域名提示**：popup 从流量日志取「该页最近实际请求的域名」，方便逐条加 origin。
-- **迁移**（启动时自动改写 config.json）：老 `host`（+ `port`）按 origin 重建——回环用 http、其余 https，端口保留；
-  老的「含子域 / 来源匹配 / 子项停用」字段与正则条目**丢弃**（要覆盖子域请逐条加 origin，或把条件写进规则）；缺 `noCache` 补 `true`；迁移后撞车的合并为一条。
 - 空名单 = 全部透传；名单存 edt，跨浏览器共享。
 
 ## 4. 规则（名单内的流量怎么处理）
@@ -85,10 +83,10 @@
 
 ## 7. 扩展与通信
 
-> 扩展已上提到平台层（`browser-extension/`，WXT）；interceptor 是其中一个 feature。完整约定见 [`docs/browser-extension.md`](./browser-extension.md)。
+> 扩展在平台层（`browser-extension/`，WXT），interceptor 是其中一个 feature。完整约定见 [`docs/browser-extension.md`](./browser-extension.md)。
 
 - Origin 校验（只接受 `chrome-extension://<本扩展 id>`，服务只绑回环）+ **每次启动轮换的共享令牌**：edt 把随机令牌写进扩展目录的 `bridge-token.json`（0600），扩展重连时读取并放进 `hello`；没有令牌的握手回 `hello-reject { reason: 'bad-token' }`。扩展仍零配置，不需要用户手填配对码。
-- 线协议为 **v1 信封**（`{ v, module, type, payload?, requestId? }`）：`shell` 负责握手/心跳，`interceptor` 承载业务；入站仍兼容旧扁平消息。校验与 64 KB 上限不变。
+- 线协议为 **v1 信封**（`{ v, module, type, payload?, requestId? }`）：`shell` 负责握手/心跳，`interceptor` 承载业务；入站同时接受扁平消息。校验与 64 KB 上限不变。
 - 业务语义（信封内 type / payload）：
 
   | 方向 | 消息 |
@@ -121,14 +119,7 @@
 
 实现：`index.ts` 的 `subRoutes` 由 `renderer/router/routes.ts` 拍平为 `/tools/<工具>/<子路径>`；竖脊驱动 `router.push`；映射集中在 `renderer/tabs.ts`。规则编辑器是组件内视图、不进路由。工具页常驻由平台 `ToolPane` 保持挂载。
 
-## 10. 未做 / 二期
-
-- 限速、断点、请求重放；
-- 上游公司代理的探测与链式转发（回环强制直连已做）；
-- 多浏览器 / 多 profile 的身份区分（当前用连接 clientId）；
-- PAC 的 A 模式（纯域名场景的可选优化）。
-
-## 11. 关键文件
+## 10. 关键文件
 
 | 关注点 | 位置 |
 |---|---|

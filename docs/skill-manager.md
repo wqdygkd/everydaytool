@@ -1,35 +1,17 @@
-# 技能管理器（Skill Manager）设计方案
+# 技能管理器（Skill Manager）
 
-> 状态：**已实现（Step 0–11）** · 目标版本：edt 1.2 · 关联文档：[AGENTS.md](../AGENTS.md)、[DESIGN.md](../DESIGN.md)、[docs/data-layers.md](./data-layers.md)
+> 本文是 skill-manager 的设计与模块记忆：数据模型、锁兼容、安装 / 更新事务、禁用、收藏与 UI 结构。平台约定见 [AGENTS.md](../AGENTS.md)，视觉规范见 [DESIGN.md](../DESIGN.md)，数据落点见 [data-layers.md](./data-layers.md)。
 >
 > 一句话：给本机 skill 做一个「包管理器 + 收藏夹」——按仓库分组、记住装过什么、更新时对账、识别上游已删除的 skill、支持禁用/启用、收藏分类，并能直接管理项目里的 `.agents/skills` 与 `skills-lock.json`。
->
-> 修订：2026-11-05 确认 Q1–Q4/Q6/Q7/Q11/Q12 决策；新增「仓库内只装部分技能」、§9.8 仓库技能面板、§8.6 TFS/无 API 通用 git 与根目录技能布局。2026-11-06 新增墓碑恢复、§6.3 `presets.json`、§8.7 预设应用、§7.5 未托管接管与 §15.9/§15.10 预设/接管视图。
->
-> 视觉预览：[skill-manager-preview.html](./skill-manager-preview.html)（静态样张；右上「设计信息」含规格 / 组件映射 / 状态）。
->
-> 实施计划：[skill-manager-implementation-plan.md](./skill-manager-implementation-plan.md)（一步一停，Step 0 待确认）。
 
----
+## 0. 核心约束
 
-## 实现状态（2026-11-06）
-
-- 已落地：全局/项目扫描、安装与项目锁事务、更新计划/应用/撤销、禁用/启用与回收站、收藏/预设、墓碑/接管/恢复、项目登记与重扫、设置与按 host PAT、通用 git/TFS URL 解析。
-- 兼容：global 锁 v3、project 锁 v1 / v2；项目锁按读入版本写回，新建时仍为 v1。
-- 未覆盖：真实 TFS/Azure 内网与 PAT 端到端、Electron 内完整 IPC 手测、常驻自动检查调度器。实现细节与每步验收见 [skill-manager-implementation-plan.md](./skill-manager-implementation-plan.md)。
-
----
-
-## 0. 结论先行
-
-### 0.1 十条核心决策
-
-| # | 决策 | 理由 |
+| # | 约束 | 原因 |
 | --- | --- | --- |
 | 1 | 新增工具 `skill-manager`，只做**本机技能的文件与来源管理**，不做技能运行时 | 运行时分发属于各 agent；我们只负责「装、更、删、禁、藏」 |
 | 2 | 双作用域：`global`（`~/.agents/skills` + `~/.agents/.skill-lock.json`）与 `project`（`<project>/.agents/skills` + `<project>/skills-lock.json`） | 与 `vercel-labs/skills` CLI 的规范目录一致，且本项目自身就在用 |
 | 3 | 安装/更新以**仓库（source + ref）**为分组单元，但以**技能**为操作单元；组内持久化「已选中 / 已安装 / 上次远端可见」三个集合 | 用户要的「按仓库分组」「记住上次装了哪些」落在组上；「一个仓库只装/只更其中一个」落在技能选择上 |
-| 4 | 失效判定采用**三方对账**：锁文件 + 应用侧本地基线 + 远端目录；网络失败绝不判失效 | 锁不可靠（见 §1.2）、hash 语义不一致，单靠锁会误删 |
+| 4 | 失效判定采用**三方对账**：锁文件 + 应用侧本地基线 + 远端目录；网络失败绝不判失效 | 锁不可靠（见 §1）、hash 语义不一致，单靠锁会误删 |
 | 5 | 更新是**事务**：staging → 校验 → 旧版本进回收站 → 原子替换 → 写锁 → 写 registry；支持回滚 | skill 是用户资产，不能出现「删了一半」 |
 | 6 | 禁用 = 把技能**移出扫描根**到应用数据区；启用 = 移回 | 各 agent 只认目录扫描，marker 文件不算真禁用；symlink 只动链接不动目标 |
 | 7 | 收藏是**跨 project/global 的个人书签**，支持多分类标签；未安装也能收藏 | 收藏表达「我想要什么」，不等于「我现在装着什么」 |
@@ -37,63 +19,17 @@
 | 9 | 锁之外再维护**墓碑 + 预设**：卸载或外部删除后仍能按来源找回；预设可随时重装到指定目录 | 锁只记「当前安装」，不记「曾经装过」；用户要的是可恢复的资产清单 |
 | 10 | 项目里手工新增的未托管技能默认**只读**；显式「接管」后才进入选择集；绑定来源后才进入更新计划 | 不猜来源、不静默改锁；本地接管可管理但不假装能远端更新 |
 
-### 0.2 已确认决策（2026-11-05 / 11-06）
+### 0.1 非目标
 
-| 议题 | 结论 |
-| --- | --- |
-| 禁用后放哪 | **应用数据区** `<assets>/skill-manager/disabled/<scopeId>/<name>/`（§10） |
-| 禁用时锁怎么处理 | **分 scope**：`global` 删锁条目；`project` 保留锁条目，项目级可切换为删（§10.3） |
-| 项目 `skills-lock.json` | **直接读写**，兼容 v1 / v2，严格保持读入版本的格式、排序与字段（§2.2、§12.2） |
-| 上游已删除的默认处置 | 更新计划里**默认勾选**「移到回收站 + 移除锁」，可撤销（§9.3、§9.5） |
-| 首版范围 | 只管理 `.agents/skills`；其它 agent 目录**只读识别**（§3、§12） |
-| 仓库内只装部分技能 | 安装/更新都按技能勾选；更新**只作用于已选中技能**，未选中的远端技能只提示、不下载、不安装（§9.8） |
-| 仓库技能面板 | 列出仓库全部技能，**自动勾选已安装/已禁用**；改选后一次确认，安装/更新/移除合并成一个事务（§9.8） |
-| 面板取消勾选 | **卸载**：移到回收站 + 从锁/`selectedNames` 移除；「跳过本次更新」只在更新对话框里做 |
-| 非 GitHub / 无 API | **通用 git + PAT**（TFS / Azure Repos / 自建 GitLab），不依赖 GitHub API（§8.6） |
-| 根目录即技能 | 根 `SKILL.md` → 整个仓库一个技能，`skillPath = "SKILL.md"`，不再发现子技能（§8.6） |
-| 私有仓库认证 | **PAT**，按 host 保存（env 或应用内加密）；TFS 走 git + token，不要求 API（§8.6、§22 Q7） |
-| 技能丢失后的追踪 | registry 保留**墓碑**（origin / removedAt / trashRef / 最后基线），不随卸载删除；可从回收站或远端重装（§7.2、§9.5） |
-| 技能预设 | `presets.json` 保存技能来源清单；可应用到 global / 项目 / 指定目录，默认增量安装，显式才精确同步（§6.3、§8.7、§11.5） |
-| 预设指定目录 | **默认项目根**，装到 `<path>/.agents/skills`；直接把目录当技能根只作为高级选项（§8.7） |
-| 预设应用模式 | **默认 additive**：装缺失、更新已有、保留目标多余项；exact 需显式确认（§8.7） |
-| 项目里手工新增 skills | 扫描为 `orphan`，默认**只读不可维护**；可预览/收藏/删除；显式「接管」后才进入选择集；绑定来源后才参与远端更新（§7.5、§15.10） |
-| 未托管接管方式 | **两种都允许**：绑定来源（写锁、可更新）/ 仅本地（不写锁、只本地维护、可后补来源）（§7.5、Q15） |
-
-其余问题（Q5 收藏多分类、Q8 默认策略、Q9 工具形态、Q10 明细保留）按 §22 的推荐值执行，除非另有指示。
-
-### 0.3 需求对照
-
-| 用户要求 | 落点 |
-| --- | --- |
-| 安装 / 管理 / 更新 skills | §8 安装、§9 更新、§6 数据模型 |
-| 识别失效 skill（上游移除） | §9.2–§9.4，状态 `removed-upstream` |
-| 按仓库分组 | §4.3 `RepoGroup`、§15.2 分组表 |
-| 记住上次安装 / 上次拉取并对比 | §6.2 `selectedNames` / `installedNames` / `lastFetchedNames`、§9.1 |
-| 删除已失效 | §9.5（默认进回收站，不硬删） |
-| 禁用 / 启用 | §10 |
-| 收藏 + 按功能分类 | §11 |
-| 安装到项目文件夹 / 更新项目技能 | §12、§8.3 |
-| 识别并解析 `skills-lock.json` | §2.2、§12.2 |
-| 解析安装源后更新、移除失效 | §9.1、§12.3 |
-| 仓库多技能只装/只更新其中一个 | §9.8 仓库技能面板、§8.2 |
-| 面板列出全部技能、自动勾选已安装、可改选 | §9.8、§15.4 |
-| 锁和目录都丢失后仍能追踪、重装 | §7.2 墓碑、§9.5、§11.5 |
-| 维护技能预设、随时安装到指定目录 | §6.3 `presets.json`、§8.7、§11.5、§15.9 |
-| 项目里手工新增 skills 默认只读、可接管 | §7.3 `orphan`、§7.5 接管、§15.10 |
-
-### 0.4 不做什么（非目标）
-
-- 不做技能市场/搜索（`skills.sh` 的浏览与排行不在首版；首版支持「知道来源后安装」）。
+- 不做技能市场/搜索（`skills.sh` 的浏览与排行不在范围内；只支持「知道来源后安装」）。
 - 不执行 skill 里的脚本，不替 agent 注入上下文。
 - 不改各 agent 的配置文件（`.claude/settings.json`、`~/.codex/config.toml` 等），只管理规范技能目录。
-- 不管理 `node_modules` 来源的同步（`experimental_sync` 的职责）；首版只读展示。
+- 不管理 `node_modules` 来源的同步（`experimental_sync` 的职责）；只读展示。
 - 不做跨机器同步；收藏与 registry 是本机数据。
 
 ---
 
-## 1. 现状与事实基线（本机实测）
-
-这些数字不是假设，是设计必须绕开的坑。
+## 1. 锁文件与扫描约束
 
 ### 1.1 两套锁、两种语义
 
@@ -112,28 +48,11 @@
 > - 我们不能把「本地内容 hash」写进全局锁（CLI 期望 tree SHA）；也不能把 tree SHA 当成本地修改判据。
 > - 全局锁**绝不能写成 v1/v2**——CLI 读到旧版本会直接清空，等于删用户数据。
 
-### 1.2 本仓库体检结果（2026-11-05）
+### 1.2 设计约束
 
-**项目 `skills-lock.json`**
-
-- `version: 1`，**34 条**，来自 5 个仓库：`mattpocock/skills` 24、`greensock/gsap-skills` 7、`Leonxlnx/taste-skill` 1、`pbakaus/impeccable` 1、`vueuse/vueuse` 1。
-- 磁盘上 `.agents/skills` 有 **38 个目录**。
-- **4 个未入锁的目录**：`gsap-react`、`shadcn-vue`、`supabase`、`supabase-postgres-best-practices`（来源未知，属于「未托管」）。
-- 锁中记录但目录缺失：**0 个**。
-- 按 CLI 的 `computeSkillFolderHash` 逻辑复算：**只有 7/34 与 `computedHash` 一致，27 条不一致**。
-
-**全局 `~/.agents/.skill-lock.json`**
-
-- `version: 3`，**只有 3 条**：`find-skills`、`archify`、`coding-standards`。
-- `~/.agents/skills` 实际有 **32 项**（31 个技能目录 + `.DS_Store`），其中 **29 个是 symlink（含 1 个断链）**，指向 `~/work/skills-pack/skills/*`。
-- `coding-standards` 在锁里有记录，但目录**不存在**。
-- 有 **1 个断链**：`trace-debug-dongguantaixin11`。
-
-### 1.3 四条设计结论
-
-1. **锁不是清单**：全局 3 条锁 vs 31 个实际技能。必须以目录扫描为主、锁为来源线索。
-2. **锁哈希不是本地内容指纹**：项目 27/34 对不上。首次接管必须**重建基线**，不能把「对不上」直接报成「被用户改过」。
-3. **symlink 是一等公民**：全局 29/31 是链接。删除/禁用必须 `lstat` + 只处理链接本身，绝不能递归删目标目录（否则会删掉外部技能包）。
+1. **锁不是清单**：锁条目通常少于磁盘上的实际技能数。必须以目录扫描为主、锁为来源线索。
+2. **锁哈希不是本地内容指纹**：项目锁的 `computedHash` 与本地内容经常对不上。首次接管必须**重建基线**，不能把「对不上」直接报成「被用户改过」。
+3. **symlink 是一等公民**：全局技能大量是符号链接。删除/禁用必须 `lstat` + 只处理链接本身，绝不能递归删目标目录（否则会删掉外部技能包）。
 4. **项目锁是团队资产**：它会被提交、被 review、被 CI 的 `--frozen-lockfile` 校验。我们写它必须逐字节保持 CLI 的格式与排序。
 
 ---
@@ -197,7 +116,7 @@ CLI 和应用可能同时写同一个锁。做不到跨进程文件锁，但可�
 
 ### 3.2 成功判据
 
-- 对一个 38 技能的项目，首次扫描 1s 内完成，且 4 个 orphan、1 个断链、0 个误报「本地修改」。
+- 几百个技能的项目，首次扫描仍在秒级完成；orphan 与断链如实显示，不误报「本地修改」。
 - 对一个删除了 2 个技能的仓库，检查更新后准确列出 2 个 `removed-upstream`，应用后进入回收站、锁同步、可一键撤销。
 - 禁用后新开 agent 会话，技能不再出现在可用列表；启用后恢复，内容 hash 不变。
 - 手动删掉 `skills-lock.json` 条目和技能目录后，仍能从 registry 墓碑看到来源并一键重装；预设可一键装到另一个项目。
@@ -238,7 +157,7 @@ FavoriteKey  = OriginKey                             // 收藏不绑 scope，也
 规则：
 
 - 技能在仓库里**改名但路径不变** → 仍视为同一技能（按 `skillPath` 对齐），收藏不丢。
-- 技能**换目录**（repo 重组）→ 状态 `moved`，迁移而不是「删一个 + 加一个」，`OriginKey` 更新但收藏通过「旧 key → 新 key」的映射表跟随。
+- 技能**换目录**（repo 重组）→ 状态 `moved`，保留原条目而不是「删一个 + 加一个」，`OriginKey` 更新但收藏通过「旧 key → 新 key」的映射表跟随。
 - 两个仓库有同名技能 → 安装到同一 scope 会产生目录名冲突，**默认阻止**，不做静默覆盖。
 - 项目与全局同名 → 允许共存，项目优先；UI 标 `shadowed`（被项目覆盖），只做提示。
 
@@ -267,13 +186,9 @@ interface Scope {
 
 ```text
 ┌──────────────────────────── renderer ────────────────────────────┐
-│ SkillManagerPage                                                │
-│  ├─ InstalledView   仓库分组表 + 状态 + 行操作                    │
-│  ├─ UpdatesView     仓库级检查结果 + 更新计划                     │
-│  ├─ FavoritesView   分类侧栏 + 收藏卡片/表                        │
-│  ├─ PresetsView     预设清单 + 应用到目标 + 差异预览               │
-│  ├─ ProjectsView    项目卡 + 锁状态 + 批量更新                    │
-│  └─ SettingsView    策略 / 令牌 / 回收站                          │
+│ SkillManagerPage（单页 + tabs.ts 子路由）                         │
+│  ├─ 技能库 / 更新中心 / 收藏 / 预设 / 项目 / 设置                  │
+│  └─ UpdatePlanPanel  更新计划对话框                               │
 │         │ invoke / on(EVENT_PROGRESS)                            │
 └─────────┼─────────────────────────────────────────────────────────┘
           ▼
@@ -294,13 +209,13 @@ interface Scope {
 │  └─ trash.ts         回收站                                       │
 │  sources/{github,git,local,catalog}.ts                            │
 │  locks/{global-lock,project-lock,hash}.ts                         │
-│  store/{registry,projects,favorites,presets,settings}.ts          │
+│  services/{registry,projects,favorites,presets,settings,history}.ts│
 └─────────┬─────────────────────────────────────────────────────────┘
           ▼
   GitHub API / codeload tarball / git CLI（可选）/ 本地文件系统
 ```
 
-### 5.2 拟新增文件
+### 5.2 模块与文件
 
 ```text
 tools/skill-manager/
@@ -308,17 +223,16 @@ tools/skill-manager/
   backend/
     index.ts                      # skillManagerBackend.initialize()
     ipc/{channels,handlers}.ts
-    services/{scanner,planner,executor,installer,projects,favorites,presets,history,trash}.ts
-    sources/{github,git,local,catalog}.ts
-    locks/{global-lock,project-lock,hash}.ts
-    store/{registry,projects-store,favorites-store,presets-store,settings-store}.ts
-    utils/{paths,atomic,tar,lock-guard,frontmatter}.ts
+    locks/{global-lock,project-lock,lock-file,skill-name}.ts
+    services/{scanner,planner,executor,installer,project-installer,projects,
+              disabled,trash,archive,adopt,removed,favorites,presets,
+              registry,history,settings,credentials,delete-skill,hash}.ts
+    sources/{github,git,local,catalog,parse,errors}.ts
   renderer/
     ipc.ts                        # 唯一 createIpcHelpers 实例
+    tabs.ts                       # 子路由表
     pages/SkillManagerPage.vue
-    views/{InstalledView,UpdatesView,FavoritesView,PresetsView,ProjectsView,SettingsInspector}.vue
-    components/{RepoGroupTable,SkillRow,PlanDialog,PresetApplyDialog,FavoriteStar,CategoryPicker,ProjectCard}.vue
-    stores/…                      # 只放视图状态，业务状态从 IPC 来
+    components/UpdatePlanPanel.vue
 shared/skill-manager.ts           # 纯类型 / 常量 / 纯函数（状态矩阵、格式化）
 ```
 
@@ -424,7 +338,7 @@ shared/skill-manager.ts           # 纯类型 / 常量 / 纯函数（状态矩�
   - `selected - lastFetched` → 上游已移除（进入失效候选，但要先确认仓库可访问）。
 - 对比差异可回答：「这个仓库上次有 12 个，这次只剩 10 个 → 哪些没了」。
 - 即使不应用更新，也保留 `lastFetchedNames`，用于「上次检查时发现减少」的审计。
-- 旧数据没有 `selectedNames` 时，按 `installedNames ∪ disabledNames ∪ 锁条目` 重建。
+- 缺少 `selectedNames` 时，按 `installedNames ∪ disabledNames ∪ 锁条目` 重建。
 
 **墓碑（tombstone）**：`records[name]` **不因卸载或目录删除而删除**。
 
@@ -749,7 +663,7 @@ interface SkillManagerSettings {
 磁盘目录集合 D
 锁条目集合 L
 registry 记录集合 R
-选择集 S（selectedNames；旧数据按 R ∪ L 补齐，排除 state=removed 墓碑）
+选择集 S（selectedNames；缺失时按 R ∪ L 补齐，排除 state=removed 墓碑）
 禁用区记录集合 X
 
 D ∩ (S ∪ L) → 正常实例（再比对 baseline / 远端）
@@ -776,7 +690,7 @@ D ∩ X       → disabled-drift（被外部恢复）
   - 用**当前磁盘内容**计算 `baseline.contentHash`，`source: 'adopt'`。
   - 锁里的 `computedHash` 只作为 `lockHash` 留存展示；**不**因为不一致就报 `modified`。
   - UI 提示：「锁中的哈希与当前内容不一致，已按当前内容建立基线。可一键修复锁哈希。」
-- 这条规则直接消化本仓库 27/34 的哈希不一致，避免首屏 27 条红色误报。
+- 这条规则直接消化项目锁常见的哈希不一致，避免首屏大量红色误报。
 
 ### 7.3 状态矩阵
 
@@ -790,7 +704,7 @@ D ∩ X       → disabled-drift（被外部恢复）
 | `invalid` | 断链 / 无 `SKILL.md` / frontmatter 解析失败 | 修复 / 删除（仅链接） | 中 |
 | `removed-upstream` | selected 记录存在，远端快照无此路径，且仓库可访问 | 移到回收站 + 移除锁 | 高 |
 | `removed-external` | 锁/目录都没了，但 registry 有旧记录（墓碑） | 显示在「已移除」；重新安装 / 遗忘 | — |
-| `moved` | 远端同名技能唯一，但 `skillPath` 变了 | 迁移 + 更新锁 | 中 |
+| `moved` | 远端同名技能唯一，但 `skillPath` 变了 | 移动目录 + 更新锁 | 中 |
 | `disabled` | 在禁用区，且目录不在扫描根 | 启用 / 卸载 | — |
 | `linked` | 目录是 symlink 且无锁记录（本地技能包） | 只读展示；可禁用（删链接） | 中 |
 | `legacy` | 锁记录缺 `skillPath` | 重新安装以补全 | 低 |
@@ -806,10 +720,10 @@ D ∩ X       → disabled-drift（被外部恢复）
 
 ### 7.4 首次运行的降噪
 
-本机现状是「锁只记得 3 个、磁盘有 31 个」，首屏必然出现大量 `orphan`。这不是用户做错了，不能红屏警告：
+锁条目通常少于磁盘技能数，首屏会出现 `orphan`。这不是用户做错了，不能红屏警告：
 
-- 全局首次扫描只出**摘要条**：「2 个已托管 · 29 个未托管（多为链接）· 1 个断链 · 1 条锁记录目录缺失」。
-- 项目首次扫描：「34 条锁 · 38 个目录 · 4 个未入锁 · 0 个缺失」。
+- 全局首次扫描只出**摘要条**：已托管、未托管（多为链接）、断链、锁记录目录缺失各显示计数。
+- 项目首次扫描显示锁条目、目录数、未入锁数与缺失数。
 - `orphan` 默认折叠进「未托管」筛选，用 neutral 色；只有 `invalid`（断链/无 SKILL.md）用 warning。
 - 提供批量动作：「批量收藏」「批量忽略」「查看链接目标」。
 - 对 symlink 的 orphan，明确显示「链接到 `~/work/skills-pack/skills/…`，由外部管理」，避免用户以为要重装。
@@ -850,7 +764,7 @@ D ∩ X       → disabled-drift（被外部恢复）
 - 未托管组默认折叠，用 neutral 色；不逐条红色报警（见 §7.4）。
 - 行操作只给「接管 / 收藏 / 删除」；接管打开 `AdoptDialog`，不是一键静默写锁。
 - 接管失败（来源不存在、`skillPath` 不符、项目锁 invalid）→ 不写任何文件，保留 `orphan`。
-- 接管成功写 history `kind: 'adopt'`；批量接管 P2 再做，首版逐个确认。
+- 接管成功写 history `kind: 'adopt'`；逐个确认。
 - 如果目录是 symlink：接管记录 `installMode: 'symlink'` + `linkTarget`；删除只 `unlink`。
 - 手工新增的技能若已有 frontmatter `metadata.source`，可作为来源**预填**，但仍需用户确认。
 
@@ -858,7 +772,7 @@ D ∩ X       → disabled-drift（被外部恢复）
 
 ## 8. 安装
 
-### 8.1 支持的来源（首版）
+### 8.1 支持的来源
 
 | 形式 | 示例 | 备注 |
 | --- | --- | --- |
@@ -938,23 +852,23 @@ skillPath：仓库相对路径，根目录技能写 'SKILL.md'
 
 #### 布局识别（关键）
 
-1. **根目录有 `SKILL.md`** → 整个仓库就是一个技能：`skillPath = "SKILL.md"`，子目录全部视为 `assets/`、`references/`、`scripts/`，**不再发现子技能**。
+1. **根目录有 `SKILL.md`** → 整个仓库就是一个技能：`skillPath = "SKILL.md"`，子目录全部视为 `assets/`、`references/`、`scripts/`，**不继续发现子技能**。
 2. 根目录没有 → 先找 `skills/`、`.agents/skills` 等常见容器（深度 ≤3），再全树递归（深度 ≤5，跳过 `.git`、`node_modules`、`dist`、`build`）。
 3. 路径统一 `\` → `/`，每个技能路径以 `SKILL.md` 结尾；同名多路径标 `ambiguous`，不自动选。
 
-这与 `npx skills` 的发现规则一致：根 `SKILL.md` 命中后直接按单技能返回，不再向下扫；`skillPath` 也正好是 `"SKILL.md"`。
+这与 `npx skills` 的发现规则一致：根 `SKILL.md` 命中后直接按单技能返回，不继续向下扫；`skillPath` 也正好是 `"SKILL.md"`。
 
 #### 无 API 怎么更新
 
 - `git ls-remote` 解析 ref / commit；浅克隆到 `cache/git/<hash>`（`--depth 1`，必要时 `--branch`）。
 - folder SHA 不靠 API：对技能**目录**执行 `git rev-parse HEAD:<skillDir>`（根技能用 `HEAD^{tree}`）。注意不是 `HEAD:<skillPath>`——那得到的是 `SKILL.md` 的 blob SHA。git tree SHA 与 GitHub Trees API 的 folder SHA 同源，所以 §9.2 的 diff 逻辑不用分叉。
 - 扫描克隆目录得到全部 `SKILL.md`，做与 §9.2 相同的对比；仓库里没了的技能照样判 `removed-upstream`。
-- 大仓库可选 sparse-checkout（P3）；首版浅克隆整仓，但只复制选中的技能目录到目标。
+- 浅克隆整仓，只复制选中的技能目录到目标。
 
 #### 认证
 
 - 首选 **PAT**：按 host 保存到 `secret-box`，通过 `GIT_ASKPASS` 或一次性 credential helper 注入；**不拼进 URL、不写日志、不进 argv**。
-- 也兼容本机已有 git 凭据（SSH key / credential helper），但首版 TFS 先按 token 做；复用 git 凭据作为 P3 增强。
+- 也兼容本机已有 git 凭据（SSH key / credential helper）；TFS 按 token 做。
 - `GIT_TERMINAL_PROMPT=0`，避免后台检查卡在交互；认证失败明确提示「需要 token / 无权访问」，**不判仓库删除**。
 - **HTTP 警告**：`http://` 下 PAT 明文传输；UI 标「内网 HTTP，token 可能被嗅探」，优先建议 HTTPS。只能 HTTP 时，token 用只读、最小权限。
 - 关闭 LFS 自动下载（`GIT_LFS_SKIP_SMUDGE=1`），避免未装 git-lfs 时 checkout 失败。
@@ -1146,7 +1060,7 @@ for each tracked skill S:
 3. 删除前检查目录是否为 symlink：只 `unlink`，目标目录不动。
 4. 若目录里有未跟踪文件（相对 baseline 新增），标 `modified`，不默认删。
 5. 删除项目技能会改 `skills-lock.json`：UI 明确「将修改项目锁文件」，并在历史里保留旧锁快照。
-6. 支持「保留本地，停止跟踪」（fork）：移出 `selectedNames`、保留目录与收藏，标为本地/已修改；以后不再报「上游已删除」，也不会被自动更新。
+6. 支持「保留本地，停止跟踪」（fork）：移出 `selectedNames`、保留目录与收藏，标为本地/已修改；之后不报「上游已删除」，也不会被自动更新。
 7. **删除必留墓碑**：registry 写 `state: 'removed'` + origin + removedAt + trashRef；回收站被清空也不删墓碑的 origin，仍可重新下载。
 8. **重新安装**：墓碑行提供「重新安装」；优先从 trash 恢复（本地修改也保留），否则按 origin 走 §8 / §9.4 重新拉取。来源不可用则提示「重新绑定来源」。
 9. **批量恢复**：可把多个墓碑「加入预设」，再对目标一键应用；不需要逐条点。
@@ -1275,16 +1189,9 @@ T3 若上游改了 tdd、删了 wizard：
 
 ## 10. 禁用 / 启用
 
-### 10.1 方案对比
+### 10.1 禁用方式
 
-| 方案 | 真禁用 | 跨 agent | 是否改锁 | 风险 |
-| --- | --- | --- | --- | --- |
-| A. 移到应用数据区（推荐） | ✅ | ✅ | 分 scope：global 删条目 / project 保留 | 项目 scope 会产生 git 删除 diff；project 侧 CLI update 可能复活 |
-| B. 移到同 scope 的 `.agents/skills-disabled/` | ✅（不在扫描根） | ✅ | 否 | 可能被递归扫描器命中；需改 `.gitignore` |
-| C. 改名为 `SKILL.md.disabled` | ⚠️ 多数扫描器不认 | ⚠️ | 否 | 改内容 hash；CLI 视为缺失并重装；目录仍占位 |
-| D. marker 文件 | ❌ | ❌ | 否 | 只有我们认，agent 照读 |
-
-**选 A**：只有「移出所有扫描根」是确定有效的。目录放 `<assets>/skill-manager/disabled/<scopeId>/<name>/`，旁边 `index.json` 记录来源、hash、禁用时间、链接目标。
+禁用 = 把技能移出所有扫描根到 `<assets>/skill-manager/disabled/<scopeId>/<name>/`，旁边 `index.json` 记录来源、hash、禁用时间、链接目标。只有「移出扫描根」对每个 agent 都确定有效；改后缀或写 marker 会被部分扫描器继续读到。
 
 ### 10.2 状态机
 
@@ -1311,7 +1218,7 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 - 我们的应对：
   - 扫描时若发现「registry 标 disabled，但目录又出现了」→ 状态 `disabled-drift`，提示「已被外部工具恢复」，提供「重新禁用 / 接受启用」。
   - 设置项 `autoReDisable: boolean`（默认关）：开启后下次扫描自动移回禁用区。
-- 若用户希望 project 也「绝不复活」，可在该项目的设置里切换为「禁用时删条目」（会写项目锁，UI 明确警告）。见 §22 Q2。
+- 若用户希望 project 也「绝不复活」，可在该项目的设置里切换为「禁用时删条目」（会写项目锁，UI 明确警告）。
 
 ### 10.4 symlink 技能
 
@@ -1343,7 +1250,7 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 - 内置示例分类（首次启动写入，可删可改）：开发规范、UI / 设计、文档与写作、测试与质量、运维与工具。
 - 分类字段：`id`（slug，不可变）、`name`、`icon`（lucide）、`order`、`builtin`。
 - 删除分类不删收藏，只从 `categories` 移除；收藏进入「未分类」。
-- 分类排序：首版按 `order`，拖拽排序放 P2。
+- 分类排序按 `order`。
 
 ### 11.3 交互
 
@@ -1357,7 +1264,7 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 
 - `favorites.json` 单独文件，避免 registry 写放大。
 - 写入走 json-store（原子写）；分类与条目同文件，保证一致性。
-- 不做云同步；导出/导入放 P3。
+- 不做云同步。
 
 ### 11.5 预设（Preset）
 
@@ -1407,7 +1314,7 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 
 ### 12.2 识别 `skills-lock.json`
 
-- 位置：项目根目录。首版不做递归搜索（monorepo 由用户添加子包目录）；P2 可在添加时向下探测 ≤2 层、跳过 `node_modules`。
+- 位置：项目根目录。不做递归搜索（monorepo 由用户添加子包目录）。
 - 解析：
   - `version !== 1` → `unsupported`，只读，展示「CLI 版本不匹配」。
   - JSON 解析失败 / 含冲突标记 → `invalid`，只读，展示错误位置。
@@ -1560,11 +1467,11 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 /tools/skill-manager/settings    设置（右侧 inspector 或独立子路由）
 ```
 
-静态预览：[skill-manager-preview.html](./skill-manager-preview.html)。只读样张，交互为演示；实现时按 §15.7 组件映射落到 `tools/skill-manager/renderer/`。
+实现：[`tools/skill-manager/renderer/`](../tools/skill-manager/renderer/)，按 §15.7 的组件映射落位；样式只使用 `DESIGN.md` 的令牌与 `renderer/shared/components/ui` 组件。
 
 工具页 header：
 
-- 左：图标 + 「技能管理」+ 一句「38 个技能 · 6 个仓库 · 4 项待处理」。
+- 左：图标 + 「技能管理」+ 一句「N 个技能 · M 个仓库 · K 项待处理」。
 - 右：主按钮随视图变化（技能库 →「安装技能」；更新 →「检查全部更新」；收藏 →「新建分类」；预设 →「新建预设」；项目 →「添加项目」）+ 一个「更多」。
 - 不把版本、路径、长说明放进 header。
 
@@ -1574,11 +1481,11 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ header: 技能管理   38 个技能 · 4 项待处理      [安装技能] [更多] │
+│ header: 技能管理   N 个技能 · K 项待处理       [安装技能] [更多] │
 ├──────────────┬───────────────────────────────────────────────┤
-│ 全局  31     │ toolbar: [搜索] [状态筛选] [分组: 仓库]  [刷新] │
-│  6 个仓库    │                                               │
-│ 项目  38     │ ▾ mattpocock/skills     3/24 已选 · 2 待处理  │
+│ 全局  N      │ toolbar: [搜索] [状态筛选] [分组: 仓库]  [刷新] │
+│  M 个仓库    │                                               │
+│ 项目  N      │ ▾ mattpocock/skills     a/b 已选 · K 待处理   │
 │  everydaytool│   grilling       开发规范   ok      [☆] [⋯]    │
 │ 其他项目…    │   tdd            测试       update  [☆] [⋯]    │
 │              │   wizard         工具       removed [☆] [⋯]    │
@@ -1587,12 +1494,12 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 │  失效 1      │                                               │
 │  未托管 4    │                                               │
 ├──────────────┴───────────────────────────────────────────────┤
-│ statusline: 38 个技能 · 6 个仓库 · 上次检查 3 分钟前           │
+│ statusline: N 个技能 · M 个仓库 · 上次检查 X 分钟前            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- 主表用 `UiTable` 的树形行：父行 = 仓库组（可折叠），子行 = 技能；子行只显示**已选中**的技能，未安装的 21 个不铺在表里（避免把技能库变成仓库目录浏览器）。
-- 父行右侧：`3/24 已选` chip、待处理 chip、`更新此仓库` split button（左更新 / 右菜单：检查、管理技能、打开仓库）。
+- 主表用 `UiTable` 的树形行：父行 = 仓库组（可折叠），子行 = 技能；子行只显示**已选中**的技能，未安装的其余技能不铺在表里（避免把技能库变成仓库目录浏览器）。
+- 父行右侧：`a/b 已选` chip、待处理 chip、`更新此仓库` split button（左更新 / 右菜单：检查、管理技能、打开仓库）。
 - 子行：名称 + 描述（截断 + tooltip）、来源路径（mono）、状态 chip、收藏星标、更多菜单。
 - 左栏：作用域切换、仓库过滤、状态过滤；窄窗口折叠为顶部下拉。
 
@@ -1602,7 +1509,7 @@ disabled --卸载--> removed        （禁用区目录 → 回收站；锁条目
 toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 ┌───────────────────────────────────────────────────────────────┐
 │ 仓库                    已选/可用  可更新  已移除  状态       │
-│ mattpocock/skills        3/24       1       1     [更新…]     │
+│ mattpocock/skills        a/b        1       1     [更新…]     │
 │ greensock/gsap-skills    7/7        0       0     最新         │
 │ Leonxlnx/taste-skill     1/1        1       0     [更新…]     │
 └───────────────────────────────────────────────────────────────┘
@@ -1618,13 +1525,13 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 │ ☑ wizard            失效   上游已无此技能，将移到回收站      │
 │ ☐ tdd               冲突   本地已修改，未选中               │
 │                                                             │
-│ 其余 21 个未选中：不下载、不安装、不参与本次更新             │
+│ 其余未选中项：不下载、不安装、不参与本次更新                 │
 │ ⚠ 失效项会从 skills-lock.json 移除，可在回收站恢复           │
 │                              [取消]  [应用 2 项]             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- 「更新此仓库」永远只处理 `selectedNames`；想加装其余 21 个，点父行的「管理技能」。
+- 「更新此仓库」永远只处理 `selectedNames`；想加装其余技能，点父行的「管理技能」。
 - 计划对话框不提供「全选」；勾选只代表「本次执行哪些已选中项」，取消勾选不会卸载。
 
 - 冲突行展开可看「本地修改摘要」（文件数、增删行数）与三个选项。
@@ -1637,7 +1544,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 
 ```text
 ┌─ 管理 mattpocock/skills 的技能 ───────────────────────────── × ─┐
-│ 24 个可用 · 已选 3 · github · main · 上次检查 12:31            │
+│ b 个可用 · 已选 a · github · main · 上次检查 12:31            │
 │ [搜索技能]  [全部] [已选 3] [未安装 21]           [全选] [全不选]│
 │                                                                │
 │ ☑ grilling      已安装        skills/productivity/grilling/…    │
@@ -1673,7 +1580,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- 卡片/表格二选一（首版表格，P2 卡片）；分类用 `UiChip` 过滤。
+- 使用表格；分类用 `UiChip` 过滤。
 - 星标在技能库与收藏页共用组件；收藏状态即时反馈。
 - 空态：`UiEmpty` + 「去技能库点星标收藏」。
 
@@ -1684,7 +1591,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 │ [添加项目]                                                  │
 │ ┌ everydaytool                          [重新扫描] [更多]   │
 │ │ ~/other/everydaytool                                      │
-│ │ 锁 v1 · 34 条 · 38 个目录 · 4 个未托管                    │
+│ │ 锁 v1 · N 条 · M 个目录 · K 个未托管                      │
 │ │ ⚠ 4 个目录未入锁  ⚠ 27 条锁哈希与当前内容不一致           │
 │ └ 其它项目…                                                 │
 └─────────────────────────────────────────────────────────────┘
@@ -1697,13 +1604,13 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 
 | 需求 | 组件 |
 | --- | --- |
-| 页面骨架 | `WorkspaceHeader` + `ToolSurface`（唯一主表面） |
+| 页面骨架 | 全局标题栏 + `ToolSurface`（唯一主表面）；子视图用 `WorkspaceSpine` |
 | 左栏 | `ToolSideInspector` 或普通 aside（宽度 268） |
 | 仓库分组表 | `UiTable` 树形行 + `UiTableColumn` |
 | 状态 | `UiStatusTag`（点 + 文案）+ `UiChip`（计数） |
-| 搜索/筛选 | `UiSearchInput`、`UiSelect`、`UiMenuHorizontal` |
+| 搜索/筛选 | `UiSearchInput`、`UiSelect` |
 | 计划对话框 | `UiDialog`（`destroyOnClose`） |
-| 收藏分类 | `Popover` + `UiCheckbox` + `UiInput` |
+| 收藏分类 | `UiPopover` + `UiCheckbox` + `UiInput` |
 | 空态/提示 | `UiEmpty`、`UiHint`、`UiAlert` |
 | 危险操作 | `UiButton` tone=danger（仅永久删除/清空回收站） |
 | 进度 | `UiProgress` + statusline |
@@ -1716,7 +1623,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 - 批量操作：按钮显示数量「应用 3 项」「更新 2 个仓库」。
 - 危险确认文案必须包含对象与后果：
   - 「将 2 个技能移到回收站，并从 skills-lock.json 移除。可在回收站恢复。」
-- 禁用确认：「禁用后新开的 agent 会话不再加载它；当前会话不受影响。」
+- 禁用确认：「禁用后新开的 agent 会话不加载它；当前会话不受影响。」
 
 ### 15.9 预设与恢复
 
@@ -1802,7 +1709,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
   - GitHub 速率：未认证 60/h；提示配置 token；403/429 指数退避，不降级为「删除」。
   - 通用 git：无 API 限流，但浅克隆有成本；按 `(source, ref, commit)` 缓存，`ls-remote` 先探 commit，未变直接复用。
   - 预设应用按 `(source, ref)` 去重，同一仓库只拉一次快照；多项共享同一棵树。
-- **UI**：分组折叠默认只展开有问题的组；技能数 > 500 时分页/虚拟滚动（P2）。
+- **UI**：分组折叠默认只展开有问题的组。
 
 ---
 
@@ -1811,7 +1718,7 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 | 场景 | 行为 |
 | --- | --- |
 | 离线 | 用上次快照标 `stale`；禁止应用更新；安装不可用 |
-| 仓库改名/转移 | GitHub 301 跟随；记录新 `source`，提示「来源已迁移」 |
+| 仓库改名/转移 | GitHub 301 跟随；记录新 `source`，提示「来源已变更」 |
 | 仓库 404 | 组级 `source-gone`，逐技能保留；不判 removed |
 | 私有仓库无权限 | GitHub 401/403、git `Authentication failed` / `could not read Username` → 「需要 token / 无权访问」；不重试到封禁，不判 removed |
 | 本机没有 git | 通用 git 源（TFS/Azure/自建）不可用；提示安装 git，或改用 GitHub API / 本地目录 |
@@ -1871,74 +1778,15 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 
 ### 19.4 手工验收
 
-- 用本仓库自身作为项目：应显示 34 条锁 / 38 个目录 / 4 个未托管 / 0 个误报本地修改。
-- 全局：29 个 symlink 显示为 `linked`，断链显示 `invalid`，`coding-standards` 显示 `missing`。
+- 用本仓库自身作为项目：锁条目、目录数、未托管数与实际一致，不误报本地修改。
+- 全局：symlink 显示为 `linked`，断链显示 `invalid`，锁中有记录但目录缺失显示 `missing`。
 - 仓库含 24 个技能、只装 1 个：组头显示 `1/24 已选`；「更新此仓库」只列这 1 个；面板自动勾选这 1 个，其余 23 个不勾且不下载。
 - 删掉一个技能目录 + 锁条目：技能库出现「已移除」，来源仍可见，重新安装成功；重置应用数据后该记录才消失。
 - 手工复制一个技能目录到项目 `.agents/skills`：显示未托管、只读、无更新/禁用；接管并绑定来源后写锁，更新可用；仅本地接管不写锁。
 
 ---
 
-## 20. 分期落地
-
-| 阶段 | 范围 | 交付 | 预估 |
-| --- | --- | --- | --- |
-| **P0 只读盘点** | 工具骨架、扫描、锁解析（只读）、状态矩阵、仓库分组表、项目登记 | 能看清现状与问题，不改任何文件 | 2–3 天 |
-| **P1 安装/更新/失效** | 源解析、GitHub tree/tarball、**通用 git/TFS + token**、staging、事务、写锁、回收站、计划对话框、**仓库技能面板/选择计划**、历史 | 核心闭环（含「只装一个就只更一个」与内网 TFS） | 6–8 天 |
-| **P2 禁用/收藏/项目** | 禁用区、启用、收藏、分类、项目管理、更新中心、批量、**墓碑与预设** | 用户要的全部功能面（含“丢了也能装回来”） | 5–6 天 |
-| **P3 打磨** | 回滚、git 凭据复用、本地源、watcher、锁修复、导出 | 生产可用 | 2–3 天 |
-
-**P0 必须先做**：它能在不写文件的前提下验证「锁不可靠」「哈希不可信」这两个前提，避免 P1 写错数据。
-
----
-
-## 21. 风险与取舍
-
-| 风险 | 影响 | 缓解 |
-| --- | --- | --- |
-| CLI 锁格式升级（v4） | 我们写坏/读不懂 | 版本守卫；未知版本只读；保留未知字段；跟进适配 |
-| 禁用被 CLI 复活 | 用户困惑 | 检测 `disabled-drift`；可配自动重新禁用；文档说明 |
-| 项目锁 diff 噪音 | 团队 review 负担 | 严格排序与格式；批量变更合并为一次写；提示 review |
-| hash 语义差异 | 误报修改 | 自建 baseline；锁 hash 只作线索；首屏不误报 |
-| symlink 误删 | 删掉外部技能包 | 只 unlink；realpath 边界；测试覆盖 |
-| 网络/限流 | 检查失败 | 缓存、退避、明确错误、绝不据此删除 |
-| 供应链 | 安装恶意技能 | 预览、来源提示、不自动执行、默认不自动加新增 |
-| 预设被误当锁 | 用户以为预设等于已安装 | UI 明确「期望清单」；应用成功后才写锁；状态行区分 |
-| 墓碑来源失效 | 知道从哪来但装不回来 | 显示 `source-gone`；支持重新绑定来源；保留 origin |
-| 大仓库 tarball | 慢/占空间 | 大小上限、tree 优先、缓存、取消 |
-
----
-
-## 22. 决策记录与剩余问题
-
-### 22.1 已确认（2026-11-05 / 11-06）
-
-| # | 决策 | 结论 |
-| --- | --- | --- |
-| Q1 | 禁用后的技能放哪？ | **应用数据区** `<assets>/skill-manager/disabled/...`（唯一能保证所有 agent 都不加载） |
-| Q2 | 禁用时锁条目怎么处理？ | **分 scope**：global 删条目、project 保留；project 可单独切换为「删条目」 |
-| Q3 | 是否直接维护项目 `skills-lock.json`？ | **读写**，兼容 v1 / v2 并按读入版本写回 |
-| Q4 | 上游已删除的技能默认怎么处理？ | **默认勾选**「移到回收站 + 移除锁」，可撤销 |
-| Q6 | 首版是否管理 `.claude/skills` 等非 `.agents` 目录？ | **否**，只读识别；canonical 目录才可写 |
-| Q7 | 私有仓库 / 无 API 的 git 源怎么认证？ | **PAT**：GitHub 用 `GITHUB_TOKEN`/`GH_TOKEN`，TFS 用 PAT；按 host 保存（env 或应用内加密）；不要求 API |
-| Q11 | 一个仓库有多个技能、只装其中一个时，更新怎么办？ | **只遍历 `selectedNames`**；未选中的远端技能不下载、不安装、不产生 plan item |
-| Q12 | 仓库面板取消勾选已安装技能是什么语义？ | **卸载**：移到回收站 + 从锁/`selectedNames` 移除；「跳过本次更新」只在更新对话框里做 |
-| Q13 | 预设应用到目标时默认怎么处理“多出来的技能”？ | **`additive` 保留**；`exact` 作为显式选项，需二次确认 |
-| Q14 | “指定目录”默认指项目根还是技能根？ | **项目根**（装到 `<path>/.agents/skills`）；技能根只作为高级选项，不写锁 |
-| Q15 | 未托管技能接管方式？ | **两种都允许**：绑定来源（写锁、可更新）/ 仅本地（不写锁、只本地维护、可后补来源） |
-
-### 22.2 剩余问题（按推荐默认）
-
-| # | 问题 | 选项 | 推荐 |
-| --- | --- | --- | --- |
-| Q5 | 收藏分类是单选还是多选？ | A 多分类标签；B 单分类 | **A**：一个技能同时属于「开发规范」和「UI」很常见 |
-| Q8 | 默认更新策略？ | A 只更新已选中（新增只提示）；B 同步新增 | **A**：避免上游新增技能被动进入上下文 |
-| Q9 | 这个功能放工具还是设置页？ | A 独立工具；B 设置页子页 | **A**：它是完整工作区，不是配置项 |
-| Q10 | 是否保留每次拉取明细？ | A 只保留最近一次；B 保留最近 10 次 | **A**：足够回答「上次拉到什么」；B 增加写放大 |
-
----
-
-## 23. 附录
+## 20. 附录
 
 ### A. 目录结构（运行期）
 
@@ -1993,4 +1841,4 @@ toolbar: [检查全部更新]  [策略: 安全 ▾]        上次检查 12:31
 | 丢失后恢复 | 无 | 墓碑 + 回收站 + 预设 |
 | 项目锁 | 读写 v1 | 读写 v1（严格兼容） |
 | 全局锁 | 读写 v3，旧版清空 | 读写 v3（绝不降级） |
-| 多 agent 目录 | 支持 80+ | 首版只 canonical + 只读识别 |
+| 多 agent 目录 | 支持 80+ | 只 canonical + 只读识别 |
