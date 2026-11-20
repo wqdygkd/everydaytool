@@ -141,7 +141,7 @@ export async function listArchiveLibrary(): Promise<ArchiveLibraryEntry[]> {
     }
   }
 
-  // 先排序再截断：旧实现先扫到 1000 条就停，超过上限的新消息会被漏掉
+  // 先排序再截断，避免新消息被上限截掉
   candidates.sort((left, right) => right.sortAt - left.sortAt)
 
   const entries: ArchiveLibraryEntry[] = []

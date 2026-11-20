@@ -7,7 +7,6 @@ import { getToolRegistry } from '../../config/tools'
 import { appIpcChannels, invokeAppIpc } from '../ipc/useAppIpc'
 import { mergeVisibleToolOrder, resolveToolOrder } from '../tool/tool-order'
 
-const FAVORITE_STORAGE_KEY = STORAGE_KEYS.favoriteTools
 const TOOL_ORDER_STORAGE_KEY = STORAGE_KEYS.homeToolOrder
 
 function sanitizeIds(value: unknown): string[] {
@@ -32,15 +31,12 @@ function createStoredIdList(storageKey: string) {
   })
 }
 
-// 模块级单例：AppRail、HomePage 与命令面板共享同一份置顶 / 排序状态。
+// 模块级单例：HomePage 与命令面板共享同一份排序状态。
 const allTools = computed(() => getToolRegistry())
-const favoriteIds = createStoredIdList(FAVORITE_STORAGE_KEY)
 const savedToolOrder = createStoredIdList(TOOL_ORDER_STORAGE_KEY)
 let syncPromise: Promise<void> | null = null
 
 const orderedTools = computed(() => resolveToolOrder(allTools.value, savedToolOrder.value))
-const favoriteTools = computed(() => orderedTools.value.filter(tool => favoriteIds.value.includes(tool.id)))
-const pinnedTools = computed(() => favoriteTools.value.slice(0, 4))
 
 async function persistPreferences(patch: Partial<UiPreferences>) {
   try {
@@ -48,17 +44,6 @@ async function persistPreferences(patch: Partial<UiPreferences>) {
   } catch {
     // 纯浏览器预览没有 preload：镜像已写入，不向调用方抛错。
   }
-}
-
-function isFavorite(toolId: string): boolean {
-  return favoriteIds.value.includes(toolId)
-}
-
-function toggleFavorite(toolId: string) {
-  favoriteIds.value = isFavorite(toolId)
-    ? favoriteIds.value.filter(id => id !== toolId)
-    : [...favoriteIds.value, toolId]
-  void persistPreferences({ favoriteToolIds: favoriteIds.value })
 }
 
 function commitToolOrder(visibleOrder: string[]) {
@@ -78,13 +63,6 @@ async function syncPreferencesWithConfigLayer() {
   syncPromise = (async () => {
     try {
       const stored = await invokeAppIpc<UiPreferences>(appIpcChannels().UI_PREFERENCES_GET)
-      const remoteFavorites = sanitizeIds(stored?.favoriteToolIds)
-      if (remoteFavorites.length > 0) {
-        favoriteIds.value = remoteFavorites
-      } else if (favoriteIds.value.length > 0) {
-        void persistPreferences({ favoriteToolIds: favoriteIds.value })
-      }
-
       const remoteOrder = sanitizeIds(stored?.toolOrder)
       if (remoteOrder.length > 0) {
         savedToolOrder.value = remoteOrder
@@ -102,13 +80,8 @@ async function syncPreferencesWithConfigLayer() {
 export function useToolLauncher() {
   return {
     allTools: allTools as Readonly<typeof allTools>,
-    favoriteIds,
-    favoriteTools,
-    pinnedTools,
     orderedTools,
     savedToolOrder,
-    isFavorite,
-    toggleFavorite,
     commitToolOrder,
     resetToolOrder,
     syncPreferencesWithConfigLayer,

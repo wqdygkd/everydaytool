@@ -98,8 +98,7 @@ const backendFiles = [
   ...walk(path.join(rootDir, 'tools'), []).filter(file => file.includes(`${path.sep}backend${path.sep}`)),
 ]
 
-// 豁免只有一种写法：`data-layers:allow <原因>`（原因必填）。曾经的「行内含 legacy 就放过」
-// 让断言形同虚设——任何一次拼接都能靠一个词拿到通行证。
+// 豁免只有一种写法：`data-layers:allow <原因>`（原因必填）。
 const ALLOW_MARKER = /data-layers:allow\s+\S/
 
 /** 数据根一次赋给变量后的别名（`const root = getDataDirectory()` 这种绕法也要拦住） */

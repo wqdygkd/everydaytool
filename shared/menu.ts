@@ -1,7 +1,7 @@
 // 应用菜单动作清单的单一事实来源（electron/main.ts 系统菜单使用），避免清单漂移。
 // 仅常量，无运行时逻辑。
 
-// 应用菜单动作（主进程系统菜单以 Electron role 执行；页内菜单已移除，渲染层不再有动作桥接）
+// 应用菜单动作（主进程系统菜单以 Electron role 执行）
 export type ShellMenuAction
   = | 'quit'
     | 'undo'

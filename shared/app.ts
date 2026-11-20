@@ -52,9 +52,8 @@ export function isRailMode(value: unknown): value is RailMode {
   return value === 'compact' || value === 'wide' || value === 'collapsed'
 }
 
-/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：收藏、首页顺序、左轨三态 */
+/** 应用壳 UI 偏好（配置层 app/ui-preferences.json）：首页顺序、左轨三态 */
 export interface UiPreferences {
-  favoriteToolIds: string[]
   /**
    * 首页工具的自定义顺序（工具 id 数组，拖拽卡片产生）。
    * 空数组 = 未自定义：首页按工具创建时间倒序（最新在前）。

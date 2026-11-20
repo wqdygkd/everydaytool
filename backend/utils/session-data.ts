@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs'
 //
 // 约束：
 // - 必须在 ready 之前调用；运行期切换数据目录只在下次启动生效；
-// - 会同时移动应用自身的 localStorage（收藏 / 页签），不做迁移（开发阶段取舍）。
+// - 应用自身的 localStorage（首页排序 / 页签）也在 session 目录里，随它一起切换。
 import path from 'node:path'
 import process from 'node:process'
 import { app } from 'electron'

@@ -62,8 +62,7 @@ function resolveTool(id: string): OpenTool | null {
  *
  * 注意：应用自带页面（设置）**不进这个列表**——它是左轨底部的固定入口，
  * 由路由直接驱动，既不需要关闭，也不该占「运行中」的名额。
- * store 名与 localStorage key 仍沿用 toolTabs：键里存的是用户历史上打开过的工具 id，
- * 改名只会换来一次无意义的迁移。
+ * store 名与 localStorage key 仍叫 toolTabs：键里存的是已打开工具 id。
  */
 export const useToolTabsStore = defineStore('toolTabs', () => {
   // 隐私模式 / 配额满：持久化失败不影响当前会话的打开状态
@@ -72,7 +71,7 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
       read(raw) {
         try {
           const value = JSON.parse(raw) as unknown
-          // 旧版本存的是 string[]：读到数组就按数组迁移，时间戳由下面的播种补齐。
+          // 兼容只存 id 数组的格式；时间戳由下面的播种补齐。
           if (Array.isArray(value)) return { openIds: sanitizeIds(value), openedAt: {} }
           if (value && typeof value === 'object') {
             const record = value as Partial<StoredToolTabs>
@@ -200,7 +199,7 @@ export const useToolTabsStore = defineStore('toolTabs', () => {
   const validIds = openIds.value.filter(id => resolveTool(id) !== null)
   if (validIds.length !== openIds.value.length) openIds.value = validIds
 
-  // 旧数据没有时间戳：按打开顺序不早于现在倒推几秒播种，保留原来的「后打开更新」语义。
+  // 缺少时间戳时按打开顺序播种（不早于现在倒推几秒），保留「后打开更新」语义。
   const seededAt = Date.now()
   openIds.value.forEach((id, index) => {
     if (typeof storedTabs.value.openedAt[id] !== 'number') {

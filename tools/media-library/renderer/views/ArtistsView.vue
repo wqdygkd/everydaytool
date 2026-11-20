@@ -140,7 +140,7 @@ function clearFilters(): void {
       <header class="view-head">
         <div>
           <h1>艺人</h1>
-          <p>点击艺人进入独立主页：上方维护艺人资料，下方直接筛选作品，不再跳回资料库。支持多艺人与别名合并。</p>
+          <p>点击艺人进入独立主页：上方维护艺人资料，下方直接筛选作品，不跳回资料库。支持多艺人与别名合并。</p>
         </div>
       </header>
       <div class="summary-line">

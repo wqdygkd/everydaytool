@@ -1,4 +1,4 @@
-/** 线性图标库：stroke 风格，viewBox 与各工具原内联 SVG 保持一致，保证迁移后视觉不变 */
+/** 线性图标库：stroke 风格，viewBox 统一为正方形 */
 
 export interface IconDef {
   /** viewBox 边长（正方形） */

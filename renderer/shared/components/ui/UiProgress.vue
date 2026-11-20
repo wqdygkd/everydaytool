@@ -4,7 +4,7 @@ import { computed } from 'vue'
 const props = withDefaults(defineProps<{
   /** 进度百分比，超出 0–100 自动收敛 */
   percentage: number
-  /** 条高，默认 6px（收敛原先 4 处手写的 stroke-width） */
+  /** 条高，默认 6px */
   strokeWidth?: number
   /** 语义色：成功 / 警告 / 异常；不传走品牌色 */
   status?: 'success' | 'warning' | 'exception'

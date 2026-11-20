@@ -8,8 +8,8 @@ import { toast } from 'vue-sonner'
 import { getSensitiveEntries } from '../../shared/data-layers'
 import { appIpcChannels, invokeAppIpc } from '../shared/ipc/useAppIpc'
 
-// 应用设置页：作为应用页签打开（见 config/app-tabs.ts），不再是模态对话框——
-// 设置项里有数据目录、空间占用这类需要边看边操作的内容，占满一屏比弹窗更好用。
+// 应用设置页：作为应用页签打开（见 config/app-tabs.ts）。
+// 数据目录、空间占用需要边看边操作，占满一屏比弹窗更好用。
 
 const info = ref<AppDataDirectoryInfo | null>(null)
 // 资产根：与数据目录同构的「只写 pending、重启迁移生效」流程，但它是**独立根**（可指到另一块盘）。
@@ -105,8 +105,8 @@ function scrollToSetting(id: string) {
 useEventListener(window, 'resize', updateActiveSetting)
 
 // ── 窗口外观 ──
-// 外观不再可配：窗口恒为 CSS 透明（外壳 80% + 主表面 84%），没有材质 / vibrancy / 夜色开关，
-// 所以设置页没有对应分区——透明度只由 tokens.scss 的 --alpha-shell / --alpha-sheet 决定。
+// 外观固定：窗口恒为 CSS 透明（外壳 80% + 主表面 92%），透明度只由 tokens.scss 的
+// --alpha-shell / --alpha-sheet 决定，因此设置页没有外观分区。
 
 // ── 窗口大小与位置 ──
 // 与外观同理：唯一事实来源是主进程（<data>/app/window-bounds.json），这里只读当前记录、

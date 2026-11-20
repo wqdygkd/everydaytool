@@ -1,23 +1,20 @@
 // 应用壳的 UI 偏好（配置层：`<data>/config/app/ui-preferences.json`）。
 //
-// 目前有三项用户数据：
-// - 收藏的工具；
+// 目前有两项用户数据：
 // - 首页工具的自定义顺序（拖拽卡片产生，空数组 = 按创建时间倒序）。
 // - 左轨三态（图标栏 / 宽栏 / 收起）。
-// 三者都是用户手动标记 / 排布 / 选择、换机后希望保留、应进备份包的数据，因此从 Chromium 的
-// LocalStorage（会话层，不备份、可能随清 session 丢失）搬到配置层。
-// LocalStorage 仍保留镜像，给网页预览（无 IPC）兜底。
+// 两者都是用户手动排布 / 选择、换机后希望保留、应进备份包的数据，因此落在配置层。
+// LocalStorage 仅作网页预览（无 IPC）的镜像。
 import type { RailMode, UiPreferences } from '../../shared/app.ts'
 import { isRailMode } from '../../shared/app.ts'
 import { resolveLayerPath } from './data-layers.ts'
 import { readJsonDocument, writeJsonDocument } from './json-store.ts'
 import { logger } from './logger.ts'
 
-const MAX_FAVORITES = 200
 const MAX_TOOL_ORDER = 200
 
 function emptyPreferences(): UiPreferences {
-  return { favoriteToolIds: [], toolOrder: [], railMode: 'compact' }
+  return { toolOrder: [], railMode: 'compact' }
 }
 
 function getPreferencesPath(): string {
@@ -46,18 +43,14 @@ export function getUiPreferences(): UiPreferences {
   if (typeof stored !== 'object' || stored === null) return emptyPreferences()
   const record = stored as Record<string, unknown>
   return {
-    favoriteToolIds: sanitizeIdList(record.favoriteToolIds, MAX_FAVORITES),
     toolOrder: sanitizeIdList(record.toolOrder, MAX_TOOL_ORDER),
     railMode: sanitizeRailMode(record.railMode),
   }
 }
 
-export function setUiPreferences(patch: { favoriteToolIds?: unknown, toolOrder?: unknown, railMode?: unknown }): UiPreferences {
+export function setUiPreferences(patch: { toolOrder?: unknown, railMode?: unknown }): UiPreferences {
   const current = getUiPreferences()
   const next: UiPreferences = {
-    favoriteToolIds: patch.favoriteToolIds === undefined
-      ? current.favoriteToolIds
-      : sanitizeIdList(patch.favoriteToolIds, MAX_FAVORITES),
     toolOrder: patch.toolOrder === undefined
       ? current.toolOrder
       : sanitizeIdList(patch.toolOrder, MAX_TOOL_ORDER),
@@ -67,7 +60,6 @@ export function setUiPreferences(patch: { favoriteToolIds?: unknown, toolOrder?:
   }
   writeJsonDocument(getPreferencesPath(), next)
   logger.info('UI preferences saved', {
-    favorites: next.favoriteToolIds.length,
     toolOrder: next.toolOrder.length,
     railMode: next.railMode,
   })

@@ -504,7 +504,7 @@ function closeLabel(tool: RailTool): string {
   }
 }
 
-/* 运行中圆点：只在「已打开但未激活」时出现；激活态已有浅底 + 左侧指示条，不再重复标记 */
+/* 运行中圆点：只在「已打开但未激活」时出现；激活态已有浅底 + 左侧指示条，不重复标记 */
 .rail-run-dot {
   position: absolute;
   right: 4px;

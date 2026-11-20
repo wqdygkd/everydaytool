@@ -95,7 +95,7 @@ const pad = computed(() => props.padding ?? (props.variant === 'bordered' ? 'var
   min-width: 0;
   line-height: 1.5;
 
-  /* 只有文案、没有标题时（表格空态等），保持原来的紧凑单行观感 */
+  /* 只有文案、没有标题时（表格空态等），保持紧凑单行观感 */
   .ui-empty:not(.has-title) & {
     display: inline;
   }

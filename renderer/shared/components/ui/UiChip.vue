@@ -8,7 +8,7 @@ const props = withDefaults(defineProps<{
   tone?: ChipTone
   /**
    * 视觉变体：
-   * - `auto`（默认）= 平台历史外观，按 tone 自动取：neutral → outline、success → solid、其余 → soft
+   * - `auto`（默认）= 按 tone 自动取：neutral → outline、success → solid、其余 → soft
    * - `soft` = 浅底彩字（用于状态列）
    * - `outline` = 透明底彩边彩字（用于弱化标记）
    * - `solid` = 实底反白（计数 / 未读徽章）
@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   variant: 'auto',
 })
 
-/** auto 的映射必须与历史视觉严格等价：neutral 描边、success 实底、其余浅底 */
+/** auto 的映射：neutral 描边、success 实底、其余浅底 */
 const resolvedVariant = computed<Exclude<ChipVariant, 'auto'>>(() => {
   if (props.variant !== 'auto') return props.variant
   if (props.tone === 'neutral') return 'outline'

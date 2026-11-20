@@ -111,7 +111,7 @@ export interface DataLayerEntry {
 export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   // ── 配置层 ──
   { id: 'app.window-bounds', toolId: 'app', layer: 'config', relativePath: 'app/window-bounds.json', label: '窗口大小与位置', backup: 'include', clean: 'never' },
-  { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '收藏的工具与首页排序', backup: 'include', clean: 'never' },
+  { id: 'app.ui-preferences', toolId: 'app', layer: 'config', relativePath: 'app/ui-preferences.json', label: '首页排序与左轨三态', backup: 'include', clean: 'never' },
   { id: 'interceptor.config', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/config.json', label: '拦截配置', backup: 'include', clean: 'never' },
   { id: 'interceptor.rules', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/rules.json', label: '拦截规则', backup: 'include', clean: 'never' },
   { id: 'interceptor.certs', toolId: 'interceptor', layer: 'config', relativePath: 'interceptor/certs', label: '根 CA 证书与私钥', backup: 'include', clean: 'never', sensitive: true },
@@ -185,7 +185,7 @@ export const DATA_LAYOUT_VERSION_FILE = '.edt-layout.json'
 
 /**
  * 旧布局里无法归类的遗留项搬进这里（**配置层下**：不删、不备份、不随「清缓存」消失）。
- * 放在 `cache/` 下曾经等于「清缓存顺手销毁不可再生数据」——隔离区的意义是留证据，不是丢垃圾。
+ * 隔离区的意义是留证据，不是丢垃圾。
  */
 export const QUARANTINE_RELATIVE_DIR = 'config/quarantine'
 
@@ -256,7 +256,7 @@ export const DATA_LAYOUT_V1_TO_V2: readonly DataLayoutMigrationRule[] = [
   { id: 'workbuddy2api-panel.downloads', layer: 'cache', from: 'workbuddy2api-panel/downloads', to: 'workbuddy2api-panel/downloads', kind: 'dir' },
   { id: 'workbuddy2api-panel.runtime', layer: 'cache', from: 'workbuddy2api-panel/runtime', to: 'workbuddy2api-panel/runtime', kind: 'dir', note: '上游二进制，可重新下载' },
 
-  // 预留目录（旧版通常为空或不存在）
+  // 预留目录（可能为空）
   { id: 'treease-editor.data', layer: 'config', from: 'treease-editor', to: 'treease-editor', kind: 'dir' },
 ]
 

@@ -49,7 +49,7 @@ export function useRailMode() {
 
     const remoteMode = isRailMode(stored.railMode) ? stored.railMode : 'compact'
     if (remoteMode === 'compact' && mode.value !== 'compact') {
-      // 旧版本只写过 LocalStorage 镜像：把用户当前选择补进配置层。
+      // 配置层还没有形态记录（只有 LocalStorage 镜像）：把当前选择补进去。
       void persist(mode.value)
       return
     }

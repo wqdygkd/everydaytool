@@ -295,8 +295,7 @@ function openSettings() {
 
 <style scoped lang="scss">
 /* 外壳是「整宽标题栏 + 下面一行（左轨 + 内容）」：标题栏铺满整宽，
-   macOS 的红绿灯直接落在标题栏左侧，左轨从标题栏下方开始，
-   不再需要给 rail 加顶部 padding 去让灯（那种做法会让标题栏断开、也挡不住分隔线穿过红绿灯）。 */
+   macOS 的红绿灯直接落在标题栏左侧，左轨从标题栏下方开始。 */
 .app-shell {
   display: flex;
   flex-direction: column;

@@ -71,9 +71,8 @@ if (isDebugging) {
   app.commandLine.appendSwitch('remote-debugging-port', '9222')
 }
 
-// 页内菜单动作 → Electron role（role 自带标准行为与快捷键）。zoom 系列的 role 语义
-// 与旧版页内菜单一致（±0.5 / 重置为 0）。Record 键穷举 ShellMenuAction：新增动作
-// 漏映射时在编译期报错。
+// 应用菜单动作 → Electron role（role 自带标准行为与快捷键）。zoom 系列按 ±0.5 步进、重置为 0。
+// Record 键穷举 ShellMenuAction：新增动作漏映射时在编译期报错。
 const ACTION_ROLES: Record<ShellMenuAction, NonNullable<Electron.MenuItemConstructorOptions['role']>> = {
   quit: 'quit',
   undo: 'undo',
@@ -218,7 +217,7 @@ function resolveWindowBoundsOptions(): { options: Partial<Electron.BrowserWindow
   return { options: { ...placement.bounds }, maximized: placement.maximized }
 }
 
-/** 设置页开关：关闭后不再记录；重新开启时补记一次当前几何，避免下次启动跳回关闭前的老位置 */
+/** 设置页开关：关闭时不记录；重新开启时补记一次当前几何，下次启动从当前窗口恢复 */
 function setWindowBoundsEnabledFromUi(enabled: boolean): WindowBoundsState {
   const state = setWindowBoundsEnabled(enabled)
   const win = mainWindow
@@ -366,8 +365,7 @@ function registerAppIpc(): void {
   })
 
   // 「外部打开」统一入口：window.open 已全部 deny，页面需要外跳时调用本通道，
-  // 由 safeOn 统一校验调用方来源、再校验协议后用系统默认浏览器打开
-  // （不再创建会继承父窗口配置的子窗口）。
+  // 由 safeOn 统一校验调用方来源、再校验协议后用系统默认浏览器打开。
   safeOn(ipcMain, EDT_APP_IPC_CHANNELS.OPEN_EXTERNAL, (_event, rawUrl: unknown) => {
     if (typeof rawUrl !== 'string' || !isSafeWebUrl(rawUrl)) return
     void shell.openExternal(rawUrl.trim())
