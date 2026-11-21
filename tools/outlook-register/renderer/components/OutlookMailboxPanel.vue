@@ -280,9 +280,7 @@ async function resetSession(): Promise<void> {
   }
 }
 
-async function removeAccount(): Promise<void> {
-  const account = selected.value
-  if (!account) return
+async function removeAccount(account: OutlookAccount): Promise<void> {
   try {
     await confirm(`会从账号库删除 ${account.email}，并清除它的登录会话。此操作不可撤销。`, '删除账号？', {
       type: 'error',
@@ -336,7 +334,7 @@ async function onMenuCommand(command: string): Promise<void> {
       await resetSession()
       break
     case 'delete':
-      await removeAccount()
+      await removeAccount(account)
       break
   }
 }
@@ -483,6 +481,10 @@ onMounted(async () => {
                 <div class="expand-actions">
                   <UiButton size="small" text @click="beginEdit(account)">
                     编辑资料
+                  </UiButton>
+                  <span class="expand-actions-spacer" />
+                  <UiButton size="small" type="danger" link @click="removeAccount(account)">
+                    删除账号
                   </UiButton>
                 </div>
               </template>
@@ -680,6 +682,10 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+}
+
+.expand-actions-spacer {
+  flex: 1;
 }
 
 .detail-value-line {
