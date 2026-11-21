@@ -9,3 +9,7 @@ export const WB2API_WEBVIEW_PARTITION = 'persist:workbuddy2api-panel'
 // tweb-cache 内嵌 tweb（Telegram Web K）的 session 分区：登录态、IndexedDB、
 // Cache Storage 都按 origin 与分区隔离。分区名带 persist: 前缀，登录态可跨重启保留。
 export const TWEB_CACHE_WEBVIEW_PARTITION = 'persist:tweb-cache'
+
+// outlook-register 每个草稿 / 账号一个独立分区：注册页与收件箱共用同一登录态，
+// 同时避免多个 Outlook 账号互相顶掉 cookie。具体后缀由 shared/outlook-register 生成。
+export const OUTLOOK_REGISTER_PARTITION_PREFIX = 'persist:outlook-register'

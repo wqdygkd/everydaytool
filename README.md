@@ -3,7 +3,7 @@
 多功能工具平台（`everydaytool`，简称 `edt`），基于 **Electron + Vue 3 + Pinia + Reka UI + Vite**。
 
 采用单体仓库子目录架构：主壳只负责首页导航、左轨、标题栏与设置，各工具独立存放在 `tools/` 下，
-按需加载、互不耦合。内置 8 个工具模块：
+按需加载、互不耦合。内置 9 个工具模块：
 
 | 工具 | 分类 | 说明 |
 | ------ | ------ | ------ |
@@ -15,6 +15,7 @@
 | 技能管理 | 开发工具 | 按仓库对账、更新、禁用与收藏本机与项目技能，并管理 skills-lock.json |
 | Telegram 缓存（tweb） | 浏览器工具 | 以 tweb 为前端的本地归档：右键把消息与媒体写进影库，支持断点续传、离线播放与消息定位（仅开发形态可用，安装版隐藏） |
 | WorkBuddy2API | 开发工具 | 托管 workbuddy2api：左侧运行详情管安装 / 启停 / 更新（二进制不进安装包） |
+| Outlook 注册 | 通用工具 | 生成 Outlook 注册资料（不在软件内加载注册页），注册后在软件内打开邮箱收信（单账号） |
 
 ## 开发指南
 
@@ -82,6 +83,7 @@ pnpm create:tool <tool-id>    # 生成目录骨架并自动注册
 | [docs/skill-manager.md](./docs/skill-manager.md) | 技能管理：锁兼容、安装 / 更新事务、禁用与预设 |
 | [docs/tweb-cache.md](./docs/tweb-cache.md) | Telegram 缓存：页面侧归档、触点重放与 SW 坑 |
 | [docs/workbuddy2api-panel.md](./docs/workbuddy2api-panel.md) | WorkBuddy2API：托管二进制、探活与更新回滚 |
+| [docs/outlook-register.md](./docs/outlook-register.md) | Outlook 注册：资料生成、独立会话与收件箱 |
 | [docs/preview/tool-workspace-layout.html](./docs/preview/tool-workspace-layout.html) | 工具工作区交互预览（视觉参考） |
 
 身份证号生成器是纯前端工具，没有后端与持久化，设计见 [DESIGN.md](./DESIGN.md) §9.1。

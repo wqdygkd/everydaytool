@@ -20,7 +20,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const resultsRef = ref<HTMLElement | null>(null)
 
 const tools = computed(() => getToolRegistry())
-const MAX_RESULTS = 8
+const MAX_RESULTS = 9
 
 function scoreTool(tool: ToolDefinition, keyword: string): number {
   const name = tool.name.toLowerCase()

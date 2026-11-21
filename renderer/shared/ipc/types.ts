@@ -26,6 +26,7 @@ declare global {
     interceptor?: IpcInvokeApi
     wxpEnhancer?: IpcInvokeApi
     offlinePack?: IpcInvokeApi
+    outlookRegister?: IpcInvokeApi
     skillManager?: IpcInvokeApi
     workbuddy2apiPanel?: IpcInvokeApi
   }

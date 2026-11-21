@@ -46,11 +46,12 @@
                         archive-alias.json, peer-dirs.json
     treease-editor/     rules.json（规则从 LocalStorage 上台面）
     workbuddy2api-panel/ manifest.json, app-settings.json, run/{config.json,auths/,data/}
+    outlook-register/   accounts.json, draft.json, settings.json          [accounts/draft sensitive]
     skill-manager/      settings.json, registry.json, history.json, projects.json,
                         favorites.json, presets.json, credentials.json [sensitive], lock-backups/
   session/                             # 会话层 == Electron sessionData
     Cookies/  Local Storage/  IndexedDB/  Preferences
-    Partitions/{tweb-cache,treease-editor,workbuddy2api-panel}
+    Partitions/{tweb-cache,treease-editor,workbuddy2api-panel,outlook-register-*}
     Cache/  Code Cache/  GPUCache/ …   # 内部可再生子目录，会话层里唯一允许清的部分
   cache/                               # 缓存层：删了自动重建
     app/{logs,crash-dumps}
@@ -89,6 +90,7 @@
 | tweb-cache | `config/tweb-cache/{config,media-index,archive-alias,peer-dirs}.json`、`messages-index/` | `session/Partitions/tweb-cache/` | `cache/tweb-cache/{objects,tmp,diagnostics}` | `<assets>/tweb-cache/{messages,trash}`，工具内可单独覆盖 |
 | treease-editor | `config/treease-editor/rules.json` | `session/Partitions/treease-editor/` | — | — |
 | workbuddy2api-panel | `config/workbuddy2api-panel/{manifest,app-settings}.json`、`run/` | `session/Partitions/workbuddy2api-panel/` | `cache/workbuddy2api-panel/{downloads,runtime}` | — |
+| outlook-register | `config/outlook-register/{accounts,draft,settings}.json` | `session/Partitions/outlook-register-<id>/` | — | — |
 | wxp-enhancer | `config/wxp-enhancer/{config,data-cache}.json` | 目标微信自己的 profile（外部） | — | — |
 | skill-manager | `config/skill-manager/{settings,registry,history,projects,favorites,presets,credentials}.json`、`lock-backups/` | — | `cache/skill-manager/{repos,staging,tmp}` | `<assets>/skill-manager/{disabled,trash}` |
 | id-card-generator | 无持久化 | — | — | — |

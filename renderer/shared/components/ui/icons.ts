@@ -122,6 +122,11 @@ export const icons = {
     paths: ['M4 14.5 10 4.5l6 10', 'M6.5 14.5h7', 'M8.2 11.2h3.6'],
     sw: 1.6,
   },
+  'outlook': {
+    vb: 20,
+    paths: ['M3 6.5h9.5v7H3z', 'm3.4 7 4.35 3.15L12.1 7', 'M14.2 8.8h3.2v2.4h-3.2', 'M14.2 13.4h3.2v2.4h-3.2'],
+    sw: 1.5,
+  },
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof icons

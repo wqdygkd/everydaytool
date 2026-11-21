@@ -3,7 +3,7 @@
   "type": "module",
   "version": "1.1.0",
   "packageManager": "pnpm@10.6.3",
-  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，内置接口拦截 / 离线包 / Treease 编辑器 / WXP 增强 / 身份证号生成 / 技能管理 / Telegram 缓存（tweb）/ WorkBuddy2API 等工具",
+  "description": "everydaytool (edt) 多功能工具平台 - Electron + Vue 3，内置接口拦截 / 离线包 / Treease 编辑器 / WXP 增强 / 身份证号生成 / 技能管理 / Telegram 缓存（tweb）/ WorkBuddy2API / Outlook 注册等工具",
   "author": "",
   "license": "MIT",
   "keywords": [
