@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PikpakGetTask } from '../../../../shared/pikpak-get'
 import { toast } from 'vue-sonner'
+import ToolSideInspector from '../../../../renderer/shared/components/workspace/ToolSideInspector.vue'
 import { humanPikpakBytes } from '../../../../shared/pikpak-get'
 import { usePikpakGetStore } from '../stores/pikpakGetStore'
 
@@ -13,21 +14,29 @@ const activeTasks = computed(() => store.activeTasks)
 const queueSummary = computed(() => store.queueSummary)
 const refreshError = computed(() => store.refreshError)
 
-/** 抽屉打开时把轮询提速到 1s；收起后回落到按任务状态决定的节奏 */
+/** 面板宽度（上次拖拽结果，落在 localStorage；ToolSideInspector 不自己持久化） */
+const WIDTH_KEY = 'pikpakGet.tasksPanelWidth'
+const width = ref(readWidth())
+
+function readWidth(): number {
+  const saved = Number(globalThis.localStorage?.getItem(WIDTH_KEY))
+  return Number.isFinite(saved) && saved >= 260 && saved <= 420 ? saved : 320
+}
+
+function saveWidth(next: number): void {
+  width.value = next
+  globalThis.localStorage?.setItem(WIDTH_KEY, String(next))
+}
+
+/** 面板展开时：立即拉一次任务，并把轮询提速到 1s；收起后回落到按任务状态决定的节奏 */
 watch(open, (value) => {
-  store.setPollingFast(value)
+  store.setPanelOpen(value)
+  if (value) void store.refreshTasks().catch(() => undefined)
 })
 
 onUnmounted(() => {
-  store.setPollingFast(false)
+  store.setPanelOpen(false)
 })
-
-/** 最近一次成功刷新的时间（过期提示用） */
-function lastUpdatedText(): string {
-  const at = store.lastRefreshedAt
-  if (!at) return '尚未刷新'
-  return `最后更新 ${new Date(at).toLocaleTimeString()}`
-}
 
 const STATUS_LABELS: Record<PikpakGetTask['status'], string> = {
   queued: '排队中',
@@ -75,6 +84,13 @@ function plannedLine(task: PikpakGetTask): string {
   return `共 ${done}/${planned} 个文件 · ${humanPikpakBytes(bytes)}`
 }
 
+/** 最近一次成功刷新的时间（过期提示用） */
+function lastUpdatedText(): string {
+  const at = store.lastRefreshedAt
+  if (!at) return '尚未刷新'
+  return `最后更新 ${new Date(at).toLocaleTimeString()}`
+}
+
 async function cancel(taskId: string): Promise<void> {
   try {
     await store.cancelTask(taskId)
@@ -94,33 +110,40 @@ async function manualRefresh(): Promise<void> {
 </script>
 
 <template>
-  <Transition name="tasks-drawer">
-    <aside v-if="open" class="tasks-drawer">
-      <header class="drawer-head">
-        <span class="drawer-title">下载任务</span>
-        <span class="drawer-meta">
-          {{ activeTasks.length }} 个进行中<template v-if="queueSummary.tasks"> · 排队 {{ queueSummary.tasks }} 个 / {{ queueSummary.files }} 个文件 / {{ humanPikpakBytes(queueSummary.bytes) }}</template>
-        </span>
-        <span class="drawer-actions">
-          <UiIconButton icon="refresh" label="刷新任务" @click="manualRefresh" />
-          <UiIconButton icon="close" label="收起" @click="open = false" />
-        </span>
-      </header>
+  <ToolSideInspector
+    :open="open"
+    title="下载任务"
+    :width="width"
+    resizable
+    :min-width="260"
+    :max-width="420"
+    body-padding="0"
+    @close="open = false"
+    @update:width="saveWidth"
+  >
+    <template #actions>
+      <UiIconButton icon="refresh" label="刷新任务" @click="manualRefresh" />
+    </template>
 
-      <div v-if="refreshError" class="drawer-stale" :title="refreshError">
+    <div class="tasks-panel">
+      <div class="panel-summary">
+        <span>{{ activeTasks.length }} 个进行中</span>
+        <span v-if="queueSummary.tasks" class="mono">
+          排队 {{ queueSummary.tasks }} 个 / {{ queueSummary.files }} 个文件 / {{ humanPikpakBytes(queueSummary.bytes) }}
+        </span>
+      </div>
+
+      <div v-if="refreshError" class="panel-stale" :title="refreshError">
         已断开引擎 · {{ lastUpdatedText() }}（下面的数字可能已过期）
       </div>
 
-      <div class="drawer-body">
-        <div v-if="!tasks.length" class="empty-block">
-          <UiEmpty text="暂无下载任务；在分享链接里解析并勾选后开始" />
-        </div>
+      <div class="panel-body">
+        <UiEmpty v-if="!tasks.length" text="暂无下载任务；在分享链接里解析并勾选后开始" />
 
         <div v-else class="task-list">
           <div v-for="task in tasks" :key="task.id" class="task-row">
             <div class="task-head">
               <span class="task-status" :class="`is-${task.status}`">{{ STATUS_LABELS[task.status] }}</span>
-              <span class="task-id mono">{{ task.id }}</span>
               <UiButton
                 v-if="task.status === 'running' || task.status === 'queued' || task.status === 'cancelling'"
                 size="small"
@@ -161,66 +184,49 @@ async function manualRefresh(): Promise<void> {
           </div>
         </div>
       </div>
-    </aside>
-  </Transition>
+    </div>
+  </ToolSideInspector>
 </template>
 
 <style scoped lang="scss">
-.tasks-drawer {
+/* 面板自头条以下独立滚动：汇总与过期提示固定在顶部，任务列表滚动 */
+.tasks-panel {
   display: flex;
-  flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
-  max-height: 44%;
-  border-top: 1px solid var(--color-border-light);
-  background: var(--color-sheet);
+  height: 100%;
 }
 
-.drawer-head {
+.panel-summary {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  flex: 0 0 40px;
-  height: 40px;
-  padding: 0 14px;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--color-border-light);
-}
-
-.drawer-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.drawer-meta {
-  flex: 1;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
 }
 
-.drawer-actions {
-  display: flex;
-  gap: var(--spacing-xs);
+.panel-stale {
+  flex: none;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-warning);
+  font-size: var(--font-size-xs);
 }
 
-.drawer-body {
-  display: flex;
+.panel-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: var(--spacing-md);
 }
 
-.empty-block {
-  width: 100%;
-  padding: var(--spacing-md) 0;
-}
-
 .task-list {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  width: 100%;
 }
 
 .task-row {
@@ -236,7 +242,8 @@ async function manualRefresh(): Promise<void> {
 .task-head {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  justify-content: space-between;
+  gap: var(--spacing-sm);
 }
 
 .task-status {
@@ -281,21 +288,15 @@ async function manualRefresh(): Promise<void> {
   }
 }
 
-.task-id {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
-}
-
 .task-current {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: var(--spacing-xs) var(--spacing-md);
   align-items: center;
+
+  :deep(.ui-progress) {
+    grid-column: 1 / -1;
+  }
 }
 
 .task-file {
@@ -317,18 +318,6 @@ async function manualRefresh(): Promise<void> {
   font-size: var(--font-size-xs);
 }
 
-.drawer-stale {
-  flex: none;
-  padding: 6px 14px;
-  border-bottom: 1px solid var(--color-border-light);
-  color: var(--color-warning);
-  font-size: var(--font-size-xs);
-}
-
-.task-current :deep(.ui-progress) {
-  grid-column: 1 / -1;
-}
-
 .task-error {
   color: var(--color-error);
   font-size: var(--font-size-xs);
@@ -348,23 +337,5 @@ async function manualRefresh(): Promise<void> {
   font-size: 11px;
   white-space: pre-wrap;
   word-break: break-all;
-}
-
-.tasks-drawer-enter-active,
-.tasks-drawer-leave-active {
-  transition: max-height 190ms var(--ease-out), opacity 190ms var(--ease-out);
-}
-
-.tasks-drawer-enter-from,
-.tasks-drawer-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tasks-drawer-enter-active,
-  .tasks-drawer-leave-active {
-    transition-duration: 0.01ms;
-  }
 }
 </style>

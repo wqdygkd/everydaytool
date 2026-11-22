@@ -1,12 +1,19 @@
 <script setup lang="ts">
+import type { IconName } from '@renderer/shared/components/ui/icons'
 import type { PikpakGetNode, PikpakGetNodeSortKey } from '../../../../shared/pikpak-get'
 import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { toast } from 'vue-sonner'
 import { groupPikpakNodes, humanPikpakBytes } from '../../../../shared/pikpak-get'
 import { usePikpakGetStore } from '../stores/pikpakGetStore'
 
+const props = defineProps<{
+  /** 右侧任务面板是否已展开（决定按钮语义是「打开」还是「收起」） */
+  tasksOpen?: boolean
+}>()
+
 const emit = defineEmits<{
   downloadStarted: []
+  openTasks: []
 }>()
 
 const store = usePikpakGetStore()
@@ -27,8 +34,8 @@ const parseResult = computed(() => store.parse)
 const selectedCount = computed(() => store.selectedCount)
 const selectedFileIds = computed(() => store.selectedFileIds)
 const selectedBytes = computed(() => store.selectedBytes)
-const parsing = computed(() => Boolean(store.parsingLinkId))
 const files = computed(() => store.fileNodes)
+const activeTaskCount = computed(() => store.activeTasks.length)
 const allSelected = computed(() => files.value.length > 0 && files.value.every(node => store.selectedFileIds.includes(node.id)))
 
 const allNodes = computed(() => parseResult.value?.nodes ?? [])
@@ -143,27 +150,55 @@ function formatTime(iso: string | null): string {
   if (Number.isNaN(date.getTime())) return iso
   return date.toLocaleString()
 }
+
+/** 低频动作收进「更多」，工具条只留排序、全选与两个下载入口 */
+const moreItems = computed<Array<{ command: string, label: string, icon: IconName }>>(() => {
+  const items: Array<{ command: string, label: string, icon: IconName }> = [
+    { command: 'reparse', label: '重新解析', icon: 'refresh' },
+  ]
+  if (selectedDownloadedIds.value.length) {
+    items.push({ command: 'deleteRecords', label: `删除记录（${selectedDownloadedIds.value.length}）`, icon: 'trash' })
+    items.push({ command: 'redownload', label: `重新下载（${selectedDownloadedIds.value.length}）`, icon: 'download' })
+  }
+  return items
+})
+
+function onMoreCommand(command: string): void {
+  if (command === 'reparse') void reparse()
+  else if (command === 'deleteRecords') void deleteRecords()
+  else if (command === 'redownload') void redownload()
+}
+
+async function downloadSelected(): Promise<void> {
+  try {
+    const task = await store.downloadSelected()
+    if (!task) {
+      toast.warning('请先勾选要下载的文件')
+      return
+    }
+    toast.success('下载任务已提交到引擎')
+    emit('downloadStarted')
+  } catch (error) {
+    toast.error((error as Error).message || '提交任务失败')
+  }
+}
 </script>
 
 <template>
   <div class="parse-pane">
-    <div v-if="!parseResult" class="parse-empty">
-      <UiEmpty
-        title="选择分享链接"
-        text="在左侧「分享链接」里点选一条，解析出的文件会显示在这里，勾选后即可下载。"
-        center
-      />
-    </div>
-
-    <template v-else>
-      <div class="parse-head">
-        <div class="parse-title">
+    <div class="parse-head">
+      <div class="parse-title">
+        <template v-if="parseResult">
           <span class="title-text">{{ parseResult.title || '分享内容' }}</span>
           <span class="title-meta">{{ files.length }} 个文件</span>
           <span v-if="parseResult.parsedAt" class="title-meta">· 解析于 {{ formatTime(parseResult.parsedAt) }}</span>
           <span v-if="selectedCount" class="title-meta selected">· 已选 {{ selectedCount }} · {{ humanPikpakBytes(selectedBytes) }}</span>
-        </div>
-        <div class="parse-actions">
+        </template>
+        <span v-else class="title-text">未选择分享链接</span>
+      </div>
+
+      <div class="parse-actions">
+        <template v-if="parseResult">
           <span class="sort-field">
             <UiSelect
               :model-value="store.sortKey"
@@ -180,62 +215,78 @@ function formatTime(iso: string | null): string {
           >
             {{ store.sortDesc ? '降序' : '升序' }}
           </UiButton>
-          <UiButton size="small" :disabled="parsing" @click="reparse">
-            重新解析
-          </UiButton>
           <UiButton size="small" @click="toggleAll">
             {{ allSelected ? '清空' : '全选' }}
           </UiButton>
-          <UiButton v-if="selectedDownloadedIds.length" size="small" @click="deleteRecords">
-            删除记录（{{ selectedDownloadedIds.length }}）
-          </UiButton>
-          <UiButton v-if="selectedDownloadedIds.length" size="small" type="primary" @click="redownload">
-            重新下载（{{ selectedDownloadedIds.length }}）
-          </UiButton>
-        </div>
-      </div>
-
-      <div class="file-tree">
-        <template v-for="{ node, depth } in visibleNodes" :key="node.id">
-          <div
-            v-if="node.isFolder"
-            class="folder-row"
-            :style="{ paddingLeft: `${depth * 16 + 12}px` }"
-          >
-            <UiCheckbox
-              :model-value="folderSelected(node.id)"
-              @update:model-value="toggleFolderFiles(node.id)"
-            />
-            <span class="folder-caret" @click="toggleFolder(node.id)">{{ collapsedFolders.has(node.id) ? '▸' : '▾' }}</span>
-            <span class="folder-name mono" @click="toggleFolder(node.id)">{{ node.name }}</span>
-            <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
-            <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件夹名" @click.stop="copyName(node)" />
-          </div>
-          <div v-else class="file-row" :style="{ paddingLeft: `${depth * 16 + 12}px` }">
-            <div class="file-hit" @click="toggle(node.id)">
-              <span class="hit-check" @click.stop>
-                <UiCheckbox
-                  :model-value="selectedFileIds.includes(node.id)"
-                  @update:model-value="toggle(node.id)"
-                />
-              </span>
-              <span class="file-path mono">{{ node.name }}</span>
-              <span
-                v-if="node.downloaded"
-                class="downloaded-mark"
-                :class="{ 'is-missing': !node.exists }"
-                :aria-label="node.exists ? '已下载' : '已下载但文件缺失'"
-                :title="node.exists ? '已下载' : '已下载但文件缺失（可删除记录重新下载）'"
-              >
-                {{ node.exists ? '✓' : '!' }}
-              </span>
-              <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
-            </div>
-            <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件名" @click.stop="copyName(node)" />
-          </div>
         </template>
+
+        <UiDropdown v-if="parseResult" :items="moreItems" @command="onMoreCommand">
+          <template #trigger>
+            <UiIconButton icon="more" :size="28" label="更多操作" />
+          </template>
+        </UiDropdown>
+
+        <UiButton
+          size="small"
+          :title="props.tasksOpen ? '收起右侧下载任务面板' : '展开右侧下载任务面板'"
+          @click="emit('openTasks')"
+        >
+          下载任务{{ activeTaskCount ? `（${activeTaskCount}）` : '' }}
+        </UiButton>
+        <UiButton type="primary" size="small" :disabled="!selectedCount" @click="downloadSelected">
+          下载选中{{ selectedCount ? `（${selectedCount}）` : '' }}
+        </UiButton>
       </div>
-    </template>
+    </div>
+
+    <div v-if="!parseResult" class="parse-empty">
+      <UiEmpty
+        title="选择分享链接"
+        text="在左侧「分享链接」里点选一条，解析出的文件会显示在这里，勾选后即可下载。"
+        center
+      />
+    </div>
+
+    <div v-else class="file-tree">
+      <template v-for="{ node, depth } in visibleNodes" :key="node.id">
+        <div
+          v-if="node.isFolder"
+          class="folder-row"
+          :style="{ paddingLeft: `${depth * 16 + 12}px` }"
+        >
+          <UiCheckbox
+            :model-value="folderSelected(node.id)"
+            @update:model-value="toggleFolderFiles(node.id)"
+          />
+          <span class="folder-caret" @click="toggleFolder(node.id)">{{ collapsedFolders.has(node.id) ? '▸' : '▾' }}</span>
+          <span class="folder-name mono" @click="toggleFolder(node.id)">{{ node.name }}</span>
+          <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
+          <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件夹名" @click.stop="copyName(node)" />
+        </div>
+        <div v-else class="file-row" :style="{ paddingLeft: `${depth * 16 + 12}px` }">
+          <div class="file-hit" @click="toggle(node.id)">
+            <span class="hit-check" @click.stop>
+              <UiCheckbox
+                :model-value="selectedFileIds.includes(node.id)"
+                @update:model-value="toggle(node.id)"
+              />
+            </span>
+            <span class="file-path mono">{{ node.name }}</span>
+            <span
+              v-if="node.downloaded"
+              class="downloaded-mark"
+              :class="{ 'is-missing': !node.exists }"
+              :aria-label="node.exists ? '已下载' : '已下载但文件缺失'"
+              :title="node.exists ? '已下载' : '已下载但文件缺失（可删除记录重新下载）'"
+            >
+              {{ node.exists ? '✓' : '!' }}
+            </span>
+            <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
+          </div>
+          <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件名" @click.stop="copyName(node)" />
+        </div>
+      </template>
+    </div>
   </div>
 </template>
 

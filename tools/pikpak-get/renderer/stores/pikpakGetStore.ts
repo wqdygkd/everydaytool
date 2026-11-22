@@ -37,8 +37,8 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
   const lastRefreshedAt = ref<number | null>(null)
   /** 最近一次拉取失败的说明；非空表示队列数字已过期 */
   const refreshError = ref('')
-  /** 下载任务抽屉是否打开（决定轮询节奏） */
-  const pollFast = ref(false)
+  /** 右侧任务面板是否打开（决定轮询节奏） */
+  const panelOpen = ref(false)
   /** 轮询是否启用（有连接时才开） */
   const polling = ref(false)
   let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -268,15 +268,22 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     return task
   }
 
+  /** 下载当前勾选（按展示顺序）；没有可下的返回 null，由调用方决定提示文案 */
+  async function downloadSelected(): Promise<PikpakGetTask | null> {
+    const current = parse.value
+    if (!current || !selectedFileIds.value.length) return null
+    return startDownload({ linkId: current.linkId, fileIds: selectedDownloadOrder.value })
+  }
+
   async function cancelTask(taskId: string): Promise<void> {
     await invoke(channels().TASKS_CANCEL, taskId)
     await refreshTasks().catch(() => undefined)
   }
 
-  /** 抽屉开合时切换轮询节奏 */
-  function setPollingFast(fast: boolean): void {
-    if (pollFast.value === fast) return
-    pollFast.value = fast
+  /** 任务面板开合时切换轮询节奏（打开时 1s，收起后按任务状态回落） */
+  function setPanelOpen(open: boolean): void {
+    if (panelOpen.value === open) return
+    panelOpen.value = open
     scheduleNextPoll()
   }
 
@@ -284,7 +291,7 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     if (pollTimer) clearTimeout(pollTimer)
     if (!polling.value) return
     const delay = pollDelayMs({
-      drawerOpen: pollFast.value,
+      panelOpen: panelOpen.value,
       activeTasks: activeTasks.value.length,
       knownTasks: tasks.value.length,
     })
@@ -326,7 +333,7 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     queueSummary,
     lastRefreshedAt,
     refreshError,
-    setPollingFast,
+    setPanelOpen,
     fileNodes,
     selectedCount,
     selectedBytes,
@@ -358,6 +365,7 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     importData,
     refreshTasks,
     startDownload,
+    downloadSelected,
     cancelTask,
   }
 })

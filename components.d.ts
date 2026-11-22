@@ -36,7 +36,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     RulesPanel: typeof import('./tools/interceptor/renderer/components/RulesPanel.vue')['default']
     TargetsPanel: typeof import('./tools/interceptor/renderer/components/TargetsPanel.vue')['default']
-    TasksDrawer: typeof import('./tools/pikpak-get/renderer/components/TasksDrawer.vue')['default']
+    TasksPanel: typeof import('./tools/pikpak-get/renderer/components/TasksPanel.vue')['default']
     ToolFormPane: typeof import('./renderer/shared/components/workspace/ToolFormPane.vue')['default']
     ToolFormSection: typeof import('./renderer/shared/components/workspace/ToolFormSection.vue')['default']
     ToolPane: typeof import('./renderer/shared/components/ToolPane.vue')['default']

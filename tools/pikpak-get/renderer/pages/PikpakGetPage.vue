@@ -7,7 +7,7 @@ import { humanPikpakBytes } from '../../../../shared/pikpak-get'
 import ConnectionAccountsPane from '../components/ConnectionAccountsPane.vue'
 import LinksPane from '../components/LinksPane.vue'
 import ParsePane from '../components/ParsePane.vue'
-import TasksDrawer from '../components/TasksDrawer.vue'
+import TasksPanel from '../components/TasksPanel.vue'
 import { usePikpakGetStore } from '../stores/pikpakGetStore'
 
 const store = usePikpakGetStore()
@@ -17,8 +17,6 @@ const tasksOpen = ref(false)
 
 const connected = computed(() => Boolean(store.connection))
 const connectionName = computed(() => store.connection?.name ?? '未连接引擎')
-const selectedCount = computed(() => store.selectedCount)
-const activeTaskCount = computed(() => store.activeTasks.length)
 const queueSummary = computed(() => store.queueSummary)
 const refreshError = computed(() => store.refreshError)
 /**
@@ -44,21 +42,6 @@ async function testConnection(): Promise<void> {
     toast.success('引擎连接正常')
   } catch (error) {
     toast.error((error as Error).message || '引擎连接失败')
-  }
-}
-
-async function downloadSelected(): Promise<void> {
-  if (!store.parse || !store.selectedFileIds.length) {
-    toast.warning('请先在左侧选择分享链接，并勾选要下载的文件')
-    return
-  }
-  try {
-    // 传展示顺序：引擎按这个顺序逐个下载（否则引擎会退回按体积从小到大）
-    await store.startDownload({ linkId: store.parse.linkId, fileIds: store.selectedDownloadOrder })
-    tasksOpen.value = true
-    toast.success('下载任务已提交到引擎')
-  } catch (error) {
-    toast.error((error as Error).message || '提交任务失败')
   }
 }
 
@@ -91,12 +74,6 @@ onUnmounted(() => {
     </Teleport>
 
     <Teleport v-if="paneActive" defer to="#app-topbar-actions">
-      <UiButton size="small" :disabled="!activeTaskCount" @click="tasksOpen = !tasksOpen">
-        下载任务{{ activeTaskCount ? `（${activeTaskCount}）` : '' }}
-      </UiButton>
-      <UiButton type="primary" size="small" :disabled="!selectedCount" @click="downloadSelected">
-        下载选中{{ selectedCount ? `（${selectedCount}）` : '' }}
-      </UiButton>
       <UiIconButton v-if="connected" icon="refresh" label="测试引擎连接" @click="testConnection" />
     </Teleport>
 
@@ -106,9 +83,13 @@ onUnmounted(() => {
           <ConnectionAccountsPane />
           <LinksPane />
         </ToolFormPane>
-        <ParsePane @download-started="tasksOpen = true" />
+        <ParsePane
+          :tasks-open="tasksOpen"
+          @download-started="tasksOpen = true"
+          @open-tasks="tasksOpen = !tasksOpen"
+        />
+        <TasksPanel v-model="tasksOpen" />
       </div>
-      <TasksDrawer v-model="tasksOpen" />
     </ToolSurface>
   </div>
 </template>

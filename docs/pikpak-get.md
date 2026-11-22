@@ -212,7 +212,11 @@ tools/pikpak-get/
 
 **载荷必须在 store 边界拍平**：渲染层 `ref` / `reactive` / `computed` 取出的值是 Proxy，Electron 的结构化克隆不认，会把整次调用打成 `An object could not be cloned.`（历史故障：勾选文件后点「下载选中」，把 `store.selectedFileIds` 这个响应式数组直接塞进 `TASKS_START`）。`pikpakGetStore.ts` 的 `invoke` 统一套 `toIpcPayload`（`renderer/ipc-payload.ts`，JSON 语义 + 保留 `undefined`），新增通道不必逐个记得转纯；判定用例在 `tests/ipc-payload.test.ts`。
 
-**任务轮询是自适应的**（`renderer/poll-policy.ts`，用例 `tests/poll-policy.test.ts`）：抽屉打开 1s、有活跃任务 1.5s、只剩历史 4s、完全空闲 6s；提交 / 取消任务后立即拉一次并重排定时器。因此界面上「排队 N 个任务 · M 个文件 · X GiB」最多滞后一个轮询间隔（有任务时约 1.5s）。拉取失败**不清空**旧数据，只置 `refreshError`，顶栏 chip 与抽屉头改为橙色的「已过期 · 最后更新 hh:mm:ss」——把冻结的数字当成实时状态是这里最容易误导人的坑。
+**任务轮询是自适应的**（`renderer/poll-policy.ts`，用例 `tests/poll-policy.test.ts`）：右侧任务面板打开 1s、有活跃任务 1.5s、只剩历史 4s、完全空闲 6s；提交 / 取消任务后立即拉一次并重排定时器。因此界面上「排队 N 个任务 · M 个文件 · X GiB」最多滞后一个轮询间隔（有任务时约 1.5s）。拉取失败**不清空**旧数据，只置 `refreshError`，顶栏 chip 与面板顶部改为橙色的「已过期 · 最后更新 hh:mm:ss」——把冻结的数字当成实时状态是这里最容易误导人的坑。
+
+**下载任务面板在右侧**（`renderer/components/TasksPanel.vue`，平台件 `ToolSideInspector`，默认 320px、可拖宽 260–420 并记到 `localStorage: pikpakGet.tasksPanelWidth`）：展开时立即刷新一次并切到 1s 轮询。面板内摘要固定、任务列表独立滚动；每行给出状态点、当前文件、进度条、计划量（排队中显示「计划 N 个文件 · X」、进行中显示「进度 d/N」）与最近 4 行任务日志。
+
+**下载相关的两个动作在工具自己的工具条上，不进标题栏**（`ParsePane` 的 48px 结果头）：右端是「下载任务（N）」（开合右侧面板）与「下载选中（N）」（主操作，未勾选时禁用）；低频动作（重新解析 / 删除记录 / 重新下载）收在旁边的「⋯」`UiDropdown` 里，避免工具条堆到八九个控件。标题栏只保留状态（连接状态 + 排队/过期 chip）与「测试引擎连接」图标钮。
 
 ### 3.3 数据落点与分层
 
