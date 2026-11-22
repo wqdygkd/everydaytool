@@ -3,6 +3,7 @@ import { EDT_APP_IPC_CHANNELS } from '../backend/ipc/channels.ts'
 import { INTERCEPTOR_IPC_CHANNELS } from '../tools/interceptor/backend/ipc/channels.ts'
 import { OFFLINE_PACK_IPC_CHANNELS } from '../tools/offline-pack/backend/ipc/channels.ts'
 import { OUTLOOK_REGISTER_IPC_CHANNELS } from '../tools/outlook-register/backend/ipc/channels.ts'
+import { PIKPAK_GET_IPC_CHANNELS } from '../tools/pikpak-get/backend/ipc/channels.ts'
 import { SKILL_MANAGER_IPC_CHANNELS } from '../tools/skill-manager/backend/ipc/channels.ts'
 import { TWEB_CACHE_IPC_CHANNELS } from '../tools/tweb-cache/backend/ipc/channels.ts'
 import { WB2API_PANEL_IPC_CHANNELS } from '../tools/workbuddy2api-panel/backend/ipc/channels.ts'
@@ -23,6 +24,7 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'wxpEnhancer', channels: WXP_ENHANCER_IPC_CHANNELS },
   { preloadNamespace: 'offlinePack', channels: OFFLINE_PACK_IPC_CHANNELS },
   { preloadNamespace: 'outlookRegister', channels: OUTLOOK_REGISTER_IPC_CHANNELS },
+  { preloadNamespace: 'pikpakGet', channels: PIKPAK_GET_IPC_CHANNELS },
   { preloadNamespace: 'skillManager', channels: SKILL_MANAGER_IPC_CHANNELS },
   { preloadNamespace: 'twebCache', channels: TWEB_CACHE_IPC_CHANNELS },
   { preloadNamespace: 'workbuddy2apiPanel', channels: WB2API_PANEL_IPC_CHANNELS },

@@ -230,3 +230,4 @@ export default defineTool({
 | **outlook-register 模块记忆（注册资料生成 / 每账号独立会话 / 收件箱）** | `docs/outlook-register.md` |
 | **skill-manager 模块记忆（skills-lock 兼容 / 安装与更新事务 / 禁用与回收站 / 预设）** | `docs/skill-manager.md` |
 | **interceptor 模块记忆（MITM / 证书 / 规则 / 流量与扩展桥）** | `docs/interceptor.md` |
+| **pikpak-get 模块记忆（NAS 引擎 + 控制面 / edt-kdf:v1 加密 / 勾选下载 / Docker·DSM 部署）** | `docs/pikpak-get.md` |

@@ -27,6 +27,7 @@ declare global {
     wxpEnhancer?: IpcInvokeApi
     offlinePack?: IpcInvokeApi
     outlookRegister?: IpcInvokeApi
+    pikpakGet?: IpcInvokeApi
     skillManager?: IpcInvokeApi
     workbuddy2apiPanel?: IpcInvokeApi
   }

@@ -24,3 +24,4 @@ browser-extension/.wxt/
 browser-extension/bridge-token.json
 browser-extension/.output/**/bridge-token.json
 cache
+

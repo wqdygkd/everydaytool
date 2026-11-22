@@ -138,6 +138,9 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'outlook-register.accounts', toolId: 'outlook-register', layer: 'config', relativePath: 'outlook-register/accounts.json', label: 'Outlook 账号库（密码为加密信封）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'outlook-register.draft', toolId: 'outlook-register', layer: 'config', relativePath: 'outlook-register/draft.json', label: '当前注册草稿（密码为加密信封）', backup: 'include', clean: 'never', sensitive: true },
   { id: 'outlook-register.settings', toolId: 'outlook-register', layer: 'config', relativePath: 'outlook-register/settings.json', label: '注册默认值、代理与复杂密码规则', backup: 'include', clean: 'never' },
+  { id: 'pikpak-get.connection', toolId: 'pikpak-get', layer: 'config', relativePath: 'pikpak-get/connection.json', label: 'PikPak 引擎连接（NAS 地址与 token）', backup: 'include', clean: 'never', sensitive: true },
+  { id: 'pikpak-get.local-engine', toolId: 'pikpak-get', layer: 'config', relativePath: 'pikpak-get/local-engine.json', label: '本机引擎密钥与下载目录（master_key / dest）', backup: 'include', clean: 'never', sensitive: true },
+  { id: 'pikpak-get.engine', toolId: 'pikpak-get', layer: 'config', relativePath: 'pikpak-get/engine', label: '本机引擎账号库 / 链接库（edt-kdf 密文）', backup: 'include', clean: 'never', sensitive: true },
   // 隔离区在**配置层**而不是缓存层：进缓存层等于「清缓存顺手销毁不可再生数据」。
   // 它不备份（不知归属的遗留物进包只会污染备份）、也不自动清理（避免二次误删），由用户看过体积后自行处理。
   { id: 'app.quarantine', toolId: 'app', layer: 'config', relativePath: 'quarantine', label: '旧布局隔离区（未登记遗留项）', backup: 'never', clean: 'never' },
@@ -147,6 +150,7 @@ export const DATA_LAYER_ENTRIES: readonly DataLayerEntry[] = [
   { id: 'tweb-cache.trash', toolId: 'tweb-cache', layer: 'assets', relativePath: 'tweb-cache/trash', label: '回收站（tweb 前端，默认保留 30 天）', backup: 'manifest-only', clean: 'never' },
   { id: 'skill-manager.trash', toolId: 'skill-manager', layer: 'assets', relativePath: 'skill-manager/trash', label: '技能回收站（manifest + 被移除目录）', backup: 'manifest-only', clean: 'never' },
   { id: 'skill-manager.disabled', toolId: 'skill-manager', layer: 'assets', relativePath: 'skill-manager/disabled', label: '已禁用技能目录（可恢复）', backup: 'include', clean: 'never' },
+  { id: 'pikpak-get.downloads', toolId: 'pikpak-get', layer: 'assets', relativePath: 'pikpak-get', label: '本机下载库', backup: 'include', clean: 'never' },
 
   // ── 会话层（Chromium 拥有；relativePath '.' 表示层根本身）──
   { id: 'session.chromium', toolId: 'app', layer: 'session', relativePath: '.', label: 'Cookies / LocalStorage / 页面缓存', backup: 'optional', clean: 'internal-chromium-cache' },
