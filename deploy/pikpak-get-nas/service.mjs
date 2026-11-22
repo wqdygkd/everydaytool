@@ -900,6 +900,23 @@ import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { mkdir as mkdir3, rename as rename2, rm as rm3, stat as stat2, writeFile as writeFile2 } from "node:fs/promises";
 import path3 from "node:path";
 
+// tools/pikpak-get/backend/engine/order.ts
+function orderBySelection(nodes, order) {
+  if (!order || order.length === 0) return [...nodes];
+  const rank = /* @__PURE__ */ new Map();
+  for (const [index, id] of order.entries()) {
+    if (!rank.has(id)) rank.set(id, index);
+  }
+  const known = [];
+  const rest = [];
+  for (const node of nodes) {
+    if (rank.has(node.id)) known.push(node);
+    else rest.push(node);
+  }
+  known.sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  return [...known, ...rest];
+}
+
 // tools/pikpak-get/backend/engine/stream.ts
 import { Buffer as Buffer3 } from "node:buffer";
 import { createHash as createHash3 } from "node:crypto";
@@ -1282,6 +1299,7 @@ var Pipeline = class {
   stop;
   accountId;
   selectedFileIds;
+  selectedOrder;
   onProgress;
   state;
   created = /* @__PURE__ */ new Set();
@@ -1300,6 +1318,7 @@ var Pipeline = class {
     this.stop = options.stop;
     this.accountId = options.accountId;
     this.selectedFileIds = options.selectedFileIds ?? null;
+    this.selectedOrder = options.selectedOrder ?? null;
     this.onProgress = options.onProgress;
     this.state = new State(
       options.args.stateDir ? path3.join(options.args.stateDir, "state.json") : null,
@@ -1670,6 +1689,7 @@ var Pipeline = class {
     let files = report.files.sort((a, b) => a.size - b.size);
     if (this.selectedFileIds) {
       files = files.filter((node) => this.selectedFileIds.has(node.id));
+      files = orderBySelection(files, this.selectedOrder);
     }
     link.status = "active";
     link.folder = String(job.folder ?? "");
@@ -2008,6 +2028,62 @@ var LinkStore = class {
   }
 };
 
+// tools/pikpak-get/backend/engine/progress-log.ts
+var PROGRESS_PREFIX = "[pikpak-get]";
+function formatBytes(nbytes) {
+  let value = Number(nbytes) || 0;
+  let unit = "B";
+  for (const next of ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]) {
+    unit = next;
+    if (Math.abs(value) < 1024 || next === "PiB") break;
+    value /= 1024;
+  }
+  return `${value.toFixed(1)}${unit}`;
+}
+function formatSpeed(bytesPerSecond) {
+  return `${formatBytes(Math.max(0, bytesPerSecond))}/s`;
+}
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor(total % 3600 / 60);
+  const rest = total % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(rest).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+function formatPercent(done, total) {
+  if (!total || total <= 0) return "--";
+  return `${Math.min(100, Math.max(0, done / total * 100)).toFixed(1)}%`;
+}
+function formatQueue(queue) {
+  if (queue.tasks <= 0) return "\u961F\u5217\u7A7A\u95F2";
+  return `\u6392\u961F ${queue.tasks} \u4E2A\u4EFB\u52A1 \xB7 ${queue.files} \u4E2A\u6587\u4EF6 \xB7 ${formatBytes(queue.bytes)}`;
+}
+function withQueue(body, queue) {
+  return `${PROGRESS_PREFIX} ${body}\uFF5C${formatQueue(queue)}`;
+}
+function formatTaskQueued(taskId, files, bytes, queue) {
+  return withQueue(`\u5165\u961F ${taskId}\uFF08${files} \u4E2A\u6587\u4EF6 \xB7 ${formatBytes(bytes)}\uFF09`, queue);
+}
+function formatTaskStart(taskId, files, bytes, queue) {
+  return withQueue(`\u5F00\u59CB ${taskId}\uFF08${files} \u4E2A\u6587\u4EF6 \xB7 ${formatBytes(bytes)}\uFF09`, queue);
+}
+function formatFileStart(index, count, name, size, queue) {
+  return withQueue(`\u4E0B\u8F7D\u4E2D ${index}/${count} ${name}\uFF08${formatBytes(size)}\uFF09`, queue);
+}
+function formatFileProgress(index, count, name, done, size, speed, eta, queue) {
+  const progress = `${formatPercent(done, size)} ${formatSpeed(speed)} \u5269\u4F59 ${formatDuration(eta)}`;
+  return withQueue(`\u4E0B\u8F7D\u4E2D ${index}/${count} ${name} ${progress}`, queue);
+}
+function formatFileDone(index, count, name, size, seconds) {
+  const average = seconds > 0 ? size / seconds : 0;
+  return `${PROGRESS_PREFIX} \u5B8C\u6210 ${index}/${count} ${name}\uFF08${formatBytes(size)} \u7528\u65F6 ${formatDuration(seconds)} \u5747\u901F ${formatSpeed(average)}\uFF09`;
+}
+function formatTaskEnd(taskId, status, doneFiles, plannedFiles, queue) {
+  return withQueue(`\u7ED3\u675F ${taskId} ${status}\uFF08${doneFiles}/${plannedFiles} \u4E2A\u6587\u4EF6\uFF09`, queue);
+}
+
 // tools/pikpak-get/backend/engine/engine.ts
 var MAX_LOG_LINES = 200;
 var PikpakEngine = class {
@@ -2022,16 +2098,30 @@ var PikpakEngine = class {
   progressSamples = /* @__PURE__ */ new Map();
   queue = [];
   workerRunning = false;
+  progressSeconds;
+  progressTimer = null;
+  /** 每个任务上次打过「下载中」的文件 id（用于打文件开始 / 完成里程碑） */
+  lastLoggedFile = /* @__PURE__ */ new Map();
+  loggedDoneFiles = /* @__PURE__ */ new Set();
+  loggedEnd = /* @__PURE__ */ new Set();
   constructor(context) {
     this.configDir = context.configDir;
     this.destDir = context.destDir;
     this.masterKey = context.masterKey;
     this.stop = context.stop;
+    this.progressSeconds = Math.max(0, Math.floor(context.progressSeconds ?? 15));
     this.accounts = new AccountStore(context);
     this.links = new LinkStore(context.configDir);
   }
   now() {
     return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  /**
+   * 进度日志的唯一出口：写 stdout，NAS 里 `docker compose logs -f` 直接可见。
+   * 引擎要能脱离 Electron 单独打包运行（NAS 容器），所以不能用平台 logger，只能用 console。
+   */
+  progress(line) {
+    console.log(line);
   }
   get destRoot() {
     return this.destDir;
@@ -2047,6 +2137,7 @@ var PikpakEngine = class {
   async createTask(linkId, fileIds, dest, accountId) {
     const link = await this.links.get(linkId);
     if (!link) throw new PikpakError(`\u5206\u4EAB\u94FE\u63A5\u4E0D\u5B58\u5728\uFF1A${linkId}`);
+    const planned = await this.plannedFor(linkId, fileIds);
     const task = {
       id: `task-${Date.now()}-${randomUUID3().slice(0, 8)}`,
       link_id: linkId,
@@ -2059,11 +2150,61 @@ var PikpakEngine = class {
       logs: [],
       error: null,
       created_at: this.now(),
-      updated_at: this.now()
+      updated_at: this.now(),
+      planned_files: planned.files,
+      planned_bytes: planned.bytes
     };
     this.tasks.set(task.id, task);
     this.stopFlags.set(task.id, { stopped: false });
+    this.progress(formatTaskQueued(task.id, planned.files, planned.bytes, this.queueSummary(task.id)));
     return this.publicTask(task);
+  }
+  /** 按解析缓存估算任务要下多少（排队中也能给出文件数与体积） */
+  async plannedFor(linkId, fileIds) {
+    if (!fileIds?.length) return { files: 0, bytes: 0 };
+    const cache = await this.links.getParseCache(linkId);
+    if (!cache) return { files: fileIds.length, bytes: 0 };
+    const wanted = new Set(fileIds);
+    const selected = cache.cache.nodes.filter((node) => !node.is_folder && wanted.has(node.id));
+    const files = selected.length || fileIds.length;
+    const bytes = selected.reduce((sum, node) => sum + (Number(node.size) || 0), 0);
+    return { files, bytes };
+  }
+  /** 排队快照：状态为 queued 的任务，可排除某个任务（它自己不算「排在自己前面」） */
+  queueSummary(excludeTaskId) {
+    let tasks = 0;
+    let files = 0;
+    let bytes = 0;
+    for (const task of this.tasks.values()) {
+      if (task.id === excludeTaskId) continue;
+      if (task.status !== "queued") continue;
+      tasks += 1;
+      files += task.planned_files;
+      bytes += task.planned_bytes;
+    }
+    return { tasks, files, bytes };
+  }
+  /** 当前文件在任务里的序号（1 基）与计划文件数 */
+  filePosition(task) {
+    const index = task.current_file ? Object.keys(task.files).indexOf(task.current_file) + 1 : 0;
+    return { index: Math.max(index, 0), count: task.planned_files || Object.keys(task.files).length };
+  }
+  startProgressTimer() {
+    if (this.progressTimer || this.progressSeconds <= 0) return;
+    this.progressTimer = setInterval(() => {
+      const task = [...this.tasks.values()].find((item) => item.status === "running");
+      if (!task?.current_file) return;
+      const entry = task.files[task.current_file];
+      if (!entry) return;
+      const { index, count } = this.filePosition(task);
+      this.progress(formatFileProgress(index, count, entry.name, entry.downloaded, entry.size, entry.speed, entry.eta, this.queueSummary(task.id)));
+    }, this.progressSeconds * 1e3);
+    this.progressTimer.unref?.();
+  }
+  stopProgressTimer() {
+    if (!this.progressTimer) return;
+    clearInterval(this.progressTimer);
+    this.progressTimer = null;
   }
   getTask(taskId) {
     const task = this.tasks.get(taskId);
@@ -2084,6 +2225,7 @@ var PikpakEngine = class {
   }
   enqueue(taskId) {
     this.queue.push(taskId);
+    this.startProgressTimer();
     void this.drainQueue();
   }
   async drainQueue() {
@@ -2101,6 +2243,7 @@ var PikpakEngine = class {
       }
     } finally {
       this.workerRunning = false;
+      if (this.queue.length === 0) this.stopProgressTimer();
     }
   }
   addLog(taskId, level, message) {
@@ -2130,6 +2273,17 @@ var PikpakEngine = class {
     entry.speed = Math.round(sample.lastSpeed);
     entry.eta = Math.round(sample.lastEta);
     this.progressSamples.set(taskId, sample);
+    const { index, count } = this.filePosition(task);
+    if (this.lastLoggedFile.get(taskId) !== node.id) {
+      this.lastLoggedFile.set(taskId, node.id);
+      this.progress(formatFileStart(index, count, node.name, entry.size, this.queueSummary(taskId)));
+    }
+    const doneKey = `${taskId}:${node.id}`;
+    if (entry.size > 0 && written >= entry.size && !this.loggedDoneFiles.has(doneKey)) {
+      this.loggedDoneFiles.add(doneKey);
+      const seconds = sample.lastSpeed > 0 ? entry.size / sample.lastSpeed : 0;
+      this.progress(formatFileDone(index, count, node.name, entry.size, seconds));
+    }
   }
   finalize(taskId, status, error) {
     const task = this.tasks.get(taskId);
@@ -2137,6 +2291,11 @@ var PikpakEngine = class {
     task.status = status;
     task.updated_at = this.now();
     if (error) task.error = String(error).slice(0, 300);
+    if (!this.loggedEnd.has(taskId)) {
+      this.loggedEnd.add(taskId);
+      const doneFiles = Object.values(task.files).filter((file) => file.size > 0 && file.downloaded >= file.size).length;
+      this.progress(formatTaskEnd(taskId, status, doneFiles, task.planned_files, this.queueSummary(taskId)));
+    }
   }
   async parseLink(linkId, force = false) {
     const link = await this.links.get(linkId);
@@ -2279,6 +2438,7 @@ var PikpakEngine = class {
     task.status = "running";
     task.updated_at = this.now();
     this.addLog(taskId, "info", `\u5F00\u59CB\u4E0B\u8F7D\uFF1A${link.url}`);
+    this.progress(formatTaskStart(taskId, task.planned_files, task.planned_bytes, this.queueSummary(taskId)));
     const dest = task.dest || this.destDir;
     const seriesRoot = `${dest}/${link.folder}`;
     const args = {
@@ -2342,6 +2502,8 @@ var PikpakEngine = class {
         stop,
         accountId,
         selectedFileIds: selected,
+        // 勾选顺序 = 控制面传来的界面顺序，直接作为下载排队顺序
+        selectedOrder: selected ? task.file_ids : null,
         onProgress
       });
       let code;
@@ -2519,8 +2681,10 @@ if (!masterKey) {
 var engine = new PikpakEngine({
   configDir,
   destDir: env("PIKPAK_DEST", "/downloads"),
-  masterKey
+  masterKey,
   // 不传 fetchImpl：NAS 用 Node 22 全局 fetch（undici）。
+  // stdout 进度日志（docker compose logs 可见）：默认 15 秒一行，0 = 只打里程碑。
+  progressSeconds: Number(env("PIKPAK_ENGINE_PROGRESS_SECONDS", "15"))
 });
 var service = createEngineService({
   engine,

@@ -5,14 +5,17 @@ import type {
   PikpakGetEngineInfo,
   PikpakGetExport,
   PikpakGetLink,
+  PikpakGetNodeSortKey,
   PikpakGetParseResult,
   PikpakGetTask,
   PikpakGetTaskInput,
   PikpakGetWhoami,
 } from '../../../../shared/pikpak-get'
 import { defineStore } from 'pinia'
+import { flattenPikpakNodes } from '../../../../shared/pikpak-get'
 import { invokePikpakGetIpc, pikpakGetIpcChannels } from '../ipc'
 import { toIpcPayload } from '../ipc-payload'
+import { pollDelayMs } from '../poll-policy'
 
 export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
   const connection = ref<PikpakGetConnectionView | null>(null)
@@ -25,19 +28,53 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
   const parsingLinkId = ref<string | null>(null)
   const selectedFileIds = ref<string[]>([])
   const selectedLinkId = ref<string | null>(null)
+  const sortKey = ref<PikpakGetNodeSortKey>('default')
+  /** 大小默认「大到小」，名 / 后缀默认升序 */
+  const sortDesc = ref(false)
   const loading = ref(false)
   const error = ref('')
-  let pollTimer: ReturnType<typeof setInterval> | null = null
+  /** 最近一次成功拉取任务的时间（ms）；null = 还没成功过 */
+  const lastRefreshedAt = ref<number | null>(null)
+  /** 最近一次拉取失败的说明；非空表示队列数字已过期 */
+  const refreshError = ref('')
+  /** 下载任务抽屉是否打开（决定轮询节奏） */
+  const pollFast = ref(false)
+  /** 轮询是否启用（有连接时才开） */
+  const polling = ref(false)
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
 
   const activeTasks = computed(() => tasks.value.filter(task =>
     task.status === 'queued' || task.status === 'running' || task.status === 'cancelling',
   ))
+
+  const queuedTasks = computed(() => tasks.value.filter(task => task.status === 'queued'))
+  /** 排队中还剩多少：任务数 / 计划文件数 / 计划体积（引擎入队时算好回传） */
+  const queueSummary = computed(() => ({
+    tasks: queuedTasks.value.length,
+    files: queuedTasks.value.reduce((sum, task) => sum + (task.plannedFiles ?? 0), 0),
+    bytes: queuedTasks.value.reduce((sum, task) => sum + (task.plannedBytes ?? 0), 0),
+  }))
 
   const fileNodes = computed(() => (parse.value?.nodes ?? []).filter(node => !node.isFolder))
   const selectedCount = computed(() => selectedFileIds.value.length)
   const selectedBytes = computed(() => fileNodes.value
     .filter(node => selectedFileIds.value.includes(node.id))
     .reduce((sum, node) => sum + node.size, 0))
+
+  /** 解析结果的展示顺序（深度优先 + 当前排序），下载排队也用它 */
+  const orderedNodes = computed(() => flattenPikpakNodes(parse.value?.nodes ?? [], sortKey.value, sortDesc.value))
+  const orderedFileIds = computed(() => orderedNodes.value.filter(node => !node.isFolder).map(node => node.id))
+  /** 已勾选文件的下载顺序：界面看到什么次序，就按什么次序下 */
+  const selectedDownloadOrder = computed(() => orderedFileIds.value.filter(id => selectedFileIds.value.includes(id)))
+
+  function setSortKey(key: PikpakGetNodeSortKey): void {
+    sortKey.value = key
+    sortDesc.value = key === 'size'
+  }
+
+  function toggleSortDesc(): void {
+    sortDesc.value = !sortDesc.value
+  }
 
   function channels(): Record<string, string> {
     return pikpakGetIpcChannels()
@@ -211,30 +248,61 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
 
   // ---- 下载任务 ----
   async function refreshTasks(): Promise<void> {
-    tasks.value = await invoke<PikpakGetTask[]>(channels().TASKS_LIST)
+    try {
+      tasks.value = await invoke<PikpakGetTask[]>(channels().TASKS_LIST)
+      lastRefreshedAt.value = Date.now()
+      refreshError.value = ''
+    } catch (cause) {
+      // 保留上一次的数据，只标记「已过期」——直接清空会让界面像任务全没了
+      refreshError.value = cause instanceof Error ? cause.message : String(cause)
+      throw cause
+    } finally {
+      scheduleNextPoll()
+    }
   }
 
   async function startDownload(input: PikpakGetTaskInput): Promise<PikpakGetTask> {
     const task = await invoke<PikpakGetTask>(channels().TASKS_START, input)
-    await refreshTasks()
+    // 任务已提交成功；刷新失败不该让调用方以为提交失败
+    await refreshTasks().catch(() => undefined)
     return task
   }
 
   async function cancelTask(taskId: string): Promise<void> {
     await invoke(channels().TASKS_CANCEL, taskId)
-    await refreshTasks()
+    await refreshTasks().catch(() => undefined)
+  }
+
+  /** 抽屉开合时切换轮询节奏 */
+  function setPollingFast(fast: boolean): void {
+    if (pollFast.value === fast) return
+    pollFast.value = fast
+    scheduleNextPoll()
+  }
+
+  function scheduleNextPoll(): void {
+    if (pollTimer) clearTimeout(pollTimer)
+    if (!polling.value) return
+    const delay = pollDelayMs({
+      drawerOpen: pollFast.value,
+      activeTasks: activeTasks.value.length,
+      knownTasks: tasks.value.length,
+    })
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void refreshTasks().catch(() => undefined)
+    }, delay)
   }
 
   function startPolling(): void {
-    if (pollTimer) return
-    pollTimer = setInterval(() => {
-      void refreshTasks().catch(() => undefined)
-    }, 1500)
+    polling.value = true
+    scheduleNextPoll()
   }
 
   function stopPolling(): void {
+    polling.value = false
     if (pollTimer) {
-      clearInterval(pollTimer)
+      clearTimeout(pollTimer)
       pollTimer = null
     }
   }
@@ -250,12 +318,21 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     parsingLinkId,
     selectedFileIds,
     selectedLinkId,
+    sortKey,
+    sortDesc,
     loading,
     error,
     activeTasks,
+    queueSummary,
+    lastRefreshedAt,
+    refreshError,
+    setPollingFast,
     fileNodes,
     selectedCount,
     selectedBytes,
+    selectedDownloadOrder,
+    setSortKey,
+    toggleSortDesc,
     init,
     dispose,
     saveConnection,

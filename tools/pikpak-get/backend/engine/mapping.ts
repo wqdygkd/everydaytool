@@ -94,6 +94,8 @@ export function mapTask(task: PikpakTask): PikpakGetTask {
     error: task.error,
     createdAt: task.created_at,
     updatedAt: task.updated_at,
+    plannedFiles: task.planned_files ?? (task.file_ids?.length ?? 0),
+    plannedBytes: task.planned_bytes ?? 0,
   }
 }
 

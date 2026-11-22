@@ -34,6 +34,7 @@ errors.ts        错误分类（PikpakError / TrafficCapped / MutationOutcomeUnk
 api.ts           PikpakClient：登录/续期/captcha_sign/walk_share/restore/download_url/cleanup/space（fetch 可注入）
 stream.ts        单流下载（Range 续传 + 空闲超时）+ content_hash/verify_content（分段暂未实现）
 pipeline.ts      转存→等就绪→下载→hash 校验→清理 编排 + State（state.json 断点）+ 选文件过滤
+order.ts         勾选下载的排队顺序（按界面顺序重排，缺省体积升序）
 accounts.ts      加密账号池（edt-kdf 信封）+ 账号轮换/1 小时流量冷却
 links.ts         分享链接 CRUD
 engine.ts        PikpakEngine 门面：任务存储 + 选文件下载编排，本机/NAS 共用
@@ -66,6 +67,18 @@ adapter.ts       统一门面：本机内嵌 / NAS HTTP 两种实现 + snake_cas
 **请求体字段名以引擎为准（snake_case）**：`/tasks` 读 `link_id` / `file_ids` / `account_id`（`/links` 的提取码例外，是 camelCase `passCode`）。控制面这侧一律经 `mapping.ts` 的 `toEngineTaskInput` 转换后再发——直接发 camelCase 会被 `str(body.link_id)` 读成空串，引擎报 `400 {"detail":"分享链接不存在："}`（冒号后为空，很容易被误判成链接被删）。
 
 进度：v1 用 `GET /tasks/{id}` **1s 轮询**（与 workbuddy2api-panel 的 3s 状态轮询同套路），不引入 WebSocket 依赖；后续需要再升级 SSE/WS。
+
+**stdout 进度日志（`docker compose logs -f` 可见）**：引擎把里程碑与周期进度写 stdout（`progress-log.ts` 负责格式化，`engine.ts` 的 `progress()` 是唯一出口）。每行都带队列快照「排队 N 个任务 · M 个文件 · X GiB」：
+
+| 行 | 时机 | 例子 |
+|---|---|---|
+| 入队 | `createTask` | `[pikpak-get] 入队 task-…（2 个文件 · 200.0MiB）｜队列空闲` |
+| 开始 / 结束 | 任务进入 running / 终态 | `[pikpak-get] 开始 task-…｜排队 1 个任务 · 1 个文件 · 100.0MiB` |
+| 下载中（边沿） | 换到下一个文件 | `[pikpak-get] 下载中 1/3 第1集.mkv（142.8MiB）｜…` |
+| 下载中（周期） | 每 `PIKPAK_ENGINE_PROGRESS_SECONDS`（默认 15） | `[pikpak-get] 下载中 1/3 第1集.mkv 37.1% 45.6MiB/s 剩余 02:05｜…` |
+| 完成 | 单文件下满 | `[pikpak-get] 完成 1/3 第1集.mkv（142.8MiB 用时 03:12 均速 45.6MiB/s）` |
+
+`PIKPAK_ENGINE_PROGRESS_SECONDS=0` 只保留里程碑、不做周期刷新。任务还额外回传 `planned_files` / `planned_bytes`（入队时按解析缓存算出），app 端据此显示「排队 2 个任务 / 7 个文件 / 1.2 GiB」，不必等下载开始才知道总量。
 
 ### 2.4 数据落点（NAS 卷）
 
@@ -199,6 +212,8 @@ tools/pikpak-get/
 
 **载荷必须在 store 边界拍平**：渲染层 `ref` / `reactive` / `computed` 取出的值是 Proxy，Electron 的结构化克隆不认，会把整次调用打成 `An object could not be cloned.`（历史故障：勾选文件后点「下载选中」，把 `store.selectedFileIds` 这个响应式数组直接塞进 `TASKS_START`）。`pikpakGetStore.ts` 的 `invoke` 统一套 `toIpcPayload`（`renderer/ipc-payload.ts`，JSON 语义 + 保留 `undefined`），新增通道不必逐个记得转纯；判定用例在 `tests/ipc-payload.test.ts`。
 
+**任务轮询是自适应的**（`renderer/poll-policy.ts`，用例 `tests/poll-policy.test.ts`）：抽屉打开 1s、有活跃任务 1.5s、只剩历史 4s、完全空闲 6s；提交 / 取消任务后立即拉一次并重排定时器。因此界面上「排队 N 个任务 · M 个文件 · X GiB」最多滞后一个轮询间隔（有任务时约 1.5s）。拉取失败**不清空**旧数据，只置 `refreshError`，顶栏 chip 与抽屉头改为橙色的「已过期 · 最后更新 hh:mm:ss」——把冻结的数字当成实时状态是这里最容易误导人的坑。
+
 ### 3.3 数据落点与分层
 
 | 数据 | 位置 | 说明 |
@@ -220,7 +235,7 @@ tools/pikpak-get/
 
 1. **登录 / 续期 / 重登**：`POST /accounts/login` 存会话；日常走 refresh_token 续期；refresh 被拒时用 sealed 密码重登（「加密密码 + 会话」的意义）。
 2. **解析**：`walk_share` 只枚举不占云盘；`PROHIBITED` 报错，不把空清单记完成；快照缓存于引擎，重开不重拉。
-3. **勾选下载**：`POST /tasks` 带 `fileIds` 白名单；`task_runner` 按「转存 → 等就绪 → 下载 `.part` → hash 校验 → 清理云端」串行处理，未勾选不碰云盘。
+3. **勾选下载**：`POST /tasks` 带 `fileIds` 白名单；`task_runner` 按「转存 → 等就绪 → 下载 `.part` → hash 校验 → 清理云端」串行处理，未勾选不碰云盘。**下载顺序 = `file_ids` 的数组顺序**（`pipeline` 用 `order.ts` 的 `orderBySelection` 重排）；控制面传的是界面展示顺序（`shared/pikpak-get.ts` 的 `flattenPikpakNodes`：深度优先 + 当前排序），因此「看到的次序」就是「下载的次序」。不带顺序的旧客户端仍退回引擎原来的体积升序。
 4. **断点续传**：复用 `State`（`state.json` v5）；`.part` 续传、`.segs*` 片段、`source_hash/mtime` 记忆校验跳过。
 5. **账号轮换 / 冷却**：`TrafficCapped` → 记 `trafficCappedAt` → 换下一账号；全冷却则等最早到期；1 小时为重试间隔。
 6. **换机还原**：见 §2.6，device_id 随迁，PikPak 侧设备指纹不变。
@@ -233,6 +248,7 @@ tools/pikpak-get/
 
 ## 7. 已知坑 / 风险
 
+- **勾选状态只在内存**：渲染层 `selectedFileIds`（Pinia）→ 点下载后才变成任务的 `file_ids`（引擎内存 Map）。两者都不落盘：重新解析 / 删链接 / 关工具清勾选，引擎重启丢任务。真正落盘的只有 `<dest>/<归档目录>/.pikpakget/state.json`（每文件下载状态，key 为 `分享链接url\tnodeId`）与文件本身。
 - 同一 PikPak 账号只归一个引擎所有；不要同时在 PC 本机引擎和 NAS 引擎登录（device_id / 出口 IP 不一致易触发风控）。
 - **NAS 模式的响应必须过 `engine/mapping.ts`**：引擎 HTTP 吐出的是内部 snake_case（`link_id` / `is_folder` / `parent_id` / `parsed_at` / `in_trash`），渲染层只认 shared 的 camelCase。漏映射的表现不是报「字段缺失」，而是 `parse.linkId` 为 `undefined`，接着点「重新解析 / 删除记录 / 下载选中」被主进程 `requireId` 拦成「ID 非法」；文件树还会把文件夹当文件平铺（`is_folder` 读不到）。新增 NAS 端点时同步在 `mapping.ts` 补映射与用例（`tests/mapping.test.ts`）。
 - **请求方向同样要转换**（两个方向都漏过，别再只看一半）：`POST /tasks` 发 camelCase 会让引擎读到空 `link_id`，报 `400 分享链接不存在：`；空 `file_ids` 等价于「不筛选」，`toEngineTaskInput` 统一发 `null`。

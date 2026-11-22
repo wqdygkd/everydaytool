@@ -30,6 +30,8 @@ const engine = new PikpakEngine({
   destDir: env('PIKPAK_DEST', '/downloads'),
   masterKey,
   // 不传 fetchImpl：NAS 用 Node 22 全局 fetch（undici）。
+  // stdout 进度日志（docker compose logs 可见）：默认 15 秒一行，0 = 只打里程碑。
+  progressSeconds: Number(env('PIKPAK_ENGINE_PROGRESS_SECONDS', '15')),
 })
 
 const service = createEngineService({

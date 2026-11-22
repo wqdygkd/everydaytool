@@ -10,6 +10,24 @@ const open = defineModel<boolean>({ default: false })
 
 const tasks = computed(() => store.tasks)
 const activeTasks = computed(() => store.activeTasks)
+const queueSummary = computed(() => store.queueSummary)
+const refreshError = computed(() => store.refreshError)
+
+/** 抽屉打开时把轮询提速到 1s；收起后回落到按任务状态决定的节奏 */
+watch(open, (value) => {
+  store.setPollingFast(value)
+})
+
+onUnmounted(() => {
+  store.setPollingFast(false)
+})
+
+/** 最近一次成功刷新的时间（过期提示用） */
+function lastUpdatedText(): string {
+  const at = store.lastRefreshedAt
+  if (!at) return '尚未刷新'
+  return `最后更新 ${new Date(at).toLocaleTimeString()}`
+}
 
 const STATUS_LABELS: Record<PikpakGetTask['status'], string> = {
   queued: '排队中',
@@ -46,11 +64,31 @@ function percent(task: PikpakGetTask): number {
   return Math.min(100, Math.round((file.downloaded / file.size) * 100))
 }
 
+/** 任务计划量：排队中显示「还要下多少」，进行中显示「已完成几个」 */
+function plannedLine(task: PikpakGetTask): string {
+  const planned = task.plannedFiles ?? 0
+  const bytes = task.plannedBytes ?? 0
+  if (!planned && !bytes) return ''
+  const done = Object.values(task.files).filter(file => file.size > 0 && file.downloaded >= file.size).length
+  if (task.status === 'queued') return `计划 ${planned} 个文件 · ${humanPikpakBytes(bytes)}`
+  if (task.status === 'running') return `进度 ${done}/${planned} 个文件 · 共 ${humanPikpakBytes(bytes)}`
+  return `共 ${done}/${planned} 个文件 · ${humanPikpakBytes(bytes)}`
+}
+
 async function cancel(taskId: string): Promise<void> {
   try {
     await store.cancelTask(taskId)
   } catch (error) {
     toast.error((error as Error).message || '取消失败')
+  }
+}
+
+/** 手动刷新：失败要给出提示（自动轮询那条路径是静默的，靠 refreshError 标识过期） */
+async function manualRefresh(): Promise<void> {
+  try {
+    await store.refreshTasks()
+  } catch (error) {
+    toast.error((error as Error).message || '刷新任务失败')
   }
 }
 </script>
@@ -60,12 +98,18 @@ async function cancel(taskId: string): Promise<void> {
     <aside v-if="open" class="tasks-drawer">
       <header class="drawer-head">
         <span class="drawer-title">下载任务</span>
-        <span class="drawer-meta">{{ activeTasks.length }} 个进行中</span>
+        <span class="drawer-meta">
+          {{ activeTasks.length }} 个进行中<template v-if="queueSummary.tasks"> · 排队 {{ queueSummary.tasks }} 个 / {{ queueSummary.files }} 个文件 / {{ humanPikpakBytes(queueSummary.bytes) }}</template>
+        </span>
         <span class="drawer-actions">
-          <UiIconButton icon="refresh" label="刷新任务" @click="store.refreshTasks()" />
+          <UiIconButton icon="refresh" label="刷新任务" @click="manualRefresh" />
           <UiIconButton icon="close" label="收起" @click="open = false" />
         </span>
       </header>
+
+      <div v-if="refreshError" class="drawer-stale" :title="refreshError">
+        已断开引擎 · {{ lastUpdatedText() }}（下面的数字可能已过期）
+      </div>
 
       <div class="drawer-body">
         <div v-if="!tasks.length" class="empty-block">
@@ -99,6 +143,10 @@ async function cancel(taskId: string): Promise<void> {
                 </template>
               </div>
               <UiProgress :percentage="percent(task)" :show-text="true" />
+            </div>
+
+            <div v-if="plannedLine(task)" class="task-planned mono">
+              {{ plannedLine(task) }}
             </div>
 
             <div v-if="task.error" class="task-error">
@@ -261,6 +309,19 @@ async function cancel(taskId: string): Promise<void> {
 
 .task-bytes {
   color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.task-planned {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.drawer-stale {
+  flex: none;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-warning);
   font-size: var(--font-size-xs);
 }
 

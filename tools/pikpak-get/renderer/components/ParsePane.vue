@@ -2,7 +2,7 @@
 import type { PikpakGetNode, PikpakGetNodeSortKey } from '../../../../shared/pikpak-get'
 import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { toast } from 'vue-sonner'
-import { humanPikpakBytes, sortPikpakNodes } from '../../../../shared/pikpak-get'
+import { groupPikpakNodes, humanPikpakBytes } from '../../../../shared/pikpak-get'
 import { usePikpakGetStore } from '../stores/pikpakGetStore'
 
 const emit = defineEmits<{
@@ -18,13 +18,9 @@ const SORT_OPTIONS: Array<{ label: string, value: PikpakGetNodeSortKey }> = [
   { label: '后缀', value: 'ext' },
 ]
 
-const sortKey = ref<PikpakGetNodeSortKey>('default')
-/** 大小默认「大到小」，名 / 后缀默认升序 */
-const sortDesc = ref(false)
-
+// 排序状态在 store：它是「下载排队顺序」的唯一来源，工具条与顶栏按钮共用
 function onSortChange(value: string): void {
-  sortKey.value = value as PikpakGetNodeSortKey
-  sortDesc.value = sortKey.value === 'size'
+  store.setSortKey(value as PikpakGetNodeSortKey)
 }
 
 const parseResult = computed(() => store.parse)
@@ -36,18 +32,7 @@ const files = computed(() => store.fileNodes)
 const allSelected = computed(() => files.value.length > 0 && files.value.every(node => store.selectedFileIds.includes(node.id)))
 
 const allNodes = computed(() => parseResult.value?.nodes ?? [])
-const childrenByParent = computed(() => {
-  const map = new Map<string, PikpakGetNode[]>()
-  for (const node of allNodes.value) {
-    const parent = node.parentId ?? ''
-    const list = map.get(parent) ?? []
-    list.push(node)
-    map.set(parent, list)
-  }
-  // 排序只作用于同一层（父子层级不变），文件夹恒在文件之前
-  for (const [parent, list] of map) map.set(parent, sortPikpakNodes(list, sortKey.value, sortDesc.value))
-  return map
-})
+const childrenByParent = computed(() => groupPikpakNodes(allNodes.value, store.sortKey, store.sortDesc))
 const collapsedFolders = ref<Set<string>>(new Set())
 const visibleNodes = computed(() => {
   const result: Array<{ node: PikpakGetNode, depth: number }> = []
@@ -114,9 +99,11 @@ async function reparse(): Promise<void> {
   }
 }
 
-/** 勾选的文件中「已下载」的 id */
+/** 勾选的文件中「已下载」的 id，同样按展示顺序排队 */
 const selectedDownloadedIds = computed(() => {
-  return files.value.filter(node => node.downloaded && selectedFileIds.value.includes(node.id)).map(node => node.id)
+  // selectedDownloadOrder 本身就是「已勾选」的子集，这里只需再筛「已下载」
+  const downloaded = new Set(files.value.filter(node => node.downloaded).map(node => node.id))
+  return store.selectedDownloadOrder.filter(id => downloaded.has(id))
 })
 
 async function deleteRecords(): Promise<void> {
@@ -179,7 +166,7 @@ function formatTime(iso: string | null): string {
         <div class="parse-actions">
           <span class="sort-field">
             <UiSelect
-              :model-value="sortKey"
+              :model-value="store.sortKey"
               :options="SORT_OPTIONS"
               size="small"
               @update:model-value="onSortChange"
@@ -187,11 +174,11 @@ function formatTime(iso: string | null): string {
           </span>
           <UiButton
             size="small"
-            :disabled="sortKey === 'default'"
-            :title="sortDesc ? '当前降序，点击切换为升序' : '当前升序，点击切换为降序'"
-            @click="sortDesc = !sortDesc"
+            :disabled="store.sortKey === 'default'"
+            :title="store.sortDesc ? '当前降序，点击切换为升序' : '当前升序，点击切换为降序'"
+            @click="store.toggleSortDesc()"
           >
-            {{ sortDesc ? '降序' : '升序' }}
+            {{ store.sortDesc ? '降序' : '升序' }}
           </UiButton>
           <UiButton size="small" :disabled="parsing" @click="reparse">
             重新解析

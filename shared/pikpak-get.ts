@@ -121,6 +121,9 @@ export interface PikpakGetTask {
   error: string | null
   createdAt: string
   updatedAt: string
+  /** 入队时算出的计划量：排队中的任务也能显示「还要下多少」 */
+  plannedFiles: number
+  plannedBytes: number
 }
 
 export interface PikpakGetEngineInfo {
@@ -179,4 +182,38 @@ export function sortPikpakNodes(nodes: readonly PikpakGetNode[], key: PikpakGetN
     const byExt = NODE_NAME_COLLATOR.compare(pikpakNodeExtension(a.name), pikpakNodeExtension(b.name))
     return (byExt || NODE_NAME_COLLATOR.compare(a.name, b.name)) * factor
   })
+}
+
+/**
+ * 按父节点分组并按当前排序整理每一层（文件夹恒在文件之前）。
+ * 渲染层的折叠树与 `flattenPikpakNodes` 共用同一套分组，避免两处各写一遍。
+ */
+export function groupPikpakNodes(nodes: readonly PikpakGetNode[], key: PikpakGetNodeSortKey = 'default', desc = false): Map<string, PikpakGetNode[]> {
+  const byParent = new Map<string, PikpakGetNode[]>()
+  for (const node of nodes) {
+    const parent = node.parentId ?? ''
+    const list = byParent.get(parent) ?? []
+    list.push(node)
+    byParent.set(parent, list)
+  }
+  for (const [parent, list] of byParent) byParent.set(parent, sortPikpakNodes(list, key, desc))
+  return byParent
+}
+
+/**
+ * 按当前排序把解析结果拍平成**展示顺序**（深度优先，文件夹紧跟其子项）。
+ * 下载顺序取的就是这个顺序：用户在界面上看到什么次序，就按什么次序下。
+ * 不看折叠状态——折叠起来的已勾选文件同样要下。
+ */
+export function flattenPikpakNodes(nodes: readonly PikpakGetNode[], key: PikpakGetNodeSortKey = 'default', desc = false): PikpakGetNode[] {
+  const byParent = groupPikpakNodes(nodes, key, desc)
+  const ordered: PikpakGetNode[] = []
+  const visit = (parentId: string): void => {
+    for (const node of byParent.get(parentId) ?? []) {
+      ordered.push(node)
+      if (node.isFolder) visit(node.id)
+    }
+  }
+  visit('')
+  return ordered
 }

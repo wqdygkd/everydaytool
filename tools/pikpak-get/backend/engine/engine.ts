@@ -1,6 +1,7 @@
 import type { PikpakFetch, PikpakLogger, PikpakStop } from './api.ts'
 import type { PikpakLink } from './links.ts'
 import type { PikpakNode, PipelineArgs } from './pipeline.ts'
+import type { QueueSummary } from './progress-log.ts'
 // 引擎门面：组合账号池 / 链接库 / 任务存储，提供统一的同步接口。
 // 本机模式直接 new 一个 PikpakEngine 调用；NAS 模式由 service.ts 把它包成 HTTP 端点。
 import { randomUUID } from 'node:crypto'
@@ -11,6 +12,14 @@ import { AccountStore } from './accounts.ts'
 import { PikpakError } from './errors.ts'
 import { LinkStore } from './links.ts'
 import { Pipeline } from './pipeline.ts'
+import {
+  formatFileDone,
+  formatFileProgress,
+  formatFileStart,
+  formatTaskEnd,
+  formatTaskQueued,
+  formatTaskStart,
+} from './progress-log.ts'
 
 export interface EngineContext {
   configDir: string
@@ -19,6 +28,8 @@ export interface EngineContext {
   fetchImpl?: PikpakFetch
   logger?: PikpakLogger
   stop?: PikpakStop
+  /** stdout 进度日志的刷新间隔（秒）；0 = 只打里程碑、不做周期刷新 */
+  progressSeconds?: number
 }
 
 export interface TaskFile {
@@ -45,6 +56,9 @@ export interface PikpakTask {
   error: string | null
   created_at: string
   updated_at: string
+  /** 入队时按解析缓存算出的计划量：排队中也能知道「还要下多少」 */
+  planned_files: number
+  planned_bytes: number
 }
 
 const MAX_LOG_LINES = 200
@@ -61,18 +75,34 @@ export class PikpakEngine {
   private progressSamples = new Map<string, { lastBytes: number, lastAt: number, lastSpeed: number, lastEta: number }>()
   private queue: string[] = []
   private workerRunning = false
+  private readonly progressSeconds: number
+  private progressTimer: ReturnType<typeof setInterval> | null = null
+  /** 每个任务上次打过「下载中」的文件 id（用于打文件开始 / 完成里程碑） */
+  private lastLoggedFile = new Map<string, string>()
+  private loggedDoneFiles = new Set<string>()
+  private loggedEnd = new Set<string>()
 
   constructor(context: EngineContext) {
     this.configDir = context.configDir
     this.destDir = context.destDir
     this.masterKey = context.masterKey
     this.stop = context.stop
+    this.progressSeconds = Math.max(0, Math.floor(context.progressSeconds ?? 15))
     this.accounts = new AccountStore(context)
     this.links = new LinkStore(context.configDir)
   }
 
   private now(): string {
     return new Date().toISOString()
+  }
+
+  /**
+   * 进度日志的唯一出口：写 stdout，NAS 里 `docker compose logs -f` 直接可见。
+   * 引擎要能脱离 Electron 单独打包运行（NAS 容器），所以不能用平台 logger，只能用 console。
+   */
+  private progress(line: string): void {
+    // eslint-disable-next-line no-console -- 见上：引擎在容器里没有平台 logger 可用
+    console.log(line)
   }
 
   get destRoot(): string {
@@ -91,6 +121,7 @@ export class PikpakEngine {
   async createTask(linkId: string, fileIds: string[] | null, dest?: string | null, accountId?: string | null): Promise<PikpakTask> {
     const link = await this.links.get(linkId)
     if (!link) throw new PikpakError(`分享链接不存在：${linkId}`)
+    const planned = await this.plannedFor(linkId, fileIds)
     const task: PikpakTask = {
       id: `task-${Date.now()}-${randomUUID().slice(0, 8)}`,
       link_id: linkId,
@@ -104,10 +135,70 @@ export class PikpakEngine {
       error: null,
       created_at: this.now(),
       updated_at: this.now(),
+      planned_files: planned.files,
+      planned_bytes: planned.bytes,
     }
     this.tasks.set(task.id, task)
     this.stopFlags.set(task.id, { stopped: false })
+    // 入队即打一行：此时队列里已包含本任务，能直接看出「还要下多少」
+    this.progress(formatTaskQueued(task.id, planned.files, planned.bytes, this.queueSummary(task.id)))
     return this.publicTask(task)
+  }
+
+  /** 按解析缓存估算任务要下多少（排队中也能给出文件数与体积） */
+  private async plannedFor(linkId: string, fileIds: string[] | null): Promise<{ files: number, bytes: number }> {
+    if (!fileIds?.length) return { files: 0, bytes: 0 }
+    const cache = await this.links.getParseCache(linkId)
+    // 没有解析缓存（还没解析过）时只能给出文件数，体积未知按 0
+    if (!cache) return { files: fileIds.length, bytes: 0 }
+    const wanted = new Set(fileIds)
+    const selected = (cache.cache.nodes as PikpakNode[])
+      .filter(node => !node.is_folder && wanted.has(node.id))
+    // 缓存里对不上任何 id（例如缓存被清理过）时，至少保留勾选数
+    const files = selected.length || fileIds.length
+    const bytes = selected.reduce((sum, node) => sum + (Number(node.size) || 0), 0)
+    return { files, bytes }
+  }
+
+  /** 排队快照：状态为 queued 的任务，可排除某个任务（它自己不算「排在自己前面」） */
+  private queueSummary(excludeTaskId?: string): QueueSummary {
+    let tasks = 0
+    let files = 0
+    let bytes = 0
+    for (const task of this.tasks.values()) {
+      if (task.id === excludeTaskId) continue
+      if (task.status !== 'queued') continue
+      tasks += 1
+      files += task.planned_files
+      bytes += task.planned_bytes
+    }
+    return { tasks, files, bytes }
+  }
+
+  /** 当前文件在任务里的序号（1 基）与计划文件数 */
+  private filePosition(task: PikpakTask): { index: number, count: number } {
+    const index = task.current_file ? Object.keys(task.files).indexOf(task.current_file) + 1 : 0
+    return { index: Math.max(index, 0), count: task.planned_files || Object.keys(task.files).length }
+  }
+
+  private startProgressTimer(): void {
+    if (this.progressTimer || this.progressSeconds <= 0) return
+    this.progressTimer = setInterval(() => {
+      const task = [...this.tasks.values()].find(item => item.status === 'running')
+      if (!task?.current_file) return
+      const entry = task.files[task.current_file]
+      if (!entry) return
+      const { index, count } = this.filePosition(task)
+      this.progress(formatFileProgress(index, count, entry.name, entry.downloaded, entry.size, entry.speed, entry.eta, this.queueSummary(task.id)))
+    }, this.progressSeconds * 1000)
+    // 定时器不该拖住进程退出（NAS 里由 systemd/docker 管进程，本地是 Electron 主进程）
+    this.progressTimer.unref?.()
+  }
+
+  private stopProgressTimer(): void {
+    if (!this.progressTimer) return
+    clearInterval(this.progressTimer)
+    this.progressTimer = null
   }
 
   getTask(taskId: string): PikpakTask | null {
@@ -132,6 +223,7 @@ export class PikpakEngine {
 
   enqueue(taskId: string): void {
     this.queue.push(taskId)
+    this.startProgressTimer()
     void this.drainQueue()
   }
 
@@ -150,6 +242,8 @@ export class PikpakEngine {
       }
     } finally {
       this.workerRunning = false
+      // 队列清空后停止周期刷新，避免空转刷日志
+      if (this.queue.length === 0) this.stopProgressTimer()
     }
   }
 
@@ -182,6 +276,19 @@ export class PikpakEngine {
     entry.speed = Math.round(sample.lastSpeed)
     entry.eta = Math.round(sample.lastEta)
     this.progressSamples.set(taskId, sample)
+
+    // 里程碑只在「换了文件」「刚下完」这两个边沿打一行，进度百分比交给周期刷新
+    const { index, count } = this.filePosition(task)
+    if (this.lastLoggedFile.get(taskId) !== node.id) {
+      this.lastLoggedFile.set(taskId, node.id)
+      this.progress(formatFileStart(index, count, node.name, entry.size, this.queueSummary(taskId)))
+    }
+    const doneKey = `${taskId}:${node.id}`
+    if (entry.size > 0 && written >= entry.size && !this.loggedDoneFiles.has(doneKey)) {
+      this.loggedDoneFiles.add(doneKey)
+      const seconds = sample.lastSpeed > 0 ? entry.size / sample.lastSpeed : 0
+      this.progress(formatFileDone(index, count, node.name, entry.size, seconds))
+    }
   }
 
   private finalize(taskId: string, status: TaskStatus, error?: string): void {
@@ -190,6 +297,11 @@ export class PikpakEngine {
     task.status = status
     task.updated_at = this.now()
     if (error) task.error = String(error).slice(0, 300)
+    if (!this.loggedEnd.has(taskId)) {
+      this.loggedEnd.add(taskId)
+      const doneFiles = Object.values(task.files).filter(file => file.size > 0 && file.downloaded >= file.size).length
+      this.progress(formatTaskEnd(taskId, status, doneFiles, task.planned_files, this.queueSummary(taskId)))
+    }
   }
 
   async parseLink(linkId: string, force = false): Promise<Record<string, unknown>> {
@@ -347,6 +459,7 @@ export class PikpakEngine {
     task.status = 'running'
     task.updated_at = this.now()
     this.addLog(taskId, 'info', `开始下载：${link.url}`)
+    this.progress(formatTaskStart(taskId, task.planned_files, task.planned_bytes, this.queueSummary(taskId)))
 
     const dest = task.dest || this.destDir
     const seriesRoot = `${dest}/${link.folder}`
@@ -412,6 +525,8 @@ export class PikpakEngine {
         stop,
         accountId,
         selectedFileIds: selected,
+        // 勾选顺序 = 控制面传来的界面顺序，直接作为下载排队顺序
+        selectedOrder: selected ? task.file_ids : null,
         onProgress,
       })
       let code: number

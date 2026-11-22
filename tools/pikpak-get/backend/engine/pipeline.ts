@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, readFileSync } from 'node:fs'
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { MutationOutcomeUnknown, PikpakError, TrafficCapped } from './errors.ts'
+import { orderBySelection } from './order.ts'
 import { downloadSegments, downloadStream, PIECE_SIZES, verifyContent } from './stream.ts'
 
 const SPACE_HEADROOM = 400_000_000
@@ -50,6 +51,8 @@ export interface PipelineOptions {
   stop: () => boolean
   accountId?: string
   selectedFileIds?: Set<string> | null
+  /** 勾选文件的下载顺序（调用方给的界面顺序）；缺省时退回体积升序 */
+  selectedOrder?: readonly string[] | null
   onProgress?: (node: PikpakNode, written: number, elapsed: number) => void
 }
 
@@ -285,6 +288,7 @@ export class Pipeline {
   readonly stop: () => boolean
   readonly accountId?: string
   readonly selectedFileIds: Set<string> | null
+  readonly selectedOrder: readonly string[] | null
   readonly onProgress?: (node: PikpakNode, written: number, elapsed: number) => void
   readonly state: State
   private created = new Set<string>()
@@ -304,6 +308,7 @@ export class Pipeline {
     this.stop = options.stop
     this.accountId = options.accountId
     this.selectedFileIds = options.selectedFileIds ?? null
+    this.selectedOrder = options.selectedOrder ?? null
     this.onProgress = options.onProgress
     this.state = new State(
       options.args.stateDir ? path.join(options.args.stateDir, 'state.json') : null,
@@ -694,6 +699,8 @@ export class Pipeline {
     let files = (report.files as PikpakNode[]).sort((a, b) => a.size - b.size)
     if (this.selectedFileIds) {
       files = files.filter(node => this.selectedFileIds!.has(node.id))
+      // 勾选下载按界面顺序排队（用户看到的次序）；没带顺序时保持体积升序的老行为
+      files = orderBySelection(files, this.selectedOrder)
     }
     link.status = 'active'
     link.folder = String(job.folder ?? '')

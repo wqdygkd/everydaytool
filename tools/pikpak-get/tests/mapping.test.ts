@@ -91,10 +91,33 @@ test('mapTask 把文件表的 node_id 映射到 nodeId', () => {
     error: null,
     created_at: '2026-11-22T00:00:00.000Z',
     updated_at: '2026-11-22T00:00:00.000Z',
+    planned_files: 3,
+    planned_bytes: 4096,
   })
   assert.equal(task.linkId, 'abc123def4567890')
   assert.equal(task.currentFile, 'n1')
+  assert.equal(task.plannedFiles, 3)
+  assert.equal(task.plannedBytes, 4096)
   assert.deepEqual(task.files.n1, { nodeId: 'n1', name: 'movie.mkv', size: 1024, downloaded: 512, speed: 64, eta: 8 })
+})
+
+test('mapTask 对旧引擎缺失的计划字段兜底（文件数退回 file_ids 长度）', () => {
+  const task = mapTask({
+    id: 'task-3',
+    link_id: 'abc',
+    file_ids: ['n1', 'n2'],
+    dest: '/downloads',
+    account_id: null,
+    status: 'queued',
+    current_file: null,
+    files: {},
+    logs: [],
+    error: null,
+    created_at: '',
+    updated_at: '',
+  } as never)
+  assert.equal(task.plannedFiles, 2)
+  assert.equal(task.plannedBytes, 0)
 })
 
 test('mapTask 速度 / ETA 缺省为 0', () => {

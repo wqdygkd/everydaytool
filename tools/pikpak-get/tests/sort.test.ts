@@ -2,7 +2,7 @@
 import type { PikpakGetNode } from '../../../shared/pikpak-get.ts'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { pikpakNodeExtension, sortPikpakNodes } from '../../../shared/pikpak-get.ts'
+import { flattenPikpakNodes, groupPikpakNodes, pikpakNodeExtension, sortPikpakNodes } from '../../../shared/pikpak-get.ts'
 
 function node(id: string, name: string, size: number, isFolder = false): PikpakGetNode {
   return {
@@ -65,4 +65,34 @@ test('后缀解析', () => {
   assert.equal(pikpakNodeExtension('noext'), '')
   assert.equal(pikpakNodeExtension('.gitignore'), '')
   assert.equal(pikpakNodeExtension('a.b.srt'), 'srt')
+})
+
+const TREE: PikpakGetNode[] = [
+  node('f2', '第2集.mkv', 200),
+  node('f1', '第1集.mkv', 100),
+  { ...node('d1', 'S1', 0, true), parentId: '' },
+  { ...node('f3', '第1集.ass', 10), parentId: 'd1' },
+  { ...node('d2', 'Extra', 0, true), parentId: 'd1' },
+  { ...node('f4', 'menu.mkv', 5), parentId: 'd2' },
+]
+
+test('flattenPikpakNodes 按展示顺序深度优先拍平（文件夹紧跟其子项）', () => {
+  assert.deepEqual(flattenPikpakNodes(TREE, 'name').map(item => item.id), ['d1', 'd2', 'f4', 'f3', 'f1', 'f2'])
+})
+
+test('groupPikpakNodes 按父节点分组，且每层都按当前排序（文件夹在前）', () => {
+  const groups = groupPikpakNodes(TREE, 'name')
+  assert.deepEqual((groups.get('') ?? []).map(item => item.id), ['d1', 'f1', 'f2'])
+  assert.deepEqual((groups.get('d1') ?? []).map(item => item.id), ['d2', 'f3'])
+  assert.deepEqual((groups.get('d2') ?? []).map(item => item.id), ['f4'])
+})
+
+test('flattenPikpakNodes 的 default 顺序保留引擎原始次序', () => {
+  assert.deepEqual(flattenPikpakNodes(TREE).map(item => item.id), ['f2', 'f1', 'd1', 'f3', 'd2', 'f4'])
+})
+
+test('flattenPikpakNodes 不含孤儿节点之外的意外重复', () => {
+  const ids = flattenPikpakNodes(TREE, 'size', true).map(item => item.id)
+  assert.equal(new Set(ids).size, ids.length)
+  assert.equal(ids.length, TREE.length)
 })

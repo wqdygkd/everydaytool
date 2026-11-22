@@ -25,6 +25,7 @@ export default antfu(
       'browser-extension/.wxt',
       // 子模块各自维护构建产物：tweb 使用 oxlint。
       'tweb',
+      'deploy/pikpak-get-nas/service.mjs',
     ],
   },
   {
