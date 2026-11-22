@@ -30,7 +30,11 @@ test('wrong aad fails', () => {
 test('tampered envelope fails', () => {
   const sealed = seal('hello', MASTER_KEY, 'account-1', 'password')
   const parts = sealed.split(':')
-  parts[parts.length - 1] = `A${parts[parts.length - 1]!.slice(1)}`
+  const payload = parts[parts.length - 1]!
+  // 首字符必须真的改变：此处原本写死成 'A'，而 base64url 首字符本身就可能为 'A'，
+  // 约 1/64 概率篡改后与原串完全相同，用例便会随机失败。
+  parts[parts.length - 1] = `${payload.startsWith('A') ? 'B' : 'A'}${payload.slice(1)}`
+  assert.notEqual(parts.join(':'), sealed)
   assert.throws(() => openSealed(parts.join(':'), MASTER_KEY, 'account-1', 'password'))
 })
 
