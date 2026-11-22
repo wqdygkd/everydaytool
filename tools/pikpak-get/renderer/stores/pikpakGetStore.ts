@@ -12,6 +12,7 @@ import type {
 } from '../../../../shared/pikpak-get'
 import { defineStore } from 'pinia'
 import { invokePikpakGetIpc, pikpakGetIpcChannels } from '../ipc'
+import { toIpcPayload } from '../ipc-payload'
 
 export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
   const connection = ref<PikpakGetConnectionView | null>(null)
@@ -43,7 +44,9 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
   }
 
   function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-    return invokePikpakGetIpc<T>(channel, ...args)
+    // 统一在边界拍平：调用方可能直接传响应式数组（如 selectedFileIds），
+    // Proxy 过不了结构化克隆，会在 IPC 层抛「An object could not be cloned.」
+    return invokePikpakGetIpc<T>(channel, ...args.map(toIpcPayload))
   }
 
   function fail(cause: unknown): never {
@@ -147,7 +150,10 @@ export const usePikpakGetStore = defineStore('pikpakGet/state', () => {
     selectedLinkId.value = linkId
     error.value = ''
     try {
-      parse.value = await invoke<PikpakGetParseResult>(channels().LINKS_PARSE, linkId, force)
+      const result = await invoke<PikpakGetParseResult>(channels().LINKS_PARSE, linkId, force)
+      // 解析结果缺 linkId（引擎契约漂移 / 旧版 NAS 镜像）时回填请求用的 id，
+      // 否则后续「重新解析 / 删除记录 / 下载选中」会拿 undefined 撞主进程的 ID 校验。
+      parse.value = { ...result, linkId: result.linkId || linkId }
       selectedFileIds.value = []
     } catch (cause) {
       fail(cause)

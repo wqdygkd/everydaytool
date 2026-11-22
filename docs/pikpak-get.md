@@ -60,8 +60,10 @@ adapter.ts       统一门面：本机内嵌 / NAS HTTP 两种实现 + snake_cas
 | `GET/POST/PATCH/DELETE /links` | 分享链接 CRUD |
 | `POST /links/{id}/parse` | `walk_share` 枚举文件树（零云盘占用），缓存快照 |
 | `GET /tasks` / `GET /tasks/{id}` | 任务与文件级状态（重连后读回断点） |
-| `POST /tasks` | `{linkId, fileIds[], dest?}` 只下载勾选的文件 |
+| `POST /tasks` | `{link_id, file_ids[] \| null, dest?, account_id?}` 只下载勾选的文件 |
 | `POST /tasks/{id}/cancel` | 中断当前任务（保留 `.part` 与云端副本，可续传） |
+
+**请求体字段名以引擎为准（snake_case）**：`/tasks` 读 `link_id` / `file_ids` / `account_id`（`/links` 的提取码例外，是 camelCase `passCode`）。控制面这侧一律经 `mapping.ts` 的 `toEngineTaskInput` 转换后再发——直接发 camelCase 会被 `str(body.link_id)` 读成空串，引擎报 `400 {"detail":"分享链接不存在："}`（冒号后为空，很容易被误判成链接被删）。
 
 进度：v1 用 `GET /tasks/{id}` **1s 轮询**（与 workbuddy2api-panel 的 3s 状态轮询同套路），不引入 WebSocket 依赖；后续需要再升级 SSE/WS。
 
@@ -174,6 +176,11 @@ tools/pikpak-get/
 
 布局沿用平台件：左栏 `ToolFormPane`/`ToolFormSection`，表格 `UiTable`，进度 `UiProgress`；细节以 DESIGN.md 为准。
 
+解析结果（右栏 `ParsePane.vue`）的交互约定：
+
+- **行内复制**：每个文件 / 文件夹行 hover（或键盘聚焦）显现 22px 复制钮，只复制名字本身（不含目录），提示走 `useCopy`；行的其余区域点击仍是切换勾选。复制钮必须在勾选区域之外（`.file-hit` 之外），否则会连带切换选中。
+- **排序**：工具条上的 `UiSelect` 提供「解析顺序 / 文件名 / 文件大小 / 后缀」+ 升降序切换（选大小时自动切降序）。排序只作用于**同一层**（父子层级不变），文件夹恒在文件之前；文件名是数字感知排序（`Intl.Collator`，第2集 < 第10集）。判定逻辑在 `shared/pikpak-get.ts` 的 `sortPikpakNodes`（纯函数，`tests/sort.test.ts` 覆盖），渲染层只传 key 与方向。
+
 ### 3.2 IPC 通道
 
 | 通道 | 入参 → 出参 |
@@ -189,6 +196,8 @@ tools/pikpak-get/
 | `EVENT_TASK_PROGRESS` | 主进程 → 渲染层（任务 / 文件进度，1s 节流） |
 
 渲染层不直连 NAS；主进程 `engine/client.ts` 把 IPC 翻译成 §2.3 的 HTTP 调用，token 从 config 层 sealed 读取。
+
+**载荷必须在 store 边界拍平**：渲染层 `ref` / `reactive` / `computed` 取出的值是 Proxy，Electron 的结构化克隆不认，会把整次调用打成 `An object could not be cloned.`（历史故障：勾选文件后点「下载选中」，把 `store.selectedFileIds` 这个响应式数组直接塞进 `TASKS_START`）。`pikpakGetStore.ts` 的 `invoke` 统一套 `toIpcPayload`（`renderer/ipc-payload.ts`，JSON 语义 + 保留 `undefined`），新增通道不必逐个记得转纯；判定用例在 `tests/ipc-payload.test.ts`。
 
 ### 3.3 数据落点与分层
 
@@ -225,6 +234,8 @@ tools/pikpak-get/
 ## 7. 已知坑 / 风险
 
 - 同一 PikPak 账号只归一个引擎所有；不要同时在 PC 本机引擎和 NAS 引擎登录（device_id / 出口 IP 不一致易触发风控）。
+- **NAS 模式的响应必须过 `engine/mapping.ts`**：引擎 HTTP 吐出的是内部 snake_case（`link_id` / `is_folder` / `parent_id` / `parsed_at` / `in_trash`），渲染层只认 shared 的 camelCase。漏映射的表现不是报「字段缺失」，而是 `parse.linkId` 为 `undefined`，接着点「重新解析 / 删除记录 / 下载选中」被主进程 `requireId` 拦成「ID 非法」；文件树还会把文件夹当文件平铺（`is_folder` 读不到）。新增 NAS 端点时同步在 `mapping.ts` 补映射与用例（`tests/mapping.test.ts`）。
+- **请求方向同样要转换**（两个方向都漏过，别再只看一半）：`POST /tasks` 发 camelCase 会让引擎读到空 `link_id`，报 `400 分享链接不存在：`；空 `file_ids` 等价于「不筛选」，`toEngineTaskInput` 统一发 `null`。
 - `captcha_sign` 的 md5 盐链、客户端头、`decode_share_file_id`、hash 的「块 SHA-1 的 SHA-1」候选分片，任一不同都会登录/枚举/校验失败——引擎侧直接复用 `pikpakget` 规避。
 - `restore` 丢失响应时「结果未知、停止重发、下次启动查副本」，不能盲重试。
 - 主密钥丢失 = 账号密码不可恢复（会话可重登但密码拿不回）；务必保管 `.env`。

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { PikpakGetNode } from '../../../../shared/pikpak-get'
+import type { PikpakGetNode, PikpakGetNodeSortKey } from '../../../../shared/pikpak-get'
+import { useCopy } from '@renderer/shared/composables/useClipboard'
 import { toast } from 'vue-sonner'
-import { humanPikpakBytes } from '../../../../shared/pikpak-get'
+import { humanPikpakBytes, sortPikpakNodes } from '../../../../shared/pikpak-get'
 import { usePikpakGetStore } from '../stores/pikpakGetStore'
 
 const emit = defineEmits<{
@@ -9,6 +10,22 @@ const emit = defineEmits<{
 }>()
 
 const store = usePikpakGetStore()
+
+const SORT_OPTIONS: Array<{ label: string, value: PikpakGetNodeSortKey }> = [
+  { label: '解析顺序', value: 'default' },
+  { label: '文件名', value: 'name' },
+  { label: '文件大小', value: 'size' },
+  { label: '后缀', value: 'ext' },
+]
+
+const sortKey = ref<PikpakGetNodeSortKey>('default')
+/** 大小默认「大到小」，名 / 后缀默认升序 */
+const sortDesc = ref(false)
+
+function onSortChange(value: string): void {
+  sortKey.value = value as PikpakGetNodeSortKey
+  sortDesc.value = sortKey.value === 'size'
+}
 
 const parseResult = computed(() => store.parse)
 const selectedCount = computed(() => store.selectedCount)
@@ -27,6 +44,8 @@ const childrenByParent = computed(() => {
     list.push(node)
     map.set(parent, list)
   }
+  // 排序只作用于同一层（父子层级不变），文件夹恒在文件之前
+  for (const [parent, list] of map) map.set(parent, sortPikpakNodes(list, sortKey.value, sortDesc.value))
   return map
 })
 const collapsedFolders = ref<Set<string>>(new Set())
@@ -44,6 +63,11 @@ const visibleNodes = computed(() => {
 
 function toggle(nodeId: string): void {
   store.toggleFile(nodeId)
+}
+
+/** 行内复制：只复制名字本身（不含目录），提示走统一 toast */
+async function copyName(node: PikpakGetNode): Promise<void> {
+  await useCopy(node.name, node.isFolder ? '文件夹名' : '文件名')
 }
 
 function toggleFolder(id: string): void {
@@ -153,6 +177,22 @@ function formatTime(iso: string | null): string {
           <span v-if="selectedCount" class="title-meta selected">· 已选 {{ selectedCount }} · {{ humanPikpakBytes(selectedBytes) }}</span>
         </div>
         <div class="parse-actions">
+          <span class="sort-field">
+            <UiSelect
+              :model-value="sortKey"
+              :options="SORT_OPTIONS"
+              size="small"
+              @update:model-value="onSortChange"
+            />
+          </span>
+          <UiButton
+            size="small"
+            :disabled="sortKey === 'default'"
+            :title="sortDesc ? '当前降序，点击切换为升序' : '当前升序，点击切换为降序'"
+            @click="sortDesc = !sortDesc"
+          >
+            {{ sortDesc ? '降序' : '升序' }}
+          </UiButton>
           <UiButton size="small" :disabled="parsing" @click="reparse">
             重新解析
           </UiButton>
@@ -180,26 +220,32 @@ function formatTime(iso: string | null): string {
               @update:model-value="toggleFolderFiles(node.id)"
             />
             <span class="folder-caret" @click="toggleFolder(node.id)">{{ collapsedFolders.has(node.id) ? '▸' : '▾' }}</span>
-            <span class="folder-name mono">{{ node.name }}</span>
+            <span class="folder-name mono" @click="toggleFolder(node.id)">{{ node.name }}</span>
             <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
+            <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件夹名" @click.stop="copyName(node)" />
           </div>
-          <label v-else class="file-row" :style="{ paddingLeft: `${depth * 16 + 12}px` }">
-            <UiCheckbox
-              :model-value="selectedFileIds.includes(node.id)"
-              @update:model-value="toggle(node.id)"
-            />
-            <span class="file-path mono">{{ node.name }}</span>
-            <span
-              v-if="node.downloaded"
-              class="downloaded-mark"
-              :class="{ 'is-missing': !node.exists }"
-              :aria-label="node.exists ? '已下载' : '已下载但文件缺失'"
-              :title="node.exists ? '已下载' : '已下载但文件缺失（可删除记录重新下载）'"
-            >
-              {{ node.exists ? '✓' : '!' }}
-            </span>
-            <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
-          </label>
+          <div v-else class="file-row" :style="{ paddingLeft: `${depth * 16 + 12}px` }">
+            <div class="file-hit" @click="toggle(node.id)">
+              <span class="hit-check" @click.stop>
+                <UiCheckbox
+                  :model-value="selectedFileIds.includes(node.id)"
+                  @update:model-value="toggle(node.id)"
+                />
+              </span>
+              <span class="file-path mono">{{ node.name }}</span>
+              <span
+                v-if="node.downloaded"
+                class="downloaded-mark"
+                :class="{ 'is-missing': !node.exists }"
+                :aria-label="node.exists ? '已下载' : '已下载但文件缺失'"
+                :title="node.exists ? '已下载' : '已下载但文件缺失（可删除记录重新下载）'"
+              >
+                {{ node.exists ? '✓' : '!' }}
+              </span>
+              <span class="file-size mono">{{ humanPikpakBytes(node.size) }}</span>
+            </div>
+            <UiIconButton class="row-copy" icon="copy" :size="22" label="复制文件名" @click.stop="copyName(node)" />
+          </div>
         </template>
       </div>
     </template>
@@ -265,7 +311,15 @@ function formatTime(iso: string | null): string {
 .parse-actions {
   display: flex;
   flex: none;
+  align-items: center;
   gap: var(--spacing-sm);
+}
+
+/* UiSelect 设了 inheritAttrs:false，宽度由本组件的包裹元素定（scoped 才稳） */
+.sort-field {
+  display: inline-flex;
+  flex: none;
+  width: 104px;
 }
 
 .file-tree {
@@ -279,7 +333,9 @@ function formatTime(iso: string | null): string {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding-right: 8px;
+  padding-top: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
   border-radius: var(--radius-sm);
   cursor: pointer;
   user-select: none;
@@ -310,14 +366,45 @@ function formatTime(iso: string | null): string {
 .file-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  gap: var(--spacing-xs);
+  padding-right: 8px;
+  padding-top: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
   border-radius: var(--radius-sm);
-  cursor: pointer;
 
   &:hover {
     background: color-mix(in srgb, var(--color-primary) 7%, transparent);
   }
+}
+
+/* 勾选 / 文件名 / 标记 / 大小都在 .file-hit 里：点空白处切换选中，复选框自己处理点击 */
+.file-hit {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hit-check {
+  display: inline-flex;
+  flex: none;
+}
+
+/* 行内复制：悬停 / 键盘聚焦才显现，避免每行常驻一枚按钮抢视线 */
+.row-copy {
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.file-row:hover .row-copy,
+.file-row:focus-within .row-copy,
+.folder-row:hover .row-copy,
+.folder-row:focus-within .row-copy {
+  opacity: 1;
 }
 
 .file-path {

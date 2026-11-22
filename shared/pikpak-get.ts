@@ -151,3 +151,32 @@ export function humanPikpakBytes(nbytes: number): string {
   }
   return `${v.toFixed(1)}${unit}`
 }
+
+/** 解析结果每层的排序方式；`default` 保留引擎给的原始顺序 */
+export type PikpakGetNodeSortKey = 'default' | 'name' | 'size' | 'ext'
+
+/** 文件名排序用（数字感知：「第2集」排在「第10集」前），与资源管理器口径一致 */
+const NODE_NAME_COLLATOR = new Intl.Collator('zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+
+/** 取文件名后缀（小写、不含点）；没有后缀或隐藏文件返回空串 */
+export function pikpakNodeExtension(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+}
+
+/**
+ * 同一层节点的排序：**文件夹恒在文件之前**，`desc` 只翻转同组内顺序。
+ * 返回新数组，不改动入参（渲染层直接吃 computed 结果）。
+ */
+export function sortPikpakNodes(nodes: readonly PikpakGetNode[], key: PikpakGetNodeSortKey, desc = false): PikpakGetNode[] {
+  const list = [...nodes]
+  if (key === 'default') return list
+  const factor = desc ? -1 : 1
+  return list.sort((a, b) => {
+    if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1
+    if (key === 'name') return NODE_NAME_COLLATOR.compare(a.name, b.name) * factor
+    if (key === 'size') return ((a.size - b.size) || NODE_NAME_COLLATOR.compare(a.name, b.name)) * factor
+    const byExt = NODE_NAME_COLLATOR.compare(pikpakNodeExtension(a.name), pikpakNodeExtension(b.name))
+    return (byExt || NODE_NAME_COLLATOR.compare(a.name, b.name)) * factor
+  })
+}

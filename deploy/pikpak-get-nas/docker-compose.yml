@@ -10,5 +10,5 @@ services:
       - PIKPAK_DEST=/downloads
       - PIKPAK_ENGINE_CONFIG_DIR=/config
     volumes:
-      - /volume1/docker/pikpakget/config:/config      # 账号库/链接库（edt-kdf 密文，可整体备份还原）
-      - /volume1/media/pikpak:/downloads              # NAS 本地卷，直写不走 SMB
+      - ./config:/config      # 账号库/链接库（edt-kdf 密文，可整体备份还原）
+      - ./pikpak:/downloads              # NAS 本地卷，直写不走 SMB
