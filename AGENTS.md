@@ -231,3 +231,4 @@ export default defineTool({
 | **skill-manager 模块记忆（skills-lock 兼容 / 安装与更新事务 / 禁用与回收站 / 预设）** | `docs/skill-manager.md` |
 | **interceptor 模块记忆（MITM / 证书 / 规则 / 流量与扩展桥）** | `docs/interceptor.md` |
 | **pikpak-get 模块记忆（NAS 引擎 + 控制面 / edt-kdf:v1 加密 / 勾选下载 / Docker·DSM 部署）** | `docs/pikpak-get.md` |
+| **yunshu-uninstall 模块记忆（云枢 / eagleyun SASE 残留清单 / 一次管理员授权 / 废纸篓去向）** | `docs/yunshu-uninstall.md` |

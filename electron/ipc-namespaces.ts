@@ -8,6 +8,7 @@ import { SKILL_MANAGER_IPC_CHANNELS } from '../tools/skill-manager/backend/ipc/c
 import { TWEB_CACHE_IPC_CHANNELS } from '../tools/tweb-cache/backend/ipc/channels.ts'
 import { WB2API_PANEL_IPC_CHANNELS } from '../tools/workbuddy2api-panel/backend/ipc/channels.ts'
 import { WXP_ENHANCER_IPC_CHANNELS } from '../tools/wxp-enhancer/backend/ipc/channels.ts'
+import { YUNSHU_UNINSTALL_IPC_CHANNELS } from '../tools/yunshu-uninstall/backend/ipc/channels.ts'
 
 export interface IpcNamespace {
   /** 渲染层 window 上暴露的对象名（preload contextBridge） */
@@ -28,4 +29,5 @@ export const ipcNamespaces: IpcNamespace[] = [
   { preloadNamespace: 'skillManager', channels: SKILL_MANAGER_IPC_CHANNELS },
   { preloadNamespace: 'twebCache', channels: TWEB_CACHE_IPC_CHANNELS },
   { preloadNamespace: 'workbuddy2apiPanel', channels: WB2API_PANEL_IPC_CHANNELS },
+  { preloadNamespace: 'yunshuUninstall', channels: YUNSHU_UNINSTALL_IPC_CHANNELS },
 ]

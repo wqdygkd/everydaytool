@@ -9,8 +9,9 @@ import treeaseEditor from '@tools/treease-editor/index'
 import twebCache from '@tools/tweb-cache/index'
 import workbuddy2apiPanel from '@tools/workbuddy2api-panel/index'
 import wxpEnhancer from '@tools/wxp-enhancer/index'
+import yunshuUninstall from '@tools/yunshu-uninstall/index'
 
-export const allToolRegistry: ToolDefinition[] = [interceptor, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, outlookRegister, pikpakGet, skillManager, twebCache, workbuddy2apiPanel]
+export const allToolRegistry: ToolDefinition[] = [interceptor, treeaseEditor, wxpEnhancer, idCardGenerator, offlinePack, outlookRegister, pikpakGet, skillManager, twebCache, workbuddy2apiPanel, yunshuUninstall]
 
 function getCurrentToolClientTarget(): ToolClientTarget {
   // 兼容预加载时序：优先读 window.edtRuntime，兜底 UA 判断
