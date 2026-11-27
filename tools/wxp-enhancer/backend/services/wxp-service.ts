@@ -8,6 +8,7 @@ import { dataCacheStore } from '../store/data-cache-store.ts'
 import { isExecutableRunning } from '../utils/process-detect.ts'
 import { startAutoCollect, stopAutoCollect } from './auto-collect-service.ts'
 import { CdpInjectionSession, evaluateInPageTargets, waitForCdpPort } from './cdp-client.ts'
+import { resetChannelCache } from './channel-service.ts'
 import { buildClearLoginCacheSnippet, buildInjectionSource, WXP_INJECTION_REV } from './injection-source.ts'
 import { processLauncher } from './launcher-service.ts'
 
@@ -116,6 +117,8 @@ function setState(patch: Partial<WxpRunningState>): WxpRunningState {
 
 function clearState(): void {
   runningState = null
+  // 通道端口只存在于这一次 WXP 进程里：会话一结束就丢掉转发列表缓存，避免下次启动读到旧快照
+  resetChannelCache()
   emitStatus()
 }
 

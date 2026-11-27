@@ -77,6 +77,70 @@ export interface WxpClearLoginCacheResult {
   pending?: boolean
 }
 
+/** 链接中心里的一家医院（来自 Vuex tenants；branchid 是 suit 接口的查询键） */
+export interface WxpHospitalOption {
+  code: string
+  name: string
+  branchid: string
+}
+
+/**
+ * 链接中心的一行转发连接。字段来自 WXP 中间件 `suit/getByUserAndBranch`，
+ * `online` 由主进程通道端口集合（`getPortsByTenant`）推断——它才是通道状态的唯一事实来源。
+ */
+export interface WxpChannelLink {
+  id: string
+  /** 接口原始名称（含「(转发N)」后缀） */
+  name: string
+  /** 去掉「(转发N)」后缀的名称，与 WXP 表格列一致 */
+  simpleName: string
+  /** `[正式]` / `[非正式]` */
+  sceneformal: string
+  accessPoint: string
+  targetPoint: string
+  /** 接入点主机：只有 127.0.0.1 / localhost 才能在 WXP 内建立通道 */
+  localIp: string
+  /** 本地监听端口（= middle_port），通道按它匹配 */
+  localPort: number
+  relIp: string
+  relPort: number
+  /** 浏览器类型：yumbrowse / deliverbrowse / middlebrowse（复制地址时决定默认路径） */
+  browsetype: string
+  /** opera 端口（与 localPort 相等时按 yumbrowse 处理） */
+  operaPort: number
+  protocol: string
+  urlSuffix: string
+  canOpen: boolean
+  online: boolean
+}
+
+/** 通道快照：工具端只读镜像（不落盘、不缓存「启用」状态） */
+export interface WxpChannelSnapshot {
+  hospitals: WxpHospitalOption[]
+  /** 本快照对应的医院；未指定时取 WXP 当前医院 */
+  hospitalCode: string
+  /** WXP 里当前选中的医院（Vuex currentTenant） */
+  currentCode: string
+  links: WxpChannelLink[]
+  onlinePorts: number[]
+  collectedAt: number
+  /** 页面侧读取失败的原因（未登录 / 没选医院 / 中间件接口异常） */
+  error?: string
+}
+
+/** 建立 / 关闭通道的入参（link 只取标识与端口，其余字段不参与操作） */
+export interface WxpChannelTogglePayload {
+  hospitalCode: string
+  link: WxpChannelLink
+}
+
+export interface WxpChannelToggleResult {
+  /** 端口原本就是目标状态：没有真的发出建立 / 关闭 */
+  already: boolean
+  /** 操作后的端口集合 */
+  ports: number[]
+}
+
 /** 链接收藏。页面与工具缓存同一结构；旧的 `环境|名称|接入点|原地址` 只在读取时拆开。 */
 export interface WxpLinkFavorite {
   sceneformal: string

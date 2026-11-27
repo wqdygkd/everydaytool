@@ -1,9 +1,10 @@
-import type { WxpSettings } from '../../../../shared/wxp.ts'
+import type { WxpChannelTogglePayload, WxpSettings } from '../../../../shared/wxp.ts'
 import { resolve } from 'node:path'
 import { dialog, ipcMain } from 'electron'
 import { broadcastToWindows } from '../../../../backend/utils/broadcast.ts'
 import { safeHandle } from '../../../../backend/utils/ipc-safety.ts'
 import { setWxpDataCacheEmitter } from '../services/auto-collect-service.ts'
+import { readChannelSnapshot, toggleChannel } from '../services/channel-service.ts'
 import { collectWxpData } from '../services/data-collector.ts'
 import { assertSettings, setWxpStatusEmitter, wxpService } from '../services/wxp-service.ts'
 import { wxpConfigStore } from '../store/config-store.ts'
@@ -14,6 +15,15 @@ import { WXP_ENHANCER_IPC_CHANNELS } from './channels.ts'
 
 function broadcast(channel: string, payload: unknown): void {
   broadcastToWindows(channel, payload)
+}
+
+/** 通道类操作只在「已连上 CDP」时才有意义：未就绪时给一句能照做的提示，而不是 CDP 超时 */
+function activePort(): number {
+  const running = wxpService.getRunning()
+  if (!running || running.status !== 'running') {
+    throw new Error('WXP 未连接：请先启动并等待连接完成')
+  }
+  return running.port
 }
 
 let handlersRegistered = false
@@ -85,5 +95,17 @@ export function registerWxpHandlers(): void {
       throw new Error('WXP 未在运行，无法读取数据；请先启动 WXP')
     }
     return collectWxpData(running.port)
+  })
+
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.GET_CHANNELS, async (_event, hospitalCode?: unknown) => {
+    return readChannelSnapshot(activePort(), typeof hospitalCode === 'string' ? hospitalCode : '')
+  })
+
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.OPEN_CHANNEL, async (_event, payload: WxpChannelTogglePayload) => {
+    return toggleChannel(activePort(), payload, 'open')
+  })
+
+  safeHandle(ipcMain, WXP_ENHANCER_IPC_CHANNELS.CLOSE_CHANNEL, async (_event, payload: WxpChannelTogglePayload) => {
+    return toggleChannel(activePort(), payload, 'close')
   })
 }

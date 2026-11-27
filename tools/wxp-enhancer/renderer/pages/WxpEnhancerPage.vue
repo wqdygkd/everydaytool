@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WxpRunningStatus } from '../../../../shared/wxp'
+import type { WxpChannelLink, WxpRunningStatus } from '../../../../shared/wxp'
 import { useToolPaneActive } from '@renderer/shared/components/ui/overlay-target'
 import { isElectronEnvironment } from '@renderer/shared/environment'
 import { confirm } from '@renderer/shared/feedback'
@@ -249,6 +249,110 @@ async function handleCollect(): Promise<void> {
   }
 }
 
+// —— 转发连接：只读镜像 WXP 主进程的通道；建立 / 关闭都走同一个 action，WXP 里看到的是同一份状态 ——
+const CHANNEL_POLL_MS = 3000
+const channelTicking = ref(false)
+const channelRefreshing = ref(false)
+const channelBusy = reactive<Record<string, boolean>>({})
+let channelTimer: ReturnType<typeof setInterval> | null = null
+
+const channelOptions = computed(() => (store.channels?.hospitals ?? []).map(h => ({ label: h.name, value: h.code })))
+const channelLinks = computed(() => store.channels?.links ?? [])
+const channelError = computed(() => store.channels?.error ?? '')
+/** 医院选择：显示的是快照对应的医院（跟随 WXP 当前医院时也一致） */
+const channelCode = computed({
+  get: () => store.channels?.hospitalCode ?? '',
+  set: (code: string) => {
+    void selectChannelHospital(code)
+  },
+})
+
+async function selectChannelHospital(code: string): Promise<void> {
+  try {
+    await store.selectChannelHospital(code)
+  } catch (error) {
+    toast.error((error as Error).message || '读取转发连接失败')
+  }
+}
+
+/** manual = 用户点「刷新」：显示按钮 loading 与错误提示；后台轮询只静默更新 */
+async function refreshChannels(manual = false): Promise<void> {
+  if (!isConnected.value || channelTicking.value) return
+  channelTicking.value = true
+  if (manual) channelRefreshing.value = true
+  try {
+    await store.loadChannels()
+  } catch (error) {
+    if (manual) toast.error((error as Error).message || '读取转发连接失败')
+  } finally {
+    channelTicking.value = false
+    if (manual) channelRefreshing.value = false
+  }
+}
+
+function startChannelPolling(): void {
+  stopChannelPolling()
+  channelTimer = setInterval(() => {
+    // 工具页被切走 / 窗口最小化时不轮询：CDP 求值没有意义，回来时立即补一次
+    if (document.visibilityState !== 'visible' || !paneActive.value || !isConnected.value) return
+    void refreshChannels(false)
+  }, CHANNEL_POLL_MS)
+}
+
+function stopChannelPolling(): void {
+  if (channelTimer) {
+    clearInterval(channelTimer)
+    channelTimer = null
+  }
+}
+
+watch([isConnected, paneActive], ([connected, active]) => {
+  if (!connected || !active) {
+    stopChannelPolling()
+    return
+  }
+  void refreshChannels(false)
+  startChannelPolling()
+}, { immediate: true })
+
+async function handleToggleChannel(link: WxpChannelLink): Promise<void> {
+  if (channelBusy[link.id]) return
+  const action = link.online ? 'close' : 'open'
+  channelBusy[link.id] = true
+  try {
+    const result = await store.toggleChannel(link, action)
+    if (action === 'open') {
+      toast.success(result.already ? '通道原本已启用' : `通道已建立（端口 ${link.localPort}）`)
+    } else {
+      toast.success(result.already ? '通道原本未启用' : `通道已关闭（端口 ${link.localPort}）`)
+    }
+  } catch (error) {
+    toast.error((error as Error).message || (action === 'open' ? '建立通道失败' : '关闭通道失败'))
+  } finally {
+    channelBusy[link.id] = false
+    // 成功/失败都以 WXP 的实际端口为准刷新一次，避免按钮状态和真实通道分叉
+    void refreshChannels(false)
+  }
+}
+
+/** 与 WXP 的 getActualURL / 快捷操作「复制地址」一致：browsetype 优先，其次 urlSuffix，最后 portal 兜底 */
+function channelUrl(link: WxpChannelLink): string {
+  const base = `${link.protocol}://${link.accessPoint}`
+  if (link.browsetype === 'yumbrowse' || (link.operaPort && link.operaPort === link.localPort)) {
+    return `${base}/cluster/action/index/welcome`
+  }
+  if (link.browsetype === 'deliverbrowse') return `${base}/deliver/#/home`
+  if (link.urlSuffix) {
+    return base + (link.urlSuffix.startsWith('/') ? link.urlSuffix : `/${link.urlSuffix}`)
+  }
+  if (link.simpleName.toLowerCase().includes('portal')) return `${base}/portal/#/login`
+  return base
+}
+
+async function copyChannel(link: WxpChannelLink): Promise<void> {
+  await useCopy(channelUrl(link), '地址')
+}
+
 async function pickExecutable(): Promise<void> {
   try {
     const path = await store.selectExecutable()
@@ -293,6 +397,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   autoSave.cancel()
+  stopChannelPolling()
   if (isElectron && savedRevision < settingsRevision) {
     void persistSettings().catch(() => undefined)
   }
@@ -426,7 +531,7 @@ onUnmounted(() => {
         <section class="result-pane">
           <header class="result-head">
             <div>
-              <strong>WXP 数据缓存</strong>
+              <strong>WXP 工作区</strong>
               <span v-if="statusDetail" class="status-detail" :title="statusDetail">
                 {{ statusDetail }}
               </span>
@@ -446,97 +551,185 @@ onUnmounted(() => {
             </div>
           </header>
 
-          <div class="cache-scroll">
-            <UiHint v-if="loading" block>
-              正在读取本地缓存…
-            </UiHint>
-            <template v-else-if="dataLogin">
-              <div class="kv-list">
-                <UiKeyValue label="登录账号" label-width="88px">
-                  {{ dataLogin.username || '—' }}
-                </UiKeyValue>
-                <UiKeyValue label="登录密码" label-width="88px" mono>
-                  <span class="muted">应用 RSA 加密存储，工具不读取</span>
-                </UiKeyValue>
-                <UiKeyValue label="访问令牌" label-width="88px" mono>
-                  {{ maskToken(dataLogin.accessToken) }}
-                  <template #actions>
-                    <UiButton link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
-                      复制
-                    </UiButton>
-                  </template>
-                </UiKeyValue>
-                <UiKeyValue label="访问有效期至" label-width="88px">
-                  {{ fmtTime(dataLogin.accessExpiresAt) }}
-                </UiKeyValue>
-                <UiKeyValue label="刷新令牌" label-width="88px" mono>
-                  {{ maskToken(dataLogin.refreshToken) }}
-                  <template #actions>
-                    <UiButton link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
-                      复制
-                    </UiButton>
-                  </template>
-                </UiKeyValue>
-                <UiKeyValue label="刷新有效期至" label-width="88px">
-                  {{ fmtTime(dataLogin.refreshExpiresAt) }}
-                </UiKeyValue>
-                <UiKeyValue label="用户编码" label-width="88px">
-                  {{ userCode }}
-                </UiKeyValue>
-                <UiKeyValue label="用户名称" label-width="88px">
-                  {{ userName }}
-                </UiKeyValue>
-                <UiKeyValue label="NameNode" label-width="88px" mono>
-                  {{ dataLogin.nameNodeAddrs || '—' }}
-                </UiKeyValue>
-                <UiKeyValue label="会话快照" label-width="88px">
-                  {{ dataLogin.snapshotExists ? '存在' : '无' }}
-                </UiKeyValue>
-              </div>
-              <UiCollapse v-if="dataLogin.user" class="user-json">
-                <UiCollapseItem name="user" title="用户信息 JSON">
-                  <UiCodeBlock max-height="200px">
-                    {{ JSON.stringify(dataLogin.user, null, 2) }}
-                  </UiCodeBlock>
-                </UiCollapseItem>
-              </UiCollapse>
-              <template v-if="favCount">
-                <div class="fav-head">
-                  <h3 class="fav-title">
-                    收藏的转发
-                  </h3>
-                  <UiChip>{{ favCount }}</UiChip>
-                  <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted fav-backup">
-                    备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
-                  </span>
+          <div class="result-scroll">
+            <section class="channel-block">
+              <div class="block-head">
+                <div class="block-title">
+                  <h3>转发连接</h3>
+                  <span>状态实时读取 WXP 主进程；通道随 WXP 进程存在，重启或空闲 2 小时自动关闭。</span>
                 </div>
+                <div class="block-actions">
+                  <div class="channel-select">
+                    <UiSelect
+                      v-model="channelCode"
+                      :options="channelOptions"
+                      placeholder="选择医院"
+                      size="small"
+                      :disabled="!isConnected || !channelOptions.length"
+                    />
+                  </div>
+                  <UiButton size="small" :loading="channelRefreshing" :disabled="!isConnected" @click="refreshChannels(true)">
+                    刷新
+                  </UiButton>
+                </div>
+              </div>
+              <UiHint v-if="!isConnected" block>
+                启动并连接 WXP 后可查看转发连接与通道状态。
+              </UiHint>
+              <UiHint v-else-if="!store.channels" block>
+                正在读取转发连接…
+              </UiHint>
+              <UiHint v-else-if="!channelOptions.length" block>
+                WXP 尚未登录或还没加载到医院列表；登录成功后这里会自动出现医院与转发。
+              </UiHint>
+              <UiHint v-else-if="!channelCode" block>
+                选择医院后显示该医院的转发连接与通道状态。
+              </UiHint>
+              <template v-else>
+                <UiHint v-if="channelError" class="channel-error" block>
+                  {{ channelError }}
+                </UiHint>
                 <UiTable
-                  class="fav-table"
-                  :data="favTree"
+                  :data="channelLinks"
                   row-key="id"
-                  :tree-props="{ children: 'children' }"
-                  default-expand-all
-                  max-height="440"
-                  :row-class-name="favRowClass"
+                  max-height="300"
+                  empty-text="该医院暂无转发连接"
                 >
-                  <UiTableColumn prop="name" label="医院 / 转发" min-width="220" show-overflow-tooltip />
-                  <UiTableColumn prop="sceneformal" label="环境" width="90" />
+                  <UiTableColumn label="转发名称" min-width="190" show-overflow-tooltip>
+                    <template #default="{ row }">
+                      <span class="channel-name">{{ row.simpleName || row.name }}</span>
+                    </template>
+                  </UiTableColumn>
+                  <UiTableColumn prop="sceneformal" label="环境" width="84" />
                   <UiTableColumn prop="accessPoint" label="接入点" min-width="150" show-overflow-tooltip />
                   <UiTableColumn prop="targetPoint" label="原地址" min-width="150" show-overflow-tooltip />
+                  <UiTableColumn label="状态" width="86">
+                    <template #default="{ row }">
+                      <UiChip :tone="row.online ? 'success' : 'neutral'" variant="soft">
+                        {{ row.online ? '启用' : '未启用' }}
+                      </UiChip>
+                    </template>
+                  </UiTableColumn>
+                  <UiTableColumn label="操作" width="132" align="right">
+                    <template #default="{ row }">
+                      <div class="channel-ops">
+                        <UiButton
+                          size="small"
+                          plain
+                          :type="row.online ? 'default' : 'primary'"
+                          :loading="channelBusy[row.id]"
+                          :disabled="!row.online && !row.canOpen"
+                          :title="!row.online && !row.canOpen ? '接入点非本机地址，需复制地址用外部浏览器访问' : ''"
+                          @click="handleToggleChannel(row)"
+                        >
+                          {{ row.online ? '断开' : '建立' }}
+                        </UiButton>
+                        <UiButton link size="small" @click="copyChannel(row)">
+                          复制
+                        </UiButton>
+                      </div>
+                    </template>
+                  </UiTableColumn>
                 </UiTable>
               </template>
-              <UiHint v-else block>
-                暂无收藏数据。
+            </section>
+
+            <section class="cache-block">
+              <div class="block-head">
+                <h3>WXP 数据缓存</h3>
+                <span v-if="store.dataCache" class="muted">采集于 {{ fmtTime(store.dataCache.collectedAt) }}</span>
+              </div>
+              <UiHint v-if="loading" block>
+                正在读取本地缓存…
               </UiHint>
-            </template>
-            <UiEmpty
-              v-else
-              class="cache-empty"
-              title="还没有 WXP 缓存"
-              text="启动 WXP 并登录后自动采集，也可在左侧启动设置里手动读取。"
-              center
-              icon="layers"
-            />
+              <template v-else-if="dataLogin">
+                <div class="kv-list">
+                  <UiKeyValue label="登录账号" label-width="88px">
+                    {{ dataLogin.username || '—' }}
+                  </UiKeyValue>
+                  <UiKeyValue label="登录密码" label-width="88px" mono>
+                    <span class="muted">应用 RSA 加密存储，工具不读取</span>
+                  </UiKeyValue>
+                  <UiKeyValue label="访问令牌" label-width="88px" mono>
+                    {{ maskToken(dataLogin.accessToken) }}
+                    <template #actions>
+                      <UiButton link size="small" :disabled="!dataLogin.accessToken" @click="useCopy(dataLogin.accessToken, '令牌')">
+                        复制
+                      </UiButton>
+                    </template>
+                  </UiKeyValue>
+                  <UiKeyValue label="访问有效期至" label-width="88px">
+                    {{ fmtTime(dataLogin.accessExpiresAt) }}
+                  </UiKeyValue>
+                  <UiKeyValue label="刷新令牌" label-width="88px" mono>
+                    {{ maskToken(dataLogin.refreshToken) }}
+                    <template #actions>
+                      <UiButton link size="small" :disabled="!dataLogin.refreshToken" @click="useCopy(dataLogin.refreshToken, '刷新令牌')">
+                        复制
+                      </UiButton>
+                    </template>
+                  </UiKeyValue>
+                  <UiKeyValue label="刷新有效期至" label-width="88px">
+                    {{ fmtTime(dataLogin.refreshExpiresAt) }}
+                  </UiKeyValue>
+                  <UiKeyValue label="用户编码" label-width="88px">
+                    {{ userCode }}
+                  </UiKeyValue>
+                  <UiKeyValue label="用户名称" label-width="88px">
+                    {{ userName }}
+                  </UiKeyValue>
+                  <UiKeyValue label="NameNode" label-width="88px" mono>
+                    {{ dataLogin.nameNodeAddrs || '—' }}
+                  </UiKeyValue>
+                  <UiKeyValue label="会话快照" label-width="88px">
+                    {{ dataLogin.snapshotExists ? '存在' : '无' }}
+                  </UiKeyValue>
+                </div>
+                <UiCollapse v-if="dataLogin.user" class="user-json">
+                  <UiCollapseItem name="user" title="用户信息 JSON">
+                    <UiCodeBlock max-height="200px">
+                      {{ JSON.stringify(dataLogin.user, null, 2) }}
+                    </UiCodeBlock>
+                  </UiCollapseItem>
+                </UiCollapse>
+                <template v-if="favCount">
+                  <div class="fav-head">
+                    <h3 class="fav-title">
+                      收藏的转发
+                    </h3>
+                    <UiChip>{{ favCount }}</UiChip>
+                    <span v-if="store.dataCache?.favoritesUpdatedAt" class="muted fav-backup">
+                      备份于 {{ fmtTime(store.dataCache.favoritesUpdatedAt) }}
+                    </span>
+                  </div>
+                  <UiTable
+                    class="fav-table"
+                    :data="favTree"
+                    row-key="id"
+                    :tree-props="{ children: 'children' }"
+                    default-expand-all
+                    max-height="440"
+                    :row-class-name="favRowClass"
+                  >
+                    <UiTableColumn prop="name" label="医院 / 转发" min-width="220" show-overflow-tooltip />
+                    <UiTableColumn prop="sceneformal" label="环境" width="90" />
+                    <UiTableColumn prop="accessPoint" label="接入点" min-width="150" show-overflow-tooltip />
+                    <UiTableColumn prop="targetPoint" label="原地址" min-width="150" show-overflow-tooltip />
+                  </UiTable>
+                </template>
+                <UiHint v-else block>
+                  暂无收藏数据。
+                </UiHint>
+              </template>
+              <UiEmpty
+                v-else
+                class="cache-empty"
+                title="还没有 WXP 缓存"
+                text="启动 WXP 并登录后自动采集，也可在左侧启动设置里手动读取。"
+                center
+                icon="layers"
+              />
+            </section>
           </div>
         </section>
       </div>
@@ -657,12 +850,76 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.cache-scroll {
+.result-scroll {
   flex: 1;
   min-width: 0;
   min-height: 0;
   padding: 16px;
   overflow: auto;
+}
+
+.channel-block,
+.cache-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cache-block {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+}
+
+.block-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+
+  span {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+  }
+}
+
+.block-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.channel-select {
+  width: 180px;
+}
+
+.channel-name {
+  font-weight: var(--font-weight-medium);
+}
+
+.channel-ops {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.channel-error {
+  color: var(--color-warning);
 }
 
 .config-form {

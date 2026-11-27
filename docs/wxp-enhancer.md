@@ -76,6 +76,27 @@ cdp-client.ts              CDP 基础：连接/求值/注入；evaluateInPageTar
 - 清除登录缓存：运行中经 `evaluateInPageTargets` 删工具写入的四键（不动应用 token）+ reload；未运行登记 `clearLoginCachePending`，下次启动首轮注入的脚本带清除块（**必须随后换回常规脚本 scanAndInject(true)**，否则会清掉用户重登后的快照）。
 - 采集/求值脚本与注入脚本一样受"模板字符串禁反斜杠"约束；验证用文本抽取 + `new Function`（esbuild 打包 data-collector 会拖进 electron 依赖，纯 Node 不能 require）。
 
+## 转发连接（通道）
+
+**状态唯一事实来源是 WXP 主进程**：`listenNodes = [{port, tenant, server, sockets}]`，页面侧只有 `app/ProxyServerAllEnabledPorts(code)`（→ `getPortsByTenant`）能读到端口集合。工具端做的是**只读镜像 + 开关**，不自己记状态、不落盘：
+
+- `backend/services/channel-collector.ts`：两段注入表达式（快照 / 开关），与 data-collector 同约束（ES5、禁反斜杠、值经 `quote()` 白名单）；
+- `backend/services/channel-service.ts`：端口腔每轮都读，转发列表（`suit/getByUserAndBranch`）按 30s 缓存，切医院立即重拉；会话结束（`clearState`）清缓存；
+- IPC：`wxp:get-channels` / `wxp:open-channel` / `wxp:close-channel`；只在 `status === 'running'` 时可用。
+
+**工具建通道（WXP 里能看到「启用」）**：`BindCurrentProxyTenant(医院 code)` → `GenerateProxyServerSync({suite:{id, middle_ip, middle_realip, middle_realport, middle_port}, tenant:{code}})` → 每 250ms 查端口直到出现（5s 超时）→ **把主进程租户还原成 WXP 当前选中的医院**。四个坑：
+
+1. `startProxyNodeServer` 在 `this.tenant && this.tenant != r` 时**静默 return**（不报错、不发事件）——不先绑定就是「点了没反应」；
+2. 租户 Key 必须是医院 `code`，传 id / 名称会建在 WXP 永远不查的 key 下，界面永远「未启用」；
+3. NameNode 未连上时抛「无可用的NameNode服务！」，要在登录补跑之后才能建；
+4. 接入点不是 `127.0.0.1` / `localhost` 时不允许建（WXP 自身也只让复制地址）。
+
+**WXP 建 / 关 → 工具跟随**：页面每 3s 轮询一次快照（页面不可见或工具被切走时暂停），端口集合变化即刷新状态列；WXP 里关掉后下一轮就变「未启用」。工具不订阅 `event:nodeserver:channel-port`，避免重注入叠加监听。
+
+**必须向用户如实说明的生命周期**：通道只在当前 WXP 进程里（重启清零）；空闲 **2 小时**自动关闭（`idleConfig.timeout`）；同端口被别的租户占用时对方通道会被先关掉，且没有提示；`GenerateProxyServerSync` 会顺带调 `saveTntWxpConnInfoById` 记一次「最近使用」。
+
+**验证**：`tools/wxp-enhancer/tests/channel-expressions.test.ts` 用 mock Vuex / fetch 跑真实序列化表达式，覆盖「快照映射 / 绑定 → 生成 → 轮询 → 还原 / 关闭 / 已到位 / 注入防护」；改表达式先让它红。实测两条链路：工具建 → WXP 检索该医院看「启用」；WXP 建/关 → 工具 3s 内跟随。
+
 ## 运行时坑位备忘
 
 - **pnpm dev 运行中锁 dist-electron（EBUSY）**——重编译前先关 dev。

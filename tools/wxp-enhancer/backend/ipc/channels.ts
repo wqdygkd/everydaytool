@@ -9,6 +9,9 @@ export const WXP_ENHANCER_IPC_CHANNELS = {
   CLEAR_LOGIN_CACHE: 'wxp:clear-login-cache',
   GET_DATA_CACHE: 'wxp:get-data-cache',
   COLLECT_DATA: 'wxp:collect-data',
+  GET_CHANNELS: 'wxp:get-channels',
+  OPEN_CHANNEL: 'wxp:open-channel',
+  CLOSE_CHANNEL: 'wxp:close-channel',
   EVENT_STATUS_CHANGED: 'wxp:status-changed',
   EVENT_DATA_CACHE_UPDATED: 'wxp:data-cache-updated',
 } as const
